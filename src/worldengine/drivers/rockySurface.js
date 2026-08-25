@@ -121,7 +121,7 @@ import { surfacePaletteBlock, offsetDriverBlock } from './giantSurface.js';   //
 // ⚠ THE FIVE PRODUCER IMPORTS THIS LINE REPLACES (`surfacePaletteOf`, `icenessOf`, `biosphereOf`, `BIO_PIGMENT`, `applyAlbedoTransfer`) MOVED WITH THE BLOCK and NOT ONE of them is called from this file any more. An unused import kept "for symmetry" is how a file grows a dependency it no longer has — the same note `scalar`'s departure carries three lines below.
 import { reliefEnvelope } from '../base/labCore.js';
 // ⚠ `scalar` LEFT THIS IMPORT AT B3 LEG 2 AND WAS NOT DROPPED FROM THE PROGRAM: the only two gated drivers this pack ever emitted are the crater/ejecta master gates, and they moved to `./craterDeck.js` with the block. An unused import kept "for symmetry" is how a file grows a dependency it no longer has.
-import { sizeKm, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
+import { sizeKm, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js';   // ⭐ `resolveDriver` JOINED THIS LINE AT THE LAB SEAM (2026-08-25) and it is the ONLY symbol the seam needs: the mirror at the foot of this file resolves each bound driver exactly as the writer would, so a pack driver and its lab mirror cannot disagree about what a gate or a km shape means. It is the same import `polarDeck`, `solidOptics`, `solidFeatures` and `giantSurface` all took for their own mirrors.
 // ⭐ B2 LEG 3 — the base field's km wavelength and its cFeature. ⛔ THE CALIBRATION CONSTANTS LIVE IN THAT MODULE AND ARE ONLY FORWARDED FROM HERE, and the reason is a shipped fence rather than taste: tests/driver-pack-rockysurface.test.js:767 `    expect(literals.sort()).toEqual(['0', '0.55', '1.0']);` asserts this file's numeric literals are exactly those THREE — ⭐ FOUR UNTIL 2026-08-21, and the `'3'` did not get deleted, it MOVED: its only source was `offsetOf`'s array-length guard, which went to `./giantSurface.js` with `offsetDriverBlock` and is fenced there instead (⭐ was also cited as :717 until 2026-08-21; that line is the `literalsIn` call, not the assertion, and being symbol-less the ref sat in gate 2's UNCHECKED column where nothing could catch it) — so a calibration constant TYPED here reds it. `C_CRATER` below is the same NAMED-FORWARD shape and escapes only because its value happens to be one of the three; a base-field constant of 1.16 does not, and routing around the fence rather than through a shared module is exactly the transcription it exists to catch.
 import { macroWavelengthKm, C_MACRO } from '../base/macroWavelength.js';
 
@@ -372,3 +372,238 @@ export const ROCKY_SURFACE_UNIFORMS = Object.freeze([
   // that. MEASURED over `lab-procedural-0…199`: 0 of 1160 non-gas bodies agree.
   'uNoiseScale',
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// THE LAB SEAM — the mirror the lab imports back (2026-08-25).
+//
+// ⭐ THE MAPPING IS THE THING THAT MUST NOT BE WRITTEN TWICE. planet-lod-lab.html authors these
+// fields BY HAND inside `ensureNetworkRouted` off its own `craterUniformsFrom` and
+// `applyAlbedoTransfer(surfacePaletteOf(...))` calls (planet-lod-lab.html:2820 and :2831-2845); the
+// game reaches the identical values through `applyDriverPacks`. Two hand-written spellings of one
+// uniform→field map is the two-routes disease this pack was extracted to end, so the map lives in
+// the pack and both front-ends read it.
+//
+// ⭐⭐ THE SPLIT IS `giantSurface`'s, NAME FOR NAME, AND THAT IS FORCED RATHER THAN TIDY. That pack
+// is this one's EXACT COMPLEMENT predicate over the SAME two shared blocks — `surfacePaletteBlock`
+// and `offsetDriverBlock` — so any name the two packs mirror DIFFERENTLY is one law with two
+// answers, switched on a body's composition class. src/worldengine/drivers/giantSurface.js:395 is
+// the table this one agrees with on every name the two share; the differences below are only the
+// families `giantSurface` does not emit (the impact ten, the relief term, the base-field wavelength).
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * Uniform name -> the FLAT `state` field planet-lod-lab.html's per-frame writer reads.
+ *
+ * TWELVE OF THIS PACK'S TWENTY-TWO, and the ten that are absent are absent for four different
+ * reasons. Every one is enumerated below rather than left to be rediscovered, because a name missing
+ * from this table falls silently into whatever complement a caller derives by subtraction.
+ *
+ * ⛔ 1. THE FIVE PALETTE COLOURS ARE NOT HERE — they reach `state` as components of ONE object,
+ *       `state.surfacePalette`, which the lab's frame writer destructures at
+ *       planet-lod-lab.html:5455-5464 (`const _sp = state.surfacePalette;` and five `.setRGB` calls
+ *       under a truthiness guard). They are mirrored as a GROUP by `rockySurfaceLabState` off
+ *       `pack.meta.palette`, exactly as src/worldengine/drivers/giantSurface.js:455 does, and they
+ *       are declared as `ROCKY_SURFACE_PALETTE_MIRRORED` below for the reason that file gives at
+ *       src/worldengine/drivers/giantSurface.js:407-411: an undeclared name falls through into the
+ *       direct set, is written straight to the material, and is then overwritten by the frame loop
+ *       from a stale `state.surfacePalette` on the very next frame — "a uniform that flickers
+ *       between two owners, which is invisible on a still and unbisectable in motion".
+ *       ⛔ FORCING THE FIVE INTO THIS FLAT TABLE WOULD MEAN INVENTING FIVE LAB STATE FIELDS THAT DO
+ *       NOT EXIST, which is authoring a lab surface from inside a pack — the direction this program
+ *       forbids. Measured: `state.weatheredColor` and its four siblings do not occur in the lab.
+ *
+ * ⛔ 2. `uCraterScale` IS NOT HERE, AND IT IS THE ONE EXCLUSION A READER WILL TRY TO UNDO. It is
+ *       km-SHAPED (`sizeKm(cu.Dchar, C_CRATER)` in ./craterDeck.js) and the lab does not hold a
+ *       frequency in `state` at all — it holds the SIZE, `state.craterSizeKm`
+ *       (planet-lod-lab.html:1155), and re-resolves the frequency itself at its own display policy
+ *       every frame (planet-lod-lab.html:5358, whose trailing display multiply this file may not
+ *       name). So the mirror hands back the SIZE instead: `pack.meta.Dchar`, guarded exactly as the
+ *       lab's own line planet-lod-lab.html:2845 guards it. See `rockySurfaceLabState`.
+ *       ⛔⛔ BINDING THE FREQUENCY INTO THE SIZE FIELD MOVES CRATER PIXELS ON ALREADY-SHIPPED
+ *       BODIES — measured at 1.25x-2.5x on named presets — and it is REFUSED BY STANDING RULING, not
+ *       by this file's preference. A wiring commit does not make a visible-change decision.
+ *       ⚠ AND THE BLAST RADIUS IS WIDER THAN THE CRATER FIELD IT IS NAMED FOR: the same uniform sets
+ *       the EJECTA APRON's FBM frequency at
+ *       src/worldengine/shaders/craterRelief.glsl.js:196 `vec4 ln = noised(dir * (uCraterScale * 2.7) + uCraterOffset);`
+ *       so a mis-bound scale re-textures the aprons as well as re-tiling the bowls. The exclusion is
+ *       stronger than it looks.
+ *
+ * ⛔ 3. `uPerturb` IS NOT HERE AND IS NOT IN ANY DIRECT SET EITHER — see `ROCKY_SURFACE_LAB_OWNED`.
+ *
+ * ⚠ 4. `uMacroOffset` AND `uDetailOffset` ARE NOT HERE WHILE `uCraterOffset` IS, and the three come
+ *       out of ONE block. The split is not this file's: it is the lab's ownership, read off the lab
+ *       and already recorded at src/worldengine/drivers/giantSurface.js's own binding. The crater
+ *       offset is a transient the lab holds as `state.craterOffset` and writes from at
+ *       planet-lod-lab.html:5500; the macro/detail pair are written STRAIGHT to the material by
+ *       planet-lod-lab.html:1379-1380, which also stashes the plain arrays this pack is handed on
+ *       `ctx`. Same block in the pack, different owner in the lab, so they split here too — and they
+ *       split the SAME WAY in both packs or the two complements disagree.
+ *
+ * ⚠ 5. `uNoiseScale` IS NOT HERE BECAUSE THE LAB HAS NO OWNER FOR IT AT ALL. MEASURED: the token
+ *       `uNoiseScale` occurs ZERO times in planet-lod-lab.html, and the material's declaration
+ *       (src/worldengine/shaders/uniforms.js:10) is a factory default nothing writes. It is also
+ *       km-shaped. So it is the ONE name in this pack that a direct write genuinely gives the lab
+ *       rather than handing it back its own answer — and the day it acquires a lab state field, it
+ *       joins this table rather than staying a direct write.
+ *
+ * ⚠ THE TWO GATED NAMES ALSO CARRY A RELEVANCE FACTOR THE LAB RE-APPLIES, AND THE MIRROR IS SAFE
+ * ONLY BECAUSE THAT FACTOR IS BINARY. ./craterDeck.js folds `craterRelevanceOf` into the driver
+ * VALUE (`cu.density * rel`, `cu.ejectaStrength * rel`) because the game's relevance channel is
+ * empty, while the lab's writer multiplies by `state.craterRelevance` again
+ * (planet-lod-lab.html:5354 and :5361, against the same 0/1 it derives from the same condition at
+ * planet-lod-lab.html:2834). So the mirrored value is re-multiplied by the same factor:
+ * src/worldengine/base/bombardment.js:220 returns literally 0 or 1 and nothing else, and both
+ * squares are exact in IEEE, so the round trip is the identity. ⛔ IT IS AN IDENTITY OF THE
+ * PREDICATE'S RANGE, NOT OF THE WIRE — the day `craterRelevanceOf` returns a fraction, this mirror
+ * starts squaring it, silently, on the bodies where it is most visible. The pack suite pins the
+ * range; this note is why it must stay pinned.
+ */
+export const ROCKY_SURFACE_LAB_BINDING = Object.freeze({
+  // ⛔ uEjectaStrength IS DELIBERATELY UNBOUND, and binding it ALONE is worse than binding neither.
+  // It is one factor of a product the shader forms as `uEjectaStrength * uEjectaAmp * pw`
+  // (craterRelief.glsl.js). The pack emits a hard 1 where the lab derives a continuous value from
+  // crater density, and the lab's uEjectaAmp is a GUI knob sitting ~113x above the pack's. Binding
+  // strength while refusing amp moves the lab's apron product FURTHER from the game's, not closer —
+  // measured. The whole ejecta AMPLITUDE family (strength + amp + lump) closes together or not at
+  // all, and closing it is a ~113x visible change to every cratered body: Max's gate, not a wiring
+  // decision.
+  // ── The impact family, nine of ten (`uCraterScale` is exclusion 2) ─────────────────────────────
+  uCraterDensity: 'craterDensity',
+  uCraterAmp: 'craterAmp',
+  uCraterComplexD: 'craterComplexD',
+  uCraterRelaxation: 'craterRelaxation',
+  uTerraceCount: 'terraceCount',
+  uEjectaRampart: 'ejectaRampart',
+
+  // ── The two surface scalars — same two fields, same two names, as `giantSurface`'s binding ─────
+  uIcenessMix: 'iceness',
+  uBioGroundCover: 'biosphere',
+
+  // ── The one domain offset the lab holds as a state field (exclusion 4) ─────────────────────────
+  uCraterOffset: 'craterOffset',
+});
+
+/**
+ * The five palette drivers that reach `state` as components of ONE object rather than as fields.
+ *
+ * ⛔ DECLARED AS A NAMED GROUP RATHER THAN LEFT IMPLICIT, for the reason
+ * src/worldengine/drivers/giantSurface.js:407-411 gives in full: a complement derived by SUBTRACTION
+ * would let an undeclared colour fall through into the direct set, where the lab's frame loop
+ * overwrites it from a stale `state.surfacePalette` on the very next frame.
+ *
+ * ⚠ IT IS CHARACTER-IDENTICAL TO `GIANT_SURFACE_PALETTE_MIRRORED`, AND THAT IS THE POINT RATHER THAN
+ * A DUPLICATION TO CLEAN UP LATER: both packs emit these five from the SAME `surfacePaletteBlock`,
+ * so the two lists agreeing is what makes the palette one law across the composition-class split.
+ * They are declared per-pack because each pack's complement is derived from its OWN emitted set.
+ */
+export const ROCKY_SURFACE_PALETTE_MIRRORED = Object.freeze([
+  'uWeatheredColor', 'uFreshColor', 'uSedColor', 'uCratonColor', 'uBioGroundColor',
+]);
+
+/**
+ * The names this seam hands back by NEITHER route — not through the binding, not through any direct
+ * set a caller derives by subtraction. Declared so the refusal is checkable instead of prose.
+ *
+ * ⛔⛔ `uPerturb` — THE PACK EMITS THE PRODUCT AND THE LAB COMPOSES THE SAME PRODUCT ITSELF, so
+ * either route applies the relief envelope TWICE. The pack's driver is `PERTURB_BASE * relief`; the
+ * lab's per-frame writer is planet-lod-lab.html:5001
+ * `uniforms.uPerturb.value = state.perturb * reliefEnvelope(_RE, _gNow);` over its own GUI default
+ * `state.perturb` (planet-lod-lab.html:902).
+ *   · MIRRORING it into `state.perturb` would leave the frame writer multiplying an
+ *     envelope-carrying value by the envelope again — the SQUARE of a term this program has already
+ *     convicted once for being applied twice (see the `uCraterAmp` note in the drivers map above,
+ *     where riding the envelope a second time squared it and was a shipped defect).
+ *     ⚠ AND UNLIKE THE CRATER RELEVANCE FACTOR ABOVE, THIS ONE IS NOT IDEMPOTENT: the envelope is a
+ *     continuous term near 1 on an Earth-gravity body, so the doubled application is INVISIBLE on
+ *     exactly the bodies a spot check would use and grows with distance from g = 1.
+ *   · DIRECT-WRITING `uPerturb` to the material would be overwritten by that same line on the very
+ *     next frame — src/worldengine/drivers/giantSurface.js:410's "a uniform that flickers between
+ *     two owners, which is invisible on a still and unbisectable in motion".
+ * ⛔ THE FIX IS NOT AVAILABLE HERE AND IS NOT ATTEMPTED. Handing back the UNMULTIPLIED base would
+ * mean emitting a different driver than the game receives, i.e. two answers again; handing back the
+ * envelope alone would mean naming a lab state field that does not exist. Closing it is a decision
+ * about which side owns the envelope, and a wiring commit does not make those.
+ *
+ * ⛔ `uCraterScale` — the frequency has no lab state field to go to (exclusion 2 on the binding),
+ * and a DIRECT write is overwritten by planet-lod-lab.html:5358 on the next frame for precisely the
+ * flicker reason above. The size goes back instead, as `state.craterSizeKm`.
+ * ⚠ THAT SECOND HALF IS REASONED FROM THE LAB'S FRAME WRITER, NOT SEPARATELY MEASURED: the ruling
+ * handed down covers the BINDING, and the direct-set half is this file's own inference from the
+ * unconditional per-frame write. It is recorded as an inference rather than presented as a measured
+ * refusal.
+ */
+export const ROCKY_SURFACE_LAB_OWNED = Object.freeze(['uPerturb', 'uCraterScale']);
+
+/**
+ * ⛔⛔ EVERY GATE ON, AND THAT IS THE LOAD-BEARING PART OF THIS SEAM — the reason
+ * src/worldengine/drivers/solidFeatures.js:301 states, reproduced here in this pack's own terms.
+ *
+ * The lab re-applies its OWN ✓ checkboxes at the per-frame writer, both of them:
+ *   planet-lod-lab.html:5354 `uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
+ *   planet-lod-lab.html:5361 `uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.craterRelevance : 0.0;`
+ * — one per gate name this pack's ENTRY declares (`CRATER_GATE`, `EJECTA_GATE`), and they are
+ * INDEPENDENT toggles: ejecta off with craters on is a real lab state. So the value this mirror puts
+ * into `state.craterDensity` and `state.ejectaStrength` must be the UNGATED one. A mirror that
+ * resolved the gate too would apply each decision TWICE: a body whose craters are enabled would
+ * still read zero the moment the pack's gate map disagreed with the checkbox.
+ *
+ * ⚠ AND NOTHING WOULD THROW, BECAUSE ZERO IS A LEGAL VALUE FOR BOTH — which is what makes
+ * double-gating SILENT here rather than loud. Both names are the population masters their own GLSL
+ * early-outs on (`if (uCraterDensity <= 0.0) return;` and `if (uEjectaStrength <= 0.0) return;`),
+ * and this pack's own suite measures that only 3 of 66 solid PLANETS come back with a resolvable
+ * crater band at all. A double-gated body reads 0 and is indistinguishable from the great majority
+ * of correct ones.
+ *
+ * ⛔ IT CARRIES THE GATE MAP AND NOTHING ELSE, AND THE OMISSIONS ARE A FENCE RATHER THAN A TIDY-UP —
+ * this pack's case is sharper than `giantSurface`'s, which reasoned the same way from having NO
+ * km-shaped driver. This pack has TWO. `resolveDriver` reaches
+ * src/worldengine/port/writePackUniforms.js:219 `const dispR = assertDisplayPolicy(ctx);` for any
+ * km-shaped driver, so a ctx with no display policy makes the mirror THROW rather than resolve a
+ * wrong frequency — which is exactly what should happen the day someone adds `uCraterScale` or
+ * `uNoiseScale` to the binding. A placeholder display radius here would turn that loud refusal into
+ * a plausible number resolved at a policy nobody chose.
+ * ⚠ AND THE OMISSION IS ALSO FORCED BY THIS FILE'S OWN FENCES, which is worth knowing before
+ * "restoring symmetry" with the other packs' mirrors: this module's suite pins its numeric-literal
+ * set to exactly the three constants it declares it owns, so a placeholder radius is a typed number
+ * that reds it — and the same suite's three-free arm scans this file's code for the animation-rate
+ * and relevance ctx keys by name. The gates-only shape is the only shape that passes.
+ */
+const LAB_MIRROR_CTX = Object.freeze({
+  gates: Object.freeze({ [CRATER_GATE]: true, [EJECTA_GATE]: true }),
+});
+
+/**
+ * The subset of a pack result the LAB mirrors into `state`, resolved with every gate ON.
+ *
+ * ⚠ SKIPS WHAT THE PACK DID NOT EMIT rather than defaulting it. Writing `undefined` into a live
+ * `.listen()`-bound lil-gui field would be a NEW behaviour wearing the byte-identity gate's clothes,
+ * and it would do it to a field the lab's own sliders author.
+ *
+ * ⭐ THE PALETTE ARRIVES AS THE PACK'S OWN `meta.palette` — the SAME object `surfacePaletteBlock`
+ * returned on the way in — so the lab stops calling `applyAlbedoTransfer(surfacePaletteOf(...))`
+ * itself (planet-lod-lab.html:2820). Re-assembling it here from `pack.drivers` would rebuild an
+ * object the pack already holds AND would drop `pigment`, which the frame writer reads
+ * (planet-lod-lab.html:5464) and which is not the name of any driver.
+ *
+ * ⭐⭐ THE CRATER SIZE IS HANDED BACK AS A SIZE, AND THE GUARD IS THE LAB'S OWN, NOT A NULL CHECK.
+ * planet-lod-lab.html:2845 reads `state.craterSizeKm = _cu.Dchar > 0 ? _cu.Dchar : state.craterSizeKm;`
+ * — on a body with no characteristic diameter the lab KEEPS the field it had. In a mirror applied by
+ * assignment, "keep what was there" is spelled by NOT EMITTING THE KEY, which is what the guard
+ * below does; emitting a zero would hand the lab a size that its own frequency resolve refuses
+ * (src/worldengine/port/craterUniforms.js:96 records that a `Dchar` of 0 means "there is no
+ * characteristic diameter", not "the diameter is zero"). ⚠ `pack.meta.Dchar` IS `cu.Dchar`
+ * VERBATIM — the pack's `meta` forwards the same `craterUniformsFrom` answer the lab's line reads —
+ * so this reproduces that line exactly rather than approximating it.
+ *
+ * @param {{drivers: object, meta: object}} pack  a `rockySurfacePack` result
+ * @returns {object} `state` field name -> value
+ */
+export function rockySurfaceLabState(pack) {
+  const out = {};
+  for (const [uName, stateField] of Object.entries(ROCKY_SURFACE_LAB_BINDING)) {
+    if (!(uName in pack.drivers)) continue;
+    out[stateField] = resolveDriver(uName, pack.drivers[uName], LAB_MIRROR_CTX);
+  }
+  out.surfacePalette = pack.meta.palette;
+  if (pack.meta.Dchar > 0) out.craterSizeKm = pack.meta.Dchar;
+  return out;
+}

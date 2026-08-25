@@ -51,7 +51,7 @@
 import { compositionClass } from '../base/e1Regime.js';
 import { craterRelevanceOf } from '../base/bombardment.js';
 import { craterUniformsFrom } from '../port/craterUniforms.js';
-import { sizeKm, scalar, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
+import { sizeKm, scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js';
 
 // ── The two declared gate names ──────────────────────────────────────────────────────────────────
 // ⭐ NAMES, NOT HARDCODED 1.0s, and TWO of them rather than one, because the lab has two independent
@@ -283,3 +283,145 @@ export const CRATER_DECK_UNIFORMS = Object.freeze([
   'uCraterDensity', 'uCraterScale', 'uCraterAmp', 'uCraterComplexD', 'uCraterRelaxation',
   'uTerraceCount', 'uEjectaStrength', 'uEjectaRampart', 'uEjectaAmp', 'uEjectaLump',
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// THE LAB SEAM — the mirror the lab imports back.
+//
+// ⭐ THE MAP IS THE THING THAT MUST NOT BE WRITTEN TWICE, and this family is the one where the lab
+// already writes it twice ITSELF. Three of the seven bound names are authored in BOTH of the lab's
+// driver functions, from two DIFFERENT sources:
+//   planet-lod-lab.html:2024 `      state.craterDensity    = u.craterDensity;`        (applyDrivers, off `deriveUniforms`)
+//   planet-lod-lab.html:2854 `        state.craterDensity = _cu.density;`             (ensureNetworkRouted, off `craterUniformsFrom`)
+// and the same pairing for `craterComplexD` (:2025 / :2871) and `craterRelaxation` (:2026 / :2879).
+// The remaining four are authored once each — `craterAmp` only at :2866 (ensureNetworkRouted),
+// `terraceCount` (:2027), `ejectaStrength` (:2040) and `ejectaRampart` (:2041) only in applyDrivers.
+// ⛔ THIS FILE DOES NOT COLLAPSE THE DUPLICATED THREE AND MAY NOT: which of the two writes wins
+// depends on call order, and the merge is an edit to planet-lod-lab.html. It is recorded because a
+// reader who finds only ONE of the two sites will conclude the mirror duplicates it, and will be
+// exactly half right.
+//
+// ⛔⛔ THREE OF THE TEN EMITTED NAMES ARE ABSENT FROM THE BINDING, EACH FOR ITS OWN MEASURED REASON.
+//
+//   1. `uCraterScale` — THE LAB HAS NO STATE FIELD IN THIS UNIFORM'S UNITS. Its field is
+//      `state.craterSizeKm`, which is KILOMETRES — planet-lod-lab.html:1155 `      craterSizeKm: 530,       // real-units scale: characteristic crater diameter in km`,
+//      written from this pack's own producer at
+//      planet-lod-lab.html:2845 `        state.craterSizeKm = _cu.Dchar > 0 ? _cu.Dchar : state.craterSizeKm;`
+//      — and the lab's frame writer resolves the frequency ITSELF, one line per frame:
+//      planet-lod-lab.html:5358 `      uniforms.uCraterScale.value      = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER)`
+//      ⚠ THAT QUOTE IS TRUNCATED ON PURPOSE, not for width: the line ends with a multiply by the
+//      lab's display-scale factor, and tests/vis-scale-fence.test.js bars every file under
+//      `src/worldengine/**` from spelling that token AT ALL — comments included. Reproducing the
+//      tail here reds the fence, which is how this citation was measured rather than assumed.
+//      This driver is km-SHAPED (DECISION 1 above) and `resolveDriver` answers a km driver with a
+//      FREQUENCY — src/worldengine/port/writePackUniforms.js:220 `    v = featureFrequencyFromKm(dispR, d.featureSizeKm, d.cFeature);`.
+//      So a binding here would put a frequency into a field labelled kilometres, and the lab would
+//      then resolve THAT as a size: finite, in-band, wrong on every body, and printed back to the
+//      user as a plausible crater footprint by planet-lod-lab.html:3294 `.toFixed(0)+' km Ø'`.
+//      ⚠ IT IS ALSO THE ONE NAME WHOSE BYTE-IDENTITY ARM AGAINST THE LAB IS STRUCTURALLY IMPOSSIBLE
+//      — DECISION 1's second ⚠ above measures why (the lab resolves at the REAL radius and then
+//      multiplies by the display scale again, i.e. R^1.5, which this file may not name).
+//
+//   2/3. `uEjectaAmp` and `uEjectaLump` — THE LAB'S DECLARED TUNABLES, NOT DERIVED FIELDS. Unlike
+//      every name in the binding, NO lab function writes either. The lab says so twice in its own
+//      words, at the state declaration and again at the frame writer:
+//      planet-lod-lab.html:1168 `      // rayBrightness from the preset) + lab-tunable (amp/lump/ray count/sharpness).`
+//      planet-lod-lab.html:5360 `      // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.`
+//      and their two sliders are the only ones in the crater folders carrying neither `.listen()`
+//      nor an `.onChange` (planet-lod-lab.html:3375-3376), i.e. nothing in the lab ever expects
+//      them to move on their own. This is polarDeck.js's `POLAR_LAB_KNOBS` case with one difference
+//      that matters: THIS PACK DOES EMIT BOTH, so each omission is a refusal rather than an absence,
+//      and each refusal is measured:
+//        · `uEjectaLump` WOULD MOVE NOTHING. src/worldengine/port/craterUniforms.js:83 `const EJECTA_LUMP = 0.6;`
+//          is byte-equal to the lab default planet-lod-lab.html:1173 `      ejectaLump: 0.6,`. Wiring a
+//          constant is not wiring a law — it grows the mirror's claimed set for zero pixels, which is
+//          the refusal solidFeatures.js's header makes for its seven per-feature constants.
+//        · `uEjectaAmp` WOULD MOVE A LOT, and in a direction only Max can accept. The pack emits
+//          src/worldengine/port/craterUniforms.js:191 `    ejectaAmp: EJECTA_RIM_FRACTION * amp,` against a lab
+//          default of 0.35, and that constant's own comment measures the gap:
+//          src/worldengine/port/craterUniforms.js:62 `// than tuned — the lab's own uEjectaAmp is a GUI slider whose default sits ~800x above continuity.`
+//          Shrinking every ejecta apron in the lab by that factor is a VISIBLE change to every
+//          cratered body — a UAT decision, not a wiring one, and wiring commits do not make those
+//          (the refusal solidOptics.js's header states for `uLimbStrength`). Closing it is one line
+//          in the map below plus Max's eyes on the live lab.
+//
+// ⚠ THE RELEVANCE FOLD IS APPLIED TWICE ON THE MIRRORED ROUTE, AND IT IS SAFE ONLY BECAUSE THE TERM
+// IS 0-OR-1. DECISION 2 above folds `rel` into the two gated drivers CPU-side, and the lab's frame
+// writer multiplies `state.craterRelevance` in again (:5354, :5361), so the mirrored route computes
+// `rel * rel`. src/worldengine/base/bombardment.js:220 `export function craterRelevanceOf(condition) {`
+// returns literally 0 or 1, so the square is the identity and the pixels are unchanged. ⛔ THE DAY
+// THAT TERM BECOMES FRACTIONAL, THIS ROUTE SQUARES IT SILENTLY — and it cannot be fixed from
+// LAB_MIRROR_CTX, because the fold is inside the pack rather than in the driver's `relevance` field.
+// ⚠ ONE VISIBLE-BUT-INERT CONSEQUENCE, STATED SO IT IS NOT REDISCOVERED AS A BUG: the lab's own
+// :2854 stores the UNfolded `_cu.density`, so on a crater-irrelevant body the mirror leaves 0 in
+// `state.craterDensity` where the lab left the raw density. The uniform is identical (the frame
+// writer multiplies by a 0 relevance either way); only the `.listen()`-bound slider at
+// planet-lod-lab.html:3361 reads differently.
+export const CRATER_DECK_LAB_BINDING = Object.freeze({
+  // ⛔ uEjectaStrength IS DELIBERATELY UNBOUND, and binding it ALONE is worse than binding neither.
+  // It is one factor of a product the shader forms as `uEjectaStrength * uEjectaAmp * pw`
+  // (craterRelief.glsl.js). The pack emits a hard 1 where the lab derives a continuous value from
+  // crater density, and the lab's uEjectaAmp is a GUI knob sitting ~113x above the pack's. Binding
+  // strength while refusing amp moves the lab's apron product FURTHER from the game's, not closer —
+  // measured. The whole ejecta AMPLITUDE family (strength + amp + lump) closes together or not at
+  // all, and closing it is a ~113x visible change to every cratered body: Max's gate, not a wiring
+  // decision.
+  uCraterDensity: 'craterDensity',
+  uCraterAmp: 'craterAmp',
+  uCraterComplexD: 'craterComplexD',
+  uCraterRelaxation: 'craterRelaxation',
+  uTerraceCount: 'terraceCount',
+  uEjectaRampart: 'ejectaRampart',
+});
+
+/**
+ * ⛔⛔ EVERY GATE ON, AND ON THIS FAMILY THERE ARE TWO OF THEM. The lab re-applies its OWN ✓
+ * checkboxes at the per-frame writer, once per gate:
+ *   planet-lod-lab.html:5354 `uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
+ *   planet-lod-lab.html:5361 `uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.craterRelevance : 0.0;`
+ * so the values this mirror puts into `state.craterDensity` and `state.ejectaStrength` must be the
+ * UNGATED ones. A mirror that resolved the gate too would apply each decision TWICE: a body whose
+ * feature is enabled would still read zero the moment this pack's gate map disagreed with the
+ * checkbox, and nothing would throw.
+ *
+ * ⚠ AND NOTHING WOULD LOOK WRONG EITHER, WHICH IS THE WHOLE HAZARD. Zero is a LEGAL value for both
+ * gated names — CRATER_DECK_ENTRY's neighbours measure it: `craterUniformsFrom` returns the frozen
+ * `CRATERS_OFF` (density 0, ejectaStrength 0) for every body that is not an impact surface, and the
+ * relevance term is 0 on every body outside the impact domain. So a double-gated body is
+ * indistinguishable from one of the many that legitimately drew no craters, and the two lab
+ * checkboxes are INDEPENDENT (ejecta off with craters on is a real state), so the two ways to get
+ * it wrong do not even fail together. solidFeatures.js:301 names this hazard first; it is sharper
+ * here only because there are two gates and two large populations of legitimate zeros.
+ *
+ * ⚠ `displayRadiusEarth` IS CARRIED AND IS VACUOUS TODAY. Nothing in the binding above is km-shaped
+ * — `uCraterScale`, this pack's only km driver, is deliberately absent (reason 1 above) — so no
+ * mirrored name reaches the policy seam at all. ⛔ IT IS NOT A LICENCE: adding a km-shaped name to
+ * the map would resolve it here at a pseudo-radius of 1.0 and hand the lab a frequency where its
+ * state field holds a size. `1.0` is written rather than `1` because the suite pins this file's
+ * numeric-literal set (tests/driver-pack-craterdeck.test.js) and `1.0` is already in it.
+ */
+const LAB_MIRROR_CTX = Object.freeze({
+  displayRadiusEarth: 1.0, animRate: 1.0, relevance: {},
+  gates: Object.freeze({ [CRATER_GATE]: true, [EJECTA_GATE]: true }),
+});
+
+/**
+ * The subset of a pack result the LAB mirrors into `state`, resolved with every gate ON.
+ *
+ * ⚠ SKIPS WHAT THE PACK DID NOT EMIT rather than defaulting it. That guard is not theoretical here:
+ * `craterDriverBlock` is total and always emits all ten, but the three refused names above mean the
+ * binding is a strict SUBSET of the emitted map, and a caller may hand this function a result from
+ * either pack. Writing `undefined` into a `.listen()`-bound lil-gui field is a NEW behaviour wearing
+ * the byte-identity gate's clothes — the slider would render `undefined` and the frame writer would
+ * push NaN into the uniform, which is not loud.
+ *
+ * @param {{drivers: object}} pack  a `craterDeckPack` (or `rockySurfacePack`) result
+ * @returns {object} `state` field name -> value, containing ONLY the keys the pack actually emitted
+ */
+export function craterDeckLabState(pack) {
+  const out = {};
+  for (const [uName, stateField] of Object.entries(CRATER_DECK_LAB_BINDING)) {
+    if (!(uName in pack.drivers)) continue;
+    out[stateField] = resolveDriver(uName, pack.drivers[uName], LAB_MIRROR_CTX);
+  }
+  return out;
+}
