@@ -433,7 +433,18 @@ const IMPORT_BACK_DEBT = Object.freeze([
     path: 'src/worldengine/drivers/index.js',
     clears:
       'The lab applies packs through `applyDriverPacks` instead of calling each pack individually. ' +
-      'Blocked by the pack rows above — there is nothing to compose until the packs are imported.',
+      '⛔ ITS STATED BLOCKER WAS STALE AND IS CORRECTED HERE, 2026-08-26: it read "blocked by the ' +
+      'pack rows above — there is nothing to compose until the packs are imported", and there is ' +
+      'nothing left to block on. ALL EIGHT packs are imported at world-engine-lab.html:188 and each ' +
+      'is CALLED individually (giantDeckPack :1765, polarDeckPack :1916, solidFeaturesPack :2074, ' +
+      'giantSurfacePack :2465, rockySurface + craterDeck :2880). This ledger has now had three rows ' +
+      'stand on a blocker nobody re-checked (emission-e.js, crater-relief-transcription.test.js, ' +
+      'and this one), which is the failure mode the liveness test above exists to catch and cannot: ' +
+      'liveness proves a row still DIVERGES, never that its stated reason is true. ' +
+      '⚠ WHAT REMAINS IS REAL WORK, NOT A DROP-IN. applyDriverPacks(material, condition, ctx) writes ' +
+      'into a MATERIAL; the lab call sites write into `state` and each carries its own display ' +
+      'policy. Composing them means giving the lab a material-shaped sink or the composer a second ' +
+      'sink, and that is a design decision, not a mechanical swap.',
   }),
   // ⭐⭐ 2 -> 1 ON 2026-08-26 — `shaders/craterRelief.glsl.js` CLEARED, and it is the first row this
   // ledger has lost to a CONVERGENCE rather than to an import-back of something the lab already had.
