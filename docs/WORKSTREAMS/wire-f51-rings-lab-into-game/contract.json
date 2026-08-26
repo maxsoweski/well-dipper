@@ -2,14 +2,14 @@
   "workstream": "wire-f51-rings-lab-into-game",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "scoping",
   "acceptanceCriteria": [
     {
       "id": "AC-0",
-      "statement": "Spine conformance: the ring's world-engine inputs come from the shared condition/physics path, and no new parallel ring implementation is created. The game's _createRing body is REPLACED by the lab's program rather than the lab's data being grafted onto the game's sine-wave shader.",
+      "statement": "Spine conformance: the ring is ONE shared module under src/worldengine/ that BOTH front-ends import — not a hand-port of the lab's shader into Planet.js. Hand-porting is what one-route-shared-driver-path exists to stop; it would make rings the ninth extraction the lab never imported back, and the plan's own warning is that wiring into the two-route world means paying to migrate a second time.",
       "verifyVia": {
-        "input": "grep the shipped Planet.js _createRing for the legacy band terms and for the lab's terms",
-        "observable": "`sin(t * 30.0)` and `sin(t * 12.0` are ABSENT from src/objects/Planet.js; the ringlet loop, the gap loop, `uRingMeanDensity` and the `fwidth(ringT)` band-limit clamp are all PRESENT. No third ring shader exists anywhere in src/."
+        "input": "grep the shipped tree for the ring program, and run tests/one-pipeline-fence.test.js",
+        "observable": "Exactly ONE ring shader source exists in the repo, under src/. Planet.js imports it; world-engine-lab.html imports THE SAME module and calls it. `sin(t * 30.0)` is absent from Planet.js. IMPORT_BACK_DEBT does not grow, and the fence stays green — a ring module the lab does not import back must fail registration 2b by name."
       },
       "layer": "unit",
       "live": false
@@ -86,5 +86,8 @@
       "Ring tilt from axialTilt (Planet.js:1539-1540) — unchanged by this work.",
       "The world-engine lab itself must keep rendering its ring; it is the source, not a casualty."
     ]
-  }
+  },
+  "blockedBy": [
+    "one-route-shared-driver-path — 2 IMPORT_BACK_DEBT rows remain (drivers/index.js, shaders/craterRelief.glsl.js). Wiring rings before the route is finished wires them into the two-route world and pays the migration twice, which is the month Max described."
+  ]
 }

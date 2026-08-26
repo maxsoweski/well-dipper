@@ -44,3 +44,21 @@ wired."*
   16. That is the age model working as written (`PhysicsEngine.js:937`). ⚠ Flagged as risk, not
   fixed: the lab has only ever rendered a *young dense* disk (`ageGyr: 0.3`), so the tenuous regime
   is unobserved on either side. That is this plan's own risk #13.
+
+## ⛔ Sequencing — this is BLOCKED, and deliberately
+
+Corrected after reading `docs/WORKSTREAMS/one-route-shared-driver-path/`. Max, 2026-08-21:
+
+> *"what I care about is going forward the game engine and world engine (lod lab) are connected such
+> that a change to one affects the other and we don't have to spend a month (like we have in this
+> workstream) porting over lab features to the main game"*
+
+Hand-porting the lab's ring shader into `Planet.js` is **exactly that month**. It would make rings
+the ninth extraction the lab never imports back, and the plan of record warns in its own words:
+*"do 1 and 2 BEFORE wiring moons/gas giants. Wire them first and you wire them into the two-route
+world, then pay to migrate them a second time."*
+
+**The route is 2 debt rows from done** (13 → 2, measured; `tests/one-pipeline-fence.test.js` green,
+31 assertions). So rings wait, and then ride the finished route as a shared module both front-ends
+import. That is also this workstream's cleanest possible proof of AC5 in the route contract —
+*"wiring the NEXT lab feature is demonstrably not a hand reconciliation of two routes."*
