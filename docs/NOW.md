@@ -2452,6 +2452,35 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Recently shipped
 
+- **⭐⭐ TIDAL DRIVE MOVES FROM FREQUENCY TO AMPLITUDE — SHIPPED + UAT-PASSED 2026-08-26** — `b0c0cda`,
+  contract `docs/WORKSTREAMS/world-engine-tidal-relief-not-frequency-2026-08-26/`.
+  Max, flying Lava in from 9 body radii at game parity: *"yes this looks better"* and *"I can't notice
+  detail arriving grossly so that seems good to me"*.
+  **What it closes:** three complaints that turned out to share ONE cause — terrain with no sense of
+  scale, detail arriving too early, and new detail looking unrelated to the shape under it. The LOD
+  stack had no headroom: `macroShortening` expressed tidal drive as a shorter WAVELENGTH, which
+  measured out at 75 macro structures per body radius (5.1x finer than Io, the finest body in the
+  law's own calibration table) and left 0–1 usable octaves against Earth-like 6. Io's table rows
+  record *features on Io* — an absence of LARGE-SCALE RELIEF, an amplitude fact encoded as a
+  frequency. Now every non-gas body carries λ = K·R (one landform per body radius) and
+  `coarseReliefCut` flattens the coarse octaves instead. **Usable octaves at 4 radii: 1 → 6.**
+  **Also:** `labCore`'s ramp moved 20..6 → 8..1.5 radii and its far-end budget 4 → 1, so the DISTANCE
+  budget binds FAR (detail must not arrive early) and the fwidth fade binds NEAR (nothing may alias) —
+  neither doing the other's job. Measured live: octaves 1 / 1 / 2.81 / 6.36 / 8.87 / 9 at
+  12 / 8 / 6 / 4 / 2 / 1.3 radii. ⭐ "Not until we're quite close" is now a control in RADII.
+  ⚠ Two ACs carry honest amendments rather than quiet passes — AC-4's property was written backwards,
+  AC-3's equality arm is structurally vacuous (its sabotage arm is the live one).
+- **The lab is `world-engine-lab.html`** (2026-08-26, `77fff7f`… see `77c8689`) — renamed from
+  `planet-lod-lab.html`; 2071 references rewritten, nothing in the build depended on the filename.
+- **Terrain legibility + the diamond** (2026-08-26) — the octave clamp's footprint was an L-infinity
+  norm over OBJECT axes, which creased a sphere into an octahedron (Max: *"a diamond-shaped point"*);
+  now the minor singular value of the footprint Jacobian, capped at 8x anisotropy. `uFwClamp` is
+  tri-state with a 4-render-px legibility arm on key `[K]`. The lab now renders IDENTICALLY to the
+  game (antialias off, w/pixelScale target, nearest magnify, no display multiply on the frequency) —
+  it had been flattering every hot body by 3–7x.
+  ⛔ **OPEN, SCOPED, NOT STARTED:** the ≥4-render-px ruling applies in 2 of ~70 places. See
+  `docs/FEATURES/resolvability-scope-2026-08-26.md` — rings are the flagged next-worst offender.
+
 - **world-engine port (lane L1), rung 3 decided + rung 4 scouted** (2026-07-30) — `bea2438`
   **rung 3 verdict: keep transcribing**, but the handoff's stated blocker (per-planet
   `ShaderMaterial` × 343 uniforms) **does not exist** — 18 planets across all 18 types compile to

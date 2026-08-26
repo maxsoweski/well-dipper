@@ -2,8 +2,8 @@
   "workstream": "world-engine-tidal-relief-not-frequency-2026-08-26",
   "intentRef": "docs/WORKSTREAMS/world-engine-tidal-relief-not-frequency-2026-08-26/intent.md",
   "project": "well-dipper",
-  "status": "VERIFIED_PENDING_MAX",
-  "statusNote": "Implemented and headless-verified at b0c0cda, 2026-08-26. AC-0..AC-8 pass; AC-9 is Max's UAT and no agent closes it. AC-4 was AMENDED during execution, not merely satisfied \u2014 see its statement.",
+  "status": "Shipped",
+  "statusNote": "SHIPPED 2026-08-26. Max UAT-passed at b0c0cda: (1) 'yes this looks better' on the landform reading; (2) 'I can't notice detail arriving grossly so that seems good to me' on the 8..1.5 radii ramp \u2014 so the arrival timing is accepted as tuned and the ramp is NOT an open item. AC-4 was amended during execution (budget binds FAR, fade binds NEAR) and AC-3 carries an execution note about its vacuous arm; both are recorded on the ACs rather than smoothed over.",
   "programRef": "docs/FEATURES/lod-architecture-rootcause-2026-08-26.md",
   "designDecisions": [
     "Tidal drive expresses as AMPLITUDE of the coarse octaves, not as base FREQUENCY. The eight-body calibration table survives and is read more carefully; Io's rows record features ON Io, i.e. an absence of large-scale relief.",
@@ -93,10 +93,10 @@
     },
     {
       "id": "AC-9",
-      "statement": "UAT \u2014 Max flies it and says a tidally-active world reads as a big object, detail arrives late and keeps arriving on approach, and new detail belongs to the landform under it. \u26d4 deferred-to-max; no agent closes this.",
+      "statement": "CLOSED BY MAX 2026-08-26. Flew Lava from 9 body radii inward at game parity. Verdict, verbatim: 'yes this looks better' and 'I can't notice detail arriving grossly so that seems good to me'. The three complaints this workstream targeted \u2014 no sense of scale, detail arriving too early, and new detail unrelated to the shape under it \u2014 are answered from the one cause.",
       "verifyVia": "live",
       "layer": "uat",
-      "live": false
+      "live": true
     }
   ]
 }
