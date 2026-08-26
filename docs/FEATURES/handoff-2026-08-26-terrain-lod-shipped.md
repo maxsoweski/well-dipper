@@ -1,6 +1,6 @@
 # Handoff 2026-08-26 — ▶ TERRAIN LOD SHIPPED. NEXT IS THE OTHER ~68 SURFACES, RINGS FIRST.
 
-**HEAD** `a5c78c5` · **Branch** `feature/world-engine-production-L1` · **pushed, tracked tree clean**
+**HEAD** `e490b70` · **Branch** `feature/world-engine-production-L1` · **pushed, tracked tree clean**
 **Repo** `~/projects/well-dipper` (lane A's branch, **NOT** master) · lab is now **`world-engine-lab.html`**
 ⛔ **~700 untracked PNGs are normal. NEVER `git add -A` at the repo root.**
 
@@ -11,7 +11,7 @@
 
 ## 0. STATE
 
-`origin/feature/world-engine-production-L1` = `a5c78c5` = local HEAD. `origin/master` = `9f141e5`,
+`origin/feature/world-engine-production-L1` = `e490b70` = local HEAD. `origin/master` = `9f141e5`,
 **untouched**. ⛔ **DO NOT push `master`** without asking — it AUTO-DEPLOYS, no staging step.
 
 **Nothing is pending and nothing is half-done.** The workstream that ran this session is Shipped and
@@ -23,7 +23,7 @@ Max UAT-passed it. Everything below is NEW work.
 
 Full record: `docs/WORKSTREAMS/world-engine-tidal-relief-not-frequency-2026-08-26/` (contract,
 status Shipped) and `docs/FEATURES/lod-architecture-rootcause-2026-08-26.md` (the measurement).
-Commits `8e0eb5f`..`a5c78c5`. **Read the root-cause doc before touching anything LOD-shaped.**
+Commits `8e0eb5f`..`e490b70` (16 this session). **Read the root-cause doc before touching anything LOD-shaped.**
 
 One paragraph so you don't have to: three of Max's complaints — terrain with no sense of scale,
 detail arriving too early, and new detail looking unrelated to the shape under it — turned out to
