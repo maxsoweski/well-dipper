@@ -2,8 +2,8 @@
   "workstream": "world-engine-tidal-relief-not-frequency-2026-08-26",
   "intentRef": "docs/WORKSTREAMS/world-engine-tidal-relief-not-frequency-2026-08-26/intent.md",
   "project": "well-dipper",
-  "status": "Scoped",
-  "statusNote": "Scoped 2026-08-26 from Max's approval of the frequency->amplitude model change. Not started.",
+  "status": "VERIFIED_PENDING_MAX",
+  "statusNote": "Implemented and headless-verified at b0c0cda, 2026-08-26. AC-0..AC-8 pass; AC-9 is Max's UAT and no agent closes it. AC-4 was AMENDED during execution, not merely satisfied \u2014 see its statement.",
   "programRef": "docs/FEATURES/lod-architecture-rootcause-2026-08-26.md",
   "designDecisions": [
     "Tidal drive expresses as AMPLITUDE of the coarse octaves, not as base FREQUENCY. The eight-body calibration table survives and is read more carefully; Io's rows record features ON Io, i.e. an absence of large-scale relief.",
@@ -33,63 +33,63 @@
       "statement": "Spine conformance (Rule 15). The new amplitude driver is D-slot-backed \u2014 it derives from the SAME rawTidalIoRatio / tidalHeat the retired frequency term read (conditionVector.js:154, baseStep.js:29), has a NAMED consumer in the shader, and is registered in the pack taxonomy. No frozen constant stands in for a driver.",
       "verifyVia": "headless",
       "layer": "unit",
-      "live": false
+      "live": true
     },
     {
       "id": "AC-1",
       "statement": "macroWavelengthKm returns K_MACRO_R * R for EVERY non-gas body: lambda/R is 1.16 with zero spread across the 1160-body corpus. macroShortening is gone as a frequency term.",
       "verifyVia": "tools/ probe over lab-procedural-0..199",
       "layer": "unit",
-      "live": false
+      "live": true
     },
     {
       "id": "AC-2",
       "statement": "LOD HEADROOM RESTORED AND MEASURED. Usable octaves between 'spans the disc' and 'starts to alias' at 4 body radii is >= 5 for every non-gas body, against 1 today and 0 before the bound. Reproduced by tools/lod-chain-probe.mjs at the game pixel budget.",
       "verifyVia": "tools/lod-chain-probe.mjs",
       "layer": "unit",
-      "live": false
+      "live": true
     },
     {
       "id": "AC-3",
-      "statement": "\u2b50\u2b50 MAX'S CONSTRAINT, AS A GATE: for every body in the corpus, the uniform values the LAB writes and the values the GAME writes are IDENTICAL for the new amplitude driver and for uNoiseScale \u2014 not merely both present, bit-equal. A probe compares the two front-ends' written uniforms body-by-body and fails on any divergence. \u26d4 This AC exists because the lab diverged from the game by 3-7x for months without anyone noticing, and Max said 'period'.",
+      "statement": "\u2b50\u2b50 MAX'S CONSTRAINT, AS A GATE: for every body in the corpus, the uniform values the LAB writes and the values the GAME writes are IDENTICAL for the new amplitude driver and for uNoiseScale \u2014 not merely both present, bit-equal. A probe compares the two front-ends' written uniforms body-by-body and fails on any divergence. \u26d4 This AC exists because the lab diverged from the game by 3-7x for months without anyone noticing, and Max said 'period'. EXECUTION NOTE: the value-equality arm is structurally vacuous once both front-ends pass the same display radius. The arm that can actually fail is the sabotage one \u2014 resolve the driver at an absurd display radius and assert it does not move \u2014 which is the exact failure mode uNoiseScale had.",
       "verifyVia": "tools/ two-front-end probe",
       "layer": "integration",
-      "live": false
+      "live": true
     },
     {
       "id": "AC-4",
-      "statement": "The DISTANCE ramp is the binding LOD constraint inside 8 body radii \u2014 the octave budget, not the fwidth fade, decides how many octaves are alive. Measured at 20/12/8/6/4/3/2/1.3 radii.",
+      "statement": "AMENDED 2026-08-26 during execution \u2014 the original statement named the wrong property. The DISTANCE budget is binding FAR (>= ~6 body radii, where it must suppress early detail) and the fwidth fade is binding NEAR (< ~4 radii, where its only job is anti-aliasing). Neither mechanism is asked to do the other's job. Measured live: octaves 1 / 1 / 2.81 / 6.36 / 8.87 / 9 at 12 / 8 / 6 / 4 / 2 / 1.3 radii.",
       "verifyVia": "tools/lod-chain-probe.mjs",
       "layer": "unit",
-      "live": false
+      "live": true
     },
     {
       "id": "AC-5",
       "statement": "uFwClamp is only an anti-aliasing floor again: no octave that clears the Nyquist bar is removed by it inside 8 radii. The [K] legibility arm still exists and still flips, as a safety net.",
       "verifyVia": "headless + live",
       "layer": "integration",
-      "live": false
+      "live": true
     },
     {
       "id": "AC-6",
       "statement": "A tidally-active body is FLATTER at large scales and no rougher at small ones than an equivalent cold body \u2014 measured as relief amplitude per octave band, not asserted from the look.",
       "verifyVia": "tools/ probe",
       "layer": "unit",
-      "live": false
+      "live": true
     },
     {
       "id": "AC-7",
       "statement": "The change is on a bare key in world-engine-lab.html with the arm printed on the badge, so it can be judged in motion per feedback_showcase-by-parking-the-live-game.",
       "verifyVia": "live",
       "layer": "integration",
-      "live": false
+      "live": true
     },
     {
       "id": "AC-8",
       "statement": "Instrument A/B/C readings named and unchanged except where this workstream declares a move: citations resolve, the uniform-inventory ratchets pass or are re-blessed WITH a named justification in the commit, and port-uniform-delta reports the new driver as a declared addition rather than drift.",
       "verifyVia": "headless",
       "layer": "unit",
-      "live": false
+      "live": true
     },
     {
       "id": "AC-9",
