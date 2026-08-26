@@ -50,7 +50,24 @@ uniform float uEjectaLump;        // 0..1 FBM lumpiness of the apron
 uniform float uProvinceWeight;    // global province-influence dial; 0 restores the pre-2026-08-25 neutral look
 `;
 
-export const CRATER_RELIEF_GLSL = /* glsl */ `
+// ── THE MODULE IS SPLIT IN THREE SO BOTH FRONT-ENDS CAN TAKE ONLY WHAT THEY LACK ──────────────
+// Converging the crater path (Max, 2026-08-26: "we need to converge; I need to be able to stop
+// saying this, that the lab and game need to have the same rendering system") means the LAB splices
+// these too instead of carrying its own copies. It cannot splice them as one blob, for two reasons
+// that are both GLSL declaration-order facts rather than preferences:
+//
+//  1. The lab already owns the FULL province law (height.glsl.js:835 initProvinces / :850
+//     provinceWeight, every feature-id branch). This file carries only the CRATER SLICE of it. The
+//     lab must keep its own and take neither of ours, so the slice is its own export.
+//  2. The cellular keystone must be declared before the lab's FIRST voronoi3d consumer
+//     (height.glsl.js:1136), while the combiner must be declared AFTER the lab's provinceWeight
+//     (:850). One splice point cannot satisfy both. Two exports, two splice points, both legal.
+//
+// ⛔ `CRATER_RELIEF_GLSL` REMAINS THE WHOLE THING, IN THE SAME ORDER, so the game's single splice at
+// Planet.js:572 is untouched and this restructure is a no-op on that side. ⚠ Being a no-op is
+// exactly why its own output cannot prove it live — see the sabotage arm in the crater suite.
+
+export const CRATER_CELLULAR_GLSL = /* glsl */ `
 // ── hash33 + voronoi3d — the cellular keystone. Transcribed from planet-lod-height.glsl.js. ──
 // 3D-domain cellular noise sampled on the direction vector: inherently seam-free on the sphere (no
 // UV seam, no pole pinch), which is the reason to pay for 27 cells. hash33 returns [0,1)^3 cell
@@ -102,20 +119,6 @@ vec2 voronoi3d(vec3 p, int cells, out vec3 cellId, out vec3 grad){
 //
 // ⛔ THE CALL SITE IS UNCHANGED, which is what the original stub's note asked for: this really was a
 // drop-in replacement of one function body plus a per-fragment init, exactly as it predicted.
-const int PROV_CRATERS = 1;   // matches height.glsl.js:787 — was 0 while the body was a stub
-vec3 gProvince = vec3(0.5);   // .x only is meaningful here; .y/.z stay at the lab's rest value
-void initProvinces(vec3 pos){
-  pos *= uDispDomainScale;    // height.glsl.js:836 — province scale tracks the display scale
-  vec4 a1 = noised(pos * 0.75 + uMacroOffset + vec3(17.3, -9.1, 4.7));
-  vec4 a2 = noised(pos * 1.5  + uMacroOffset + vec3(-3.2, 8.8, -12.6));
-  gProvince.x = smoothstep(0.35, 0.65, 0.5 + 0.5 * (a1.x + 0.35 * a2.x) / 1.35);
-}
-float provinceWeight(int fid){
-  float f = 1.0 - gProvince.x; float fl = 0.25;   // height.glsl.js:853, the PROV_CRATERS branch
-  return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);   // height.glsl.js:901, verbatim
-}
-
-// ── craterProfile — BYTE-FAITHFUL to the lab (vitest-pinned analytic dhdr). ──
 // r = dist(fragment, centre) / craterRadius. Returns vec2(height, dh/dr).
 vec2 craterProfile(float r, float morphology, float relaxation, float terraceCount){
   float h = 0.0, dhdr = 0.0;
@@ -160,6 +163,32 @@ vec2 ejectaProfile(float r, float rampart, float rOuter){
 // dir MUST be a unit vector (divergence 3). Accumulates the height delta in planet radii and its
 // gradient, which in this domain is already a dimensionless SLOPE.
 // uCraterDensity <= 0 early-outs, so a body with no crater record is byte-identical to no call.
+`;
+
+// The crater slice of the lab's province law. GAME ONLY — the lab splices its own full version.
+export const CRATER_PROVINCE_SLICE_GLSL = /* glsl */ `
+const int PROV_CRATERS = 1;   // matches height.glsl.js:787 — was 0 while the body was a stub
+vec3 gProvince = vec3(0.5);   // .x only is meaningful here; .y/.z stay at the lab's rest value
+void initProvinces(vec3 pos){
+  pos *= uDispDomainScale;    // height.glsl.js:836 — province scale tracks the display scale
+  vec4 a1 = noised(pos * 0.75 + uMacroOffset + vec3(17.3, -9.1, 4.7));
+  vec4 a2 = noised(pos * 1.5  + uMacroOffset + vec3(-3.2, 8.8, -12.6));
+  gProvince.x = smoothstep(0.35, 0.65, 0.5 + 0.5 * (a1.x + 0.35 * a2.x) / 1.35);
+}
+float provinceWeight(int fid){
+  float f = 1.0 - gProvince.x; float fl = 0.25;   // height.glsl.js:853, the PROV_CRATERS branch
+  return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);   // height.glsl.js:901, verbatim
+}
+
+// ── craterProfile — BYTE-FAITHFUL to the lab (vitest-pinned analytic dhdr). ──
+`;
+
+// ⭐ `initProvinces` IS NO LONGER CALLED IN HERE. It was, and that was the last thing keeping this
+// function host-specific: the lab initialises the province field ONCE per fragment before every
+// feature combiner (planetShaders.glsl.js:209, planet-lod-rivers.js:329) and the game did it inside
+// this function instead. Now both hosts call it at the call site, so this body is byte-identical for
+// the two of them. Pure in `pos`, so lifting it out moves no pixel on either side.
+export const CRATER_COMBINER_GLSL = /* glsl */ `
 void craterEjectaCombiner(vec3 dir, inout float h, inout vec3 slope){
   if (uCraterDensity <= 0.0) return;
 
@@ -174,7 +203,6 @@ void craterEjectaCombiner(vec3 dir, inout float h, inout vec3 slope){
   // lab, which pins this to force morphology == 0 because every crater it draws is sub-floor.
   float morphology = smoothstep(uCraterComplexD*0.6, uCraterComplexD, diameter);
   float r = ff.x / craterRadius;
-  initProvinces(dir);                             // per-fragment province field (lab: initProvinces(pos))
   float pw = provinceWeight(PROV_CRATERS);         // craters keep to old terrain (anti-tectonic)
 
   // dr/d(dir), chain-ruled exactly. Shared by both profiles — the merge's whole point.
@@ -239,3 +267,7 @@ void craterEjectaCombiner(vec3 dir, inout float h, inout vec3 slope){
   slope += eamp * (m * eprof.y * drdp + eprof.x * dmdp);
 }
 `;
+
+/** The whole crater path in declaration order — the GAME's single splice. Unchanged by the split. */
+export const CRATER_RELIEF_GLSL =
+  CRATER_CELLULAR_GLSL + CRATER_PROVINCE_SLICE_GLSL + CRATER_COMBINER_GLSL;

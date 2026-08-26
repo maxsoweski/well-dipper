@@ -25,7 +25,7 @@ import {
   craterUniformsFrom, coverageBand, CRATERS_OFF,
   CELL_CRATER_AREA, RENDERED_CELL_COVERAGE, CRATER_VIS_FLOOR_RAD, EJECTA_RIM_FRACTION,
 } from '../src/worldengine/port/craterUniforms.js';
-import { craterSchedule, transitionDiameterKm } from '../src/worldengine/base/bombardment.js';
+import { craterSchedule, transitionDiameterKm } from '../src/worldengine/base/bombardment.js'; import { CRATER_COMBINER_GLSL } from '../src/worldengine/shaders/craterRelief.glsl.js';   // ⛔ RIDES THIS LINE — :74 below is cited from craterRelief.glsl.js and a NEW import line would shift it.
 import { radPerKm } from '../src/worldengine/base/baseStep.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { generateSolarSystem } from '../src/generation/SolarSystemData.js';  import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js'; import { compositionClass } from '../src/worldengine/base/e1Regime.js';  // ⛔ RIDE THIS LINE: tests/driver-pack-rockysurface.test.js:1092 cites crater-uniform-law.test.js:74 by symbol, so a new import LINE reds the citation fence. Same idiom as src/objects/Moon.js:3.
@@ -313,7 +313,34 @@ describe('crater wiring fence — the domain and the accumulator', () => {
   const planet = readFileSync(join(root, 'src/objects/Planet.js'), 'utf8');
 
   it('the combiner is called on the UNIT direction, not on object-space vPosition', () => {
-    expect(planet).toMatch(/craterEjectaCombiner\(\s*normalize\(pos\)\s*,\s*gCraterH\s*,\s*gCraterSlope\s*\)/);
+    // ⭐ WIDENED 2026-08-26, AND STRICTLY STRONGER THAN WHAT IT REPLACED. It used to scrape the one
+    // literal `craterEjectaCombiner(normalize(pos), ...)`. That spelling stopped being the only
+    // correct one when `initProvinces` was lifted out of the combiner so the body could be the ONE
+    // shared source for lab and game — the call site now needs the same direction TWICE, so it binds
+    // a named temp. Scraping a spelling would have forced the shared-source work to either weaken
+    // this fence or write worse GLSL. So it now checks the PROPERTY, plus the new invariant that
+    // lifting the init created: the province field must be initialised from the SAME direction the
+    // combiner is handed, or craters get their province weight from somewhere else on the sphere.
+    const call = planet.match(/craterEjectaCombiner\(\s*([A-Za-z_][\w.]*|normalize\(pos\))\s*,\s*gCraterH\s*,\s*gCraterSlope\s*\)/);
+    expect(call, 'craterEjectaCombiner must be called with (dir, gCraterH, gCraterSlope)').toBeTruthy();
+    const arg = call[1];
+    if (arg !== 'normalize(pos)') {
+      // a named temp is fine, but it must BE normalize(pos) — bound once, in the same scope
+      expect(planet, `${arg} must be bound to normalize(pos)`)
+        .toMatch(new RegExp(`vec3\\s+${arg}\\s*=\\s*normalize\\(pos\\)\\s*;`));
+    }
+    // the province field is initialised from that same direction, BEFORE the combiner reads it
+    const initAt = planet.search(new RegExp(`initProvinces\\(\\s*${arg.replace(/[()]/g, '\\$&')}\\s*\\)`));
+    expect(initAt, 'initProvinces must be called on the same direction as the combiner').toBeGreaterThan(-1);
+    expect(initAt).toBeLessThan(planet.indexOf('craterEjectaCombiner(' + arg));
+  });
+
+  it('the shared combiner body carries NO host-specific province init', () => {
+    // The whole point of lifting it: this body must be byte-identical for both front-ends, so the
+    // lab (which initialises provinces once per fragment at planetShaders.glsl.js:209) can splice
+    // the SAME string the game does. An initProvinces call back inside it re-privatises the module.
+    expect(CRATER_COMBINER_GLSL).not.toMatch(/initProvinces\s*\(/);
+    expect(CRATER_COMBINER_GLSL).toMatch(/provinceWeight\(PROV_CRATERS\)/);
   });
 
   it('the crater slope is a SEPARATE argument to perturbNormalAnalytic, not folded into gReliefD', () => {

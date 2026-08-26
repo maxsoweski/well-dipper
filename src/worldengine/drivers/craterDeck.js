@@ -119,7 +119,7 @@ export function craterDriverBlock(condition) {
     // a simplification: the GLSL keys the whole crater pass on the density
     // (src/worldengine/shaders/height.glsl.js:2203 `if (uCraterDensity <= 0.0) return;`) and the
     // whole apron on the strength
-    // (src/worldengine/shaders/craterRelief.glsl.js:222 `if (uEjectaStrength <= 0.0) return;`), so
+    // (src/worldengine/shaders/craterRelief.glsl.js:250 `if (uEjectaStrength <= 0.0) return;`), so
     // one zero deletes each pass byte-identically. Gating the morphology terms too would give the
     // same pixels and a different STATE — and would leave a gated-off body carrying the previous
     // body's terrace count behind a zero, invisible until something read them off-gate.
