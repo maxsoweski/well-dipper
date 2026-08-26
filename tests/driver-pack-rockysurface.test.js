@@ -76,7 +76,7 @@ import {
   PackContractError, gameDisplayRadiusEarth,
 } from '../src/worldengine/port/writePackUniforms.js';
 import { PACKS, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js';
-import { Planet, labPackCtx, setLabGasBodiesOverride, PLANET_SHADER_VARIANTS, shaderVariantFor } from '../src/objects/Planet.js';
+import { Planet, labPackCtx, setLabGasBodiesOverride, PLANET_SHADER_VARIANTS, shaderVariantFor } from '../src/objects/Planet.js';  import { HEIGHT_GLSL } from '../src/worldengine/shaders/height.glsl.js';   // ⛔ RIDES THIS LINE: :1543 below is cited and a new import line would shift it.
 import {
   rockySurfacePack, ROCKY_SURFACE_ENTRY, ROCKY_SURFACE_UNIFORMS,
   CRATER_GATE, EJECTA_GATE, C_CRATER, PERTURB_BASE,
@@ -1520,8 +1520,13 @@ describe('F — the entry is registry-ready and collision-free', () => {
   it('FAMILY 25 · SHADER FACTS: each gated uniform is a bare early-out gate in the GLSL', () => {
     // The pack's whole claim — "0 deletes the pass exactly, a real density restores it" — is a
     // claim about GLSL this suite cannot execute. It is pinned as source instead of assumed.
-    const h = read('src/worldengine/shaders/height.glsl.js');
-    expect(h).toContain('if (uCraterDensity <= 0.0) return;');
+    // ⭐ ASSERTED AGAINST THE ASSEMBLED SHADER, NOT THE RAW FILE, SINCE 2026-08-26 — and that is the
+    // stronger reading, not a concession. The crater gate used to be typed literally into
+    // height.glsl.js; the lab now SPLICES it from the shared craterRelief.glsl.js module (Max's
+    // converge ruling), so raw-text grep of height.glsl.js stopped seeing a gate that is still very
+    // much in the compiled program. What this suite actually claims is "the gate is in the GLSL the
+    // lab compiles", and HEIGHT_GLSL is that GLSL with every splice resolved.
+    expect(HEIGHT_GLSL).toContain('if (uCraterDensity <= 0.0) return;');
     const cr = read('src/worldengine/shaders/craterRelief.glsl.js');
     expect(cr).toContain('if (uEjectaStrength <= 0.0) return;');
     // …and the ejecta amplitude really is the product of the gate and the amplitude, so the gate is

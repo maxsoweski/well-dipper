@@ -335,8 +335,8 @@ export const ROUTER_MAIN = `
     vec3 grad = hd.yzw;
     vec3 gradBase = hd.yzw;
     mountainCombiner(vPos, fwBase, h, grad);
-    craterCombiner(vPos, h, grad);
-    ejectaCombiner(vPos, h, grad);
+    craterEjectaCombiner(vPos, h, grad);
+    // ⭐ F2+F3 ARE ONE CALL SINCE 2026-08-26 — craterCombiner and ejectaCombiner ran voronoi3d TWICE over the same domain, same cells, same per-cell hash, same host gate, same hashed radius. The merge is EXACT: every input to the second call was bit-identical to the first, so this halves the dominant term of the crater pass (27 hash33 evaluations at uVoroCells 27) and moves no pixel. The body is now the SHARED craterRelief.glsl.js one the game splices, which is the convergence Max asked for.
     canyonCombiner(vPos, h, canyonHeight, grad);
     outflowCombiner(vPos, h, canyonHeight, grad, 0.0);   // AC5 — order=0: outflow is a downstream scour, must NOT feed routing (order derives FROM routing; outflow off in routing). Early-outs ⇒ zero contribution, router baseline preserved.
     karstCombiner(vPos, h, canyonHeight, grad);

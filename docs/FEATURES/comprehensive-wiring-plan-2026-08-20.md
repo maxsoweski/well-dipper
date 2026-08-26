@@ -654,7 +654,7 @@ the six exotic presets exist so the (d) queue can ever be scored.
    Max named** — CH₄ (`uVolatileSpecies == 3`) is a sun-aligned periodic blade train at
    `height.glsl.js:3116-3131`, and the `voronoi3d` path at `:3137` serves H₂O / CO₂ / N₂ only, so scoping
    *"replace the cell system"* from his words fixes the wrong three species and leaves CH₄ untouched;
-   **QB-11's guess is correct** (src/worldengine/shaders/height.glsl.js:2812 `void facetCombiner(` is
+   **QB-11's guess is correct** (src/worldengine/shaders/height.glsl.js:2689 `void facetCombiner(` is
    voronoi3d, and the post-posterize spark is a second one), so "Theme A" is ~4 features, not 6;
    **QB-7 is not a cell problem at all** — `src/worldengine/shaders/height.glsl.js:2320`
    `void canyonCombiner(` is a great-circle plane cut, by construction a band wrapping the whole sphere,

@@ -289,8 +289,8 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
           // accumulator (Fluvial incised gorges + Cryo chasma ADD IN at stages 3/4); F5
           // scarps add fault-block relief onto h/grad (no shared accumulator).
           mountainCombiner(vPos, fwBase, h, grad);
-          craterCombiner(vPos, h, grad);
-          ejectaCombiner(vPos, h, grad);            // F3 — apron wrapping the F2 craters
+          craterEjectaCombiner(vPos, h, grad);
+          // ⭐ F2+F3 ARE ONE CALL SINCE 2026-08-26 — craterCombiner and ejectaCombiner ran voronoi3d TWICE over the same domain, same cells, same per-cell hash, same host gate, same hashed radius. The merge is EXACT: every input to the second call was bit-identical to the first, so this halves the dominant term of the crater pass (27 hash33 evaluations at uVoroCells 27) and moves no pixel. The body is now the SHARED craterRelief.glsl.js one the game splices, which is the convergence Max asked for.
           canyonCombiner(vPos, h, canyonHeight, grad);
           fluvialCombiner(vPos, h, canyonHeight, grad, fluvialWet);   // F11 — channels carve into canyonHeight
           float outflowOrder = textureCube(uRiverCarveMap, N).b;   // AC5 — baked Strahler order (B): place outflow on the REAL trunk (same object-space dir N as sampleCarve / deltaCombiner)

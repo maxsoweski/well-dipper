@@ -423,7 +423,7 @@ const GAME_ONLY_BY_DESIGN = Object.freeze([
 // is a citation-repair job and its own decision. TWO ROWS REMAIN, and both are carried past the merge
 // by design: `drivers/index.js` is a composition question and `shaders/craterRelief.glsl.js` is a
 // DECLARED divergence awaiting Max's permanent-or-not ruling.
-const IMPORT_BACK_DEBT_CEILING = 2;
+const IMPORT_BACK_DEBT_CEILING = 1;
 
 const IMPORT_BACK_DEBT = Object.freeze([
   // ⭐ THE TWO PACK ROWS (`craterDeck`, `rockySurface`) WERE DELETED 2026-08-25 — the lab imports and
@@ -435,17 +435,16 @@ const IMPORT_BACK_DEBT = Object.freeze([
       'The lab applies packs through `applyDriverPacks` instead of calling each pack individually. ' +
       'Blocked by the pack rows above — there is nothing to compose until the packs are imported.',
   }),
-  Object.freeze({
-    path: 'src/worldengine/shaders/craterRelief.glsl.js',
-    clears:
-      'A DECLARED divergence, not an oversight: the header records three deliberate departures from ' +
-      'the lab, each measured, and the transcription block inside tests/crater-uniform-law.test.js ' +
-      'pins them (⚠ CORRECTED 2026-08-25: this row used to cite tests/crater-relief-transcription.test.js, which does not exist and never has — the second row today whose stated blocker was fiction. ' +
-      '⛔ AND THAT FENCE IS NARROWER THAN THE ROW IMPLIES: it pins craterProfile, ejectaProfile, hash33 and voronoi3d only, so the two COMBINERS are outside it and an unmirrored change to either diverges silently). It clears ' +
-      'when the lab adopts the merged combiner — or it is promoted to a GAME_ONLY_BY_DESIGN row if ' +
-      'Max rules the divergences permanent. ⚠ Listed as debt rather than exempt BECAUSE that ruling ' +
-      'has not been made, and the plan names this exact file as the both-were-kept precedent.',
-  }),
+  // ⭐⭐ 2 -> 1 ON 2026-08-26 — `shaders/craterRelief.glsl.js` CLEARED, and it is the first row this
+  // ledger has lost to a CONVERGENCE rather than to an import-back of something the lab already had.
+  // Max ruled it: "we need to converge; I need to be able to stop saying this, that the lab and game
+  // need to have the same rendering system." The row's own text offered two exits — the lab adopts the
+  // merged combiner, or Max rules the divergences permanent and it is promoted to GAME_ONLY_BY_DESIGN.
+  // He took the first. The lab now imports CRATER_CELLULAR_GLSL + CRATER_COMBINER_GLSL at
+  // height.glsl.js:13 and splices both, having deleted its own hash33, voronoi3d, craterProfile,
+  // ejectaProfile, craterCombiner and ejectaCombiner (138 lines). ⚠ THE ROW IS DELETED RATHER THAN
+  // REWRITTEN AS CLEARED, because the liveness test above reds on a stale row — that is the rule this
+  // ledger is built on and it is what caught this one.
   // ⭐ `base/macroWavelength.js` ROW DELETED 2026-08-25 — it entered the lab's closure with the
   // crater wire, via `rockySurface.js`. The ceiling comment above states what that did and did NOT
   // close, because the distinction is the whole reason this row existed.

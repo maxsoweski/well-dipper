@@ -179,7 +179,7 @@ export const PERTURB_BASE = 0.55;
  *                                           is legal, invisible, and the P-13 defect itself.
  *   ⛔ `ctx.macroSeed` is NOT read — this pack draws no entropy (non-port 6 in the header).
  *   ⛔ `ctx.animRate` is NOT read — nothing in this family animates; the crater and palette GLSL is
- *      static (src/worldengine/shaders/height.glsl.js:2201 `// uCraterDensity≤0 ⇒ early-out, so the Stage-A base render is untouched.`).
+ *      static (src/worldengine/shaders/height.glsl.js:2158 `// uCraterDensity≤0 ⇒ early-out, so the Stage-A base render is untouched.`).
  *   ⛔ `ctx.relevance` is NOT read, and that is FORCED rather than chosen. See DECISION 2.
  * @returns {{drivers: object, attributes: object, meta: object}}
  */

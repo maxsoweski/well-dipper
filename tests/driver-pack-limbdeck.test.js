@@ -617,7 +617,7 @@ describe('F — the entry is registry-ready and collision-free', () => {
     // planet-lod-shaders.glsl.js:940 `vec3 limbC = uLimbColor * limb * provinceWeight(PROV_LIMB);`.
     // If that factor were zero on a game body, opening the strength gate would change no pixel and
     // this whole lane would be decoration. Measured from the source: PROV_LIMB's floor is 1.00, and
-    // planet-lod-height.glsl.js:901 `return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);` with
+    // planet-lod-height.glsl.js:880 `return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);` with
     // fl = 1.0 is `mix(1.0, 1.0, x)` — identically 1.0 for every field sample and every knob value.
     const h = read('src/worldengine/shaders/height.glsl.js');
     const row = h.split('\n').find((l) => l.includes('fid == PROV_LIMB'));

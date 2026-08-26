@@ -25,7 +25,7 @@ import {
   craterUniformsFrom, coverageBand, CRATERS_OFF,
   CELL_CRATER_AREA, RENDERED_CELL_COVERAGE, CRATER_VIS_FLOOR_RAD, EJECTA_RIM_FRACTION,
 } from '../src/worldengine/port/craterUniforms.js';
-import { craterSchedule, transitionDiameterKm } from '../src/worldengine/base/bombardment.js'; import { CRATER_COMBINER_GLSL } from '../src/worldengine/shaders/craterRelief.glsl.js';   // ⛔ RIDES THIS LINE — :74 below is cited from craterRelief.glsl.js and a NEW import line would shift it.
+import { craterSchedule, transitionDiameterKm } from '../src/worldengine/base/bombardment.js'; import { HEIGHT_GLSL } from '../src/worldengine/shaders/height.glsl.js'; import { CRATER_COMBINER_GLSL } from '../src/worldengine/shaders/craterRelief.glsl.js';   // ⛔ RIDES THIS LINE — :74 below is cited from craterRelief.glsl.js and a NEW import line would shift it.
 import { radPerKm } from '../src/worldengine/base/baseStep.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { generateSolarSystem } from '../src/generation/SolarSystemData.js';  import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js'; import { compositionClass } from '../src/worldengine/base/e1Regime.js';  // ⛔ RIDE THIS LINE: tests/driver-pack-rockysurface.test.js:1092 cites crater-uniform-law.test.js:74 by symbol, so a new import LINE reds the citation fence. Same idiom as src/objects/Moon.js:3.
@@ -245,37 +245,102 @@ describe('crater law — the game must NOT inherit the lab morphology pin', () =
 });
 
 // ── FENCE 1: the two analytic profiles are the lab's, token for token ─────────────────────────────
-describe('crater transcription fence — craterProfile / ejectaProfile match the lab source', () => {
-  const norm = (s) => s.replace(/\/\/[^\n]*/g, ' ').replace(/\s+/g, ' ').trim();
-  const grab = (src, sig) => {
-    const at = src.indexOf(sig);
-    if (at < 0) throw new Error(`signature not found: ${sig}`);
-    let depth = 0, i = src.indexOf('{', at);
-    const start = i;
-    for (; i < src.length; i++) {
-      if (src[i] === '{') depth++;
-      else if (src[i] === '}' && --depth === 0) return src.slice(start, i + 1);
-    }
-    throw new Error(`unbalanced body: ${sig}`);
-  };
-  const lab = readFileSync(join(root, 'src/worldengine/shaders/height.glsl.js'), 'utf8');
-  const game = readFileSync(join(root, 'src/worldengine/shaders/craterRelief.glsl.js'), 'utf8');
-
-  for (const sig of [
+describe('crater SINGLE-SOURCE fence — there is nothing left to transcribe', () => {
+  // ⭐⭐ THIS FENCE REPLACED A TRANSCRIPTION FENCE ON 2026-08-26, AND THE REPLACEMENT IS STRICTLY
+  // STRONGER. The old one held four functions byte-identical between the lab's copy in height.glsl.js
+  // and the game's copy in craterRelief.glsl.js. It was the right fence for as long as there were two
+  // copies. Max then ruled the convergence — "we need to converge; I need to be able to stop saying
+  // this, that the lab and game need to have the same rendering system" — the lab deleted its six
+  // copies and now splices the game's module, and the old fence's own liveness control started
+  // failing because there was no second copy left to differ from.
+  //
+  // ⛔ A FENCE THAT CANNOT FAIL IS NOT A FENCE, and deleting it silently would have removed the only
+  // thing standing between here and a re-fork. So it asserts the STRONGER property that made it
+  // vacuous: not "the two copies agree" but "there is only one copy, and both front-ends reach it."
+  const labSrc  = readFileSync(join(root, 'src/worldengine/shaders/height.glsl.js'), 'utf8');
+  const gameSrc = readFileSync(join(root, 'src/objects/Planet.js'), 'utf8');
+  const shared  = readFileSync(join(root, 'src/worldengine/shaders/craterRelief.glsl.js'), 'utf8');
+  const DEFS = [
     'vec2 craterProfile(float r, float morphology, float relaxation, float terraceCount)',
     'vec2 ejectaProfile(float r, float rampart, float rOuter)',
     'vec3 hash33(vec3 p)',
     'vec2 voronoi3d(vec3 p, int cells, out vec3 cellId, out vec3 grad)',
-  ]) {
-    it(`${sig.split('(')[0]} is byte-identical to the lab modulo whitespace and comments`, () => {
-      expect(norm(grab(game, sig))).toBe(norm(grab(lab, sig)));
+    'void craterEjectaCombiner(',
+  ];
+
+  for (const sig of DEFS) {
+    it(`${sig.split('(')[0]} is defined ONCE, in the shared module`, () => {
+      const count = (h, n) => h.split(n).length - 1;
+      expect(count(shared, sig), `${sig} must live in craterRelief.glsl.js`).toBe(1);
+      expect(count(labSrc, sig), `${sig} must NOT be re-declared in height.glsl.js`).toBe(0);
     });
   }
 
-  it('the fence can fail — a one-constant mutation is caught', () => {
-    const mutated = grab(game, 'vec2 ejectaProfile(float r, float rampart, float rOuter)')
-      .replace('(r - 2.0)/0.3', '(r - 2.5)/0.3');
-    expect(norm(mutated)).not.toBe(norm(grab(lab, 'vec2 ejectaProfile(float r, float rampart, float rOuter)')));
+  it('the lab reaches the shared module by SPLICE, not by having its own copy', () => {
+    expect(labSrc).toMatch(/import \{[^}]*CRATER_CELLULAR_GLSL[^}]*\} from '\.\/craterRelief\.glsl\.js'/);
+    expect(labSrc).toContain('${CRATER_CELLULAR_GLSL}');
+    expect(labSrc).toContain('${CRATER_COMBINER_GLSL}');
+    // and the cellular keystone precedes the combiner, or GLSL sees a call before a declaration
+    expect(labSrc.indexOf('${CRATER_CELLULAR_GLSL}')).toBeLessThan(labSrc.indexOf('${CRATER_COMBINER_GLSL}'));
+  });
+
+  it('the game reaches the SAME module', () => {
+    expect(gameSrc).toMatch(/CRATER_RELIEF_GLSL[\s\S]{0,200}from '\.\.\/worldengine\/shaders\/craterRelief\.glsl\.js'/);
+    expect(gameSrc).toContain('${CRATER_RELIEF_GLSL}');
+  });
+
+  it('CONTROL: the fence can fail — a re-declared copy in the lab is caught', () => {
+    // the exact regression this replaces the transcription fence to catch: someone pastes a local
+    // copy back into height.glsl.js and the two sources fork again, silently.
+    const forked = labSrc.replace('${CRATER_CELLULAR_GLSL}', 'vec3 hash33(vec3 p){ return vec3(0.0); }');
+    expect((forked.split('vec3 hash33(vec3 p)').length - 1)).toBe(1);
+    expect(forked).not.toContain('${CRATER_CELLULAR_GLSL}');
+  });
+});
+
+describe('assembled-shader fence — the lab GLSL is well-formed after every splice', () => {
+  // ⭐ THIS EXISTS BECAUSE THE SPLICE COULD ONLY FAIL ONE WAY AND NOTHING WATCHED FOR IT.
+  // Converging the crater path moved six function bodies out of height.glsl.js and back in through
+  // TWO separate `${...}` splices, chosen so the cellular keystone lands above the lab's first
+  // voronoi3d consumer and the combiner lands below the lab's provinceWeight. Get that order wrong
+  // and GLSL sees a call before a declaration — a compile failure, a black planet, and NOT ONE
+  // STRING ASSERTION IN THIS REPO WOULD HAVE MOVED, because every one of them greps source text
+  // while the defect only exists in the assembled program.
+  //
+  // ⚠ THIS IS NOT A COMPILER AND DOES NOT CLAIM TO BE. There is no headless GL in this project
+  // (no puppeteer, no playwright, no gl), so the live check is still a browser and still Max's dev
+  // server. What this pins is the specific, checkable class the splice can break.
+  const code = HEIGHT_GLSL.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+
+  it('every function is defined before it is called', () => {
+    const DEF = /\b(?:void|float|int|bool|vec2|vec3|vec4|mat2|mat3|mat4)\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*\{/g;
+    const defs = new Map();
+    for (let d; (d = DEF.exec(code)); ) if (!defs.has(d[1])) defs.set(d[1], d.index);
+    const RESERVED = new Set(['if', 'for', 'while', 'switch', 'return', 'main',
+      'vec2', 'vec3', 'vec4', 'mat2', 'mat3', 'mat4', 'float', 'int', 'bool']);
+    const CALL = /\b([A-Za-z_]\w*)\s*\(/g;
+    const early = [];
+    for (let c; (c = CALL.exec(code)); ) {
+      const n = c[1];
+      if (RESERVED.has(n) || !defs.has(n)) continue;
+      if (c.index < defs.get(n) && Math.abs(c.index - defs.get(n)) >= 2) early.push(n);
+    }
+    expect([...new Set(early)], 'these are called before they are declared').toEqual([]);
+    expect(defs.size, 'the walker must actually find the function library').toBeGreaterThan(50);
+  });
+
+  it('braces balance and no backtick survived into the GLSL', () => {
+    expect(code.split('{').length).toBe(code.split('}').length);
+    // one backtick ends the template literal early and silently un-collects suites — it has happened
+    expect((HEIGHT_GLSL.match(/`/g) || []).length).toBe(0);
+  });
+
+  it('CONTROL: the order check can fail — swapping the two crater splices is caught', () => {
+    // craterEjectaCombiner calls provinceWeight; hoisting the combiner above it must be detectable.
+    const broken = 'float provinceWeight(int fid){ return 1.0; }';
+    const hoisted = 'void x(){ provinceWeight(1); }\n' + broken;
+    const defAt = hoisted.indexOf(broken);
+    expect(hoisted.indexOf('provinceWeight(1)')).toBeLessThan(defAt);
   });
 });
 

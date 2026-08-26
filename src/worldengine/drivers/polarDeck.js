@@ -152,7 +152,7 @@ export const POLAR_GATE = 'polarVortex';
  *                                           see the vacuity note below.
  *   @param {number} ctx.animRate            unread by this pack; no F29 uniform animates. The GLSL
  *                                           consumer is explicitly static —
- *                                           planet-lod-height.glsl.js:1796 `ALBEDO/LUMINANCE ONLY — no h/grad writes; static — no uTime`.
+ *                                           planet-lod-height.glsl.js:1775 `ALBEDO/LUMINANCE ONLY — no h/grad writes; static — no uTime`.
  *   @param {object} ctx.gates               must carry `polarVortex` — an ABSENT key throws.
  *   @param {object} ctx.relevance           unread. See the FORCED note in the header.
  *   PACK-SPECIFIC:
@@ -235,7 +235,7 @@ export function polarDeckPack(condition, ctx = {}) {
   // ⭐ ONLY `uPolarStrength` CARRIES THE GATE, and that reproduces the lab exactly rather than being
   // a simplification: world-engine-lab.html:5196 `      // F29 polar vortex — polarVortexEnabled gates strength→0 ONLY (the GLSL call`
   // says the enable gate zeroes strength ALONE, because the GLSL call site keys on `uPolarStrength`
-  // — planet-lod-height.glsl.js:2167 `        if (uPolarStrength > 0.0) col = polarVortexCol(N, col);` — so one gate kills the whole
+  // — planet-lod-height.glsl.js:2146 `        if (uPolarStrength > 0.0) col = polarVortexCol(N, col);` — so one gate kills the whole
   // combiner and restores byte-identical F28 output, while the other seven keep their derived values.
   // Gating all eight would give the same pixels and a different STATE, which is the class of change
   // the lab's own 52/52 note above says no gate in this repo can see.

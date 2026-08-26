@@ -10,7 +10,7 @@
 // be duplicated there behind a byte-identity drift-guard; the guard existed only because this
 // file was contested by a second lane. That lane merged (c854c09), so there is one copy again.
 // Edit them THERE.
-import { HASH3_NOISED_GLSL, FBMD_GLSL } from './heightNoise.glsl.js';
+import { HASH3_NOISED_GLSL, FBMD_GLSL } from './heightNoise.glsl.js';  import { CRATER_CELLULAR_GLSL, CRATER_COMBINER_GLSL } from './craterRelief.glsl.js';   // ⛔ RIDES THIS LINE: a new import line shifts every cited line below it in this file.
 
 export const HEIGHT_GLSL = /* glsl */ `
       precision highp float;
@@ -719,36 +719,8 @@ export const HEIGHT_GLSL = /* glsl */ `
       // sphere (no UV seam, no pole pinch) — the reason to pay for 27 cells.
       // Transcribed from the CPU oracle in planet-lod-lab-core.js (same hash).
       // hash33 returns [0,1)^3 cell-jitter — DISTINCT from the signed hash3 above.
-      vec3 hash33(vec3 p){
-        p = vec3( dot(p, vec3(127.1, 311.7,  74.7)),
-                  dot(p, vec3(269.5, 183.3, 246.1)),
-                  dot(p, vec3(113.5, 271.9, 124.6)) );
-        return fract(sin(p) * 43758.5453123);
-      }
       // returns vec2(F1, F2); cellId + grad(=∂F1/∂p, the relief-normal term) via out.
       // cells: 27 = full 3×3×3 (seam-free desktop) ; <27 = center-slab 9 (lossy mobile).
-      vec2 voronoi3d(vec3 p, int cells, out vec3 cellId, out vec3 grad){
-        vec3 ip = floor(p);
-        vec3 fp = fract(p);
-        float f1 = 1e9, f2 = 1e9;
-        vec3 nCell = ip, nR = vec3(0.0);
-        for (int gz=-1; gz<=1; gz++){
-          if (cells < 27 && gz != 0) continue;     // 9-cell: center slab only
-          for (int gy=-1; gy<=1; gy++){
-            for (int gx=-1; gx<=1; gx++){
-              vec3 g = vec3(float(gx), float(gy), float(gz));
-              vec3 c = g + hash33(ip + g);          // jittered center, rel to ip cell
-              vec3 r = c - fp;                       // fragment -> center
-              float d = length(r);
-              if (d < f1){ f2 = f1; f1 = d; nCell = ip + g; nR = r; }
-              else if (d < f2){ f2 = d; }
-            }
-          }
-        }
-        cellId = nCell;
-        grad = (f1 > 1e-6) ? (-nR / f1) : vec3(0.0); // = normalize(p - center)
-        return vec2(f1, f2);
-      }
 
       // ── emissiveBlackbody — shared incandescence color ramp (integration-index §1) ──
       // ONE curve, two consumers: BANDS thermal (F32/F33) + EXOTIC magma (F41).
@@ -769,6 +741,13 @@ export const HEIGHT_GLSL = /* glsl */ `
       // ── NEW: variable-octave analytic FBM. Returns vec4(height, gradient.xyz). ──
       // octaves = mix(4,9,lodRamp); fractional trailing-octave weight = pop-free ramp;
       // fwidth clamp fades sub-pixel octaves to their mean (kills dither shimmer).
+      // ⭐ THE CELLULAR KEYSTONE + THE TWO CRATER PROFILES NOW COME FROM THE SHARED MODULE, 2026-08-26.
+      // hash33, voronoi3d, craterProfile and ejectaProfile used to be declared here as the lab's own
+      // copies. They were diffed against craterRelief.glsl.js before deletion and were IDENTICAL modulo
+      // comments and whitespace, so this splice moves no pixel. It has to sit HERE, above the lab's first
+      // other voronoi3d consumer, because GLSL wants declaration before use; the combiner cannot come with
+      // it, because that needs provinceWeight, which is declared further down. Hence two splices.
+      ${CRATER_CELLULAR_GLSL}
       ${FBMD_GLSL}
 
       // ── Stage-D provinces (index §8 — LIVE 2026-06-10) — the shared large-scale partition ──
@@ -2171,102 +2150,17 @@ export const HEIGHT_GLSL = /* glsl */ `
       // ── F2 craters (Stage-C step 3, Relief) — transcribed from craterProfile()
       // in planet-lod-lab-core.js (same constants, vitest-pinned analytic dhdr).
       // r = dist(fragment,center)/craterRadius. Returns vec2(height, dh/dr).
-      vec2 craterProfile(float r, float morphology, float relaxation, float terraceCount){
-        float h = 0.0, dhdr = 0.0;
-        if (r < 1.0){
-          h    += 0.2 * (r*r - 1.0);                        // parabolic cavity (depth/diam ≈0.2)
-          dhdr += 0.2 * 2.0 * r;
-          float u = clamp(r/0.4, 0.0, 1.0);                 // central peak: s = 1 − smoothstep(0,0.4,r)
-          float s = 1.0 - (u*u*(3.0-2.0*u));
-          float dsdr = -(6.0*u*(1.0-u)) * (1.0/0.4);        // d/dr; auto-0 once clamped (u=1)
-          h    += morphology * 0.14 * s;
-          dhdr += morphology * 0.14 * dsdr;
-          float tw = 0.02 * morphology;                     // terraces: cos rings on the inner wall
-          float w  = 6.28318530718 * terraceCount;
-          h    += tw * cos(w*r);
-          dhdr += tw * (-w) * sin(w*r);
-        }
-        float rs = (r - 1.0)/0.18;                          // rim: gaussian peak at r≈1
-        float rg = exp(-(rs*rs));
-        h    += 0.05 * rg;
-        dhdr += 0.05 * rg * (-2.0*(r-1.0)/(0.18*0.18));
-        float k = 1.0 - relaxation;                         // relaxation → palimpsest
-        return vec2(h*k, dhdr*k);
-      }
 
       // The crater combiner — first consumer of the voronoi3d keystone (index §1).
       // Per cell: a hash gates whether it hosts a crater (uCraterDensity fraction)
       // and hashes its radius; morphology = smoothstep on the g⁻¹ transition diameter
       // (NO type branch). Accumulates the crater height delta + its chain-rule gradient.
       // uCraterDensity≤0 ⇒ early-out, so the Stage-A base render is untouched.
-      void craterCombiner(vec3 pos, inout float h, inout vec3 grad){
-        if (uCraterDensity <= 0.0) return;
-        vec3 cellId, voroGrad;
-        vec2 ff = voronoi3d(pos * uCraterScale + uCraterOffset, uVoroCells, cellId, voroGrad);
-        vec3 ch = hash33(cellId);                                   // per-cell hash: host gate + radius
-        float host = step(1.0 - uCraterDensity, ch.x);             // uCraterDensity fraction of cells crater
-        float craterRadius = mix(0.18, 0.55, ch.y);                // hashed size (cell units)
-        float diameter = 2.0 * craterRadius;
-        float morphology = smoothstep(uCraterComplexD*0.6, uCraterComplexD, diameter);
-        float r = ff.x / craterRadius;
-        vec2 prof = craterProfile(r, morphology, uCraterRelaxation, uTerraceCount);
-        float pw = provinceWeight(PROV_CRATERS);     // §8: craters keep to old terrain (anti-tectonic)
-      // THE 2026-08-25 CRATER-SHAPE FIX IS THE "* diameter" TERM, NOT A SCALE TWEAK — READ BEFORE REMOVING IT.
-      // uCraterAmp is ONE number per body, so before this line carried the size term every crater in the
-      // field got the SAME ABSOLUTE DEPTH while its width was hashed over mix(0.18, 0.55) — a 3.06x
-      // spread. Composed depth is CRATER_DEPTH * amp and width is diameter / uCraterScale, and
-      // src/worldengine/port/craterUniforms.js:150 pins amp * scale == 1 EXACTLY, so the old depth/diameter
-      // ratio was CRATER_DEPTH / diameter: 0.18 at the widest hashed crater and 0.56 at the narrowest,
-      // against Pike's ~0.20 for real simple craters. The small ones rendered as SPIKES.
-      // MULTIPLYING BY diameter MAKES d/D SIZE-INVARIANT: it becomes
-      // CRATER_DEPTH * uCraterAmp * uCraterScale, with no hashed term left in it, at EVERY hashed size.
-      // THE LEVEL THAT LANDS AT IS NOT THE SAME IN THE TWO FRONT-ENDS, AND THE FIRST DRAFT OF THIS NOTE
-      // GOT THAT WRONG BY READING ONE OF THEM. In the GAME amp * scale == 1 exactly (pinned at
-      // tests/crater-uniform-law.test.js:74), so d/D lands on CRATER_DEPTH == D_D_SIMPLE == 0.20, Pike
-      // exactly. In the LAB it does NOT: world-engine-lab.html:5358 multiplies uCraterScale by the display
-      // scale while :5359 writes uCraterAmp raw, so the product is the display-resolved one —
-      // MEASURED LIVE 0.522 (Moon/Mercury), 0.649 (Frozen), 0.728 (Mars) — and d/D lands on 0.10 to 0.15.
-      // (THE DISPLAY-SCALE TOKEN IS DELIBERATELY NOT SPELLED ON THAT LINE. tests/vis-scale-fence.test.js
-      // bans it from every file under src/worldengine/**, COMMENTS INCLUDED, and naming it here reds
-      // five of its assertions — which is how this note was caught the first time it was written.)
-      // That lab/game gap is PRE-EXISTING, is the vis-scale seam itself, and this fix neither creates nor
-      // closes it. What this fix changes is the SPREAD: d/D swept 0.095 to 0.40 across one body's own
-      // crater field and now does not sweep at all.
-      // THE CALIBRATION POINT IS UNMOVED, which is why this is a fix and not a re-tune: a crater one cell
-      // unit across (diameter == 1.0, the characteristic crater Dchar the amp law is solved for) multiplies
-      // by exactly 1.0 and renders bit-identically. Only the off-nominal sizes move, and they move TOWARD
-      // the law the amp was already derived from.
-      // THIS LINE HAS A TWIN AND NOTHING PINS THEM TOGETHER. the game's merged craterEjectaCombiner at src/worldengine/shaders/craterRelief.glsl.js:218 carries the identical
-      // expression. The transcription fence in tests/crater-uniform-law.test.js pins only craterProfile,
-      // ejectaProfile, hash33 and voronoi3d — the COMBINERS are outside it, so a change here that is not
-      // mirrored there diverges SILENTLY. Both moved together.
-      // THE EJECTA APRON IS DELIBERATELY NOT TOUCHED. Its amplitude is uEjectaStrength * uEjectaAmp
-      // in ejectaCombiner, and that whole family is an open A/B for Max (a ~113x change); folding a size term into
-      // one factor of it here would pre-empt his ruling and move the lab further from the game, not closer.
-      // AND NO BACKTICK APPEARS ANYWHERE ABOVE, ON PURPOSE: this is inside a GLSL template literal, and one
-      // backtick terminates the string, silently un-collects 15 test files and LOWERS the failure count.
-        float amp = uCraterAmp * diameter * host * pw;
-        h    += amp * prof.x;
-        // d(h)/d(vPos) = dh/dr · (1/craterRadius) · d(f1)/d(vPos);  d(f1)/d(vPos) = voroGrad·uCraterScale
-        grad += amp * prof.y * (1.0/craterRadius) * voroGrad * uCraterScale;
-      }
 
       // ── F3 ejecta apron (Stage-C step 3, Relief) — transcribed from ejectaProfile()
       // in planet-lod-lab-core.js (same constants, vitest-pinned analytic dhdr §5.4).
       // r = dist/craterRadius. Apron lives in 1<r<rOuter; F2 owns r≤1. rampart blends
       // the dry 1/r² skirt (0) ↔ the fluidized lobate terminal ridge (1). vec2(h, dh/dr).
-      vec2 ejectaProfile(float r, float rampart, float rOuter){
-        if (r <= 1.0 || r >= rOuter) return vec2(0.0);
-        float invO2 = 1.0/(rOuter*rOuter);
-        float norm  = 1.0/(1.0 - invO2);                  // skirt(1)=1, skirt(rOuter)=0
-        float skirt  = (1.0/(r*r) - invO2) * norm;
-        float dskirt = (-2.0/(r*r*r)) * norm;
-        float rs = (r - 2.0)/0.3;                          // rampart ridge at r=2.0, w=0.3
-        float ridge  = exp(-(rs*rs));
-        float dridge = ridge * (-2.0*(r-2.0)/(0.3*0.3));
-        return vec2(skirt*(1.0-rampart) + ridge*rampart,
-                    dskirt*(1.0-rampart) + dridge*rampart);
-      }
 
       // F3 ejecta combiner — WRAPS the same F2 voronoi3d craters (no new placement):
       // identical scale/offset/host-gate/hashed-radius, so the apron rings exactly the
@@ -2277,31 +2171,6 @@ export const HEIGHT_GLSL = /* glsl */ `
       // analytic grad; the soft patch mask's r-derivative is treated locally-constant
       // (the Musgrave convention this codebase already uses for octave weights).
       // uEjectaStrength≤0 ⇒ early-out (Stage-A base + F1/F2/F4/F5/F6 untouched).
-      void ejectaCombiner(vec3 pos, inout float h, inout vec3 grad){
-        if (uEjectaStrength <= 0.0) return;
-        vec3 cellId, voroGrad;
-        vec2 ff = voronoi3d(pos * uCraterScale + uCraterOffset, uVoroCells, cellId, voroGrad);
-        vec3 ch = hash33(cellId);                                   // SAME per-cell hash as F2
-        float host = step(1.0 - uCraterDensity, ch.x);             // SAME host gate
-        float craterRadius = mix(0.18, 0.55, ch.y);                // SAME hashed radius
-        float r = ff.x / craterRadius;
-        vec2 prof = ejectaProfile(r, uEjectaRampart, 2.5);
-        vec4 ln = noised(pos * (uCraterScale * 2.7) + uCraterOffset);  // .x value, .yzw grad
-        float fbm = 0.5 + 0.5 * ln.x;                              // 0..1
-        float patchMask = mix(1.0, smoothstep(0.35, 0.85, fbm), smoothstep(1.2, 2.2, r)); // patchy outward
-        float lump = mix(1.0, fbm, uEjectaLump);
-        float m = host * lump * patchMask;
-        // §8: ejecta wraps F2's craters — SAME affinity (PROV_CRATERS) so aprons never
-        // ring province-suppressed craters.
-        float pw = provinceWeight(PROV_CRATERS);
-        float amp = uEjectaStrength * uEjectaAmp * pw;
-        h += amp * m * prof.x;
-        // d(amp·m·prof.x)/dpos = amp·[ m·prof.y·dr/dpos + prof.x·dm/dpos ]
-        vec3 drdp = (1.0/craterRadius) * voroGrad * uCraterScale;  // dr/dpos (chain-ruled, exact)
-        vec3 dfbm = 0.5 * ln.yzw * (uCraterScale * 2.7);           // d(fbm)/dpos from noised()
-        vec3 dmdp = host * patchMask * uEjectaLump * dfbm;         // lump term (patchMask r-deriv held constant)
-        grad += amp * (m * prof.y * drdp + prof.x * dmdp);
-      }
 
       // F3 bright rays — the ALBEDO exception (relief doc §F3.a): high-albedo streaks
       // radiating from YOUNG AIRLESS craters. NOT relief (no height/grad) — returns a
@@ -2310,6 +2179,14 @@ export const HEIGHT_GLSL = /* glsl */ `
       // Azimuth from a stable per-crater basis (e1,e2) — constant-azimuth = a ray line.
       // uRayBrightness≤0 (driven airless×young gate) ⇒ 0. LIMITATION: rays truncate at
       // Voronoi cell boundaries (a ray system physically overruns its cell) — carry-forward.
+      // ⭐ ONE COMBINER, SHARED. This replaces the lab's craterCombiner + ejectaCombiner, which ran
+      // voronoi3d TWICE over the same domain with the same cells, the same per-cell hash, the same host
+      // gate and the same hashed radius. Merging them is EXACT, not an approximation: every input to the
+      // second call was bit-identical to the first. The lab keeps its OWN full province law above and
+      // splices only this body, which is why the module is split rather than spliced whole.
+      // ⛔ initProvinces is NOT called in here. The lab already calls it once per fragment before every
+      // feature combiner (planetShaders.glsl.js:209); the game now does the same at its call site.
+      ${CRATER_COMBINER_GLSL}
       float rayField(vec3 pos){
         if (uRayBrightness <= 0.0) return 0.0;
         vec3 cellId, voroGrad;

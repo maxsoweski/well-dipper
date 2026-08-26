@@ -117,7 +117,7 @@ export function craterDriverBlock(condition) {
     // ── The impact family (10) ───────────────────────────────────────────────────────────────────
     // ⭐ ONLY THE TWO MASTER GATES CARRY A GATE, which reproduces the lab exactly rather than being
     // a simplification: the GLSL keys the whole crater pass on the density
-    // (src/worldengine/shaders/height.glsl.js:2203 `if (uCraterDensity <= 0.0) return;`) and the
+    // (src/worldengine/shaders/craterRelief.glsl.js:193 `if (uCraterDensity <= 0.0) return;`) and the
     // whole apron on the strength
     // (src/worldengine/shaders/craterRelief.glsl.js:250 `if (uEjectaStrength <= 0.0) return;`), so
     // one zero deletes each pass byte-identically. Gating the morphology terms too would give the
