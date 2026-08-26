@@ -3,7 +3,7 @@
 **Date:** 2026-06-15
 **Author:** working-Claude (brainstormed with Max)
 **Status:** spec — pending Max review → implementation plan
-**Scope:** `planet-lod-lab.html` (GUI only). **No shader/core changes**
+**Scope:** `world-engine-lab.html` (GUI only). **No shader/core changes**
 (`planet-lod-lab-core.js` untouched), **no generator, no new data file, no drift guard** — all
 content is derived at runtime from modules that are *already* authoritative. This cannot regress any
 planet rendering.
@@ -32,7 +32,7 @@ runtime** from `ARCHETYPES` / `FEATURES` / `featuresOf()` / live enable state.
 ### Data flow (fully derived; nothing authored)
 
 ```
-planet-archetypes.js  ──import (already)──▶  planet-lod-lab.html
+planet-archetypes.js  ──import (already)──▶  world-engine-lab.html
   ARCHETYPES[key] = { label, bodies, presets }       inline ⓘ archetype info block
   FEATURES[key]   = { label, enableKey, archetypes }  (re-derived on preset/toggle change)
   featuresOf(archKey) → [featureKey, …]
@@ -144,7 +144,7 @@ This matches Ask 2's approach: the structured/state-bearing parts re-render on t
 
 ## Mechanics & risks (on the record)
 
-- **Line-number drift** in `planet-lod-lab.html` is real — all line numbers in this spec are **HINTS**.
+- **Line-number drift** in `world-engine-lab.html` is real — all line numbers in this spec are **HINTS**.
   Re-`grep -n` every edit site (`relevantFeatureSet`, `applyArchetypeFilter`, `fWorld`,
   `archetypeLabel`, `relocateEnableToTitle`); do **NOT** trust line numbers from this spec.
 - **Header `M` vs. per-archetype roster sums will differ by design** (the rosters double-count
@@ -174,7 +174,7 @@ This matches Ask 2's approach: the structured/state-bearing parts re-render on t
 ## Verification
 
 - **Live on chrome-devtools GPU `:9223`** (NOT Playwright):
-  `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`. **Reload `?fresh=1` before each check.**
+  `localhost:5173/well-dipper/world-engine-lab.html?fresh=1`. **Reload `?fresh=1` before each check.**
   Verify via `window._lab.*` helpers + `evaluate_script` **DOM queries** — NOT image recognition.
   - **Venus (sulfuric shroud)** → the view shows **BOTH** archetypes
     (`Tectonic / terrestrial` *and* `Volcanic`) with their `bodies` ("like Earth, Venus, Mars" /
@@ -191,5 +191,5 @@ This matches Ask 2's approach: the structured/state-bearing parts re-render on t
   staying green.
 - **Existing suites** (`feature-associations`, `planet-archetypes`, the `cityLightsEnabled` pin #16,
   the Stage-D GLSL drift-guard) stay green — this is a purely **additive** GUI change.
-- **Commit explicit paths only** (`planet-lod-lab.html`) — never `git add -A` (shared-tree litter:
+- **Commit explicit paths only** (`world-engine-lab.html`) — never `git add -A` (shared-tree litter:
   warp WIP + loose `.png`/`.webm`/`.html`).

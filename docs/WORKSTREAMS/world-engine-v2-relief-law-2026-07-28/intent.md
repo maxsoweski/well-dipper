@@ -23,7 +23,7 @@ step where the physics finally reaches the screen. Right now a 4.5 M⊕ super-Ea
 `condition.surfaceGravity`. Four world-engine writers read that flat slot (`shellRelief.js:138`,
 `stagnantLid.js:133`, `plates.js:131`, `magmatism.js:119`), so all four are radius-deaf today.
 
-The global relief-amplitude uniform is blind twice over: `uPerturb` (`planet-lod-lab.html:5908`) is
+The global relief-amplitude uniform is blind twice over: `uPerturb` (`world-engine-lab.html:5908`) is
 computed from `state.surfaceGravity`, whose sole writer (`:3016`) is the same canonical value, and it
 is multiplied by `reliefEnvelope`, which **discards the `radiusEarth` argument it is handed**. Full
 trace: `../world-engine-gravity-selfcompression-2026-07-28/evidence/FINDING-uperturb-radius-blind.md`.
@@ -39,7 +39,7 @@ citing the falling law that replaced it.** The brief calls that the single worst
 Splitting the workstream is what would make that mistake possible, so the ordering is an AC.
 
 ⭐ **THERE ARE THREE SEAMS, NOT TWO — and the third one is inside this workstream.** The rulings file
-lists two. The settlement found a third: `planet-lod-lab.html:5937` feeds the envelope
+lists two. The settlement found a third: `world-engine-lab.html:5937` feeds the envelope
 `state.surfaceGravity`, whose sole writer (`:3033`) took `deriveUniforms`' **canonical, radius-blind**
 `g`. **The `uPerturb` feed fix lands in the same commit as the law.**
 `bodyDrivers.massGravity` can keep its place in the queue; this cannot.
@@ -159,7 +159,7 @@ Concretely, for this workstream:
 
   **Goldens hold for a different reason than that sentence claimed:** `reliefEnvelope` is not
   imported anywhere in the bake path (only `src/worldengine/instrument/laws.js:34` and
-  `planet-lod-lab.html:151`). Byte-identity therefore survives **only if the new exponent is added as
+  `world-engine-lab.html:151`). Byte-identity therefore survives **only if the new exponent is added as
   a new constant and `Q_RELIEF = 0.58` is left alone** — `src/worldengine/base/reliefBudget.js:30`
   imports it and `:91` uses it with `C_RELIC = 0.00014558245419776515`, a Mercury+Moon fit solved
   **at 0.58**. Editing `Q_RELIEF` in place goes stale and moves the goldens.

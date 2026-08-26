@@ -24,12 +24,12 @@
 // ⛔ NOTHING HERE IS NEW AND NOTHING HERE IS TUNED. The intensity is not even re-typed: it is read
 // straight off the shipped `deriveUniforms` bundle, so the magnitude law has exactly one expression
 // and it is still labCore's. The three shape/colour laws are the lab's post-process, moved verbatim
-// from planet-lod-lab.html:2614-2630 — and they are the SAME expressions the game generator carries
+// from world-engine-lab.html:2614-2630 — and they are the SAME expressions the game generator carries
 // at src/generation/PlanetGenerator.js:502 `          const ringLatitude = 0.7 + magneticField * 0.2; // 0.7 to 0.9 (in normalized Y)`
 // and :503, which is what makes this row a wiring row rather than a law choice.
 //
 // ⛔⛔ THE ONE PIECE OF THE LAB'S LAW THAT IS DELIBERATELY NOT HERE, NAMED SO IT CANNOT BE MISTAKEN
-// FOR AN OVERSIGHT. planet-lod-lab.html:2612 floors the field at 0.6 for GAS bodies of at least
+// FOR AN OVERSIGHT. world-engine-lab.html:2612 floors the field at 0.6 for GAS bodies of at least
 // 3.5 R⊕ (`_giantDynamo`), and that branch is not expressed in this module. Two reasons, both hard:
 //   (1) DOMAIN. Its first conjunct is "is a gas body", and the only consumer of this module is a
 //       pack whose predicate is the complement of gas. The branch is unreachable on every body that
@@ -47,13 +47,13 @@
 // the lab and the game all get the same answer from the same object.
 import { deriveUniforms } from './labCore.js';
 
-// The hard field gate, planet-lod-lab.html:2613
+// The hard field gate, world-engine-lab.html:2613
 // `      state.auroraIntensity = _mag > 0.05 ? (_giantDynamo ? _mag : u.auroraIntensity) : 0.0;`
 // — a dynamo this weak pins no oval at all, and the lab zeroes rather than fading it.
 export const AURORA_FIELD_MIN = 0.05;
 
 // Emission colour by D4 atmosphere composition. ⭐ VERBATIM, and verbatim TWICE: the table is
-// character-identical in planet-lod-lab.html:2622-2628 and in src/generation/PlanetGenerator.js:490
+// character-identical in world-engine-lab.html:2622-2628 and in src/generation/PlanetGenerator.js:490
 // `          const auroraColors = {`, and the lab's own comment names the generator as its source
 // ("the PlanetGenerator auroraColors table"). Physical basis, in the order below: the oxygen
 // 557.7 nm line; the hydrogen Balmer series; CO2 dissociation; methane.
@@ -67,18 +67,18 @@ export const AURORA_COLOR_BY_COMPOSITION = Object.freeze({
 
 // ⚠ THE FALLBACK IS [0.3, 0.8, 0.4] AND NOT THE `uAuroraColor` DEFAULT [0.3, 0.9, 0.5]. Both
 // literals exist in this codebase and they are a hair apart, which is exactly how a wrong one
-// survives a reading. The lab's fallback (planet-lod-lab.html:2630) and the generator's
+// survives a reading. The lab's fallback (world-engine-lab.html:2630) and the generator's
 // (src/generation/PlanetGenerator.js:497) are both this one; the 0.9/0.5 value is the material's
 // cold-start default at src/worldengine/shaders/uniforms.js:58, which a written uniform replaces.
 export const AURORA_COLOR_FALLBACK = Object.freeze([0.3, 0.8, 0.4]);
 
-/** Oval latitude in normalized Y. planet-lod-lab.html:2614 — a stronger dynamo hugs the pole. */
+/** Oval latitude in normalized Y. world-engine-lab.html:2614 — a stronger dynamo hugs the pole. */
 export function auroraRingLatFor(magneticField) {
   return 0.7 + magneticField * 0.2;
 }
 
 /**
- * Oval gaussian half-width. planet-lod-lab.html:2615
+ * Oval gaussian half-width. world-engine-lab.html:2615
  * `      state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);`
  *
  * ⚠ THE 0.07 FLOOR IS THE LAB'S AND THE GENERATOR HAS NO EQUIVALENT — src/generation/PlanetGenerator.js:503
@@ -108,8 +108,8 @@ export function auroraColorFor(atmosphereComposition) {
  * retyped `> 10` is a silent population change in two rows at once. The quantity is the LAB's cloud
  * regime and nothing about it is auroral; only the OVERRIDE it feeds is.
  *
- * planet-lod-lab.html:2637 `      if (_cloudRegime === 3) state.auroraIntensity = 0.0;`
- * where regime 3 is planet-lod-lab.html:2385
+ * world-engine-lab.html:2637 `      if (_cloudRegime === 3) state.auroraIntensity = 0.0;`
+ * where regime 3 is world-engine-lab.html:2385
  * `      if (_fp.atmosphere?.composition === 'co2' && (_fp.atmosphere?.pressure ?? 0) > 10) _cloudRegime = 3;`
  *
  * ⭐ THIS IS THE PART OF P-05 THE ROW'S OWN PROSE DOES NOT NAME, and it is not small: MEASURED over
@@ -118,7 +118,7 @@ export function auroraColorFor(atmosphereComposition) {
  * been "forwarding four values", it would have been authoring a fifth law that lights an aurora on
  * 130 bodies the lab leaves dark.
  *
- * The lab's reason, quoted from planet-lod-lab.html:2631-2636: the core keys magneticField on the
+ * The lab's reason, quoted from world-engine-lab.html:2631-2636: the core keys magneticField on the
  * tidal-lock FLAG only, so a slow-rotator Venus "derives a physically-wrong 0.3 that would also be
  * invisible under the opaque H2SO4 blanket anyway".
  *

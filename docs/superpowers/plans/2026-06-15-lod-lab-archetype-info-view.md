@@ -16,7 +16,7 @@
 
 ## Build-ordering note: Ask 3 is INDEPENDENT of Ask 2 (read before starting)
 
-Ask 2 (per-feature info cards) is **spec'd + planned but NOT yet built** — none of its code is in `planet-lod-lab.html` yet. This plan is written to **NOT depend on Ask 2 having shipped first**:
+Ask 2 (per-feature info cards) is **spec'd + planned but NOT yet built** — none of its code is in `world-engine-lab.html` yet. This plan is written to **NOT depend on Ask 2 having shipped first**:
 
 - Ask 3 injects its ⓘ onto the **disabled `archetype` controller's field row** in the World folder (a different DOM target from Ask 2's per-feature **folder title bars**).
 - Ask 3 defines its **own** `.title-info` / block CSS under a distinct selector, so it does not collide with Ask 2 if/when that lands. (If Ask 2 ships first and already defines `.lil-gui .title-info`, that rule is compatible — both want a small clickable glyph — but to stay independent this plan defines its block styling under `.archetype-info` and does not assume `.title-info` pre-exists; Step 1.2 adds the rule unconditionally and a duplicate identical `.title-info` rule is harmless.)
@@ -28,7 +28,7 @@ Ask 2 (per-feature info cards) is **spec'd + planned but NOT yet built** — non
 
 ## Verification reality (read before any GUI step)
 
-The lab GUI is an **inline `<script>` in `planet-lod-lab.html`** — NOT importable by Vitest. There is **no generator** in Ask 3 (the contrast with Ask 2), so there is **no unit test** to write. Per [[well-dipper-testing-reference]] the lab is verified **live on `:9223`** (GPU Chrome, NOT Playwright, NOT image recognition) via `window._lab.*` helpers + DOM queries (`mcp__chrome-devtools__evaluate_script`). Reload `?fresh=1` before each check.
+The lab GUI is an **inline `<script>` in `world-engine-lab.html`** — NOT importable by Vitest. There is **no generator** in Ask 3 (the contrast with Ask 2), so there is **no unit test** to write. Per [[well-dipper-testing-reference]] the lab is verified **live on `:9223`** (GPU Chrome, NOT Playwright, NOT image recognition) via `window._lab.*` helpers + DOM queries (`mcp__chrome-devtools__evaluate_script`). Reload `?fresh=1` before each check.
 
 **Existing test contract that must stay green:** `tests/planet-archetypes.test.js` scans the lab source with the regex `/\.add\(state, '(\w+Enabled)'\)/g` to learn which enable keys the panel binds (and cross-checks `cityLightsEnabled` → `PROV_CITYLIGHTS`, pin #16). The archetype info block is **plain DOM** and adds **no** `.add(state, '…Enabled')` calls and removes none — so this regex's match set is unchanged. Do not refactor any `.add(state, 'xEnabled')` line. `tests/feature-associations.test.js` and the Stage-D GLSL drift-guard are likewise untouched (additive GUI-only change).
 
@@ -36,9 +36,9 @@ The lab GUI is an **inline `<script>` in `planet-lod-lab.html`** — NOT importa
 
 ## Standing cautions
 
-- **Line numbers are HINTS** — `grep -n` every edit site before editing (line drift in `planet-lod-lab.html` is a known hazard). Re-grep: `relevantFeatureSet`, `applyArchetypeFilter`, `fWorld`, `archetypeLabel`, `relocateEnableToTitle`.
-- **Stage explicit paths only.** The ONLY source path this plan modifies is `planet-lod-lab.html`; the close-out also touches `docs/NOW.md`. **NEVER `git add -A`** — the shared working tree has unrelated warp WIP + loose `.png`/`.webm`/`.html` litter.
-- Reload `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1` before each live verification (`:9223` may hold a stale session; `?fresh=1` opts out of the sessionStorage scenario-restore).
+- **Line numbers are HINTS** — `grep -n` every edit site before editing (line drift in `world-engine-lab.html` is a known hazard). Re-grep: `relevantFeatureSet`, `applyArchetypeFilter`, `fWorld`, `archetypeLabel`, `relocateEnableToTitle`.
+- **Stage explicit paths only.** The ONLY source path this plan modifies is `world-engine-lab.html`; the close-out also touches `docs/NOW.md`. **NEVER `git add -A`** — the shared working tree has unrelated warp WIP + loose `.png`/`.webm`/`.html` litter.
+- Reload `localhost:5173/well-dipper/world-engine-lab.html?fresh=1` before each live verification (`:9223` may hold a stale session; `?fresh=1` opts out of the sessionStorage scenario-restore).
 - End every commit message with: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 
 ---
@@ -80,7 +80,7 @@ These are the spec's LOCKED display decisions, confirmed against the live source
 
 | File | Responsibility | Action |
 |---|---|---|
-| `planet-lod-lab.html` | Add `escapeHtml()` (if not already present from Ask 2) + `buildArchetypeInfo()` renderer + chip helpers; capture the archetype controller; inject the ⓘ toggle + block onto its field row; re-render at the tail of `applyArchetypeFilter()`; refresh dots+K on enable toggle. | **Modify** (inline `<script>` + one CSS block) |
+| `world-engine-lab.html` | Add `escapeHtml()` (if not already present from Ask 2) + `buildArchetypeInfo()` renderer + chip helpers; capture the archetype controller; inject the ⓘ toggle + block onto its field row; re-render at the tail of `applyArchetypeFilter()`; refresh dots+K on enable toggle. | **Modify** (inline `<script>` + one CSS block) |
 | `docs/NOW.md` | Close-out: note Ask 3 landed `VERIFIED_PENDING_MAX <sha>`. | **Modify** |
 
 No new files. No generator, no generated module, no `package.json` change, no `scripts/doc-rot-check.sh` change, no test file — all intentionally absent (Ask 3 derives everything at runtime; nothing is authored or duplicated).
@@ -91,7 +91,7 @@ No new files. No generator, no generated module, no `package.json` change, no `s
 
 - [ ] **Step 0.1: Confirm the dev server + lab are reachable on `:9223`.**
 
-Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`.
+Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `localhost:5173/well-dipper/world-engine-lab.html?fresh=1`.
 Expected: page loads, planet renders, left (Drivers/World) + right (Features) GUI panels visible.
 
 - [ ] **Step 0.2: Capture ground truth for the Venus acceptance case** (so later checks have exact expected numbers).
@@ -119,11 +119,11 @@ Expected: `archLabel` contains both `Tectonic / terrestrial` and `Volcanic` (joi
 Define the renderer and its helpers, and add the CSS. No injection yet (Task 2) — this task only proves the renderer produces correct HTML from the live derivation.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — a CSS block near the existing title-toggle CSS (~L94-97); the renderer added after `applyArchetypeFilter()`'s definition (~L7107, so `relevantFeatureSet`/`applyArchetypeFilter` are in scope) — note these are function declarations (hoisted), so placement relative to other defs is flexible, but put it right after `applyArchetypeFilter` for readability.
+- Modify: `world-engine-lab.html` — a CSS block near the existing title-toggle CSS (~L94-97); the renderer added after `applyArchetypeFilter()`'s definition (~L7107, so `relevantFeatureSet`/`applyArchetypeFilter` are in scope) — note these are function declarations (hoisted), so placement relative to other defs is flexible, but put it right after `applyArchetypeFilter` for readability.
 
 - [ ] **Step 1.1: Add the CSS block.**
 
-Re-grep the existing title-toggle CSS: `grep -n 'title-has-toggle' planet-lod-lab.html` (~L94). After the `.lil-gui .title-toggle .lil-widget` rule (~L97), add:
+Re-grep the existing title-toggle CSS: `grep -n 'title-has-toggle' world-engine-lab.html` (~L94). After the `.lil-gui .title-toggle .lil-widget` rule (~L97), add:
 ```css
     /* Archetype info view (Ask 3) — plain DOM injected under the World folder's
        disabled `archetype` field row. Collapsed by default; ⓘ toggles .open. */
@@ -149,7 +149,7 @@ Re-grep the existing title-toggle CSS: `grep -n 'title-has-toggle' planet-lod-la
 
 - [ ] **Step 1.2: Add `escapeHtml()` only if it is not already defined.**
 
-Re-grep: `grep -n 'function escapeHtml' planet-lod-lab.html`.
+Re-grep: `grep -n 'function escapeHtml' world-engine-lab.html`.
 - If it returns a hit (e.g. Ask 2 already shipped and defined it), **do NOT add a second copy** — reuse the existing one and skip to Step 1.3.
 - If it returns nothing, add this helper immediately before the renderer in Step 1.3:
 ```js
@@ -158,7 +158,7 @@ Re-grep: `grep -n 'function escapeHtml' planet-lod-lab.html`.
 
 - [ ] **Step 1.3: Add the `buildArchetypeInfo()` renderer.**
 
-Re-grep the end of `applyArchetypeFilter`: `grep -n 'function applyArchetypeFilter' planet-lod-lab.html` (~L7089); the function ends with `syncDisplays();` then `}` (~L7106-7107). **After** that closing brace, add:
+Re-grep the end of `applyArchetypeFilter`: `grep -n 'function applyArchetypeFilter' world-engine-lab.html` (~L7089); the function ends with `syncDisplays();` then `}` (~L7106-7107). **After** that closing brace, add:
 ```js
     // ── Archetype info view (Ask 3) ───────────────────────────────────────────
     // A read-only, fully-derived explanation of WHY each feature is in this world's
@@ -226,7 +226,7 @@ Re-grep the end of `applyArchetypeFilter`: `grep -n 'function applyArchetypeFilt
 
 - [ ] **Step 1.4: Prove the renderer produces correct HTML (temporary probe, removed after).**
 
-Temporarily expose the renderer for verification by re-grepping the `_lab` export object (`grep -n 'window._lab = {' planet-lod-lab.html`, ~L7813) and adding `archetypeInfoHtml,` to it (you will REMOVE this probe line in Step 1.6). Reload `?fresh=1`. Run (`evaluate_script`):
+Temporarily expose the renderer for verification by re-grepping the `_lab` export object (`grep -n 'window._lab = {' world-engine-lab.html`, ~L7813) and adding `archetypeInfoHtml,` to it (you will REMOVE this probe line in Step 1.6). Reload `?fresh=1`. Run (`evaluate_script`):
 ```js
 () => {
   const L = window._lab;
@@ -281,12 +281,12 @@ Expected: `N === 1`, `hasGasGiant === true`, `hasShared === false` (with one arc
 
 - [ ] **Step 1.6: Remove the temporary probe.**
 
-Re-grep `grep -n 'archetypeInfoHtml,' planet-lod-lab.html` and delete the `archetypeInfoHtml,` line you added to the `_lab` export in Step 1.4. (The renderer stays; only the debug export is removed — the production path calls it internally via Task 2.) Reload `?fresh=1` and confirm the page still renders (no console error from the removed reference): `list_console_messages` shows no new errors.
+Re-grep `grep -n 'archetypeInfoHtml,' world-engine-lab.html` and delete the `archetypeInfoHtml,` line you added to the `_lab` export in Step 1.4. (The renderer stays; only the debug export is removed — the production path calls it internally via Task 2.) Reload `?fresh=1` and confirm the page still renders (no console error from the removed reference): `list_console_messages` shows no new errors.
 
 - [ ] **Step 1.7: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): archetype info-view renderer + CSS (Ask 3)
 
 archetypeInfoHtml() derives the World folder's archetype explanation at
@@ -305,11 +305,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Wire the renderer into the World folder: capture the disabled archetype controller, inject a hidden `<div>` block under its field row, and an ⓘ button onto that row that toggles the block. Collapsed by default.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — the archetype controller line (~L7116) and an injection block right after it.
+- Modify: `world-engine-lab.html` — the archetype controller line (~L7116) and an injection block right after it.
 
 - [ ] **Step 2.1: Capture the archetype controller and inject the block + ⓘ.**
 
-Re-grep: `grep -n "fWorld.add(filterUI, 'archetypeLabel')" planet-lod-lab.html` (~L7116). Change that line to **capture** the controller, then add the injection immediately after it:
+Re-grep: `grep -n "fWorld.add(filterUI, 'archetypeLabel')" world-engine-lab.html` (~L7116). Change that line to **capture** the controller, then add the injection immediately after it:
 ```js
     const archCtrl = fWorld.add(filterUI, 'archetypeLabel').name('archetype').disable();
     // ── Archetype info block: plain DOM injected directly under the archetype field
@@ -400,7 +400,7 @@ Expected: `rowStillDisabled === true` (the archetype field is still visibly disa
 - [ ] **Step 2.5: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): inline archetype info view behind an ⓘ toggle (Ask 3)
 
 Captures the World folder's disabled archetype controller and injects a hidden
@@ -419,7 +419,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 The block must update its enable dots + `K` count when Max toggles any feature's enable, and re-derive entirely on preset change. Preset change is already covered by Task 2.2's hook (the tail of `applyArchetypeFilter()`, which `applyDrivers()` calls on every preset change). This task adds the enable-toggle path.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — the feature-folder enable relocation loop (~L6944-6946) / `relocateEnableToTitle()` (~L6935).
+- Modify: `world-engine-lab.html` — the feature-folder enable relocation loop (~L6944-6946) / `relocateEnableToTitle()` (~L6935).
 
 - [ ] **Step 3.1: Refresh the block on any feature enable-toggle.**
 
@@ -497,7 +497,7 @@ Expected: `venusN === '2'`, `gasN === '1'`; `venusHasVolcanic === true`; `gasHas
 - [ ] **Step 3.4: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): live-update archetype info view on enable/preset change (Ask 3)
 
 Enable-toggle now refreshes the open block's dots + K count (N/M/rosters
@@ -514,7 +514,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 4.1: Existing unit suites stay green (additive change).**
 
 Run: `cd /home/ax/projects/well-dipper && npx vitest run`
-Expected: all green, including `tests/planet-archetypes.test.js` (the `\.add\(state, '(\w+Enabled)'\)` scan + `cityLights → PROV_CITYLIGHTS` pin #16 — we added no `.add(state,…Enabled)` and removed none), `tests/feature-associations.test.js`, and the Stage-D GLSL drift-guard. If any previously-green suite is now red, STOP and diagnose — the change is additive, so a red existing suite means an unintended edit to `planet-lod-lab.html`.
+Expected: all green, including `tests/planet-archetypes.test.js` (the `\.add\(state, '(\w+Enabled)'\)` scan + `cityLights → PROV_CITYLIGHTS` pin #16 — we added no `.add(state,…Enabled)` and removed none), `tests/feature-associations.test.js`, and the Stage-D GLSL drift-guard. If any previously-green suite is now red, STOP and diagnose — the change is additive, so a red existing suite means an unintended edit to `world-engine-lab.html`.
 
 - [ ] **Step 4.2: Final live acceptance pass against the spec's Verification list.**
 

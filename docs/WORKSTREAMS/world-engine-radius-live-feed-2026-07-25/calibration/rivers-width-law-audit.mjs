@@ -111,7 +111,7 @@ const THRESHOLDS = {
 // so this audit cannot drift away from the code it audits without the guard tripping.
 const RIVERS_SRC = readFileSync(join(REPO, 'planet-lod-rivers.js'), 'utf8');
 const PATCH_SRC  = readFileSync(join(REPO, 'planet-lod-tributary-patch.js'), 'utf8');
-const LAB_SRC    = readFileSync(join(REPO, 'planet-lod-lab.html'), 'utf8');
+const LAB_SRC    = readFileSync(join(REPO, 'world-engine-lab.html'), 'utf8');
 
 const lineOf = (src, idx) => src.slice(0, idx).split('\n').length;
 
@@ -460,7 +460,7 @@ for (const d of DEFECTS) {
 }
 
 // ── SECONDARY (dormant path): the OTHER river radius law, in the lab, not the module ─────────────
-// deriveTributaryGridRes (planet-lod-lab.html) sets the fine-lattice density ∝ R, clamped [56,560].
+// deriveTributaryGridRes (world-engine-lab.html) sets the fine-lattice density ∝ R, clamped [56,560].
 // Extracted and executed the same way. Reported because "do rivers answer radius" is a question about
 // the SYSTEM, not one function — but flagged dormant: patchStrength defaults to 0.
 let secondaryOK = true;
@@ -468,7 +468,7 @@ let secondaryOK = true;
   const capDeg = /const RIVER_LOD_REF_CAP_DEG = ([\d.]+);/.exec(LAB_SRC);
   const sFeat  = /const RIVER_LOD_S_FEAT_KM\s+= ([\d.]+);/.exec(LAB_SRC);
   const body   = /function deriveTributaryGridRes\(\)\{([\s\S]*?)\n    \}/.exec(LAB_SRC);
-  console.log('── SECONDARY: deriveTributaryGridRes (planet-lod-lab.html, DORMANT — patchStrength default 0) ──');
+  console.log('── SECONDARY: deriveTributaryGridRes (world-engine-lab.html, DORMANT — patchStrength default 0) ──');
   if (!capDeg || !sFeat || !body) {
     console.log('  ✗ X-PATCH-GRIDRES-BREAK: extraction failed — lab source shape changed.');
     secondaryOK = false;

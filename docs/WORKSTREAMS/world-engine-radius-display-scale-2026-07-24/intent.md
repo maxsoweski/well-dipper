@@ -5,7 +5,7 @@
 ## Why (line of sight)
 
 The world engine derives worlds spanning 0.3–16 R‑Earth, but the lab renders every one
-at the same screen size (`planet-lod-lab.html:196` `R = 1.0` fixed; camera distance is in
+at the same screen size (`world-engine-lab.html:196` `R = 1.0` fixed; camera distance is in
 unit-sphere radii — **no radius→visual-size wiring exists at all**). Size is a primary
 "this world is different" cue for the SCREENSAVER heart (distinct, history-coherent worlds
 per minute); today that cue is absent, and it's what Max reached for first at the inc3b UAT.

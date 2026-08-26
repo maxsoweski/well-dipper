@@ -1,6 +1,6 @@
 # Lab UI rider — "Isolate plate relief" control (AC8-UAT viewing)
 
-**Date:** 2026-06-27 · **File:** `planet-lod-lab.html` (lab only — charter: lab≠game) ·
+**Date:** 2026-06-27 · **File:** `world-engine-lab.html` (lab only — charter: lab≠game) ·
 **Rider on:** the plate/uplift increment (`e07da8c`, this workstream). NOT a new contract —
 single-system lab tooling, no `dev-collab-scope` pass (per handoff 2026-06-27).
 

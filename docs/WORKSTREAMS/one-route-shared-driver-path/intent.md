@@ -25,7 +25,7 @@ aspirational, because stated as a rule it was dropped.
 lab and the game reach the world engine by TWO SEPARATE ROUTES, so each migration is a hand
 reconciliation. Its named fix — *"Extract `applyDrivers` into the shared pipeline and have the LAB
 IMPORT IT BACK"* — is called **"the single highest-leverage unblock in this file"** and has not been
-done. Measured 2026-08-21: `applyDrivers` is still at `planet-lod-lab.html:1933`, **828 lines, 146
+done. Measured 2026-08-21: `applyDrivers` is still at `world-engine-lab.html:1933`, **828 lines, 146
 distinct state fields**, with no counterpart under `src/`; the lab HTML has GROWN 6420 → 6559 since
 the plan measured it.
 

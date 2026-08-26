@@ -52,7 +52,7 @@
     {
       "id": "AC8",
       "result": "deferred-to-max",
-      "evidence": "Holistic acceptance — reserved for Max alone; no agent ever PASSes a UAT AC. The mechanism lives in plates.js + planet-lod-rivers.js (gate + parameterized routeAndOrder/computeOcean) + planet-lod-lab.html (archetype/locked threading + plateProbe). UAT walk-through in summaryForMax.",
+      "evidence": "Holistic acceptance — reserved for Max alone; no agent ever PASSes a UAT AC. The mechanism lives in plates.js + planet-lod-rivers.js (gate + parameterized routeAndOrder/computeOcean) + world-engine-lab.html (archetype/locked threading + plateProbe). UAT walk-through in summaryForMax.",
       "adversarialVotes": "n/a — UAT is Max-only"
     }
   ],

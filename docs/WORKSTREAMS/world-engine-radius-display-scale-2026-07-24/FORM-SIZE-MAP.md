@@ -1,7 +1,7 @@
 # FORM-SIZE-MAP — every pathway that sets the ON-SCREEN size of a surface form
 
 **Workstream:** world-engine-radius-display-scale-2026-07-24 · **HEAD:** `21d3e4f` (post-UAT-fail, back to `building`)
-**Grounding agent, 2026-07-24.** Files: `planet-lod-lab.html` (6969 L), `planet-lod-height.glsl.js` (3081 L), `planet-lod-lab-core.js` (1056 L), `src/worldengine/base/{bombardment,baseStep,sphereField}.js`, `tests/vis-scale-fence.test.js`.
+**Grounding agent, 2026-07-24.** Files: `world-engine-lab.html` (6969 L), `planet-lod-height.glsl.js` (3081 L), `planet-lod-lab-core.js` (1056 L), `src/worldengine/base/{bombardment,baseStep,sphereField}.js`, `tests/vis-scale-fence.test.js`.
 
 Max's ratified bar (verbatim): *"I want to be able to make the planet bigger with the radius slider. I want the forms on the surface of the planet to remain the same size while the planet itself gets bigger. That's it."*
 
@@ -9,7 +9,7 @@ Max's ratified bar (verbatim): *"I want to be able to make the planet bigger wit
 
 ## 0. The one equation everything hangs on
 
-Relief in this lab is **shaded, not displaced**. The planet is a smooth `SphereGeometry(R,256,256)`, `R=1.0` (`planet-lod-lab.html:1451`, comment `:1534` "relief is shaded-not-displaced"). Every "form" is a **height/normal field evaluated per-fragment in object space on the unit sphere**, then the whole sphere is scaled by `planet.scale.setScalar(sVis)` (`:5656`). No vertex is moved by terrain; there is no displaced crater geometry.
+Relief in this lab is **shaded, not displaced**. The planet is a smooth `SphereGeometry(R,256,256)`, `R=1.0` (`world-engine-lab.html:1451`, comment `:1534` "relief is shaded-not-displaced"). Every "form" is a **height/normal field evaluated per-fragment in object space on the unit sphere**, then the whole sphere is scaled by `planet.scale.setScalar(sVis)` (`:5656`). No vertex is moved by terrain; there is no displaced crater geometry.
 
 For any form, at a fixed camera wheel position:
 

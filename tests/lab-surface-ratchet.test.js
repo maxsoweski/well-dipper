@@ -7,7 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Nothing else in this plan stops a NEW lab feature being authored inside `applyDrivers()` +
 // `frame()` the old way. Every authoring affordance in the lab pulls toward that path — the
-// 470-line `state` literal at planet-lod-lab.html:891 `const state = {`, 186 `.listen()` bindings,
+// 470-line `state` literal at world-engine-lab.html:891 `const state = {`, 186 `.listen()` bindings,
 // `_driverTouched` — so "migrating a feature costs one pack module" is true only for those
 // someone CHOOSES to author as a pack. This makes the un-packed path fail the build rather than
 // relying on vigilance, which is §11.2's conversion rule applied to an authoring habit.
@@ -59,7 +59,7 @@
 // so this is still a ratchet and not a freeze.
 //
 // ⭐⭐ THE BULK ARM, AND WHY THE OBVIOUS VERSION OF IT IS WORSE THAN NOTHING. Set 1 was a lexical
-// scan for `state.<field> =`, and Step 5 put planet-lod-lab.html:2326
+// scan for `state.<field> =`, and Step 5 put world-engine-lab.html:2326
 // `Object.assign(state, giantDeckLabState(_deck));` inside the very function it watches. That one
 // line writes NINE fields, and the scan could see none of them. Worse, Step 5c deleted the eight
 // direct `state.band*/state.jet* =` lines the bulk write replaced, so the ratchet observed a
@@ -112,7 +112,7 @@
 //      27 state fields + 6 uniforms is exactly what that costs. Pinning the door is not watching the
 //      room.
 //   2. The scan is lexical. A uniform reached through a computed name — `uniforms['u' + k]` — is
-//      invisible to it. `grep -cE "uniforms\s*\["` over planet-lod-lab.html returns 0, so this is
+//      invisible to it. `grep -cE "uniforms\s*\["` over world-engine-lab.html returns 0, so this is
 //      not an idiom of this file, and under §11.9 that makes it a recorded limit and not a
 //      blocker. It becomes a blocker the first time the count is non-zero.
 //      ⚠ THE `Object.assign(state, …)` HALF IS CLOSED — that is the bulk arm above, and it THROWS
@@ -132,7 +132,7 @@
 //            `for (const [u, f] of Object.entries(TABLE)) state[f] = …` — the resolver knows this
 //            shape, but only when it is reached through an `Object.assign` hop.
 //      ⚠ (a) is the one to watch, and it is NOT the harmless case the `uniforms` sentence above
-//      describes. Measured 2026-08-09: `grep -cE "state\s*\["` over planet-lod-lab.html returns
+//      describes. Measured 2026-08-09: `grep -cE "state\s*\["` over world-engine-lab.html returns
 //      **15**, against **0** for `uniforms\s*\[`. Inside `applyDrivers` the count is 0 TODAY, which
 //      is the only reason this is a recorded limit rather than a blocker — but the idiom is live
 //      fifteen times over in the same file and one copy-paste from crossing the boundary. It
@@ -168,7 +168,7 @@
 //
 //   frame uniforms — the ±1 REPRODUCES AND IS A SCAN ARTIFACT. Scanning the raw text yields 328
 //   names; stripping comments first yields 327. The extra is `js`, from the substring
-//   "uniforms.js" inside planet-lod-lab.html:4937 `// uDispDomainScale here. It keeps its 1.0 initializer` — the quoted comment goes on to name planet-lod-uniforms.js line 17 as the initializer site, spelled in prose here ON PURPOSE: a line-anchored ref NESTED inside another ref's span parses as its own citation with a garbage tail, which is how this line reached exit 2 the moment Step 6 added this file to CITE_SOURCES.
+//   "uniforms.js" inside world-engine-lab.html:4937 `// uDispDomainScale here. It keeps its 1.0 initializer` — the quoted comment goes on to name planet-lod-uniforms.js line 17 as the initializer site, spelled in prose here ON PURPOSE: a line-anchored ref NESTED inside another ref's span parses as its own citation with a garbage tail, which is how this line reached exit 2 the moment Step 6 added this file to CITE_SOURCES.
 //   — a phantom uniform named after a filename. `stripNonCode` removes it. There was never a
 //   real disagreement here, only a scanner reading a comment.
 //
@@ -227,10 +227,10 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The subject. Overridable ONLY so the controls below can run the REAL code path over a MUTATED
-// COPY without writing to planet-lod-lab.html — that file is edited concurrently by other lanes
+// COPY without writing to world-engine-lab.html — that file is edited concurrently by other lanes
 // and a test that mutates it in place would clobber live work. This is a convenience, not a
 // boundary; anyone who wants to defeat the ratchet can delete the file.
-const LAB_SRC = process.env.WD_LAB_SURFACE_SRC || join(ROOT, 'planet-lod-lab.html');
+const LAB_SRC = process.env.WD_LAB_SURFACE_SRC || join(ROOT, 'world-engine-lab.html');
 
 const AUTHORING_DOC = 'docs/FEATURES/pack-authoring-path.md';
 
@@ -346,7 +346,7 @@ export const calleeName = (m) =>
 // THE `Object.assign(state, X)` ARM — the blind spot Step 5 opened, closed
 // ─────────────────────────────────────────────────────────────────────────────
 // ⛔ WHY THE OBVIOUS FIX IS THE WRONG ONE. `STATE_WRITE` measures the SET of `state.<field>` names
-// assigned by lexical scan. planet-lod-lab.html:2326 `Object.assign(state, giantDeckLabState(_deck));`
+// assigned by lexical scan. world-engine-lab.html:2326 `Object.assign(state, giantDeckLabState(_deck));`
 // writes NINE fields that the scan cannot see, and — because Step 5c simultaneously deleted the nine
 // direct `state.band*/state.jet* =` lines it replaced — the ratchet read that as a SHRINK and stayed
 // green while nine authoring sites moved out of its view and one BRAND NEW field, `bandRough`,
@@ -680,7 +680,7 @@ const APPLY_DRIVERS_AND_FRAME_CALLEES = [
   'applyDrivers::drawPresetRadius',
   'applyDrivers::drawPresetRotation',
   'applyDrivers::giantDeckLabState', 'applyDrivers::solidFeaturesPack', 'applyDrivers::solidFeaturesLabState', 'applyDrivers::visScaleOf', 'applyDrivers::limbDeckPack', 'applyDrivers::limbDeckLabState', 'applyDrivers::solidOpticsPack', 'applyDrivers::solidOpticsLabState', 'applyDrivers::compositionClass',   // ⛔ APPENDED ON THIS LINE, NOT INSERTED — line-cited file. 2026-08-25: the limb/terminator/aurora wire. limbDeck (gas) and solidOptics (non-gas) are exact complements over uLimbExponent/uLimbColor, so both packs plus both mirrors arrive together or the field has two owners on half the population; compositionClass is the branch that picks between them.
-  // the pack hop the Object.assign arm resolves. ⛔ THE THREE APPENDED ON THIS LINE, NOT INSERTED — this file is line-cited (one-pipeline-fence.test.js:13 pins :233). ⭐ REGISTERED 2026-08-22, per this fence's own instruction, and they are the OPPOSITE of the hazard set 4 guards, exactly as atmosphereOpticsOf/terminatorOpticsOf above: set 4 exists to catch a feature authored INTO the lab through a helper instead of a pack, and these three REMOVE fourteen inline laws from the lab and route them to src/worldengine/drivers/solidFeatures.js, which the game already imports (workstream AC5). `visScaleOf` rides along because applyDrivers now passes the LAB's display policy to a pack — the same call rebakeE5Bands already makes at planet-lod-lab.html:1748 for pack #1, one region further in. ⚠ DRIVER PACK #8 `giantSurface` DELIBERATELY ADDS NOTHING HERE, and the absence is the record of a bug this fence did not catch: its call was first written into applyDrivers, which registered three callees here and threw `_gs is not defined` on page load, because applyDrivers ENDS at planet-lod-lab.html:2760 and seven of that pack's outputs are authored in ensureNetworkRouted. Moved to that function, the seam is outside both watched regions and costs all four sets nothing. ⛔ SET 4 IS BLIND TO A THIRD REGION — it watches applyDrivers and frame only, so a feature authored into ensureNetworkRouted is invisible to it. Stated as a known limit rather than widened here: widening the watched set is its own measured change, not a side effect of wiring a pack.
+  // the pack hop the Object.assign arm resolves. ⛔ THE THREE APPENDED ON THIS LINE, NOT INSERTED — this file is line-cited (one-pipeline-fence.test.js:13 pins :233). ⭐ REGISTERED 2026-08-22, per this fence's own instruction, and they are the OPPOSITE of the hazard set 4 guards, exactly as atmosphereOpticsOf/terminatorOpticsOf above: set 4 exists to catch a feature authored INTO the lab through a helper instead of a pack, and these three REMOVE fourteen inline laws from the lab and route them to src/worldengine/drivers/solidFeatures.js, which the game already imports (workstream AC5). `visScaleOf` rides along because applyDrivers now passes the LAB's display policy to a pack — the same call rebakeE5Bands already makes at world-engine-lab.html:1748 for pack #1, one region further in. ⚠ DRIVER PACK #8 `giantSurface` DELIBERATELY ADDS NOTHING HERE, and the absence is the record of a bug this fence did not catch: its call was first written into applyDrivers, which registered three callees here and threw `_gs is not defined` on page load, because applyDrivers ENDS at world-engine-lab.html:2760 and seven of that pack's outputs are authored in ensureNetworkRouted. Moved to that function, the seam is outside both watched regions and costs all four sets nothing. ⛔ SET 4 IS BLIND TO A THIRD REGION — it watches applyDrivers and frame only, so a feature authored into ensureNetworkRouted is invisible to it. Stated as a known limit rather than widened here: widening the watched set is its own measured change, not a side effect of wiring a pack.
   'applyDrivers::rebakeE5Bands',          // ⭐ driver function #4 — see KNOWN LIMIT 1
   'applyDrivers::relevantFeatureSet',
   'applyDrivers::resetDriverOverrides',

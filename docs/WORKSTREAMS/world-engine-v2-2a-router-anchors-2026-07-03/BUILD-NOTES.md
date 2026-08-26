@@ -115,7 +115,7 @@ call itself (rivers:481-482), not the dispatch's post-processing. This is safe o
    AC-BYTE-* harness compares `carrier.height` + the diag *arrays* (`plumeId`, `A_e`, `Psi_e`,
    `magmaOceanMask`, `edificeMask`, `lavaPlainMask`), never `appliedTune`. So every byte anchor passes.
 2. **Behavior-safe even for the live probe** — the live `magmaProbe` **recomputes** `appliedTune` locally
-   from `bodyDrivers` (`planet-lod-lab.html:6055` `magmaDriversToTune(bodyDrivers)` → :6088 emit); it does
+   from `bodyDrivers` (`world-engine-lab.html:6055` `magmaDriversToTune(bodyDrivers)` → :6088 emit); it does
    **not** read `magmaDiag.appliedTune` off the writer's return. So the omission is inert for the probe too.
 **Reconcile at V2-3:** when the router is wired into `writeBodyRelief`, if any *future* consumer reads
 `magmaDiag.appliedTune` off the router's return (rather than recomputing from `bodyDrivers`), re-add the

@@ -82,7 +82,7 @@ preset / feature / province is introduced. *(If a GUI toggle is ever added it MU
 
 ---
 
-## 4. Slice D wiring ledger (exactly what changed in `planet-lod-lab.html`)
+## 4. Slice D wiring ledger (exactly what changed in `world-engine-lab.html`)
 
 | # | Site | Change | Shadow-safety |
 |---|---|---|---|

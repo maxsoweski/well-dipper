@@ -87,7 +87,7 @@
       "Baked band field wBand (aBand -> vBand; signed, <0.5 belt / >0.5 zone) + shear field wShear (aShear) + storm mask aStorm + uStorm[8]/uPolar uniforms",
       "deriveGiantDrivers (giant-drivers.js) per-seed shear/band/storm derivations \u2014 the derive-not-freeze inheritance this rides on",
       "Shader terms in planet-lod-height.glsl.js: zonalBandCol / stormSwirl / stormColTerms / bandWarpField (the composite path all three slices edit)",
-      "The lab call site (planet-lod-lab.html bandMask block) + reseed wiring (rebakeE5Bands -> deriveGiantDrivers -> resolveStormE)"
+      "The lab call site (world-engine-lab.html bandMask block) + reseed wiring (rebakeE5Bands -> deriveGiantDrivers -> resolveStormE)"
     ],
     "outputs": [
       "The interaction/viscous/jaggedness render terms in zonalBandCol (the finished 'fluid world' read)",

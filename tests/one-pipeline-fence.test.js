@@ -195,7 +195,7 @@ describe('registration 4 — every drivers module is in the runtime PACKS array'
 //     all of them local variables (`h`, `g`, `out`, `seed`) that share a name by coincidence. An
 //     exported name is a law with a home; a local is not.
 //   · lab side — declarations at EXACTLY four spaces, the real lab's module-body indent (its one
-//     module script opens at planet-lod-lab.html:148 `<script type="module">`). A deeper indent is a local inside
+//     module script opens at world-engine-lab.html:148 `<script type="module">`). A deeper indent is a local inside
 //     a function, and counting those would make every shadowed variable read as a surviving copy.
 // With both anchors the real corpus yields 608 exported names against 267 lab top-level ones and
 // EXACTLY ONE collision — the allowlisted entry below.
@@ -207,19 +207,19 @@ describe('registration 4 — every drivers module is in the runtime PACKS array'
 // permitted to exist.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 
-const LAB_HTML = 'planet-lod-lab.html';
+const LAB_HTML = 'world-engine-lab.html';
 
 const SURVIVING_COPY_ALLOWLIST = Object.freeze([
   Object.freeze({
     name: 'C_CRATER',
     // src/worldengine/drivers/craterDeck.js:78 `export const C_CRATER = 1.0;` declares itself "a forward of the lab's own
-    // declaration", citing planet-lod-lab.html:821 `const C_CRATER = 1.0;` by line. So this duplicate is DELIBERATE and
+    // declaration", citing world-engine-lab.html:821 `const C_CRATER = 1.0;` by line. So this duplicate is DELIBERATE and
     // documented at both ends — which is what makes it allowlistable, and is also exactly why it
     // needs the value pin: a forward that stops agreeing is worse than no forward.
     clears:
       "registration 2's import-back applied to the calibration constants — the lab imports " +
       'C_CRATER from src/worldengine/drivers/craterDeck.js instead of declaring its own. Not done ' +
-      'in this step because planet-lod-lab.html is edited concurrently by other lanes and the ' +
+      'in this step because world-engine-lab.html is edited concurrently by other lanes and the ' +
       'Step-5 ratchet watches that file.',
     // Both declarations must resolve to this. If either moves, the pin reds by name.
     pinnedValue: '1.0',
@@ -336,13 +336,13 @@ describe('registration 3 — no surviving lab copy', () => {
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 // REGISTRATION 2 — import-back, GENERALISED BEYOND `drivers/`.
 //
-// Every pipeline module the GAME imports is also imported by `planet-lod-lab.html`. ⭐ Scoping this
+// Every pipeline module the GAME imports is also imported by `world-engine-lab.html`. ⭐ Scoping this
 // to packs would never have seen `atmosphereOptics.js`, which is not a pack and is the failure that
 // HAS ALREADY OCCURRED. The subject is therefore the two IMPORT CLOSURES, not a directory.
 //
 // ⛔⛔ THIS REGISTRATION IS RED-ON-ARRIVAL AND THAT IS THE POINT — 14 modules measured at authoring
 // sit in the game's closure and not the lab's. It is not this step's job to fix them (that means
-// editing planet-lod-lab.html, which other lanes edit concurrently, and converting the lab's inline
+// editing world-engine-lab.html, which other lanes edit concurrently, and converting the lab's inline
 // uniform writes to pack calls). It IS this step's job to make the number COUNTED, NAMED, and unable
 // to GROW. So the divergence ships as a shrink-only debt ledger, and a 15th entry reds.
 //
@@ -351,7 +351,7 @@ describe('registration 3 — no surviving lab copy', () => {
 // says exactly that — and the lab does not import it. A module whose stated purpose is
 // unmet, with nothing red. That is the whole registration in one file.
 //
-// ⚠ THE PRECEDENT THAT PROVES THE DISCIPLINE EXISTED AND WAS DROPPED: planet-lod-lab.html:188 `giantDeckPack`
+// ⚠ THE PRECEDENT THAT PROVES THE DISCIPLINE EXISTED AND WAS DROPPED: world-engine-lab.html:188 `giantDeckPack`
 // imports it back, with a comment reading "now live in ONE module the GAME imports
 // too" (PLAN §4 Step 5c, driver pack #1). Seven packs have been added since; NONE of them was
 // imported back. The fence exists because that is invisible otherwise.
@@ -379,15 +379,15 @@ const GAME_ONLY_BY_DESIGN = Object.freeze([
 // ⛔ SHRINK-ONLY. Lower it when an entry clears; NEVER raise it. Raising it is how a fence becomes a
 // changelog. Measured 13 at authoring (2026-08-21), the 14 diverging modules minus the one exemption.
 // ⭐ 13 -> 11 -> 10 ON 2026-08-22: `port/craterUniforms.js` and `base/terminatorOptics.js` CLEARED — the lab
-// imports both now (planet-lod-lab.html:178) as part of Max's converge-the-laws ruling. THE LEDGER'S
+// imports both now (world-engine-lab.html:178) as part of Max's converge-the-laws ruling. THE LEDGER'S
 // FIRST SHRINK, and the liveness test is what forced it: the rows went stale the moment the imports
 // landed and this file refused to stay green on fiction.
-// planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`. ⭐ THE SECOND SHRINK, SAME DAY: `drivers/solidFeatures.js` cleared too — the lab imports pack #2 at planet-lod-lab.html:188 `solidFeaturesPack` and calls it at :2074, which is workstream AC5 and Max's ADOPT ruling on the radius-aware gravity. ⭐⭐ AND A THIRD, 10 -> 9, SAME DAY: `drivers/giantSurface.js` cleared too — the lab imports pack #8 at planet-lod-lab.html:188 `giantSurfacePack` and calls it at :2465, gas-gated. ⛔⛔ AND A FOURTH, 9 -> 8, WHICH NOBODY CHOSE — AND WHICH HAS SINCE BEEN REVERSED. `drivers/solidOptics.js` cleared TRANSITIVELY on 2026-08-22: the lab never called it, no ruling was made, and it entered the lab's closure only because `giantSurface.js` imports `TERMINATOR_GATE` from it so the gate NAME has one home. The row was deleted because the criterion of the day — import closure, reachability not exercise — was genuinely met, and the call-side work went untracked with nothing red. ⭐ 2026-08-25 FIXED THE CRITERION RATHER THAN THE ROW: the criterion is now reachable-AND-CALLED, which is what every row's own `clears` text has always said, so solidOptics is a debt row again and its remaining work — one MEASUREMENT on the _giantDynamo branch, not a decision — is written into that row. ⭐ THE CEILING NEVER MOVED. `drivers/polarDeck.js` cleared on its own merits in the SAME commit — the lab imports it at planet-lod-lab.html:188 `polarDeckPack` and calls it at :1916, passing its own `stormSeed` per Max's 2026-08-22 ruling that the slider is a lab authoring knob — so the ledger stayed at 8 and no correction had to buy itself a raise. THREE packs remain on the roster.
-// planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`.
+// world-engine-lab.html:178 `import { terminatorOpticsOf }` and world-engine-lab.html:2831 `craterUniformsFrom`. ⭐ THE SECOND SHRINK, SAME DAY: `drivers/solidFeatures.js` cleared too — the lab imports pack #2 at world-engine-lab.html:188 `solidFeaturesPack` and calls it at :2074, which is workstream AC5 and Max's ADOPT ruling on the radius-aware gravity. ⭐⭐ AND A THIRD, 10 -> 9, SAME DAY: `drivers/giantSurface.js` cleared too — the lab imports pack #8 at world-engine-lab.html:188 `giantSurfacePack` and calls it at :2465, gas-gated. ⛔⛔ AND A FOURTH, 9 -> 8, WHICH NOBODY CHOSE — AND WHICH HAS SINCE BEEN REVERSED. `drivers/solidOptics.js` cleared TRANSITIVELY on 2026-08-22: the lab never called it, no ruling was made, and it entered the lab's closure only because `giantSurface.js` imports `TERMINATOR_GATE` from it so the gate NAME has one home. The row was deleted because the criterion of the day — import closure, reachability not exercise — was genuinely met, and the call-side work went untracked with nothing red. ⭐ 2026-08-25 FIXED THE CRITERION RATHER THAN THE ROW: the criterion is now reachable-AND-CALLED, which is what every row's own `clears` text has always said, so solidOptics is a debt row again and its remaining work — one MEASUREMENT on the _giantDynamo branch, not a decision — is written into that row. ⭐ THE CEILING NEVER MOVED. `drivers/polarDeck.js` cleared on its own merits in the SAME commit — the lab imports it at world-engine-lab.html:188 `polarDeckPack` and calls it at :1916, passing its own `stormSeed` per Max's 2026-08-22 ruling that the slider is a lab authoring knob — so the ledger stayed at 8 and no correction had to buy itself a raise. THREE packs remain on the roster.
+// world-engine-lab.html:178 `import { terminatorOpticsOf }` and world-engine-lab.html:2831 `craterUniformsFrom`.
 // ⭐⭐ 6 -> 3 ON 2026-08-25 — THE CRATER WIRE, AND IT IS THE LARGEST SINGLE SHRINK THIS LEDGER HAS
 // TAKEN. Three rows cleared in one commit: `drivers/rockySurface.js` and `drivers/craterDeck.js` on
-// their own merits — the lab imports both at planet-lod-lab.html:188 and calls each at
-// planet-lod-lab.html:2880 under exact-complement predicates — and `base/macroWavelength.js` FOR
+// their own merits — the lab imports both at world-engine-lab.html:188 and calls each at
+// world-engine-lab.html:2880 under exact-complement predicates — and `base/macroWavelength.js` FOR
 // FREE, because `rockySurface.js` imports the wavelength law, so the lab reaches it the moment the
 // pack lands. ⚠ THE FREE ROW IS THE ONE TO READ TWICE. It cleared TRANSITIVELY, which is exactly
 // how `drivers/solidOptics.js` cleared wrongly on 2026-08-22 and had to be restored. It is DIFFERENT
@@ -412,12 +412,12 @@ const GAME_ONLY_BY_DESIGN = Object.freeze([
 // lab now imports `EMISSION_PHYS` and reads all three of the constants it used to spell out as
 // literals (1.15, 1100, 0.26).
 // ⛔ AND THE LAW HAD TWO HOMES IN ONE FILE, WHICH IS THE HALF THAT NEARLY GOT MISSED. The day-lift
-// appears at planet-lod-lab.html:2443 AND at :5344 — the second inside `frame()`, re-assigning
+// appears at world-engine-lab.html:2443 AND at :5344 — the second inside `frame()`, re-assigning
 // `state.dayTempK` 60x/s and unconditionally overwriting the first. Converting :2443 alone changes
 // nothing observable AND LOOKS LIKE IT WORKED, because :2452 seeds `state.thermalTempEq` from the same
 // T_eq, so both routes yield the identical number until someone drags the T_eq slider. Both sites moved.
 // ⚠ ONE COPY WAS DELIBERATELY LEFT: `redistribution` 3.0 still has three live homes
-// (planet-lod-lab.html:1043, shaders/uniforms.js:459, emission-e.js:163 — a default parameter, not an
+// (world-engine-lab.html:1043, shaders/uniforms.js:459, emission-e.js:163 — a default parameter, not an
 // export) and NO debt row. It is named here rather than silently skipped: adding a key to
 // EMISSION_PHYS shifts emission-e.js:164, which conditionFromBody.js:194 cites BY LINE, so closing it
 // is a citation-repair job and its own decision. TWO ROWS REMAIN, and both are carried past the merge
@@ -450,7 +450,7 @@ const IMPORT_BACK_DEBT = Object.freeze([
   // crater wire, via `rockySurface.js`. The ceiling comment above states what that did and did NOT
   // close, because the distinction is the whole reason this row existed.
   // ⭐ `base/emission-e.js` ROW DELETED 2026-08-25 — the lab imports `EMISSION_PHYS` at
-  // planet-lod-lab.html:188 and reads it at :1042, :2443, :2446 and :5344. ⛔ THE ROW'S OWN STATED
+  // world-engine-lab.html:188 and reads it at :1042, :2443, :2446 and :5344. ⛔ THE ROW'S OWN STATED
   // BLOCKER WAS FICTION AND SAYING SO IS THE POINT: it read "the lab has no emission control surface
   // yet", and the lab has had the F32/F33 thermal family with a seven-control GUI folder since well
   // before this. A blocker nobody re-checked kept a row standing; the row was never blocked, only
@@ -510,7 +510,7 @@ export function gameOnlyPipelineModules(srcRel, labRel) {
 // ⛔⛔ THE CRITERION IS REACHABLE-**AND-CALLED**, AND THIS IS A BUG FIX, NOT A POLICY CHANGE.
 //
 // Until 2026-08-25 this registration measured IMPORT CLOSURE alone. Every debt row's own `clears`
-// text has always read "planet-lod-lab.html imports it back AND CALLS IT" — so the implementation
+// text has always read "world-engine-lab.html imports it back AND CALLS IT" — so the implementation
 // was weaker than the criterion the rows declared, and the gap was invisible while the only reason
 // to import a pack was to call it.
 //
@@ -561,7 +561,7 @@ function importBackMessage(violations) {
   return (
     `one-pipeline-fence registration 2: a pipeline module is in the GAME's import closure and NOT ` +
     `the lab's, so one front-end exercises it and the other cannot. Import it back in ` +
-    `planet-lod-lab.html (the giantDeckPack import precedent), or add a debt row ` +
+    `world-engine-lab.html (the giantDeckPack import precedent), or add a debt row ` +
     `naming what clears it. Offending modules:\n` +
     violations.map((v) => `  · ${v}`).join('\n')
   );
@@ -650,10 +650,10 @@ describe('registration 2 — every pipeline module the game imports is imported 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 // ⛔ CLOSED 2026-08-22. This list may SHRINK and may never gain an entry. A pack authored after this
-// date has one route into the tree: planet-lod-lab.html imports it. ⭐ Measured, not asserted — the
+// date has one route into the tree: world-engine-lab.html imports it. ⭐ Measured, not asserted — the
 // non-vacuity control below drives the same scanner with an EMPTY roster and pins exactly these
 // four, so the list is a reading of the tree rather than a claim about it. `giantDeck.js` is absent
-// because the lab really does import it at planet-lod-lab.html:188 `giantDeckPack` — the one precedent.
+// because the lab really does import it at world-engine-lab.html:188 `giantDeckPack` — the one precedent.
 // ⭐⭐ THE ROSTER IS EMPTY AS OF 2026-08-25, AND AN EMPTY ROSTER IS THE SUCCESS STATE, NOT A GAP.
 // It grandfathered exactly two packs — `craterDeck` and `rockySurface` — and the crater wire imported
 // and called both, so registration 2b now admits NO pack that the lab does not import. ⛔ IT MUST STAY
@@ -690,8 +690,8 @@ export function unimportedNewPacks(driversRel, labRel, grandfathered) {
 function newPackMessage(violations) {
   return (
     `one-pipeline-fence registration 2b (AC4): a pack was authored under \`${DRIVERS_DIR}/\` that ` +
-    `planet-lod-lab.html does NOT import, and the grandfathered roster is CLOSED — it cannot take ` +
-    `a newcomer. Import it back in the lab — the precedent is planet-lod-lab.html:188 `+'`giantDeckPack`'+`. ` +
+    `world-engine-lab.html does NOT import, and the grandfathered roster is CLOSED — it cannot take ` +
+    `a newcomer. Import it back in the lab — the precedent is world-engine-lab.html:188 `+'`giantDeckPack`'+`. ` +
     `A debt row will not clear this: the roster, not the ledger, is what admits a pack. ` +
     `Offending packs:\n` + violations.map((v) => `  · ${v}`).join('\n')
   );
@@ -799,7 +799,7 @@ const DISCHARGED_ELSEWHERE = Object.freeze([
   }),
   Object.freeze({
     registration: 6,
-    what: "the Step-5 shrink-only ratchet over planet-lod-lab.html",
+    what: "the Step-5 shrink-only ratchet over world-engine-lab.html",
     file: 'tests/lab-surface-ratchet.test.js',
     controlEvidence: 'CONTROL',
   }),

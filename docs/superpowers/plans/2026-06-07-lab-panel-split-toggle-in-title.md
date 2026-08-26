@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Split `planet-lod-lab.html`'s single lil-gui panel into a LEFT rig panel and a RIGHT feature panel, collapse the 14 feature folders by default, and move each feature's on/off toggle into its folder title bar.
+**Goal:** Split `world-engine-lab.html`'s single lil-gui panel into a LEFT rig panel and a RIGHT feature panel, collapse the 14 feature folders by default, and move each feature's on/off toggle into its folder title bar.
 
 **Architecture:** Two lil-gui instances (`guiLeft`, `guiRight`) replace the single `gui`; global iterate/save/reset calls route through `syncDisplays()`/`saveAll()`/`resetAll()` helpers. Each feature's existing boolean enable controller is *relocated* (its DOM node moved) into `folder.$title` so lil-gui's `updateDisplay()` keeps it synced for free. A standalone spike harness proves the relocation mechanism in lil-gui 0.21.0 before any production edit.
 
@@ -20,21 +20,21 @@
 - Max runs Vite — do NOT start servers. Check liveness with `mcp__chrome-devtools__list_pages`, never Bash curl (sandbox → `000`).
 - Use the `:9223` GPU Chrome (`--remote-debugging-port=9223 --user-data-dir="C:\temp\chrome-mcp-filmstrip"`), not Playwright. See `memory/chrome-devtools-9223-launch.md` + `memory/well-dipper-testing-reference.md`.
 - Do FULL setup in ONE `evaluate_script` immediately before each screenshot; park the tab on `about:blank` when done.
-- Lab URL: `http://localhost:5173/well-dipper/planet-lod-lab.html`. Spike URL: `http://localhost:5173/well-dipper/planet-titletoggle-lab.html`.
+- Lab URL: `http://localhost:5173/well-dipper/world-engine-lab.html`. Spike URL: `http://localhost:5173/well-dipper/planet-titletoggle-lab.html`.
 
 **Git cautions (shared working tree — a warp session has uncommitted WIP):**
 - NEVER `git add -A`. Stage ONLY the explicit files each task names.
 - ONE `git add <paths> && git commit` per commit in a SINGLE Bash call (a hook unstages between separate calls).
 - Sign-off every commit: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 - Do NOT edit `docs/NOW.md` (warp WIP). Do NOT push (outward-facing; needs Max's OK + `dangerouslyDisableSandbox`).
-- After editing `planet-lod-lab.html`, re-check backtick parity stays EVEN: `grep -o '`' planet-lod-lab.html | wc -l` (currently 30).
+- After editing `world-engine-lab.html`, re-check backtick parity stays EVEN: `grep -o '`' world-engine-lab.html | wc -l` (currently 30).
 
 ---
 
 ## Task 1: Spike harness — prove the controller-relocation mechanism
 
 **Files:**
-- Create: `planet-titletoggle-lab.html` (project root, beside `planet-lod-lab.html`)
+- Create: `planet-titletoggle-lab.html` (project root, beside `world-engine-lab.html`)
 
 This is the GATE. If checks 1–4 fail, fall back to mechanism (a) (hand-rolled `<input>` + explicit sync array) *in this same file* and prove it here before Task 2.
 
@@ -159,7 +159,7 @@ EOF
 ## Task 2: Split the single GUI into guiLeft + guiRight with helpers
 
 **Files:**
-- Modify: `planet-lod-lab.html` — `new GUI` at ~1978; folder `addFolder` calls at 1984/1987/2001/2008/2150/2155/2400/2406; global calls at 2147/2371/2387/2407/2408/2468.
+- Modify: `world-engine-lab.html` — `new GUI` at ~1978; folder `addFolder` calls at 1984/1987/2001/2008/2150/2155/2400/2406; global calls at 2147/2371/2387/2407/2408/2468.
 
 Goal of this task: identical behavior, two panels. NO toggle relocation yet, NO collapse change yet — that's Task 3. This isolates the refactor so a regression is easy to bisect.
 
@@ -216,8 +216,8 @@ Line ~2408: `gui.reset(); rebuildTarget(); updateSeedUniforms();` → `resetAll(
 
 - [ ] **Step 5: Confirm no stray `gui.` references remain**
 
-Run: `grep -n '\bgui\.' planet-lod-lab.html`
-Expected: NO matches (every `gui.` is now `guiLeft.`, `guiRight.`, or a helper). If any remain, fix them. Also confirm the local variable names `guiLeft`/`guiRight` aren't shadowed elsewhere: `grep -n 'guiLeft\|guiRight' planet-lod-lab.html` should show only the intended sites.
+Run: `grep -n '\bgui\.' world-engine-lab.html`
+Expected: NO matches (every `gui.` is now `guiLeft.`, `guiRight.`, or a helper). If any remain, fix them. Also confirm the local variable names `guiLeft`/`guiRight` aren't shadowed elsewhere: `grep -n 'guiLeft\|guiRight' world-engine-lab.html` should show only the intended sites.
 
 - [ ] **Step 6: Browser verify — two panels, behavior intact**
 
@@ -233,9 +233,9 @@ Expected: `rootPanels: 2`; one panel titled `PLANET LOD LAB — rig` with `left 
 
 - [ ] **Step 7: Backtick parity + commit**
 
-Run: `grep -o '`' planet-lod-lab.html | wc -l` → Expected: even (30 unless a literal changed; this task adds none).
+Run: `grep -o '`' world-engine-lab.html | wc -l` → Expected: even (30 unless a literal changed; this task adds none).
 ```bash
-git add planet-lod-lab.html && git commit -m "$(cat <<'EOF'
+git add world-engine-lab.html && git commit -m "$(cat <<'EOF'
 refactor(lab): split panel into guiLeft (rig) + guiRight (features)
 
 Two lil-gui roots replace the single gui; global iterate/save/reset route
@@ -252,7 +252,7 @@ EOF
 ## Task 3: Collapse the 14 features + relocate each toggle into its title
 
 **Files:**
-- Modify: `planet-lod-lab.html` — the 14 `f<X>.open()` calls (2159–2356); add CSS to the `<style>` block (~line 89); add the relocation loop after the `featureFolders` map (~2365).
+- Modify: `world-engine-lab.html` — the 14 `f<X>.open()` calls (2159–2356); add CSS to the `<style>` block (~line 89); add the relocation loop after the `featureFolders` map (~2365).
 
 - [ ] **Step 1: Add the title-toggle CSS**
 
@@ -330,9 +330,9 @@ Expected: full suite PASS (planet-archetypes.test.js included) — this task cha
 
 - [ ] **Step 6: Backtick parity + commit**
 
-Run: `grep -o '`' planet-lod-lab.html | wc -l` → Expected: even (still 30 — no template-literal change).
+Run: `grep -o '`' world-engine-lab.html | wc -l` → Expected: even (still 30 — no template-literal change).
 ```bash
-git add planet-lod-lab.html && git commit -m "$(cat <<'EOF'
+git add world-engine-lab.html && git commit -m "$(cat <<'EOF'
 feat(lab): collapse feature folders + move enable toggle into title bar
 
 The 14 Surface—Relief feature folders default collapsed; each feature's enable

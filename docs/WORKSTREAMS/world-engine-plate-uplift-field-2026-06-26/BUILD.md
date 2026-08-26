@@ -34,7 +34,7 @@ bounded erosion, built + verified **in the lab** (game `Planet.js` port is a lat
    - `computeOcean(… , baseLevel)` — optional per-node base level; omitted ⇒ scalar seaLevel
      **byte-identical**, supplied ⇒ per-node thresholding (**AC4**).
 
-3. **`planet-lod-lab.html`** (MODIFIED): threads the preset's archetype/locked into `route()`; adds
+3. **`world-engine-lab.html`** (MODIFIED): threads the preset's archetype/locked into `route()`; adds
    `window._lab.plateProbe()` returning the objective live-integration signals (**AC7**).
 
 ## Intent / why these choices

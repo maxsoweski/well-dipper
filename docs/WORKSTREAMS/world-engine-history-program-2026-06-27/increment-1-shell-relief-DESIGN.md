@@ -20,7 +20,7 @@ it is the must-pin checklist for scoping, NOT optional polish.
 The critic's verdict, near-verbatim:
 
 > BUILDABLE IN ARCHITECTURE, NOT YET AS A CONTRACT. The seam analysis is correct and verified
-> against ground truth: the lab passes short-keys-or-null + `locked` (`planet-lod-lab.html:3655-3656`),
+> against ground truth: the lab passes short-keys-or-null + `locked` (`world-engine-lab.html:3655-3656`),
 > Europa/Titan are `NAMED_BODY` so today they arrive as `archetype=null` (the latent "never-fires" bug
 > is real), and the two-line `PRESET_ARCHETYPE` fix + `shellRegimeOf` predicate genuinely resolves it.
 > The 3-way dispatch (earthlike-first, then `shellRegimeOf`, then despun) is clean and zero-clobbers
@@ -118,7 +118,7 @@ From `result.design.archetypeKeyResolution`, with the critic's corrections folde
 2. lab **SHORT** keys in `PRESET_ARCHETYPE` (`ice`, `eyeball`, …);
 3. the gate matches whatever `route()` is passed.
 
-**Ground truth (verified):** the lab dispatch (`planet-lod-lab.html:3655-3656`) passes
+**Ground truth (verified):** the lab dispatch (`world-engine-lab.html:3655-3656`) passes
 `archetype: PRESET_ARCHETYPE[_preset] || null` and `locked: !!(...tidalState.locked)`. So today the
 writer would receive a MIX of short keys and `null` — **never the long keys** (those live only in
 `planet-archetypes.js`, never threaded to `route()`). Per target preset:
@@ -155,7 +155,7 @@ and `shellRegimeOf(archetype, locked)`:
    "Dispatch safety", where `SHELL_EXCLUDE` is enumerated.)
 
 **(B) Fix the lab seam** so the flagship preset carries a real key rather than leaning only on the
-locked-fallback — ADD to `PRESET_ARCHETYPE` in `planet-lod-lab.html` (~line 1901):
+locked-fallback — ADD to `PRESET_ARCHETYPE` in `world-engine-lab.html` (~line 1901):
 
 ```js
 'Europa (icy moon)': 'ice',
@@ -365,7 +365,7 @@ just carrier +y), which is the falsifier the critic showed is needed — a tilte
 PASS a +y latitude test, but the discrete-lineament-vs-stress signal must beat the `w0`-band,
 distinguishing "tilted `sin²`" from "real discrete cracks."
 
-**LIVE `shellProbe()`** — a sibling of `plateProbe()` in `planet-lod-lab.html` (~line 5825), reading
+**LIVE `shellProbe()`** — a sibling of `plateProbe()` in `world-engine-lab.html` (~line 5825), reading
 `riverOverlay.shellDiag`. **PRECONDITION:** `_lab.reliefBakeStrength(>0)` + route on an
 ice/Europa/eyeball/Titan preset, else `heightSource=='sampler'`. It rebuilds the stress-proximity
 predictor **ARM'S-LENGTH** from published labels (NOT the generator's internal field), exactly as
@@ -477,7 +477,7 @@ From `result.design.filesTouched`.
 - **EDIT** `planet-lod-rivers.js` — add `import { writeShellReliefSphere, shellRegimeOf }` and export
   `isShellReliefPath`; make `writeBodyRelief` 3-way (~417); thread `shellDiag` through `route()` (~1129)
   and add `get shellDiag()` accessor (~1189).
-- **EDIT** `planet-lod-lab.html` — add `'Europa (icy moon)':'ice'` and `'Titan (methane seas)':'volatile'`
+- **EDIT** `world-engine-lab.html` — add `'Europa (icy moon)':'ice'` and `'Titan (methane seas)':'volatile'`
   to `PRESET_ARCHETYPE` (~1901); add the `shellProbe()` method on `_lab` next to `plateProbe()` (~5825).
 - **DOC** a one-paragraph build-intent note (`record-build-intent` rule) stating plain-language function
   (icy/despun stress-organized relief), intent (replace `sin²` fallback for icy/despun bodies, sibling to

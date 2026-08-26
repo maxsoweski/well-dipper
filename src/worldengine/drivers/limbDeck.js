@@ -14,11 +14,11 @@
 //
 // ⛔ NOTHING HERE IS DESIGNED. Every input already exists on the game side and no producer moves:
 //   · STRENGTH — the lab's only producer is planet-lod-lab-core.js:1081 `limbStrength: hasAtmo ? 0.7 : 0.0,`
-//     inside `deriveUniforms`, picked up at planet-lod-lab.html:2001 `state.emissive = u.emissive; state.specStrength = u.specStrength; state.limbStrength = u.limbStrength;`
+//     inside `deriveUniforms`, picked up at world-engine-lab.html:2001 `state.emissive = u.emissive; state.specStrength = u.specStrength; state.limbStrength = u.limbStrength;`
 //     — INSIDE `applyDrivers`, i.e. inside the pack-legal region and NOT inside the fenced storm
 //     writer. Its one input is planet-lod-lab-core.js:625 `const hasAtmo = !!d.atmosphere;`, which
 //     the game's condition vector answers directly. Nothing had to be extracted.
-//   · WIDTH and HUE — the lab does not own these either. planet-lod-lab.html:2465 `const _atmoOptics = atmosphereOpticsOf(`
+//   · WIDTH and HUE — the lab does not own these either. world-engine-lab.html:2465 `const _atmoOptics = atmosphereOpticsOf(`
 //     is the SAME module the game already calls at src/objects/Planet.js:1610 `const optics = atmosphereOpticsOf(condition);`
 //     and already writes to its own legacy material at src/objects/Planet.js:1643 `uLimbExponent: { value: optics.limbExponent },`.
 //     So this pack does not compute a width or a hue: it forwards the shared law's answer, and on a
@@ -34,19 +34,19 @@
 // ⛔⛔ WHAT IS DELIBERATELY NOT PORTED — declared here so it is not "discovered" at Step 9.
 // ---------------------------------------------------------------------------------------------
 //  1. THE x1.3 STRENGTH BOOST. ⭐ THE EXPONENT HALF OF THIS ITEM CLOSED 2026-08-22, MAX'S RULING.
-//     planet-lod-lab.html:2479 `if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);`
+//     world-engine-lab.html:2479 `if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);`
 //     still rides `_cloudRegime`, which is derived inside the lab's own `applyDrivers` and has no
 //     game-side producer. The game keeps the CONTINUOUS law it already ships,
 //     src/worldengine/base/atmosphereOptics.js:161 `limbExponent: 3.5 - 1.7 * thick,`.
 //     ⭐⭐ THIS BLOCK USED TO SAY THE EXPONENT WAS 'ALREADY A LIVE DIVERGENCE THIS PACK DID NOT
 //     CREATE' — TRUE WHEN WRITTEN, AND NOW CLOSED: the lab takes the shared value at
-//     planet-lod-lab.html:2478 `state.limbExponent = _atmoOptics.limbExponent;`. The binary
+//     world-engine-lab.html:2478 `state.limbExponent = _atmoOptics.limbExponent;`. The binary
 //     `_thickHaze ? 1.8 : 3.5` agreed with the module ONLY at thick 0 and 1. Over
-//     the GAS class the lab's fork reduces to exactly planet-lod-lab.html:2406 `else if (_gas && (state.planetRadiusEarth ?? 1) < 6 && (_fp.massEarth ?? 1) < 10) _cloudRegime = 2;`
+//     the GAS class the lab's fork reduces to exactly world-engine-lab.html:2406 `else if (_gas && (state.planetRadiusEarth ?? 1) < 6 && (_fp.massEarth ?? 1) < 10) _cloudRegime = 2;`
 //     — radiusEarth < 6 && massEarth < 10 — so it is closable later in ONE place. Transcribing it
 //     HERE would create a second expression of a lab law with no shared module, which is the drift
 //     this whole plan exists against.
-//  2. THE F31e DETACHED HAZE SHELL. planet-lod-lab.html:5026 `hazeShell.visible = !!(state.limbEnabled && state.limbStrength > 0 && state.limbHazeShell > 0);`
+//  2. THE F31e DETACHED HAZE SHELL. world-engine-lab.html:5026 `hazeShell.visible = !!(state.limbEnabled && state.limbStrength > 0 && state.limbHazeShell > 0);`
 //     is a separate THREE mesh, not a uniform. A pack whose contract is "a map keyed by uniform
 //     name" cannot express it, and a game-side shell would be a rewrite rather than a wire.
 //  3. NO `macroSeed` ASSERTION, and the omission is the honest one. `assertMacroSeed` is the PACK's
@@ -67,9 +67,9 @@ import { scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContr
 
 // ── The declared gate name ───────────────────────────────────────────────────
 // ⭐ A NAME, NOT A HARDCODED 1.0, AND THE DIFFERENCE IS THE WHOLE POINT OF ruling 4. The lab's write
-// is planet-lod-lab.html:5021 `uniforms.uLimbStrength.value = state.limbEnabled ? state.limbStrength : 0.0;   // ✓ enable gate`
+// is world-engine-lab.html:5021 `uniforms.uLimbStrength.value = state.limbEnabled ? state.limbStrength : 0.0;   // ✓ enable gate`
 // — an enable gate and nothing else. Unlike the F29 polar writer, which is
-// planet-lod-lab.html:5200 `state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;`,
+// world-engine-lab.html:5200 `state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;`,
 // this line multiplies NO relevance term — so the limb needs an enable gate and needs NO relevance key,
 // and src/objects/Planet.js:2209 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
 // stays untouched. Declaring the gate by NAME is what keeps the absent-gate throw alive at

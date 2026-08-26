@@ -1,6 +1,6 @@
 // planet-lod-lab-core.js
 // Pure CPU-side foundation math for the Planet LOD Lab.
-// Imported by planet-lod-lab.html AND tests/planet-lod-foundation.test.js (DRY).
+// Imported by world-engine-lab.html AND tests/planet-lod-foundation.test.js (DRY).
 // No three.js / DOM deps — keep it unit-testable in node/vitest.
 //
 // This is the code that later grafts into production PlanetGenerator, so it
@@ -49,7 +49,7 @@ export function visScaleOf(radiusEarth) {
 
 // Camera min-distance guard: the camera must never enter the scaled sphere. The floor
 // scales WITH the disc so the surface-skim margin is radius-invariant. At sVis=1 this is
-// 1.1 — bit-identical to the lab's existing wheel floor (planet-lod-lab.html :5588), so
+// 1.1 — bit-identical to the lab's existing wheel floor (world-engine-lab.html :5588), so
 // every pre-increment path is untouched. 1.1 > 1.05 satisfies minDistance > sVis·1.05.
 export const CAMERA_CLEARANCE = 1.1;
 export function minCameraDistance(sVis) {
@@ -64,7 +64,7 @@ export function minCameraDistance(sVis) {
 // docs/WORKSTREAMS/world-engine-radius-live-feed-2026-07-25/evidence/G4-rendered-belt-count.md.
 // The fix for the READ (not for the physics — Max ruled VIS_SCALE_EXP stays 0.5) is to hold the
 // disc at a constant apparent size while radius moves, which is the same discipline
-// renderDeltaSweep applies to its captures (SWEEP_DISTANCE * sVis, planet-lod-lab.html).
+// renderDeltaSweep applies to its captures (SWEEP_DISTANCE * sVis, world-engine-lab.html).
 // MECHANISM: the invariant held is the LOGICAL distance distance/sVis — the camera's distance in
 // scaled-planet-radii, the same quantity the LOD already keys on. Scaling absolute distance by
 // the sVis ratio keeps it fixed, so the wheel stays fully live (it sets a new logical distance,
@@ -205,7 +205,7 @@ export function voronoi3d(p, cells = 27) {
 // ONE curve, two consumers: Bands thermal (F32/F33, 500–3000 K) and Exotic magma
 // (F41, 1500–4000 K). Returns CHROMATICITY only ([r,g,b] in 0..1, peak channel
 // ≈1); the caller scales brightness (uThermalStrength × starFacing). The GLSL
-// helper in planet-lod-lab.html is a transcription of these same stops.
+// helper in world-engine-lab.html is a transcription of these same stops.
 //
 // Stylized Planckian-locus ramp, not a spectral integration: piecewise-smooth
 // interpolation between color stops anchored to real blackbody sRGB appearance
@@ -1132,10 +1132,10 @@ export function reliefGravityFactor(surfaceGravity) {
 // (the audit footnote-14 double-dip resolved) and the explicit 1/RE is DROPPED.
 //
 // THAT ARGUMENT IS NOW TRUE AT THIS FUNCTION'S BIGGEST CALL SITE TOO (v2-relief-law-2026-07-28).
-// It used to be false there: planet-lod-lab.html computed uPerturb from `state.surfaceGravity`,
+// It used to be false there: world-engine-lab.html computed uPerturb from `state.surfaceGravity`,
 // whose sole writer took deriveUniforms' CANONICAL, radius-blind g rather than the condition
 // vector's, so for the global relief-amplitude uniform the radius signal never arrived. That
-// writer (planet-lod-lab.html:3033) now assigns deriveConditionVector(...).surfaceGravity, so the
+// writer (world-engine-lab.html:3033) now assigns deriveConditionVector(...).surfaceGravity, so the
 // radius signal does arrive and the "radius flows through g exactly once" argument covers the
 // uniform as well as the vector. The historical record of the defect, kept because it explains
 // why the fix had to ship in the same commit as the law:

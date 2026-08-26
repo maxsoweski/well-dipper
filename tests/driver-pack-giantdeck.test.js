@@ -60,7 +60,7 @@ import { stripCommentsPreservingOffsets } from './helpers/source-scan.mjs';
 import { BASELINE, MESH_N, SAMPLE_IDX, CAPTURED_FROM, fibonacciSphere } from './fixtures/giantdeck-preset-baseline.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const LAB_RAW = readFileSync(join(ROOT, 'planet-lod-lab.html'), 'utf8');
+const LAB_RAW = readFileSync(join(ROOT, 'world-engine-lab.html'), 'utf8');
 // Comments AND string/template interiors blanked. Every source assertion below runs on THIS view, for
 // the reason the radius-live-feed fence records in blood: a law re-quoted in a comment — or parked in
 // a single-quoted string with a "moved to giantDeck.js" note beside it — satisfied a pin that existed
@@ -488,7 +488,7 @@ describe('GATE 5 · the lab copy is DELETED and the pack is what the lab calls',
   ];
   for (const [what, re] of DENY) {
     it(`the lab no longer carries ${what}`, () => {
-      expect(LAB_CODE, `${what} is still live in planet-lod-lab.html`).not.toMatch(re);
+      expect(LAB_CODE, `${what} is still live in world-engine-lab.html`).not.toMatch(re);
     });
   }
 
@@ -498,7 +498,7 @@ describe('GATE 5 · the lab copy is DELETED and the pack is what the lab calls',
     // like a clean deletion. The comparison subject is the LAB AS IT WAS, read out of a pinned git
     // blob — not the pack, whose named constants (DECK_LAW.CONTRAST.BASE …) deliberately do not spell
     // the literals — so what is proven is precisely "this text was here and is now gone".
-    const prior = execFileSync('git', ['-C', ROOT, 'show', `${CAPTURED_FROM}:planet-lod-lab.html`],
+    const prior = execFileSync('git', ['-C', ROOT, 'show', `${CAPTURED_FROM}:world-engine-lab.html`],
       { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
     const priorCode = stripCommentsPreservingOffsets(prior, { blankLiteralText: true });
     const neverMatched = DENY.filter(([, re]) => !re.test(priorCode)).map(([what]) => what);

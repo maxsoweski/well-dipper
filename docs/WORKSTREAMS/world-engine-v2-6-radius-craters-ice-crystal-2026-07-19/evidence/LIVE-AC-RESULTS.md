@@ -1,7 +1,7 @@
 # V2-6 — Live Integration AC Results
 
 Workstream `world-engine-v2-6-radius-craters-ice-crystal-2026-07-19`.
-Objective integration probes on the L1 lab, `:5175` (`/well-dipper/planet-lod-lab.html`),
+Objective integration probes on the L1 lab, `:5175` (`/well-dipper/world-engine-lab.html`),
 branch `feature/world-engine-production-L1` @ `7cf32fe`. Driven 2026-07-20 by working-Claude
 (fresh CDP page on Max's Chrome, one page, opened + closed by the probe; his own tabs untouched).
 

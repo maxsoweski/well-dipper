@@ -3,7 +3,7 @@
 **Workstream:** world-engine-inc3-relief-spine-depthlaw-2026-07-21
 **Branch / HEAD:** feature/world-engine-production-L1 @ 1bae82b
 **Driven:** 2026-07-21, working-Claude over CDP (puppeteer-core 25.3.0 → live debug
-Chrome/150 at :9223), lab served at `http://localhost:5174/well-dipper/planet-lod-lab.html`.
+Chrome/150 at :9223), lab served at `http://localhost:5174/well-dipper/world-engine-lab.html`.
 **AC:** at the UAT failing point (Moon/Mercury preset, LOW drawn R+g), paired
 same-worldSeed before/after showing discrete crater bowls / legible rim arcs vs the
 wavey-magma read, quantified via a stated metric, zero new console errors.

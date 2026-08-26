@@ -7,7 +7,7 @@ F51 (L2 crosscutting table, docs/FEATURES/planet-visual-features.md:345): planet
 
 ## 2. Current shader approach (HOW, as-built)
 
-Built in PRODUCTION, absent from planet-lod-lab.html (no ring stage, mesh, or uniform exists in the lab — grep for ring there only hits aurora ringMask and cryo bands). Production inline path: src/objects/Planet.js _createRing() (1105-1235) — THREE.RingGeometry(innerR, outerR, 64) rotated into the equatorial plane (1111-1114); fragment shader parameterizes t = (dist-innerR)/(outerR-innerR), fakes banding with two sine waves sin(t*30) and sin(t*12+1) → density + 2-color mix (1194-1198); a HARDCODED Cassini-like smoothstep gap at t≈0.4-0.51 (1200-1202); shepherd gaps as up to 6 moon-orbit notches via setRingGaps() (1241-1255, gap width = moon.radius*4); planet shadow as an analytic cylinder test — cross(vRelWorldPos, lightDir) vs planetRadius (1214-1223, shadow also drops alpha to 0.15 so stars show through); transparency via Bayer dither-discard (1225) and 6-level posterize (1227) — the retro envelope is already honored. Generation: PlanetGenerator.js:509-555 rolls per-type ring chance and calls generateRingPhysics() (PhysicsEngine.js:766-905: Roche-limit inner edge 844, moon-clipped outer edge 846-857, age-decay density 859-864, 2:1/3:1 resonance gaps 866-884, ringlet partition 886-900). DEAD PATH: src/rendering/objects/RingRenderer.js:38 consumes the full physics ringlets[]/gaps[] (16 ringlets, 8 gaps, composition-driven COMPOSITION_COLORS at line 28) in a per-fragment loop (208-235) — but it is never imported or instantiated anywhere; the physics data is generated and stored on rings.physics yet the live inline shader ignores it and renders the sine fake. Nearest lab machinery to plug into: the FEATURES solo registry in planet-archetypes.js:6 and the lab's DRIVER_PRESETS/deriveUniforms pipeline (planet-lod-lab.html:2149, 2164).
+Built in PRODUCTION, absent from world-engine-lab.html (no ring stage, mesh, or uniform exists in the lab — grep for ring there only hits aurora ringMask and cryo bands). Production inline path: src/objects/Planet.js _createRing() (1105-1235) — THREE.RingGeometry(innerR, outerR, 64) rotated into the equatorial plane (1111-1114); fragment shader parameterizes t = (dist-innerR)/(outerR-innerR), fakes banding with two sine waves sin(t*30) and sin(t*12+1) → density + 2-color mix (1194-1198); a HARDCODED Cassini-like smoothstep gap at t≈0.4-0.51 (1200-1202); shepherd gaps as up to 6 moon-orbit notches via setRingGaps() (1241-1255, gap width = moon.radius*4); planet shadow as an analytic cylinder test — cross(vRelWorldPos, lightDir) vs planetRadius (1214-1223, shadow also drops alpha to 0.15 so stars show through); transparency via Bayer dither-discard (1225) and 6-level posterize (1227) — the retro envelope is already honored. Generation: PlanetGenerator.js:509-555 rolls per-type ring chance and calls generateRingPhysics() (PhysicsEngine.js:766-905: Roche-limit inner edge 844, moon-clipped outer edge 846-857, age-decay density 859-864, 2:1/3:1 resonance gaps 866-884, ringlet partition 886-900). DEAD PATH: src/rendering/objects/RingRenderer.js:38 consumes the full physics ringlets[]/gaps[] (16 ringlets, 8 gaps, composition-driven COMPOSITION_COLORS at line 28) in a per-fragment loop (208-235) — but it is never imported or instantiated anywhere; the physics data is generated and stored on rings.physics yet the live inline shader ignores it and renders the sine fake. Nearest lab machinery to plug into: the FEATURES solo registry in planet-archetypes.js:6 and the lab's DRIVER_PRESETS/deriveUniforms pipeline (world-engine-lab.html:2149, 2164).
 
 ## 3. Reference images (real + art)
 
@@ -34,7 +34,7 @@ Academically a ring system is a 1-D radial optical-depth profile τ(r) on a razo
 
 ## 5. Isolation recipe (:9223)
 
-UNBUILT in the lab — recommended recipe once built: (1) register a FEATURES key in planet-archetypes.js:6, e.g. rings: { label: 'Rings (F51)', enableKey: 'ringsEnabled', archetypes: [...] }, so the lab's setFeatureEnables() solo plumbing (planet-lod-lab.html:2539-2569) picks it up automatically; (2) add a ringed host preset to DRIVER_PRESETS (planet-lod-lab.html:2149) — none of the six existing presets is a gas giant, so either add 'Gas giant (ringed)' or hang the ring off 'Frozen (airless)' for first light. Then, on the dedicated :9223 Chrome (see memory/chrome-devtools-9223-launch.md; verify liveness with mcp__chrome-devtools__list_pages, NOT curl), open the lab page and run: window._lab.solo('rings'). Distances via window._lab.state.distance (lab range 1.1-30 radii, planet-lod-lab.html:2106): 12 for the full annulus face-on (rings span roughly 1.2-4 planet radii); 25 for the far-silhouette readability check (do bands still read at a handful of pixels?); 3-5 hovering near the ring plane for the planet-shadow bite, gap edges, and dither-translucency against the starfield. Sweep pitch between face-on and edge-on to exercise the grazing-angle moiré case.
+UNBUILT in the lab — recommended recipe once built: (1) register a FEATURES key in planet-archetypes.js:6, e.g. rings: { label: 'Rings (F51)', enableKey: 'ringsEnabled', archetypes: [...] }, so the lab's setFeatureEnables() solo plumbing (world-engine-lab.html:2539-2569) picks it up automatically; (2) add a ringed host preset to DRIVER_PRESETS (world-engine-lab.html:2149) — none of the six existing presets is a gas giant, so either add 'Gas giant (ringed)' or hang the ring off 'Frozen (airless)' for first light. Then, on the dedicated :9223 Chrome (see memory/chrome-devtools-9223-launch.md; verify liveness with mcp__chrome-devtools__list_pages, NOT curl), open the lab page and run: window._lab.solo('rings'). Distances via window._lab.state.distance (lab range 1.1-30 radii, world-engine-lab.html:2106): 12 for the full annulus face-on (rings span roughly 1.2-4 planet radii); 25 for the far-silhouette readability check (do bands still read at a handful of pixels?); 3-5 hovering near the ring plane for the planet-shadow bite, gap edges, and dither-translucency against the starfield. Sweep pitch between face-on and edge-on to exercise the grazing-angle moiré case.
 
 ## 6. What to judge (UAT checklist)
 
@@ -71,7 +71,7 @@ underneath, there is no pop and no dissolve. Approach B: "emergence, not swap."
   planet-shadow, and the 6-level posterize + Bayer dither retro envelope.
 - **Harness** `rings-lod-lab.html` (repo root) — standalone scene + plain planet + ported v1
   impostor + cloud + camera/RT controls, where the mechanism was proven before integration.
-- **Integration** — in `planet-lod-lab.html` the cloud is built next to the existing impostor
+- **Integration** — in `world-engine-lab.html` the cloud is built next to the existing impostor
   `ring`, driven by the SAME `state.ringsEnabled` toggle, tilted per-frame via
   `ringCloud.quaternion.copy(ring.quaternion)` (coplanar with the impostor under axial tilt).
 
@@ -88,7 +88,7 @@ option (recycled-proximity-patch) was scoped and **deferred** (Max chose ship-th
 ## 6.5 Build plan — v1 (SUPERSEDED by v2 above; envelope/shadow/dither still valid reference)
 
 ### Feasibility verdict — CLEAN (scene-mesh, not fullscreen-shader)
-The lab is a REAL THREE scene, not a single fullscreen raymarched quad. Evidence (LIVE planet-lod-lab.html):
+The lab is a REAL THREE scene, not a single fullscreen raymarched quad. Evidence (LIVE world-engine-lab.html):
 `new THREE.WebGLRenderer` (116), `new THREE.Scene()` (121), `PerspectiveCamera` (122), the planet is a real
 `new THREE.SphereGeometry(R,256,256)` → `new THREE.Mesh` → `scene.add(planet)` (4385-4388), and the main loop
 does `renderer.render(scene, camera)` into a low-res RT then a nearest-blit upscale (7219-7223). The blit is ONLY
@@ -128,7 +128,7 @@ None of the DRIVER_PRESETS is a gas giant with rings. For first light, DON'T add
 render the ring on whatever body is shown. The card §5's "Frozen (airless)" works as a visual host. A dedicated
 ringed gas-giant preset is a later polish step, not first-light.
 
-### Exact edit sites (LIVE planet-lod-lab.html line numbers)
+### Exact edit sites (LIVE world-engine-lab.html line numbers)
 1. **Ring uniforms + material + mesh** — insert immediately AFTER the hazeShell block (after 4453, before the
    render-target section at 4467). Mirror the hazeShell structure: a `ringUniforms` object, a `ringMat`
    (`THREE.ShaderMaterial`, `side: THREE.DoubleSide`, `transparent:true`, `depthWrite:false` like the production
@@ -210,7 +210,7 @@ production names that are already proven safe (`uRingletInnerR`, `uGapCenters`, 
     not a decal. ON/OFF delta is total (`F51-tuned-off.png` vs `F51-tuned-on.png`): the entire
     annulus vanishes with rings off, confirming the term fires.
 
-- **Tweaks applied** (all lab-only, `planet-lod-lab.html`; physics ENGINE untouched):
+- **Tweaks applied** (all lab-only, `world-engine-lab.html`; physics ENGINE untouched):
   - **Gap-width presentational boost** (flatten loop ~4521): physics gap widths (~0.035 R_p
     dominant 2:1, ~0.02 R_p 3:1) are sub-Bayer-cell and never registered. Sorted gaps by width,
     gave the dominant (widest) gap a **0.34 R_p half-width** and subordinate gaps **0.12 R_p**,
@@ -262,7 +262,7 @@ production names that are already proven safe (`uRingletInnerR`, `uGapCenters`, 
 - **What was built (Tasks 1-7, plan `2026-06-13-f51-rings-3d-lod-particle.md`):** the two-tier
   impostor+cloud substrate (see §6.5 v2). Pure baker + factory (`ring-particle-cloud.js`,
   7 unit tests), proven in the standalone harness `rings-lod-lab.html`, then integrated into
-  `planet-lod-lab.html` next to the existing impostor `ring`, driven by the same
+  `world-engine-lab.html` next to the existing impostor `ring`, driven by the same
   `state.ringsEnabled` toggle.
 
 - **Working-Claude live integration checks (:9223, all ✅):**

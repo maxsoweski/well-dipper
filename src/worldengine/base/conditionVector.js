@@ -3,7 +3,7 @@
 // PURPOSE (BUILD-PLAN §2 Slice C / AC4): surface every body-condition scalar the V2-1 E1 regime
 // selector will read (composition/density, age, radius, eccentricity, the RAW tidal Io-ratio as an
 // explicitly-named field, shellThickness) as ONE nested `condition` sub-object attached to bodyDrivers.
-// Importable by the lab (planet-lod-lab.html buildBodyDrivers), the AC1 byte-identity harness
+// Importable by the lab (world-engine-lab.html buildBodyDrivers), the AC1 byte-identity harness
 // (tests/fixtures/v2-0-carrier-golden.mjs), the AC4 test, and — later — V2-1 E1 at the writeBodyRelief seam.
 //
 // SHADOW-MODE / BYTE-SAFETY: this vector is attached NESTED under bodyDrivers.condition, never as flat
@@ -144,7 +144,7 @@ export function deriveConditionVector(fp, derived, radiusEarth) {
   tidalState:      { locked: !!(fp.tidalState && fp.tidalState.locked) },
   // ── V2-4 Slice C5 (E2-figure descriptor) addendum: D8 rotationHours plumbed into the condition vector.
   //    Until now NO field carried spin HERE — the gas-band derivation reads the RAW `_fp.rotationHours` in
-  //    the lab (planet-lod-lab.html), never this vector. NESTED (like T_eq / surfaceGravity / tidalState) ⇒
+  //    the lab (world-engine-lab.html), never this vector. NESTED (like T_eq / surfaceGravity / tidalState) ⇒
   //    invisible to the flat-key tune builders (driversToTune / magmaDriversToTune) and to computeE1, which
   //    read only named keys — so this widening is BYTE-INERT by the same V2-0 precedent the 75-golden proves
   //    (adding a nested key no path reads leaves every HASHED_FIELD untouched). The SOLE reader is

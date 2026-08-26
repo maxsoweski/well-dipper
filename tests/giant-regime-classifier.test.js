@@ -45,7 +45,7 @@ const E1_CODE = E1_SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '
 const REGIMES = Object.values(E5_REGIME);
 
 // The lab's preset-name table, transcribed HERE and nowhere in src/ — it is the ORACLE this step
-// retires (planet-lod-lab.html:1710 `const E5_PRESET_REGIME = {`), so the classifier has to reproduce
+// retires (world-engine-lab.html:1710 `const E5_PRESET_REGIME = {`), so the classifier has to reproduce
 // it from the condition alone. Keeping the last copy in a test is the point of the step.
 const PRESET_OF_REGIME = {
   [E5_REGIME.GAS_GIANT]:   'Gas giant (Jovian)',

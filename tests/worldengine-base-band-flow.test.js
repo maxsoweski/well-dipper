@@ -268,7 +268,7 @@ const GLSL = readFileSync(fileURLToPath(new URL('../src/worldengine/shaders/heig
 // ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
 // SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
 // this fence reads both as one corpus so its assertions keep testing what the lab compiles.
-const LAB  = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.meta.url)), 'utf8')
+const LAB  = readFileSync(fileURLToPath(new URL('../world-engine-lab.html', import.meta.url)), 'utf8')
   + '\n' + readFileSync(fileURLToPath(new URL('../src/worldengine/shaders/planetShaders.glsl.js', import.meta.url)), 'utf8');
 // Driver pack #1 (PLAN §4 Step 5c) — the new home of the band-proxy export. See the re-pointed pin below.
 const PACK_SRC = readFileSync(fileURLToPath(new URL('../src/worldengine/drivers/giantDeck.js', import.meta.url)), 'utf8');

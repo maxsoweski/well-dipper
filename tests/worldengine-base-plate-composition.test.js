@@ -47,7 +47,7 @@ const SEEDS = TABLE._meta.seeds;
 // The production-shaped condition-bearing bundle. `anchored` forces the composition driver back to the
 // Earth anchor, which reproduces the pre-AC-PLATECOMP behaviour — that is the table's BEFORE column.
 // `radiusEarth` lets us exercise the LAB's radius-aware gravity rather than the radius-blind canonical
-// one (planet-lod-lab.html feeds condition.surfaceGravity as massGravity), so the radius-invariance
+// one (world-engine-lab.html feeds condition.surfaceGravity as massGravity), so the radius-invariance
 // assertion below cannot pass vacuously.
 function run(name, seed, { anchored = false, radiusEarth = null } = {}) {
   const fp = DRIVER_PRESETS[name];

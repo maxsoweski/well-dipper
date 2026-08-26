@@ -136,7 +136,7 @@
     ],
     "outputs": [
       "reliefEnvelope(radiusEarth, surfaceGravity) -- radiusEarth stays UNUSED; the Inc-3 'radius flows through g exactly once' decision STANDS. What changed is the exponent above g = 1. [corrected during build 2026-07-28: the original line asserted the opposite and was false. The seam-normalising radius cancels identically along every physical trajectory, so no continuous form needs the argument.]",
-      "uniforms.uPerturb (planet-lod-lab.html:5937) -- the global relief-amplitude uniform, currently inert on every preset",
+      "uniforms.uPerturb (world-engine-lab.html:5937) -- the global relief-amplitude uniform, currently inert on every preset",
       "bodyDrivers.massGravity, the flat D14 slot read by shellRelief.js:138, stagnantLid.js:133, plates.js:131 and magmatism.js:119 -- THREE go live simultaneously (plates, magmatism, shellRelief); stagnantLid.js:133 receives the value and discards it because K_G = 0 at stagnantLid.js:119. [corrected during build 2026-07-28: was 'all four go live'. K_G is deliberately not touched.]",
       "LAW_REGISTRY entries in src/worldengine/instrument/laws.js (three: relief-envelope-vs-gravity-calibrated, relief-envelope-vs-gravity-derived, relief-absolute-vs-radius) [corrected during build 2026-07-28: was 'two: vs-gravity and vs-radius'.]"
     ],

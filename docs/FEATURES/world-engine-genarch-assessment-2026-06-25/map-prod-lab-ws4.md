@@ -1,7 +1,7 @@
 # Map — Production LOD Lab Renderer + WS4 (E6 grain / E9 carve wiring)
 
 **Assessment date:** 2026-06-25 · **Surface:** the PRODUCTION lab renderer
-(`planet-lod-lab.html` + `planet-lod-lab-core.js` + `planet-lod-height.glsl.js` +
+(`world-engine-lab.html` + `planet-lod-lab-core.js` + `planet-lod-height.glsl.js` +
 `planet-lod-tectonic.js` + `planet-lod-rivers.js`) and the WS4 workstream that wired
 E6 tectonic grain + E9 subtractive carve into it.
 **Scope:** READ-ONLY. No code edited. This is the surface whose Max-UAT FAILED.
@@ -66,7 +66,7 @@ The axis chooses an *orientation*; the noise produces the *structure*. Same patt
 `lavaPlainsCombiner`, `cryoRidgeCombiner`. In every case: **axis = orientation input;
 noise = the actual landform.**
 
-The full combiner chain runs in `main()` (`planet-lod-lab.html:299-460`) and in the
+The full combiner chain runs in `main()` (`world-engine-lab.html:299-460`) and in the
 router's `ROUTER_MAIN` (`planet-lod-rivers.js:169-209`) — ~25 combiners, each
 `h += <noise-derived delta>`. The relief is a sum of noise fields, gated by CPU scalars,
 oriented by CPU axes.
@@ -114,7 +114,7 @@ is NOT relief, not height, not a structural province map. It is a compass field.
 This is the part most worth untangling, because the verdict's PASS and the UAT's FAIL
 are about *different code paths*:
 
-1. **LIVE render carve (what you see on screen).** In `planet-lod-lab.html:405-427`:
+1. **LIVE render carve (what you see on screen).** In `world-engine-lab.html:405-427`:
    ```
    carveDepth = sampleCarve(N, carveGrad);   // textureCube(uRiverCarveMap, dir).r
    ...
@@ -136,7 +136,7 @@ are about *different code paths*:
    `≤ 0`. `applyIncision` (`:871-876`) folds it onto an IMMUTABLE COPY. This is what
    `carve-subtractive` and `epoch-build-identical` (unit ACs) prove, and what the
    `epoch-carve-visible` live AC reads — but ONLY through the `sampleRoutedHeight`
-   **probe** (`planet-lod-lab.html:5775-5812`), which operates on the JS-side routed
+   **probe** (`world-engine-lab.html:5775-5812`), which operates on the JS-side routed
    substrate array (`ov.height`, the `ROUTER_MAIN` readback), **NOT the rendered
    shader chain.** The probe's own comment is explicit: "*NOT a rendered-chain sample
    (honest per plan D5c — the full rendered-chain readback is the deferred T12b)*"

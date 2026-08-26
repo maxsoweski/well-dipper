@@ -355,7 +355,7 @@ describe('E — the wire reaches a real lab material', () => {
 // ⭐ THE SHAPE IS `solidFeatures`'s AND `giantDeck`'s, WITH ONE DIFFERENCE THAT IS THE WHOLE OF THIS
 // PACK'S SEAM. Those two mirror uniform -> a FLAT `state.<field>`. This pack cannot: the lab does not
 // hold five palette colours as five fields, it holds ONE object —
-// planet-lod-lab.html:2820 `      state.surfacePalette = applyAlbedoTransfer(surfacePaletteOf(_bodyDrivers.condition),`
+// world-engine-lab.html:2820 `      state.surfacePalette = applyAlbedoTransfer(surfacePaletteOf(_bodyDrivers.condition),`
 // — which its per-frame writer destructures at :5455-5464. So the mirror carries the flat six
 // through a binding table AND `surfacePalette` off the pack's own `meta.palette`, which is the same
 // object `surfacePaletteBlock` already returns. Re-deriving it at the lab would be a second copy of
@@ -363,7 +363,7 @@ describe('E — the wire reaches a real lab material', () => {
 //
 // ⛔ THE COMPLEMENT IS THE TWO SEED OFFSETS AND MUST STAY THAT WAY. `uMacroOffset` / `uDetailOffset`
 // are FORWARDED verbatim off the front-end's own ctx, so what comes back is what the lab put in;
-// planet-lod-lab.html:1378 `    function updateSeedUniforms(){` owns that wire and writes them straight to the
+// world-engine-lab.html:1378 `    function updateSeedUniforms(){` owns that wire and writes them straight to the
 // material on every seed change. Writing them again from the pack would move ownership of the seed
 // wire out of the seed function for no value. ⚠ `uCraterOffset` is NOT in that group — it is a 🎲
 // transient the lab holds as `state.craterOffset`, so it mirrors like the rest.
@@ -381,8 +381,8 @@ describe('§H — the lab mirror and its complement', () => {
   });
 
   it('the mirror is UNGATED — a gated-OFF pack result still mirrors the live terminator strength', () => {
-    // The hazard planet-lod-lab.html:1749 names for pack #1. The lab re-applies its own ✓ checkbox at
-    // planet-lod-lab.html:5044 `      uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate`,
+    // The hazard world-engine-lab.html:1749 names for pack #1. The lab re-applies its own ✓ checkbox at
+    // world-engine-lab.html:5044 `      uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate`,
     // so a mirror that resolved the gate too would apply the decision twice — and zero is a legal
     // value for this master, so nothing would throw.
     const open = giantSurfaceLabState(packFor(B()));

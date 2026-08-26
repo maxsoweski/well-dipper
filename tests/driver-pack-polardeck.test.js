@@ -70,7 +70,7 @@ const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 const POLAR_SRC = read('src/worldengine/drivers/polarDeck.js');
 const STORM_SRC = read('src/worldengine/base/storm-e.js');
 const UNIFORMS_SRC = read('src/worldengine/shaders/uniforms.js');
-const LAB_SRC = read('planet-lod-lab.html');
+const LAB_SRC = read('world-engine-lab.html');
 
 // The appended wrapper's body ALONE — scanning the whole of storm-e.js for `resolveStormE` would hit
 // its own definition, which is exactly the shape of vacuous scan §11.1 calls a dead gate.
@@ -306,7 +306,7 @@ describe('GATE 3 · the eight driven uniforms land on a real material', () => {
     // ⛔⛔ THIS USED TO SCRAPE THE LAB FOR `[_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)]`
     // AND COMPARE. That worked only while the lab held a SECOND COPY of the law, and requiring two
     // copies so they can be compared is the two-routes disease encoded as a test. The lab now CALLS
-    // this pack — planet-lod-lab.html `Object.assign(state, polarDeckLabState(_pd));` — so the pin
+    // this pack — world-engine-lab.html `Object.assign(state, polarDeckLabState(_pd));` — so the pin
     // moves here, and it is STRONGER than what it replaces: it pins the VALUES with their provenance,
     // and separately pins that the lab READS the module, which the scrape never did.
     //
@@ -451,7 +451,7 @@ describe('GATE 5 · the Mars leak stays shut', () => {
   });
 
   it('[CONTROL] a predicate that admitted Mars would move the bank while strength stayed 0', () => {
-    // ⭐ THIS IS THE FAILURE THE LAB MEASURED — planet-lod-lab.html:1852 `which moves the polar bank this function writes (state.polarSides / state.polarR0) on 52/52 (preset, seed) pairs tried`
+    // ⭐ THIS IS THE FAILURE THE LAB MEASURED — world-engine-lab.html:1852 `which moves the polar bank this function writes (state.polarSides / state.polarR0) on 52/52 (preset, seed) pairs tried`
     // — and the reason the gas gate
     // cannot be left to `uPolarStrength`. Running the producer on a Mars-like body yields strength 0
     // — so every check keyed on the master strength reads clean — while `sides` / `r0` / `phase`

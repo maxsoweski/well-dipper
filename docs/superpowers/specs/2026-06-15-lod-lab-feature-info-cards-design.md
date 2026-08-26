@@ -3,7 +3,7 @@
 **Date:** 2026-06-15
 **Author:** working-Claude (brainstormed with Max)
 **Status:** spec — pending Max review → implementation plan
-**Scope:** `planet-lod-lab.html` (GUI) + new `scripts/gen-feature-cards.mjs` + a generated data
+**Scope:** `world-engine-lab.html` (GUI) + new `scripts/gen-feature-cards.mjs` + a generated data
 module + a `package.json` script. **No shader/core changes** (`planet-lod-lab-core.js` untouched),
 so this cannot regress any planet rendering.
 **Campaign frame:** this is lab *tooling*, not a planet feature — the campaign per-feature UAT loop
@@ -24,7 +24,7 @@ prose doc at build time**, shown **inline behind an ⓘ toggle** in each feature
 ### Data flow (derived; single source of truth)
 
 ```
-planet-visual-features.md  ──gen script──▶  planet-feature-cards.generated.js  ──import──▶  planet-lod-lab.html
+planet-visual-features.md  ──gen script──▶  planet-feature-cards.generated.js  ──import──▶  world-engine-lab.html
    (SOURCE OF TRUTH)        npm run            { featureKey: { name, variants,      inline ⓘ card
                             gen-feature-cards     examples, status, fNum } }
 ```
@@ -107,7 +107,7 @@ doc-rot script vs. a tiny dedicated check it calls — is an implementation deta
   drift guard catches a stale generated file; a unit test pins parse-of-a-known-row.
 - **F#→key join gaps:** a registry feature could carry an F# the `.md` doesn't list (or vice-versa).
   Handled by the coverage report + structured-only fallback — no crash.
-- **Line-number drift** in `planet-lod-lab.html` is real; re-`grep -n` every edit site (do NOT trust
+- **Line-number drift** in `world-engine-lab.html` is real; re-`grep -n` every edit site (do NOT trust
   line numbers from this spec or the prior plan).
 - **DOM injection in the title bar** must not collide with the Phase-1 enable-in-title relocation;
   the ⓘ button is appended after the enable controller, verified live.
@@ -121,7 +121,7 @@ doc-rot script vs. a tiny dedicated check it calls — is an implementation deta
 ## Verification
 
 - **Live on chrome-devtools GPU `:9223`** (NOT Playwright):
-  `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`.
+  `localhost:5173/well-dipper/world-engine-lab.html?fresh=1`.
   - ⓘ on a feature shows the correct card (title/variants/examples for a prose-backed feature; e.g.
     Mountains → Olympus Mons, Driven Tectonic/Orogeny/Volcanism, Renders Rocky…Lava).
   - Card collapsed by default; toggling ⓘ shows/hides; multiple cards can be open independently.
@@ -135,6 +135,6 @@ doc-rot script vs. a tiny dedicated check it calls — is an implementation deta
 - **Drift guard:** touching the `.md` without regenerating fails `npm run doc-rot`.
 - **Existing suites** (`feature-associations`, `planet-archetypes`, the `cityLightsEnabled` pin #16)
   stay green — this is additive.
-- **Commit explicit paths only** (`planet-lod-lab.html`, `scripts/gen-feature-cards.mjs`,
+- **Commit explicit paths only** (`world-engine-lab.html`, `scripts/gen-feature-cards.mjs`,
   `planet-feature-cards.generated.js`, `package.json`, doc-rot wiring) — never `git add -A`
   (shared-tree litter: warp WIP + loose .png/.webm/.html).

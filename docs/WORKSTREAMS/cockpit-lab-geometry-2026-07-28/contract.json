@@ -122,7 +122,7 @@
       "src/ui/Settings.js:40 — fov: 70, the FOV the framing is judged against",
       "docs/ARCHIVE/GAME_BIBLE_LEGACY.md §8A — player hull ~20 m (house-sized); the nose section must be a stated fraction of this",
       "public/assets/ GLB serving convention (ShipLoader.js:4 SHIPS_BASE = 'assets/ships/'); the cockpit GLB lands at public/assets/cockpit/",
-      "Root-level *-lab.html convention with bare 'three' imports served by the project's Vite dev server (planet-lod-lab.html precedent); three pinned at 0.183.1",
+      "Root-level *-lab.html convention with bare 'three' imports served by the project's Vite dev server (world-engine-lab.html precedent); three pinned at 0.183.1",
       "scripts/blender-export-snippet.py — the repo's existing glTF export reference (export_format='GLB', export_yup=True, export_apply=True)"
     ],
     "outputs": [

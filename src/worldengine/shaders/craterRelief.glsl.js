@@ -193,7 +193,7 @@ void craterEjectaCombiner(vec3 dir, inout float h, inout vec3 slope){
   // THE LEVEL THAT LANDS AT IS NOT THE SAME IN THE TWO FRONT-ENDS, AND THE FIRST DRAFT OF THIS NOTE
   // GOT THAT WRONG BY READING ONE OF THEM. In the GAME amp * scale == 1 exactly (pinned at
   // tests/crater-uniform-law.test.js:74), so d/D lands on CRATER_DEPTH == D_D_SIMPLE == 0.20, Pike
-  // exactly. In the LAB it does NOT: planet-lod-lab.html:5358 multiplies uCraterScale by the display
+  // exactly. In the LAB it does NOT: world-engine-lab.html:5358 multiplies uCraterScale by the display
   // scale while :5359 writes uCraterAmp raw, so the product is the display-resolved one —
   // MEASURED LIVE 0.522 (Moon/Mercury), 0.649 (Frozen), 0.728 (Mars) — and d/D lands on 0.10 to 0.15.
   // (THE DISPLAY-SCALE TOKEN IS DELIBERATELY NOT SPELLED ON THAT LINE. tests/vis-scale-fence.test.js

@@ -1551,7 +1551,7 @@ export class Planet {
     // the 1.05-radius zoom floor (`ShipCameraSystem.js:859`), because the visible cap shrinks as the
     // camera closes while the disc grows. Measured threshold: the game crosses 1 render pixel of limb
     // error at ≈2.6 body radii, so everything inside the autopilot survey stop (`radius * 2.8`) is
-    // visibly faceted. The lab has never had this — `planet-lod-lab.html:280` is
+    // visibly faceted. The lab has never had this — `world-engine-lab.html:280` is
     // `SphereGeometry(R, 256, 256)`, commented "256 for surface-skimming silhouette".
     //
     // ⛔ THE OBVIOUS FIX — raising the icosphere detail — IS THE WORST OPTION, and the reason is not
@@ -1599,12 +1599,12 @@ export class Planet {
 
     // ── Air optics (port slice: the limb) ────────────────────────────────────────────────────────
     // atmosphereOpticsOf is not a new module and not a transcription — it is the SAME file the lab
-    // imports (planet-lod-lab.html:177). The game simply never called it. That is the whole shape of
+    // imports (world-engine-lab.html:177). The game simply never called it. That is the whole shape of
     // this port: the game becomes a second consumer of what the lab already uses, so a future change
     // to the optics law lands in both without anyone porting anything.
     // ⚠ It returns a CONTINUOUS limbExponent (3.5 - 1.7*thickHaze). ⭐ THE LAB'S BINARY OVERRIDE IS
     // GONE, 2026-08-22, Max's ruling: the lab now takes this module's value at
-    // planet-lod-lab.html:2478 `state.limbExponent = _atmoOptics.limbExponent;`. This block used to
+    // world-engine-lab.html:2478 `state.limbExponent = _atmoOptics.limbExponent;`. This block used to
     // read "a live drift between the lab and the module it imports", and to say reconciling the lab
     // "is NOT done here" — it IS done, and both front-ends now render one limb law. ⛔ Its old ref
     const optics = atmosphereOpticsOf(condition); const term = terminatorOpticsOf(condition);   // ⛔ B3-1 RIDES THIS LINE (see :1403). `term` is the SHARED module the packs read, not a second law.
@@ -1697,7 +1697,7 @@ export class Planet {
         uEjectaAmp: { value: craters.ejectaAmp },
         uEjectaLump: { value: craters.ejectaLump },
         // ⭐ 2026-08-25, Max's ruling: the GAME ADOPTS THE LAB'S VERSION of province gating on
-        // craters. 1.0 is the lab's own dial default (uniforms.js:469, planet-lod-lab.html:918),
+        // craters. 1.0 is the lab's own dial default (uniforms.js:469, world-engine-lab.html:918),
         // so the two front-ends now weight craters by the same terrain-region field instead of
         // this path pinning it neutral. 0.0 restores the pre-ruling look exactly.
         uProvinceWeight: { value: 1.0 },

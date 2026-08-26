@@ -11,7 +11,7 @@
       "bake-attenuation-model.json": "S0.5/S0.5a — arc ≥1-band magnitude (MODEL-DERIVED), population fraction (JUSTIFIED) + size gate (GUESSED) copied verbatim, light staging (displayChain), RNG-neutral centre probe, shadow re-baseline protocol.",
       "relic-lambda-band.json": "S0.1/S0.1a — the anchor-swept per-world f_I band (copied).",
       "relief-budget-fit.json": "S0.2/S0.2a/S0.6 — Mars real-hypsometry f_I gate [0.3,0.8]; realized model f_I per world (cross-reference).",
-      "planet-lod-lab.html": "state defaults grep-verified this session — :2006 lightAzimuthDeg=40.6, :2007 lightElevationDeg=20.79 (the source of displayChain az/el)."
+      "world-engine-lab.html": "state defaults grep-verified this session — :2006 lightAzimuthDeg=40.6, :2007 lightElevationDeg=20.79 (the source of displayChain az/el)."
     },
     "noPostHocTuning": {
       "declaration": "Every bar below is FROZEN at the S0 seam, BEFORE the first S2 capture. No number here may be re-chosen, relaxed, or re-tagged after any render is viewed — the verdict is recorded whichever way it falls, and Max is pinged only after.",
@@ -27,7 +27,7 @@
     "bandLuminance": 0.16666666666666666,
     "appliesTo": "ALL oblique captures — arc-asymmetry, blind-read, and surface-class — at S2 (flip alone) and S4 (post-S3 / re-run), seed 1 + 2 re-rolls.",
     "fullPhaseException": "The fullPhaseControl capture (below) is the ONE capture NOT at this oblique light — it is a face-on / zero-phase control. All other captures use exactly these az/el.",
-    "justification": "Pinned to exact numbers (BUILD-PLAN §0.5: pin the az/el, not \"~70°\"). Numbers verified against planet-lod-lab.html state defaults by grep this session (:2006/:2007); incidence derived 90 − elevation = 69.21°. Frozen so every capture and the reference share one lighting geometry."
+    "justification": "Pinned to exact numbers (BUILD-PLAN §0.5: pin the az/el, not \"~70°\"). Numbers verified against world-engine-lab.html state defaults by grep this session (:2006/:2007); incidence derived 90 − elevation = 69.21°. Frozen so every capture and the reference share one lighting geometry."
   },
   "arc": {
     "barStatement": "≥ populationFraction of the ≥-median lit-disc stamps show a light-consistent wall-half luminance asymmetry of ≥ geqOneBandMagnitude (1 posterize band), centres from the RNG-neutral probe, at the staged oblique light — AND the post-flip dark-clip guard holds.",
@@ -226,12 +226,12 @@
   "rerollSpec": {
     "varietyDriver": {
       "control": "🌍 \"new planet (re-roll all)\"",
-      "site": "planet-lod-lab.html:3871 newPlanet()",
+      "site": "world-engine-lab.html:3871 newPlanet()",
       "mechanism": "re-rolls worldSeed → macroSeed (:3874, \"draw:macro:\"+worldSeed), which drives crater PLACEMENT via forEachCrater(cond, macroSeed, …) (bombardment.js:305). THIS is the layout-variety driver."
     },
     "notTheDriver": {
       "control": "🎲 \"reroll radius\"",
-      "site": "planet-lod-lab.html:3861 rerollRadius()",
+      "site": "world-engine-lab.html:3861 rerollRadius()",
       "whyNot": "bumps radiusSeed ONLY — a no-op for layout, and (pre-R3) a no-op for canonical-locked Moon/Mercury radius. Driving 🎲 on Moon/Mercury shows ZERO layout variety and re-triggers Max's \"they do not vary\" (m-4)."
     },
     "controls": {

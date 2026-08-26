@@ -4,7 +4,7 @@
   "project": "well-dipper",
   "status": "building",
   "campaign": "world-engine production-L1 port (full-A render port, increment 1 of 2)",
-  "renderer": "LAB only (planet-lod-lab.html); game Planet.js deferred/OUT",
+  "renderer": "LAB only (world-engine-lab.html); game Planet.js deferred/OUT",
   "acceptanceCriteria": [
     {
       "id": "AC1",
@@ -66,7 +66,7 @@
       "relief-e6-tectonic.js / relief-slice.js — the UAT-PASSED flat reference to READ for the height math, do NOT import (two-copy drift guard, planet-lod-tectonic.js:13-15)"
     ],
     "outputs": [
-      "planet-lod-height.glsl.js + planet-lod-lab.html — the renderer height/displacement path now samples the baked field for the low-frequency body",
+      "planet-lod-height.glsl.js + world-engine-lab.html — the renderer height/displacement path now samples the baked field for the low-frequency body",
       "planet-lod-rivers.js — the river router's height source re-pointed to the baked field"
     ],
     "mustStayWorking": [

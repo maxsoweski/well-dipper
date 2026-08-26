@@ -27,7 +27,7 @@ The adoption moves **exactly three values**, all ∝1/`surfaceGravity`: `edifice
 unchanged — verified live in the running lab, not argued.
 
 **[G] flips those three between the adopted arm and the old one.** The live arm is named in the
-green badge at top-centre (`#abBadge`, `planet-lod-lab.html:147`; handler `:5566`).
+green badge at top-centre (`#abBadge`, `world-engine-lab.html:147`; handler `:5566`).
 
 ⭐⭐ **PARK: `Europa (icy moon)`, AND THE INSTRUMENT IS THE RADIUS SLIDER, NOT THE KEY ALONE.**
 Europa is the only preset whose F9 chaos and F17 glacial masters are both fully live
@@ -56,7 +56,7 @@ nobody re-derives it.
 | Instrument C | `port-uniform-delta:check` — ZERO delta, exit 0 |
 | Citations | `port-uniform-delta:citations` — **818** (was 815), exit 0. CHECKED rose |
 | Fences | the 6 named suites **296/296** |
-| Line counts | `planet-lod-lab.html` **6559** · `Planet.js` 2304 · `limbDeck.js` 199 |
+| Line counts | `world-engine-lab.html` **6559** · `Planet.js` 2304 · `limbDeck.js` 199 |
 
 ⚠ **THE BASELINE WAS RE-RECORDED ONCE, DELIBERATELY.** `driver-pack-solidfeatures.test.js` went
 33 → 38 — the five `§H` tests authored red-first LAST session and named in the previous handoff.

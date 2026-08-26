@@ -14,7 +14,7 @@
 //   - the read-out PROBES        → _lab.grainProbe / _lab.sampleRoutedHeight (so the coherence + carve
 //     reads are numeric, not "does the screenshot LOOK aligned/cut?" — they back the same judgement)
 //
-// WHY a SOURCE-SCAN, not a runtime call: these are page-scoped JS inside planet-lod-lab.html — no DOM,
+// WHY a SOURCE-SCAN, not a runtime call: these are page-scoped JS inside world-engine-lab.html — no DOM,
 // no WebGL renderer, no live overlay headless. So vitest asserts the bundle EXISTS on _lab with the
 // documented wiring; the "ON reads as a coherent tectonic system + drainage cut into it" judgement is
 // the LIVE-only smoke on :9223 (verify phase), listed under liveDeferred, NEVER faked here.
@@ -28,13 +28,13 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), 'utf8');
+const labSrc = readFileSync(path.resolve(__dirname, '../world-engine-lab.html'), 'utf8');
 
 // Pull a single JS function/method body out of the lab source by walking matched braces from the
 // first `{` after `marker`, so per-control assertions don't bleed into neighbouring methods.
 function bodyAfter(src, marker) {
   const start = src.indexOf(marker);
-  expect(start, `"${marker}" must be present in planet-lod-lab.html`).toBeGreaterThanOrEqual(0);
+  expect(start, `"${marker}" must be present in world-engine-lab.html`).toBeGreaterThanOrEqual(0);
   const open = src.indexOf('{', start);
   let depth = 0, i = open;
   for (; i < src.length; i++) {

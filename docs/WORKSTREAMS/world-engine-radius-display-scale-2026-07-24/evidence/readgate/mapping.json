@@ -4,9 +4,9 @@
   "date": "2026-07-24",
   "build": {
     "branch": "feature/world-engine-production-L1",
-    "workingTree": "post-build (Slices A-D landed): planet-lod-lab.html, planet-lod-height.glsl.js, planet-lod-lab-core.js, planet-lod-uniforms.js, tests/vis-scale-fence.test.js modified",
+    "workingTree": "post-build (Slices A-D landed): world-engine-lab.html, planet-lod-height.glsl.js, planet-lod-lab-core.js, planet-lod-uniforms.js, tests/vis-scale-fence.test.js modified",
     "sliceD_mechanism": "bake->synth crossover (bakeReliefCrossover, BAKE_CROSS_SPAN=1.0) — the FIX-PLAN fallback, not the route re-bake",
-    "url": "http://localhost:5175/well-dipper/planet-lod-lab.html"
+    "url": "http://localhost:5175/well-dipper/world-engine-lab.html"
   },
   "staging": {
     "preset": "Rocky (Earthlike)",

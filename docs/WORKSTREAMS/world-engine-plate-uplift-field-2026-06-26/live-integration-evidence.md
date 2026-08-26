@@ -1,7 +1,7 @@
 # Live-integration evidence — world-engine-plate-uplift-field-2026-06-26
 
 **Driver:** working-Claude (main thread), chrome-devtools on GPU `:9223`, lab page
-`http://localhost:5173/well-dipper/planet-lod-lab.html` (the ~40k-node production lab mesh — NOT the
+`http://localhost:5173/well-dipper/world-engine-lab.html` (the ~40k-node production lab mesh — NOT the
 600/4000-node headless carriers). **Date:** 2026-06-26. Per the Dev-Collab OS, working-Claude drives
 the objective live-integration checks; UAT (AC8) is Max's gate alone.
 

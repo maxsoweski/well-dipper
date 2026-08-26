@@ -159,7 +159,7 @@ declare km-per-height-unit before geometry can be displaced by a physical amount
 - JS/GLSL twin pattern established for **shape kernels**: 12 of labCore's 45 exports name-match GLSL
   functions (`craterProfile`, `ejectaProfile`, `terraceProfile`, `voronoi3d`, …). `[MEASURED-LANE]`
 - The lab already streams CPU-computed per-vertex data into `BufferAttribute`s
-  (`planet-lod-lab.html:285`, `:1763`, `:1767`) and pack writers already receive raw `mesh.positions`.
+  (`world-engine-lab.html:285`, `:1763`, `:1767`) and pack writers already receive raw `mesh.positions`.
   `[READ-LANE]`
 
 ### 2.8 Correction to the brief
@@ -326,7 +326,7 @@ gReliefD = (uReliefMix > 0.001) ? fbmd(pos, uReliefOctaves, 0.0) : vec4(0.0);
 **What it would take.** Choose an authority — see §7 Q2/Q5 for the trade-offs. The gate that guards it
 is buildable *today* and mostly already exists: `uFieldTap` is declared in the **shared** fragment
 source (`planet-lod-shaders.glsl.js:126`), so the game's compiled program already has the tap; only
-the JS uniform slot is lab-only (`planet-lod-lab.html:278`), and
+the JS uniform slot is lab-only (`world-engine-lab.html:278`), and
 `tests/instrument-tap-fence.test.js:112` currently asserts `planet-lod-uniforms.js` contains no
 `uFieldTap`. **The instrument is lab-only by exactly one line, behind one deliberate test.**
 `[READ-LANE]`

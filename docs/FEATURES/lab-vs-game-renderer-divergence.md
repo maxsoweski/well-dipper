@@ -21,7 +21,7 @@ no-parity* later effort. The game still runs the original March-2026 type-based 
 
 | | **Game renderer (shipped)** | **Lab renderer (in development)** |
 |---|---|---|
-| File | `src/objects/Planet.js` (~1335 ln) | `planet-lod-lab-core.js` (~957 ln) + `planet-lod-lab.html` |
+| File | `src/objects/Planet.js` (~1335 ln) | `planet-lod-lab-core.js` (~957 ln) + `world-engine-lab.html` |
 | Architecture | **Type-branch**: `if (planetType == 1) … else if (== 6) …` — one baked look per planet type | **Feature-composition**: per-feature combiners over a shared `grad`/`liquidMask` chain + soft province weight fields |
 | What decides the look | a single `type` **string** (`PlanetGenerator._pickType` → `ExoticOverlay.apply` type-swap → `Planet._typeIndex()` shader dispatch) | per-feature **enable flags** filtered by `featuresOf()` / the archetype manifest |
 | Discrete surface features | ~0 (paints by type) | 48 (F1–F51: rivers, deltas, dunes, chaos, cryo-ridges, great-spot, provinces, …) |
@@ -50,7 +50,7 @@ and the archetype/association model exist **only** in the lab + tests + docs —
 
 `docs/superpowers/specs/2026-06-09-planet-feature-refinement-campaign-design.md` (Max-approved):
 
-> **Lab surface:** `planet-lod-lab.html`. Scope = lab only; **wiring into the production game
+> **Lab surface:** `world-engine-lab.html`. Scope = lab only; **wiring into the production game
 > (`src/objects/Planet.js`) is a separate later effort with no parity goal.**
 
 …and L224: *"Production-game wiring (`src/objects/Planet.js`) — separate later effort."*

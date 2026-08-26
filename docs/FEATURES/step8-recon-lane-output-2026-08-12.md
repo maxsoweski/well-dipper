@@ -168,7 +168,7 @@ So as written, Step 8 lands the *precondition* for C2/C3 (a second generator pat
 
 ### Also breaking on the rename, outside this file
 - `tests/port-condition-contract.test.js:3657-3662` — export-surface array literal contains `'conditionFromPlanet'`.
-- **23 files** import from `src/worldengine/port/conditionFromPlanet.js` (grep, excluding `node_modules`/`scratchpad`); **34 files / 241 references** mention the symbol. Includes `planet-lod-lab.html`, `src/main.js`, 5 `tools/*.mjs`, and 15 test files.
+- **23 files** import from `src/worldengine/port/conditionFromPlanet.js` (grep, excluding `node_modules`/`scratchpad`); **34 files / 241 references** mention the symbol. Includes `world-engine-lab.html`, `src/main.js`, 5 `tools/*.mjs`, and 15 test files.
 
 ---
 
@@ -695,7 +695,7 @@ tools/port-uniform-delta.mjs                       1      3      (3)    (3)
 TOTALS  ID-code 168 / 19 files · PATH-code 26 / 21 files · ID-cmt 45 / 18 · PATH-cmt 17 / 9
 ```
 
-Docs+`.html`: **9 files**, 45 bare-identifier + 63 filename-form occurrences. `planet-lod-lab.html:1711` is the only non-`docs/` prose hit.
+Docs+`.html`: **9 files**, 45 bare-identifier + 63 filename-form occurrences. `world-engine-lab.html:1711` is the only non-`docs/` prose hit.
 
 ---
 
@@ -739,7 +739,7 @@ Two defects in the claim:
 |---|---|
 | **with a line number**, inside the CITE_SOURCES scanned set | **6** (`CARRIED.md:26→:361`, `CARRIED.md:26→:268` (bare-`:NNN` continuation form), `CARRIED.md:70→:158`, `port-condition-contract.test.js:1149→:149`, `:1165→:671`, `radius-live-feed-fence.test.js:459→:652`) |
 | with a line number, **outside** the scanned set (ungated) | **9** — `one-pipeline-two-frontends-review-round3-2026-08-07.md` ×7 (`:194`, `:496`×2, `:184`×2, `:322`, `:337`), `lab-pipeline-into-game-PLAN.md` ×2 (`:24`, `:119`), `port-limb-optics.test.js:157→:369` |
-| **symbol-only, §10-compliant** (``conditionFromPlanet.js `sym` ``) | **4** — `PLAN.md:216`, `PLAN.md:245`, `PLAN.md:572`, `planet-lod-lab.html:1711` |
+| **symbol-only, §10-compliant** (``conditionFromPlanet.js `sym` ``) | **4** — `PLAN.md:216`, `PLAN.md:245`, `PLAN.md:572`, `world-engine-lab.html:1711` |
 | carrying a line number **and** a symbol (i.e. FATAL-column) | **0** |
 
 ⚠ **The finding that matters:** `CITE_RE` (`tools/port-uniform-delta.mjs:1090`) is `/([A-Za-z0-9_.\-]+\.(?:js|mjs|html|md)):(\d+)|(?<![\w.\/:]):(\d+)/g` — it **requires** `:\d+`. So the 4 §10-compliant symbol-only refs are not CHECKED, not UNCHECKED, not UNRESOLVED — **the fence cannot see them at all.** §10's own preferred form for this file is the one form its machine check is blind to. That is a fact about the instrument, not a bug I am asserting: it follows from the regex and is confirmed by the counters below never moving under any file-rename scenario.
@@ -804,7 +804,7 @@ That is the **only** `line + symbol` citation repo-wide whose symbol contains th
 
 **Nothing else keys on it.** Verified absent: `grep -rl conditionFromPlanet --include=*.json --include=*.snap` → **0 hits** (no baseline fixture, no `_provenance` tag, no serialized record, `tests/baseline/` clean). Cosmetic only: `tests/port-route-agreement.test.js:160` embeds the name in an error-message template literal.
 
-**Whole-suite check:** with the identifier renamed across all 27 code files (both strings included), the 14 affected test files run **486 passed / 1 failed, 487 total** — and the 1 failure is a **sim artifact**, not the rename: `driver-pack-giantdeck.test.js:450` shells out to `git -C ROOT show 4e864bc…:planet-lod-lab.html` and the tar copy has no `.git`. The same file is **73/73 green** on the live repo.
+**Whole-suite check:** with the identifier renamed across all 27 code files (both strings included), the 14 affected test files run **486 passed / 1 failed, 487 total** — and the 1 failure is a **sim artifact**, not the rename: `driver-pack-giantdeck.test.js:450` shells out to `git -C ROOT show 4e864bc…:world-engine-lab.html` and the tar copy has no `.git`. The same file is **73/73 green** on the live repo.
 
 ---
 

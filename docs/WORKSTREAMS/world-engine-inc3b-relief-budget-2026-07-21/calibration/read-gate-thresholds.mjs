@@ -49,7 +49,7 @@ need(arcPopFrac && arcPopFrac.status === 'JUSTIFIED', 'BAKE population fraction 
 need(arcSizeGate && arcSizeGate.status === 'GUESSED', 'BAKE size gate adjudication not GUESSED as expected');
 
 // ── light staging: exact numbers, from the bake displayChain (which itself pulled the LAB defaults) ─
-// Verified this session by grep of planet-lod-lab.html state defaults: :2006 lightAzimuthDeg=40.6,
+// Verified this session by grep of world-engine-lab.html state defaults: :2006 lightAzimuthDeg=40.6,
 // :2007 lightElevationDeg=20.79. incidence = 90 − elevation.
 const dc = BAKE.displayChain;
 need(dc.lightAzimuthDeg === 40.6, 'displayChain.lightAzimuthDeg drifted from the grep-verified LAB default 40.6');
@@ -83,7 +83,7 @@ const out = {
         'S0.1/S0.1a — the anchor-swept per-world f_I band (copied).',
       'relief-budget-fit.json':
         'S0.2/S0.2a/S0.6 — Mars real-hypsometry f_I gate [0.3,0.8]; realized model f_I per world (cross-reference).',
-      'planet-lod-lab.html':
+      'world-engine-lab.html':
         'state defaults grep-verified this session — :2006 lightAzimuthDeg=40.6, :2007 lightElevationDeg=20.79 (the source of displayChain az/el).',
     },
     noPostHocTuning: {
@@ -96,15 +96,15 @@ const out = {
 
   // ── (4) LIGHT STAGING — exact sun az/el for all captures (BUILD-PLAN §0.5) ───────────────────────
   lightStaging: {
-    lightAzimuthDeg: dc.lightAzimuthDeg,        // 40.6 — LAB default planet-lod-lab.html:2006 (grep-verified)
-    lightElevationDeg: dc.lightElevationDeg,    // 20.79 — LAB default planet-lod-lab.html:2007 (grep-verified)
+    lightAzimuthDeg: dc.lightAzimuthDeg,        // 40.6 — LAB default world-engine-lab.html:2006 (grep-verified)
+    lightElevationDeg: dc.lightElevationDeg,    // 20.79 — LAB default world-engine-lab.html:2007 (grep-verified)
     incidenceDeg: dc.incidenceDeg,              // 69.21 = 90 − 20.79 (oblique; NOT "about 70°")
     faceTexels: dc.faceTexels,                  // 256²/face cube (display chain context)
     posterizeLevels: dc.levels,                 // 6 posterize levels (the pipeline the reference is pushed through)
     bandLuminance: dc.bandLuminance,            // 1/6 = 0.1667 luminance per band
     appliesTo: 'ALL oblique captures — arc-asymmetry, blind-read, and surface-class — at S2 (flip alone) and S4 (post-S3 / re-run), seed 1 + 2 re-rolls.',
     fullPhaseException: 'The fullPhaseControl capture (below) is the ONE capture NOT at this oblique light — it is a face-on / zero-phase control. All other captures use exactly these az/el.',
-    justification: 'Pinned to exact numbers (BUILD-PLAN §0.5: pin the az/el, not "~70°"). Numbers verified against planet-lod-lab.html state defaults by grep this session (:2006/:2007); incidence derived 90 − elevation = 69.21°. Frozen so every capture and the reference share one lighting geometry.',
+    justification: 'Pinned to exact numbers (BUILD-PLAN §0.5: pin the az/el, not "~70°"). Numbers verified against world-engine-lab.html state defaults by grep this session (:2006/:2007); incidence derived 90 − elevation = 69.21°. Frozen so every capture and the reference share one lighting geometry.',
   },
 
   // ── (1) ARC-ASYMMETRY BAR — the ≥1-band magnitude gate ───────────────────────────────────────────
@@ -278,12 +278,12 @@ const out = {
   rerollSpec: {
     varietyDriver: {
       control: '🌍 "new planet (re-roll all)"',
-      site: 'planet-lod-lab.html:3871 newPlanet()',
+      site: 'world-engine-lab.html:3871 newPlanet()',
       mechanism: 're-rolls worldSeed → macroSeed (:3874, "draw:macro:"+worldSeed), which drives crater PLACEMENT via forEachCrater(cond, macroSeed, …) (bombardment.js:305). THIS is the layout-variety driver.',
     },
     notTheDriver: {
       control: '🎲 "reroll radius"',
-      site: 'planet-lod-lab.html:3861 rerollRadius()',
+      site: 'world-engine-lab.html:3861 rerollRadius()',
       whyNot: 'bumps radiusSeed ONLY — a no-op for layout, and (pre-R3) a no-op for canonical-locked Moon/Mercury radius. Driving 🎲 on Moon/Mercury shows ZERO layout variety and re-triggers Max\'s "they do not vary" (m-4).',
     },
     controls: {

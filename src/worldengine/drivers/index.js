@@ -56,7 +56,7 @@ import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
 import { SOLID_OPTICS_ENTRY } from './solidOptics.js';
 import { CRATER_DECK_ENTRY } from './craterDeck.js';
-import { SOLID_FEATURES_ENTRY } from './solidFeatures.js'; import { GIANT_SURFACE_ENTRY } from './giantSurface.js';   // ⛔ TWO import STATEMENTS ON ONE LINE, ON PURPOSE. Fifteen live symbol-anchored refs point INTO this file by line — src/worldengine/drivers/limbDeck.js:173 `import plus one array element at` is one of them — so a new line here reds fifteen citations as some other block's failure. The same discipline planet-lod-lab.html:188 keeps.
+import { SOLID_FEATURES_ENTRY } from './solidFeatures.js'; import { GIANT_SURFACE_ENTRY } from './giantSurface.js';   // ⛔ TWO import STATEMENTS ON ONE LINE, ON PURPOSE. Fifteen live symbol-anchored refs point INTO this file by line — src/worldengine/drivers/limbDeck.js:173 `import plus one array element at` is one of them — so a new line here reds fifteen citations as some other block's failure. The same discipline world-engine-lab.html:188 keeps.
 import {
   writePackUniforms, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';

@@ -22,7 +22,7 @@ per minute" (the program north star).
 eccentricity + raw tidal Io-ratio, shellThickness, plus surfacing D12/D13/D16/metallicity
 data-only) from `_fp` through `route()`→`writeBodyRelief`; (2) refactors `baseStep.js` to export
 its per-body scalar derivations as pure named helpers; (3) extracts `DRIVER_PRESETS` from
-`planet-lod-lab.html` into an importable module that lab AND tests consume. Data-only; no writer
+`world-engine-lab.html` into an importable module that lab AND tests consume. Data-only; no writer
 consumes any new field yet (shadow-mode template from WS1: surfaced-but-not-consumed).
 
 **UNLOCKS:** V2-1 E1 selector (condition vector at the seam + scalar helpers for Φ/L/Stage-A + a

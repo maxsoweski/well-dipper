@@ -3,7 +3,7 @@
 // WHAT THIS PROTECTS. The rim glow in src/objects/Planet.js was a hard-coded pow(fresnel, 3.0)
 // tinted by the game's whole-body atmosphereColor — the identical narrow blue-line profile on
 // Venus, Titan, Earth and a bare rock. It now comes from atmosphereOpticsOf(), which is the SAME
-// module planet-lod-lab.html imports (:177) rather than a transcription of it. That is the shape of
+// module world-engine-lab.html imports (:177) rather than a transcription of it. That is the shape of
 // this whole port: the game becomes a second consumer of what the lab already uses.
 //
 // The failure this exists to catch is the quiet one. If conditionFromBody ever stops forwarding

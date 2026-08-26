@@ -85,7 +85,7 @@ Guardrail quartet green, all trivial-pass by construction (production dispatch n
 `v2-0-byte-identity` **78/78**, `worldengine-lid-byte-anchors` **39/39**, `worldengine-e1-shadow-audit` **22/22**,
 `planet-archetypes` **21/21**. Fenced files byte-clean (git-diff empty): `e1Regime.js`, `interpenetration.js`,
 `magmatism.js`, `stagnantLid.js`, `plates.js`, `shellRelief.js`, `verify.js`, `planet-lod-rivers.js`,
-`planet-lod-lab.html`. git-diff touches ONLY the 5 in-scope files (the not-ours `CameraChoreographer.js` /
+`world-engine-lab.html`. git-diff touches ONLY the 5 in-scope files (the not-ours `CameraChoreographer.js` /
 `LabMode.js` + the untracked screenshot pile stay out).
 
 ### Test tally (Slice 1 build)
@@ -165,7 +165,7 @@ Guardrail quartet green, all trivial-pass by construction: `v2-0-byte-identity` 
 `worldengine-lid-byte-anchors` **39/39**, `worldengine-e1-shadow-audit` **22/22**, `planet-archetypes` **21/21**.
 Fenced files byte-clean (git-diff empty): `lidResponse.js` (Slice 1, frozen), `e1Regime.js`, `interpenetration.js`,
 `magmatism.js`, `stagnantLid.js`, `plates.js`, `shellRelief.js`, `verify.js`, `planet-lod-rivers.js`,
-`planet-lod-lab.html`. git-diff touches ONLY `mixedInterior.js` (+2 new in-scope files); the not-ours
+`world-engine-lab.html`. git-diff touches ONLY `mixedInterior.js` (+2 new in-scope files); the not-ours
 `CameraChoreographer.js` / `LabMode.js` + the untracked screenshot pile stay out.
 
 Byte-inertness is asserted at TWO Φ ≤ 0.42 coords (`breachCount === 0`): the (L0.60,Φ0.42) cross-check and Tharsis.
@@ -194,7 +194,7 @@ is UNTOUCHED (injected). Terminal-gate ACs advanced: AC-INTERPEN-FALSIFY (assert
 ### Files touched
 | File | Change |
 |---|---|
-| `planet-lod-lab.html` | (i) `mixedOv` gains `effectiveL: null` — a DRIVER OVERRIDE (NO `*Enabled` key). (ii) `applyMixedDrivers` absorbs `coords.effectiveL` (`'effectiveL' in coords` ⇒ set; `null` clears) and, when set, builds the `_mixedLidOverride.e1` override with `geodynamicRegime:'stagnant'` + an `e1.effectiveL` member (so classifyLidPath routes 'mixed' and the composer Ybase yields on the strong-but-piercable edge) — the object is built OUTSIDE any `route({...})` block, only the `_mixedLidOverride` identifier rides in (SF1 e1-shadow-audit clean, verified 22/22). (iii) `mixedProbe` gains SCALARS `coronaPiercedCount: md.breachCount ?? 0` + `effectiveL: md.effectiveL` (null-guarded to the file's style). NO new slider/control. |
+| `world-engine-lab.html` | (i) `mixedOv` gains `effectiveL: null` — a DRIVER OVERRIDE (NO `*Enabled` key). (ii) `applyMixedDrivers` absorbs `coords.effectiveL` (`'effectiveL' in coords` ⇒ set; `null` clears) and, when set, builds the `_mixedLidOverride.e1` override with `geodynamicRegime:'stagnant'` + an `e1.effectiveL` member (so classifyLidPath routes 'mixed' and the composer Ybase yields on the strong-but-piercable edge) — the object is built OUTSIDE any `route({...})` block, only the `_mixedLidOverride` identifier rides in (SF1 e1-shadow-audit clean, verified 22/22). (iii) `mixedProbe` gains SCALARS `coronaPiercedCount: md.breachCount ?? 0` + `effectiveL: md.effectiveL` (null-guarded to the file's style). NO new slider/control. |
 | `tests/worldengine-interpen-falsify.test.js` (NEW) | AC-INTERPEN-FALSIFY: instrument-integrity (imported single-source), WORLD-B AC gate (MF4 first), WORLD-B ADDITIONAL `Π ≥ PI_STAR`, cross-check, NULL. `PI_STAR`/`M_MAX`/`interpenetration`/`familyOf`/`PRIMITIVE_ID` all IMPORTED (0.15/0.70 never re-declared). |
 | `docs/…/BUILD-NOTES.md` | this section. |
 
@@ -249,8 +249,8 @@ drift guards green (21/21).
 | `mixedDiag.effectiveL` | mixedInterior.js `mixedDiag` | AC-EFFECTIVEL(c) Ybase-vs-rawL assert; **`mixedProbe.effectiveL` (SLICE 3)** |
 | `breach[]` / `breachCount` | mixedInterior.js STEP 3b + `mixedDiag` | STEP 5 pierceR enrollment (shield-core resolve) → AC-CORONA-PIERCED; **`interpenetration.legibleByFamily.pierce` → Π (SLICE 3 AC-INTERPEN-FALSIFY)**; **`mixedProbe.coronaPiercedCount` (SLICE 3)** |
 | `PHI_BREACH` / `BREACH_LO` | `MIXED_DEFAULTS` | STEP 3b breach decision (UAT-tunable, gate-2 Y0/Y_K precedent; `PHI_BREACH` strictly > 0.42) — SLICE 2 |
-| `mixedOv.effectiveL` (lab driver override) | planet-lod-lab.html `applyMixedDrivers` | `_mixedLidOverride.e1.effectiveL` + `geodynamicRegime:'stagnant'` → classifyLidPath route + composer Ybase (wet-stagnant live drive) — SLICE 3 |
-| `mixedProbe.coronaPiercedCount` / `mixedProbe.effectiveL` (lab probe scalars) | planet-lod-lab.html `mixedProbe` | AC-PILOT-LIVE readout (≥2 corona-pierced centers; yielded L) — SLICE 3 |
+| `mixedOv.effectiveL` (lab driver override) | world-engine-lab.html `applyMixedDrivers` | `_mixedLidOverride.e1.effectiveL` + `geodynamicRegime:'stagnant'` → classifyLidPath route + composer Ybase (wet-stagnant live drive) — SLICE 3 |
+| `mixedProbe.coronaPiercedCount` / `mixedProbe.effectiveL` (lab probe scalars) | world-engine-lab.html `mixedProbe` | AC-PILOT-LIVE readout (≥2 corona-pierced centers; yielded L) — SLICE 3 |
 
 ### AC-ZERO-CLOBBER (threaded)
 Guardrail quartet green, all trivial-pass by construction: `v2-0-byte-identity` **78/78**,
@@ -258,7 +258,7 @@ Guardrail quartet green, all trivial-pass by construction: `v2-0-byte-identity` 
 `mixedProbe` edits are OUTSIDE the `riverOverlay.route({...})` block → the `\be1\b`-in-route grep stays clean),
 `planet-archetypes` **21/21**. Fenced files byte-clean (git-diff empty, MANUALLY verified — AC-ZERO-CLOBBER(d)):
 `mixedInterior.js`, `lidResponse.js`, `e1Regime.js`, **`interpenetration.js`**, `magmatism.js`, `stagnantLid.js`,
-`plates.js`, `shellRelief.js`, `verify.js`, `planet-lod-rivers.js`. git-diff touches ONLY `planet-lod-lab.html`
+`plates.js`, `shellRelief.js`, `verify.js`, `planet-lod-rivers.js`. git-diff touches ONLY `world-engine-lab.html`
 (+ the new test + this doc); the not-ours `CameraChoreographer.js` / `LabMode.js` + the untracked screenshot pile stay out.
 
 ### Test tally (Slice 3 build)

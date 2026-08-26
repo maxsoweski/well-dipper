@@ -48,7 +48,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 
 // Real lab calibration values, so the numbers below are the numbers a real feature would take.
-// planet-lod-lab.html:955 `duneSizeKm: 398,` and planet-lod-lab.html:827 `const C_DUNE = 1.0`
+// world-engine-lab.html:955 `duneSizeKm: 398,` and world-engine-lab.html:827 `const C_DUNE = 1.0`
 const DUNE_SIZE_KM = 398;
 const C_DUNE = 1.0;
 

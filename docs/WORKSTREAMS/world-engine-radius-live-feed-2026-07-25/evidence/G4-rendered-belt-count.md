@@ -58,7 +58,7 @@ The disc grows on screen at exactly the rate the band count grows, so on-screen 
 is constant. Dragging the radius slider produces a bigger ball wearing the same stripe texture.
 
 Meanwhile the roughness Max *did* see rides a different exponent: `uBandCount = min(16, max(3,
-round(12·R/rotationHours)))` (`planet-lod-lab.html:3314`) ∝ **R^1.0** (clamped at 16), feeding
+round(12·R/rotationHours)))` (`world-engine-lab.html:3314`) ∝ **R^1.0** (clamped at 16), feeding
 `jetU` / `jetShearGate` / the festoon window (`planet-lod-height.glsl.js:1518/1530/1570`). Growing
 ∝R against a disc growing ∝√R means visibly finer edge turbulence — the one change that reads.
 
@@ -120,7 +120,7 @@ correct; the radius→band-count response is live and measurable.
 
 Both halves of the collision are **lab-only**, and the game has no stake in it at all:
 
-- `visScaleOf` / `VIS_SCALE_EXP` appear **only** in `planet-lod-lab-core.js`, `planet-lod-lab.html`
+- `visScaleOf` / `VIS_SCALE_EXP` appear **only** in `planet-lod-lab-core.js`, `world-engine-lab.html`
   and `tests/` — **zero occurrences in `src/`**.
 - The E5 band deck is equally lab-only: nothing in `src/` consumes `aBand`, `zonalBandCol` or
   `HEIGHT_GLSL` (the sole `src/` hit is a comment in `emission-e.js:251`). `climate-e5.js` and
@@ -195,7 +195,7 @@ rendered? You visually verifying stuff is usually inefficient"*. The rule is now
 
 Do **not** change `VIS_SCALE_EXP` to chase this. Instead re-spec AC-BANDS to judge band count at
 **pinned angular size** (camera distance ∝ sVis — the discipline `renderDeltaSweep` already
-applies via `SWEEP_DISTANCE * sVis`, `planet-lod-lab.html:5370`). At pinned angular size the
+applies via `SWEEP_DISTANCE * sVis`, `world-engine-lab.html:5370`). At pinned angular size the
 radius→band response is plainly visible, as the size-normalized screenshots above show. The
 alternative — retuning the display scale so the exponents stop cancelling — trades a physical
 law's legibility against every other radius-scaled read in the lab, which is a much larger blast

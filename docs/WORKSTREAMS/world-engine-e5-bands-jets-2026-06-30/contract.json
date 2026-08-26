@@ -98,7 +98,7 @@
       "id": "AC10",
       "statement": "BANDS/JETS REACH RENDER FROM THE WRITER: the lab shader consumes the writer's band/jet field instead of computing the harmonic/sin(lat) sum inline — the gas-giant presets render bands sourced from climate-e5, not from the GLSL formula.",
       "verifyVia": {
-        "input": "Open planet-lod-lab.html in the browser on the Gas giant (Jovian) preset; inspect that the shader band value is fed from the writer's bandField/bandNorm (uniform/texture) rather than the inline zonalBandCol/jetsDisp harmonic sum; grep the shader for the removed inline sin(lat) band computation.",
+        "input": "Open world-engine-lab.html in the browser on the Gas giant (Jovian) preset; inspect that the shader band value is fed from the writer's bandField/bandNorm (uniform/texture) rather than the inline zonalBandCol/jetsDisp harmonic sum; grep the shader for the removed inline sin(lat) band computation.",
         "observable": "the rendered gas giant shows bands; the shader reads the writer field (inline harmonic band sum for the band VALUE is removed/replaced by the piped field); toggling the writer output changes the render."
       },
       "layer": "integration",
@@ -141,7 +141,7 @@
       "The already-completed u(lat) LIFT in src/worldengine/base/climate-e5.js (HARMONICS/zonalBandProfile/writeClimateE5Sphere) — #3a extends this writer from faithful-unsigned-seed-independent to signed/driver-organized/per-seed",
       "E6 driver bundle per body: rotation rate (Rhines beta / band count), obliquity epsilon (Ward annual-mean insolation + >54deg inversion), energy-input & dissipation + shell-depth (unified amplitude law), T_eq (sub-Neptune haze-temp bell / haze mute)",
       "macroSeed — alea seeded off it for per-seed band phase/amplitude jitter (plates.js determinism discipline; disjoint namespace from plates/shellRelief)",
-      "Lab shader band seam in planet-lod-lab.html — uBandStrength/uJetStrength/zonalBandCol/jetsDisp/uBandLatPow, currently computing the band value inline from a sin(lat) harmonic sum"
+      "Lab shader band seam in world-engine-lab.html — uBandStrength/uJetStrength/zonalBandCol/jetsDisp/uBandLatPow, currently computing the band value inline from a sin(lat) harmonic sum"
     ],
     "outputs": [
       "Signed zonal jet field u(lat) per carrier node (replaces the shader's inline harmonic sum) + bandNorm [0,1] render-parity value",

@@ -36,7 +36,7 @@ import { lodRampOf, autoOctaves } from '../worldengine/base/labCore.js';
 /** The four bake-side vertex attributes the lab's vertex shader declares. */
 export const LAB_ATTRIBUTES = ['aBand', 'aShear', 'aMush', 'aStorm'];
 
-/** The lab's own static light direction (planet-lod-lab.html:203). The lab normalises it; so do we. */
+/** The lab's own static light direction (world-engine-lab.html:203). The lab normalises it; so do we. */
 export const LAB_WORLD_LIGHT = Object.freeze([0.6, 0.35, 0.7]);
 
 /**
@@ -491,7 +491,7 @@ export function isLabPlanetMaterial(material) {
  * ⛔ WHY ONE FUNCTION AND NOT FOUR PATCHES. Every uniform below was independently missing, and each
  * one alone reads as a different bug: a frozen terminator, un-drifting clouds, permanently coarse
  * relief. Fixed piecemeal they get four call sites, four chances for the next body type to be
- * wired into three of them. The lab does all of this in one place (planet-lod-lab.html frame());
+ * wired into three of them. The lab does all of this in one place (world-engine-lab.html frame());
  * so does this.
  *
  * What was wrong, verified 2026-08-05:
@@ -500,7 +500,7 @@ export function isLabPlanetMaterial(material) {
  *     `uLightDir`, whose own declaration says "object-space substellar direction". The surface
  *     spins (Planet.js:1896) and the parent carries axial tilt (:1544), so the terminator
  *     counter-rotated with the crust — one full sweep per planet day. The lab does the transform
- *     the game omitted (planet-lod-lab.html:4896-4897); this is that transform.
+ *     the game omitted (world-engine-lab.html:4896-4897); this is that transform.
  *  2. THE CLOCK NEVER ADVANCED. The game's only planet clock writer guards on `mat.uniforms.time`
  *     (Planet.js:1913) and the lab's clock is `uTime`, so the guard silently failed on a lab
  *     material and cloud drift, superrotation, magma churn and aurora curtains all evaluated at

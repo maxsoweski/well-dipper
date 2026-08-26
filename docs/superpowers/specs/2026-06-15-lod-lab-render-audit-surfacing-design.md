@@ -3,7 +3,7 @@
 **Date:** 2026-06-15
 **Author:** working-Claude (brainstormed with Max)
 **Status:** spec — 5 open decisions LOCKED (2026-06-15) → ready for implementation plan
-**Scope:** `planet-lod-lab.html` (GUI) + a small extracted **pure status-mapping module**
+**Scope:** `world-engine-lab.html` (GUI) + a small extracted **pure status-mapping module**
 (`lab-render-status.js`, new file) + a unit test for it (`tests/render-status.test.js`) +
 `scripts/gen-render-audit.mjs` (refactored to import the shared `EPS`/`STRONG` constants from the new
 module — see "Shared constants" below). **No shader/core changes** (`planet-lod-lab-core.js` untouched),
@@ -50,7 +50,7 @@ edit**.
 only**, run on demand:
 
 - An **"Audit this world" button** (in the World folder, near the Ask 3 archetype view / next to the
-  existing `archetype` field and `filter to relevant` controls, ~`planet-lod-lab.html:7115-7121`) runs
+  existing `archetype` field and `filter to relevant` controls, ~`world-engine-lab.html:7115-7121`) runs
   `renderDeltaSweep()` for the **CURRENT** preset, classifies each feature, and stores the result on
   state:
   ```js
@@ -62,13 +62,13 @@ only**, run on demand:
   ```
 - The button shows an **"Auditing…" working state** for the ~seconds the sweep runs. The sweep already
   **freezes auto-spin** (`_sweepFreeze`), drives `t` + `yaw` by hand, and **restores clock + camera +
-  enables** at the end (`planet-lod-lab.html:7048-7078`), so the only UI obligation is to disable the
+  enables** at the end (`world-engine-lab.html:7048-7078`), so the only UI obligation is to disable the
   button while running and re-enable it after. The audit is a single `await renderDeltaSweep()` for the
   current preset, not the 17-preset offline loop, so it's far shorter than a full report sweep.
 
 ### Classification — reuse the existing pure auditor
 
-The lab already imports `ASSOCIATIONS` (`planet-lod-lab.html:111`) and already has the **47-key**
+The lab already imports `ASSOCIATIONS` (`world-engine-lab.html:111`) and already has the **47-key**
 `FEATURES` registry (`planet-archetypes.js`), and their key sets are **identical** (verified: same 47
 keys, different order — so the audit join is exact with no gaps). Ask 4 additionally imports the pure
 auditor:
@@ -109,7 +109,7 @@ keeps its **`F` suffix (`🔴F`, never bare `🔴`)**:
 **Thresholds (locked to the report) — single source of truth (IN SCOPE):** `eps = 1e-4`,
 `STRONG = 5e-4`. These are exported as named constants `EPS`/`STRONG` from the new pure status module
 (`lab-render-status.js`, below), and **BOTH** consumers import them from there: the in-GUI badge
-(`planet-lod-lab.html`) **and** the offline report (`gen-render-audit.mjs`, which currently declares its
+(`world-engine-lab.html`) **and** the offline report (`gen-render-audit.mjs`, which currently declares its
 own local `const EPS`/`const STRONG` at lines 14-15 — those are deleted in favor of the import). One
 copy, so the in-GUI surface and the report can never drift. (This decides the earlier "import vs. just
 pin equal" question — the shared-constant refactor is in scope, not deferred.)
@@ -130,7 +130,7 @@ badge there is only one slot, so ⬛-wins is the honest read. Decided — not an
 
 > **Threshold note — do NOT conflate the two thresholds.** The sweep applies a **per-pixel** gate
 > `perPixelThresh = 12` (i.e. `>12/255` summed-abs RGB) to decide whether *a pixel* changed
-> (`planet-lod-lab.html:7045,7066-7068`), and returns `delta = changedPixels / framePixels` (a
+> (`world-engine-lab.html:7045,7066-7068`), and returns `delta = changedPixels / framePixels` (a
 > *fraction of frame*). The auditor's `eps = 1e-4` / `STRONG = 5e-4` are applied to **that fraction**,
 > not to per-pixel values. The live surface applies `eps`/`STRONG` to the sweep's returned `deltas`
 > fraction — **never** the per-pixel `12/255` gate. They live at different layers and must not be mixed.
@@ -142,7 +142,7 @@ same glyph.
 
 - **Primary surface (independent of Asks 2/3): a STATUS GLYPH on each feature folder's title bar**,
   beside the enable toggle. The enable toggle is already relocated into the title bar by
-  `relocateEnableToTitle()` (`planet-lod-lab.html:6935-6946`); the audit badge is a small `<span>`
+  `relocateEnableToTitle()` (`world-engine-lab.html:6935-6946`); the audit badge is a small `<span>`
   appended to the same `folder.$title`, after the relocated toggle, mirroring that proven DOM injection.
   Plain DOM, **not** a lil-gui controller, so it never perturbs `syncDisplays()`, the enable controller,
   or the reparenting relevance filter (`applyArchetypeFilter()`).
@@ -242,7 +242,7 @@ Add a boundary case at exactly `delta === eps` and `delta === STRONG` to pin the
 - **Auto-stale self-triggering (chief risk)** — detailed above. The audit's own `applyEnableSet` churn
   must not mark the just-completed audit stale; the `_auditing` guard (set across the whole sweep,
   early-returned in both global `onChange` handlers) is the locked mechanism.
-- **Line-number drift** in `planet-lod-lab.html` is real — every line number here is a **HINT**. Re-`grep
+- **Line-number drift** in `world-engine-lab.html` is real — every line number here is a **HINT**. Re-`grep
   -n` each edit site (`renderDeltaSweep`, `relevantFeatureSet`, `relocateEnableToTitle`,
   `applyArchetypeFilter`, `fWorld`, the World-folder controller block ~7115, `window._lab`) before
   editing. Do **NOT** trust these numbers.
@@ -271,7 +271,7 @@ Add a boundary case at exactly `delta === eps` and `delta === STRONG` to pin the
 ## Verification
 
 - **Live on chrome-devtools GPU `:9223`** (NOT Playwright — Playwright is CPU; the sweep needs the GPU):
-  `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`. **Reload `?fresh=1` before each check.**
+  `localhost:5173/well-dipper/world-engine-lab.html?fresh=1`. **Reload `?fresh=1` before each check.**
   Verify via `window._lab.*` helpers + `evaluate_script` **state/DOM queries** — NOT image recognition.
   - Pick a preset with a **KNOWN false-render** from the offline report's punch-list
     (`docs/FEATURES/lab-render-audit.md` — read it for a current 🔴F or ⚠️F cell on a specific preset), OR
@@ -304,7 +304,7 @@ Add a boundary case at exactly `delta === eps` and `delta === STRONG` to pin the
   **re-run `node scripts/gen-render-audit.mjs` and confirm `docs/FEATURES/lab-render-audit.md` is
   byte-identical** to the committed version (e.g. `git diff --exit-code docs/FEATURES/lab-render-audit.md`
   → no diff). A byte-identical report proves the refactor changed nothing.
-- **Commit explicit paths only** — `planet-lod-lab.html`, `lab-render-status.js`,
+- **Commit explicit paths only** — `world-engine-lab.html`, `lab-render-status.js`,
   `tests/render-status.test.js`, and `scripts/gen-render-audit.mjs` (the shared-constant refactor).
   **Never `git add -A`** (shared-tree litter: warp WIP, loose `.png`/`.webm`/`.html`, and a 0-byte
   `HEAD` file).

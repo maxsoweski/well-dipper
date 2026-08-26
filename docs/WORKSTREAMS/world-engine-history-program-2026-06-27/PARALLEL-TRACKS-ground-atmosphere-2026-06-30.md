@@ -18,7 +18,7 @@ Read alongside (source of truth, don't re-derive): `ROADMAP.md` (this dir), `UAT
 ## Current program state (verified against git, 2026-06-30)
 
 - **#1 Despun / ice-shell writer (`shellRelief.js`)** — BUILT, `VERIFIED_PENDING_MAX 54ea74d`.
-  **⚠ AC11 UAT is still Max's open gate** — hands-on at `planet-lod-lab.html`, step Europa/Frozen/Eyeball/Titan.
+  **⚠ AC11 UAT is still Max's open gate** — hands-on at `world-engine-lab.html`, step Europa/Frozen/Eyeball/Titan.
   (Max-only action, independent of both tracks below.)
 - **#2 Plate driver-response** — **SHIPPED** `87704a9` (D16 age descoped `45cca44` per Max UAT; age → epoch model #6 + weathering #7).
 - **Branch:** `feature/world-engine-production-L1`, checked out at `~/projects/well-dipper`. **Push HOLD** (campaign-wide). Lab-only until #9.
@@ -90,7 +90,7 @@ per writer, no `Math.random`/`Date.now`, bounded fixed pass counts (no threshold
 A git branch can be checked out in only ONE worktree. Both tracks live on `feature/world-engine-production-L1`.
 The **new writer files are separate** (`magmatism.js`/`bombardment.js` vs `climate-e5.js`) — low collision — but
 these are **shared hot spots** both tracks touch: `src/worldengine/base/route.js` + `writeBodyRelief`, the lab
-dispatch `planet-lod-rivers.js` (regime predicates), `planet-lod-lab.html` (lab UI), and `docs/NOW.md`.
+dispatch `planet-lod-rivers.js` (regime predicates), `world-engine-lab.html` (lab UI), and `docs/NOW.md`.
 
 **RESOLVED (2026-06-30, Max delegated the call → working-Claude chose two isolated worktrees):**
 - **Track A (atmosphere)** → worktree **`~/projects/well-dipper-we-atmo`** on branch **`feature/world-engine-atmosphere`** (created off L1 @ `2a09e61`; `node_modules` symlinked to the main checkout, no `npm install` needed).

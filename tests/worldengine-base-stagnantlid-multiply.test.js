@@ -213,7 +213,7 @@ describe('V2-2b-1 AC-0 — spine conformance (driver-connectivity, no archetype,
   });
 
   it('(3) taxonomy: SLICE A adds NO lab slider / *Enabled key (no writer/source taxonomy change) — drift guards trivially green', () => {
-    // SLICE A edits ONLY stagnantLid.js (the pure builder) + this test — no planet-lod-lab.html edit, so
+    // SLICE A edits ONLY stagnantLid.js (the pure builder) + this test — no world-engine-lab.html edit, so
     // planet-archetypes.js drift guards are unaffected (verified by the full-suite gate). Assert no new *Enabled
     // key leaked into the writer source.
     expect(STAGNANT_SRC).not.toMatch(/\w+Enabled\b/);

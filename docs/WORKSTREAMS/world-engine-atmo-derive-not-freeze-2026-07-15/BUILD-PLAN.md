@@ -487,7 +487,7 @@ totals by new tests only.
 
 - **ADD:** `src/worldengine/base/giant-drivers.js` + `tests/worldengine-base-giant-drivers.test.js`;
   `docs/…/DERIVE-FORMS.md`.
-- **EDIT:** `planet-lod-lab.html` (the `fSeeds` reseed wiring AND the `_lab.setSeed` method — all three
+- **EDIT:** `world-engine-lab.html` (the `fSeeds` reseed wiring AND the `_lab.setSeed` method — all three
   reseed paths route through `reseedGiant()` per [RESOLVED-BY-REVISE: 1], the extracted `applyStormState`,
   the derived-driver plumbing in `rebakeE5Bands`/`applyStormState`, optional D-slot sliders in `fBands`);
   `src/worldengine/base/storm-e.js` (`resolvePole` presence/N only); `tests/worldengine-base-storm-e.test.js`
@@ -499,7 +499,7 @@ totals by new tests only.
   carriage-filler + the three enable gates.
 - **NEVER TOUCH (hard fence):** `planet-lod-rivers.js`, `src/worldengine/base/{lidResponse,e1Regime,`
   `plates,shellRelief,magmatism,stagnantLid,mixedInterior,lidDisruption}.js`. Preserve
-  `planet-lod-lab.html` `mulberry32()` (drawPresetRadius — NOT storm).
+  `world-engine-lab.html` `mulberry32()` (drawPresetRadius — NOT storm).
 - **Minimal lab-HTML footprint:** reseed wiring + derived-driver plumbing + optional D-slot sliders
   ONLY. No provenance/badging (that is `planet-lod-lab-ux` on L1).
 
@@ -601,7 +601,7 @@ WHETHER AC-BANDS/AC-LAT/AC-POLAR require per-seed variety. Contract shape intact
 - **[R2:minor-5]** — §6 AC-LAT floor (4) scoped to TRAIN members (vacuous for the argmax-placed primary).
 
 **Rejected:** none — every mechanism-lens finding verified against `storm-e.js` / `climate-e5.js` /
-`planet-lod-lab.html` / `planet-archetypes.test.js` held up.
+`world-engine-lab.html` / `planet-archetypes.test.js` held up.
 
 **Shape check (revise-2):** all folds stay inside the standing fence — deriver floors go in the
 already-planned `worldengine-base-giant-drivers.test.js`; §7b is a static + manual audit; the presence-prior

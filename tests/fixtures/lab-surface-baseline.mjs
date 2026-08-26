@@ -2,7 +2,7 @@
 //
 // THE SHRINK-ONLY RATCHET'S BASELINE — PLAN §4 "Step 5", part 5f.
 //
-// Three committed SETS, measured from planet-lod-lab.html by the harness in
+// Three committed SETS, measured from world-engine-lab.html by the harness in
 // tests/lab-surface-ratchet.test.js and by nothing else:
 //
 //   APPLY_DRIVERS_STATE_FIELDS — every `state.<field>` that `function applyDrivers(){` ASSIGNS,
@@ -44,7 +44,7 @@
 //     matter: membership is the pin and the count is printed only as a consequence of the list.
 //   • frame uniforms 327 distinct NAMES / 329 bag-qualified entries. The document's 328 IS
 //     reproducible and IS a scan artifact: with comments left in, the substring "uniforms.js" of
-//     planet-lod-lab.html:4911 `// uDispDomainScale here. It keeps its 1.0 initializer (planet-lod-uniforms.js:17) forever,`
+//     world-engine-lab.html:4911 `// uDispDomainScale here. It keeps its 1.0 initializer (planet-lod-uniforms.js:17) forever,`
 //     matches as a uniform named `js` — a phantom named after a filename. The harness strips
 //     comments and string literals before scanning. That ±1 was never a measurement.
 //
@@ -57,7 +57,7 @@
 // ⭐⭐ RE-BASELINE 2026-08-09 — SET 1 WENT 147 → 148, AND THE INTERESTING NUMBER IS NOT THE 1
 //
 // The previous baseline was captured while the harness was BLIND to bulk writes. Step 5 introduced
-// planet-lod-lab.html:2301 `Object.assign(state, giantDeckLabState(_deck));`, and a lexical scan for
+// world-engine-lab.html:2301 `Object.assign(state, giantDeckLabState(_deck));`, and a lexical scan for
 // `state.<field> =` cannot see a single field behind it. The harness now resolves that call through
 // the import to src/worldengine/drivers/giantDeck.js and reads the field set out of the
 // `LAB_STATE_BINDING` table it loops over. What that arm turned up, measured on the working tree:
@@ -80,13 +80,13 @@
 // targets `state`. A bulk write into a uniform bag would be refused rather than measured; see
 // `bulkStateFieldsIn` in the test.
 //
-// Measured at commit 4e864bc (planet-lod-lab.html clean in the working tree) on 2026-08-09, with
+// Measured at commit 4e864bc (world-engine-lab.html clean in the working tree) on 2026-08-09, with
 // applyDrivers at lines 1933-2734 and frame at 4827-5520. Those extents are NOT pinned — the
 // harness re-locates both functions by name on every run, because Step 5c moves them.
 
 export const MEASURED_AT = {
   commit: '4e864bc',
-  source: 'planet-lod-lab.html',
+  source: 'world-engine-lab.html',
   // The bulk arm reads a SECOND file. Recorded so a reader knows the baseline has two inputs.
   bulkSource: 'src/worldengine/drivers/giantDeck.js (LAB_STATE_BINDING)',
   date: '2026-08-09',
@@ -111,7 +111,7 @@ export const APPLY_DRIVERS_STATE_FIELDS = [
   'bandCount',
   'bandOffset',
   // ⭐ RE-BASELINE 2026-08-09, and the ONE genuinely new name in it. `bandRough` reaches `state`
-  // ONLY through planet-lod-lab.html:2301 `Object.assign(state, giantDeckLabState(_deck));`, so the
+  // ONLY through world-engine-lab.html:2301 `Object.assign(state, giantDeckLabState(_deck));`, so the
   // pre-arm harness never saw it: it landed with Step 5c and was ungated from the day it arrived.
   // Measured, not adjusted-until-green — see the RE-BASELINE block in this file's header.
   'bandRough',
@@ -314,7 +314,7 @@ export const FRAME_UNIFORMS = [
   'uniforms::uCraterOffset',
   'uniforms::uCraterRelaxation',
   // ⭐ ADDED 2026-08-25, AND IT IS A GROWTH RATHER THAN A SHRINK, WHICH THIS FIXTURE TREATS AS A
-  // DELIBERATE ACT. `uNoiseScale` had NO writer anywhere in planet-lod-lab.html — the material's
+  // DELIBERATE ACT. `uNoiseScale` had NO writer anywhere in world-engine-lab.html — the material's
   // declaration (src/worldengine/shaders/uniforms.js:10) is a factory 4.0 and nothing ever touched it,
   // so every lab world rendered its base field at one shared frequency. frame() now writes it for the
   // [N] bare-key A/B: arm A restates that factory 4.0, arm B is the shared physical wavelength law

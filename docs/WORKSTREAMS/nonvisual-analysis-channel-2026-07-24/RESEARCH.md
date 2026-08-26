@@ -55,7 +55,7 @@ the *visual* half; the automated half reads the same buffers back and computes s
   For **WebGL2/GLSL there is no printf** — the documented technique is exactly the AOV route:
   encode values into a float render target / `imageStore` and read back.
 - **In our stack this already exists**: the lab already renders a `FloatType` RTT for the tributary
-  patch and reads the live height field through one (`planet-lod-lab.html:245`, `:1467`). The
+  patch and reads the live height field through one (`world-engine-lab.html:245`, `:1467`). The
   mechanism is in-house; what's missing is a general, reusable *measurement* layer on top.
 - **Answers:** exact numeric state of any intermediate the shader computes, at any sample point.
 - **Verdict for us:** **the load-bearing family.** Everything in the proposal below sits on it.
@@ -121,12 +121,12 @@ world borrows from science rather than from renderers.
 
 | Instrument | Where | Measures | Family |
 |---|---|---|---|
-| Driver probes: `plateProbe` `shellProbe` `magmaProbe` `stagnantLidProbe` `mixedProbe` `e1Probe` `provinceProbe` `grainProbe` | `planet-lod-lab.html` `_lab.*` | **Inputs** — the D-vector / tune values that reached each writer, echoed arm's-length | E (partial) |
-| `renderDeltaSweep()` | `planet-lod-lab.html:~5233` | **Change** — per-feature on/off pixel delta fraction, 47 features, readPixels | C |
+| Driver probes: `plateProbe` `shellProbe` `magmaProbe` `stagnantLidProbe` `mixedProbe` `e1Probe` `provinceProbe` `grainProbe` | `world-engine-lab.html` `_lab.*` | **Inputs** — the D-vector / tune values that reached each writer, echoed arm's-length | E (partial) |
+| `renderDeltaSweep()` | `world-engine-lab.html:~5233` | **Change** — per-feature on/off pixel delta fraction, 47 features, readPixels | C |
 | `verify-golden` (`40c18aad`), v2-0 byte-identity | `tests/golden-trajectories/` | **Change** — trajectory hashes | C |
 | vitest suite (2333 pass / 4 known-fail baseline) | `tests/` | Pure-function unit truth on the CPU mirrors | E |
 | CPU mirrors: `deriveUniforms`, `craterProfile`, `reliefEnvelope`, `featureFrequencyFromKm`… | `planet-lod-lab-core.js` (1106 lines) | The generation laws, evaluable headlessly | E |
-| `FloatType` RTT height read | `planet-lod-lab.html:245`, `:1467` | **Output field** — but single-purpose (tributary patch / river routing), not general | B |
+| `FloatType` RTT height read | `world-engine-lab.html:245`, `:1467` | **Output field** — but single-purpose (tributary patch / river routing), not general | B |
 | `window.__wd` SceneInspector + integration/warp/phase-A suites | `src/debug/` | Game-side scene inventory + scripted behavioural assertions | E |
 | `window.__diag` rebase telemetry, `__swapTiming` | `src/main.js` | Game-side event telemetry | D |
 | headless calibration harnesses | `calibration/population-sweep.mjs`, `tools/giant-drivers-calibrate.mjs` | Law calibration offline | E |

@@ -15,13 +15,13 @@ computed from a gravity that **cannot move with the radius slider**, and multipl
 that **discards the radius argument it is handed**.
 
 ```
-planet-lod-lab.html:2999   const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
-planet-lod-lab.html:3016   state.surfaceGravity = u.surfaceGravity;          // <- SOLE writer
-planet-lod-lab.html:5903   const _RE = state.planetRadiusEarth, _gNow = state.surfaceGravity ?? 1.0;
-planet-lod-lab.html:5908   uniforms.uPerturb.value = state.perturb * reliefEnvelope(_RE, _gNow);
+world-engine-lab.html:2999   const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
+world-engine-lab.html:3016   state.surfaceGravity = u.surfaceGravity;          // <- SOLE writer
+world-engine-lab.html:5903   const _RE = state.planetRadiusEarth, _gNow = state.surfaceGravity ?? 1.0;
+world-engine-lab.html:5908   uniforms.uPerturb.value = state.perturb * reliefEnvelope(_RE, _gNow);
 ```
 
-`grep -n "state\.surfaceGravity" planet-lod-lab.html` returns exactly three hits: `:3016` (the sole
+`grep -n "state\.surfaceGravity" world-engine-lab.html` returns exactly three hits: `:3016` (the sole
 writer), `:4261` (a disabled GUI readout), `:5903` (this read).
 
 `deriveUniforms` computes gravity from the **canonical** preset radius, never the drawn one:

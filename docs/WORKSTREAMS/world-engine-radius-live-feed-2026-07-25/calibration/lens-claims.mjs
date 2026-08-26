@@ -9,7 +9,7 @@ import { craterRelevanceOf, MESH_FLOOR_RAD, D_SFD_MIN_KM, C_ATMO_KM, P_ATMO_EXP,
          G_REF, K_GS, P_SURF_MAX } from '../../../../src/worldengine/base/bombardment.js';
 import { KM_PER_EARTH_RADIUS } from '../../../../src/worldengine/base/baseStep.js';
 
-const LAB = readFileSync(new URL('../../../../planet-lod-lab.html', import.meta.url), 'utf8');
+const LAB = readFileSync(new URL('../../../../world-engine-lab.html', import.meta.url), 'utf8');
 const TIER = 1.0;
 
 // ── [5] TAUTOLOGY: replicate the test's construction on deliberately BROKEN sources ──────────────

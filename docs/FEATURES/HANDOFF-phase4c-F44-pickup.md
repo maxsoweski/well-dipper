@@ -9,7 +9,7 @@ session in `~/projects/well-dipper` and read this first.
   commit `12be875` (crystalline facets + Crystal preset + exotic-geometric archetype).
 - Tree clean for campaign paths; the interleaved supercruise commits are a parallel
   session's — **never touch `src/`, `docs/NOW.md`, or anything outside
-  `planet-lod-lab.html` / `planet-archetypes.js` / `docs/FEATURES` / `tests/planet-archetypes.test.js`**.
+  `world-engine-lab.html` / `planet-archetypes.js` / `docs/FEATURES` / `tests/planet-archetypes.test.js`**.
 - **NEXT: F44 hex-tessellation**, then F45 (shattered-crust), F46–49 (overlays),
   F51 (rings), + the F38/F39 keep/stylize/drop parked-call to close the phase.
 
@@ -56,7 +56,7 @@ absent, the build plan is step 1 of the loop, not a given.
 ## Infra state at handoff
 - Dev server: Max had `npm run dev` running on :5173 (he starts it; Claude can't).
 - GPU Chrome :9223 is **up but parked at about:blank** (GPU hygiene). Next session just
-  navigates the existing tab to `http://localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`
+  navigates the existing tab to `http://localhost:5173/well-dipper/world-engine-lab.html?fresh=1`
   — no relaunch needed unless the window was closed.
 
 ## Suggested skills for the next session

@@ -5,7 +5,7 @@
 **v2 (2026-06-09, approved):** execution model changed to an end-to-end
 autonomous `/goal` chain — §13 supersedes §3 Stream B and amends §4/§6; §§5,
 7–11 stand. Max's gate moves to a batched final review lap.
-**Lab surface:** `planet-lod-lab.html` (`window._lab`). Scope = lab only; wiring
+**Lab surface:** `world-engine-lab.html` (`window._lab`). Scope = lab only; wiring
 into the production game (`src/objects/Planet.js`) is a separate later effort with
 no parity goal.
 
@@ -99,7 +99,7 @@ Derives from: P##/D## (from planet-visual-features.md)
    From planet-visual-features.md: the feature, its variants, real-body examples.
 
 ## 2. Current shader approach (HOW, as-built)
-   How it's implemented in planet-lod-lab.html TODAY — file:line to the combiner,
+   How it's implemented in world-engine-lab.html TODAY — file:line to the combiner,
    its drivers, its GUI folder. "Unbuilt (aspirational)" if not yet present.
 
 ## 3. Reference images (real + art)
@@ -164,7 +164,7 @@ because most features already exist and need refining, not building.
 - Agent tools: WebSearch/WebFetch (real reference URLs — **no-invented-urls**
   enforced in the prompt: cite only URLs actually fetched), Read/Grep (inspect the
   lab + inventory). Each agent is handed its feature's inventory row + a pointer to
-  grep `planet-lod-lab.html` for the combiner.
+  grep `world-engine-lab.html` for the combiner.
 - **Launch timing:** after this design is approved AND the dossier schema is
   locked — never half-blind, or the dossiers come back inconsistent.
 

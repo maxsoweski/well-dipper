@@ -4,7 +4,7 @@
 
 **Goal:** Declutter the planet-LOD lab GUI — one "World" header (kill the preset-selector vs archetype-indicator duplication), self-contained bioMats/cityLights feature folders (kill the split-control duplication), and a collapsed "Not relevant to this world (N)" group for irrelevant features.
 
-**Architecture:** Pure GUI wiring inside the inline `<script>` of `planet-lod-lab.html` using lil-gui. No changes to `planet-lod-lab-core.js` (the shader/uniform code), so no planet rendering can regress. Reparenting works by moving lil-gui folders' `.domElement` between DOM containers (the controller objects stay in the lil-gui JS tree — the same trick the existing `relocateEnableToTitle()` already uses), so `syncDisplays()` keeps working.
+**Architecture:** Pure GUI wiring inside the inline `<script>` of `world-engine-lab.html` using lil-gui. No changes to `planet-lod-lab-core.js` (the shader/uniform code), so no planet rendering can regress. Reparenting works by moving lil-gui folders' `.domElement` between DOM containers (the controller objects stay in the lil-gui JS tree — the same trick the existing `relocateEnableToTitle()` already uses), so `syncDisplays()` keeps working.
 
 **Tech Stack:** lil-gui (`new GUI`, `addFolder`, `add`, `addColor`, `.domElement`, `.$children`, `.$title`, `.controllers`), Three.js lab, Vite dev server (`localhost:5173`), chrome-devtools MCP on GPU Chrome `:9223`.
 
@@ -14,8 +14,8 @@
 
 **Standing cautions:**
 - **Line numbers are HINTS** — `grep -n` every edit site before editing (line drift is a known hazard in this file).
-- **Stage explicit paths only** — `git add planet-lod-lab.html` (+ the doc). **NEVER `git add -A`** (shared tree has warp WIP + loose PNGs/webm/html).
-- Reload `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1` before each verification (`:9223` may hold a stale session).
+- **Stage explicit paths only** — `git add world-engine-lab.html` (+ the doc). **NEVER `git add -A`** (shared tree has warp WIP + loose PNGs/webm/html).
+- Reload `localhost:5173/well-dipper/world-engine-lab.html?fresh=1` before each verification (`:9223` may hold a stale session).
 - `window._lab` exposes: `setPreset`, `applyDrivers`, `state`, `setFilter`, `featureFolders`, `filterUI`, `enableAllFeatures`, `renderDeltaSweep`.
 
 ---
@@ -24,7 +24,7 @@
 
 - [ ] **Step 0.1: Confirm the dev server + lab are reachable on `:9223`.**
 
-Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`.
+Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `localhost:5173/well-dipper/world-engine-lab.html?fresh=1`.
 Expected: page loads, planet renders, left + right GUI panels visible.
 
 - [ ] **Step 0.2: Snapshot the baseline GUI tree** so reparenting can be verified against it.
@@ -50,7 +50,7 @@ Expected: `filterDefault === true`; `bioMatsIsEnv === true` (both currently map 
 Kills duplication #1. Build a new top-of-left-panel `World` folder holding the preset picker, the derived archetype label beneath it, and the filter/solo/enable-all/clear-solo controls relocated from the old `Body filter` folder. Remove the standalone read-only archetype field and the now-empty `Body filter` folder.
 
 **Files:**
-- Modify: `planet-lod-lab.html` (re-grep these anchors: `const fFilter = guiLeft.addFolder('Body filter')` ~L5265; `const filterUI =` ~L5264; `fDrivers.add(driverUI, 'preset'` ~L6281; the `fFilter.add(...)` block ~L7087–7092)
+- Modify: `world-engine-lab.html` (re-grep these anchors: `const fFilter = guiLeft.addFolder('Body filter')` ~L5265; `const filterUI =` ~L5264; `fDrivers.add(driverUI, 'preset'` ~L6281; the `fFilter.add(...)` block ~L7087–7092)
 
 - [ ] **Step 1.1: Replace the `Body filter` folder declaration with a `World` folder at the very top of `guiLeft`.**
 
@@ -91,7 +91,7 @@ Expected: labels differ per preset (the indicator tracks the picker). Then visua
 
 - [ ] **Step 1.5: Commit.**
 ```bash
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): consolidate preset+archetype into top World folder
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -104,7 +104,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Kills duplication #2. Both features currently map to the entire Envelope folder (`featureFolders.bioMats === featureFolders.cityLights === fEnv`). Give each its own right-panel folder, move its sliders + enable toggle in from Envelope, and repoint the registry.
 
 **Files:**
-- Modify: `planet-lod-lab.html` (re-grep: Envelope `bio…`/`city…` adds ~L5300–5314; `const fExoticGroup = guiRight.addFolder('Surface — Exotic')` ~L6733; `featureFolders = {` ~L6897, lines `bioMats: fEnv,` / `cityLights: fEnv,` ~L6908–6909)
+- Modify: `world-engine-lab.html` (re-grep: Envelope `bio…`/`city…` adds ~L5300–5314; `const fExoticGroup = guiRight.addFolder('Surface — Exotic')` ~L6733; `featureFolders = {` ~L6897, lines `bioMats: fEnv,` / `cityLights: fEnv,` ~L6908–6909)
 
 - [ ] **Step 2.1: Create the two folders in the right panel, adjacent to F47/F49.**
 
@@ -167,7 +167,7 @@ Expected: `bioMatsOwnFolder === true`; titles contain "Bioluminescent mats (F46)
 
 - [ ] **Step 2.7: Commit.**
 ```bash
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): give bioMats(F46)/cityLights(F48) their own folders
 
 Move bio/city sliders out of the shared Envelope folder into dedicated
@@ -183,7 +183,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Replace `applyArchetypeFilter()`'s show/hide with reparenting: relevant features stay in their category groups (in original order); irrelevant ones move into one collapsed bottom group with a live count.
 
 **Files:**
-- Modify: `planet-lod-lab.html` (re-grep: `function applyArchetypeFilter()` ~L7073; the `for (const [key, folder] of Object.entries(featureFolders))` loops; a good spot to create `fNotRelevant` is right after all category groups + `featureFolders` is defined, ~L6913, AFTER Task 2's new folders exist)
+- Modify: `world-engine-lab.html` (re-grep: `function applyArchetypeFilter()` ~L7073; the `for (const [key, folder] of Object.entries(featureFolders))` loops; a good spot to create `fNotRelevant` is right after all category groups + `featureFolders` is defined, ~L6913, AFTER Task 2's new folders exist)
 
 - [ ] **Step 3.1: Create the `Not relevant` group + capture original layout, after `featureFolders` is finalized.**
 
@@ -248,7 +248,7 @@ Expected: `rocky` and `jovian` show different `(N)` counts (membership recompute
 
 - [ ] **Step 3.5: Commit.**
 ```bash
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): collapse irrelevant features into Not-relevant group
 
 applyArchetypeFilter now reparents feature folders between their category

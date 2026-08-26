@@ -436,7 +436,7 @@ describe('Ring Physics', () => {
   // PhysicsEngine.js:911-916 documents innerMoonOrbit "as multiple of planet radius"
   // but divided the moon's orbit by the MOON's own radius. The two divisors agree
   // only when the moon happens to be Earth-sized, which is why the defect survived:
-  // the sole non-empty `moons` call site (planet-lod-lab.html:522) passes
+  // the sole non-empty `moons` call site (world-engine-lab.html:522) passes
   // radiusEarth: 1 alongside planetRadiusEarth: 1, so its quotient is unchanged.
   it('clips the outer edge in parent radii, not in moon radii', () => {
     const parentRE = 9.0;                     // Saturn-class parent

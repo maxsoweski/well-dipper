@@ -66,9 +66,9 @@ the router stayed a separate shadow classifier.
 
 **Live UAT — reuse the `driverOv` / `_driverAbMode` plumbing + the `stagnantLidProbe`:** select the Venus
 preset (routes stagnant), drag the driver-override sliders off VENUS_REF → non-null tune → the rendered
-stagnant world visibly changes; `stagnantLidProbe()` (planet-lod-lab.html:6111) reports the moving diag
+stagnant world visibly changes; `stagnantLidProbe()` (world-engine-lab.html:6111) reports the moving diag
 (`plumeCount/coronaCount/tesseraFrac/activeFrac`, plus a NEW `appliedTune`). Precedent for the lab-slider +
-`_lab` probe surface: the #4-MULTIPLY `fMagmaDrivers` folder (planet-lod-lab.html:3833 `'Body drivers →
+`_lab` probe surface: the #4-MULTIPLY `fMagmaDrivers` folder (world-engine-lab.html:3833 `'Body drivers →
 volcanic relief (Inc.4-M)'`) + `setVolcanicThermal` (:5871) + `magmaProbe.appliedTune` (:6048).
 
 ---
@@ -145,7 +145,7 @@ sit*. The structure test's ordering assertion (`meanTessera > meanPlains > meanR
 stagnantLidProbe:6149) therefore passes under every non-null tune by construction.
 
 **Secondary `gravity` relief-scaling (flagged, recommend OPT-IN/deferred, Q7#5):** "higher g → flatter"
-(the house `reliefGravityFactor` convention, planet-lod-lab.html:1914; the #4-M `gFactor`, magmatism.js:119)
+(the house `reliefGravityFactor` convention, world-engine-lab.html:1914; the #4-M `gFactor`, magmatism.js:119)
 would require touching relief amplitudes. The ONLY ordering-safe way is a **uniform proportional multiply**
 on `{BASE_TESSERA, BASE_PLAINS, BASE_RIFT, and all amplitude constants}` — a uniform scale keeps every gap
 positive and every amplitude below its (also-scaled) gap, so ordering can't invert. Recommend deferring it
@@ -221,7 +221,7 @@ Confirmed against §7a RESOLVED (*"stagnant response + mixed interior second"*) 
 ## Q5 — LAB + UAT
 
 **Lab driver controls (reuse the existing `driverOv` / `_driverAbMode` plumbing):** `driverOv` already
-carries `{ gravity, volatiles, tidal, thermal }` (planet-lod-lab.html:2684) and `buildBodyDrivers` already
+carries `{ gravity, volatiles, tidal, thermal }` (world-engine-lab.html:2684) and `buildBodyDrivers` already
 injects `{ massGravity, volatileFraction, tidalHeating, thermalState }` (:2709-2719) with the A/B override
 gate (`useOv`, `_driverTouched`, `_driverAbMode` at :2686/:2711). For the stagnant tune:
 - **`volatiles` (V)** and **`gravity` (g)** sliders already exist (:3812-3816) and already flow into

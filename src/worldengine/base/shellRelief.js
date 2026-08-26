@@ -383,7 +383,7 @@ export function writeShellReliefSphere(carrier, drivers = {}, { macroSeed = 0, r
   }
 
   // ── reliefStress — the PURE STRESS-GEOMETRIC relief (lineament + chaos) BEFORE SHELL_BASE/detail/RELAX.
-  // Published ADDITIVELY for the live AC10 probe (planet-lod-lab.html shellProbe). It is byte-for-byte the
+  // Published ADDITIVELY for the live AC10 probe (world-engine-lab.html shellProbe). It is byte-for-byte the
   // writer's own STEP-3 + STEP-4 product — i.e. exactly what the headless AC2(a) stressProximityPredictor
   // reconstructs arm's-length from thetaTraj + max(0,stressTensile) — so the live probe can use it WITHOUT
   // re-duplicating the cross-section constants. Why this over the old BFS-proximity probe:

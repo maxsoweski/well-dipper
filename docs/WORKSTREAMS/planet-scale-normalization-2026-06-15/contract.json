@@ -8,7 +8,7 @@
   "acceptanceCriteria": [
     {
       "id": "AC1-units-conversion-oracle",
-      "statement": "Real-unit inputs (planet radius_km, per-feature horizontal size_km, relief height_km) are converted into the shader's unit-sphere uniforms via named single-source helpers defined once in planet-lod-lab-core.js — featureFrequencyFromKm (= C_feature * radius_km / size_km), reliefAmplitudeFromKm (= height_km / radius_km), reliefGravityFactor(surfaceGravity), animationRateFactor(radius_km), plus R_EARTH_KM — and INVOKED from the lab's uniform-build path (applyDrivers / the uniform .value assignments in planet-lod-lab.html), per the AC8-blessed single-source architecture (the helpers are not literally inlined inside deriveUniforms()). The per-feature (C_feature, featureSize_km) calibration is set so already-good features keep ~current frequency at the reference radius, while Max-flagged-oversized features (craters, rivers) calibrate to a smaller footprint (higher base frequency).",
+      "statement": "Real-unit inputs (planet radius_km, per-feature horizontal size_km, relief height_km) are converted into the shader's unit-sphere uniforms via named single-source helpers defined once in planet-lod-lab-core.js — featureFrequencyFromKm (= C_feature * radius_km / size_km), reliefAmplitudeFromKm (= height_km / radius_km), reliefGravityFactor(surfaceGravity), animationRateFactor(radius_km), plus R_EARTH_KM — and INVOKED from the lab's uniform-build path (applyDrivers / the uniform .value assignments in world-engine-lab.html), per the AC8-blessed single-source architecture (the helpers are not literally inlined inside deriveUniforms()). The per-feature (C_feature, featureSize_km) calibration is set so already-good features keep ~current frequency at the reference radius, while Max-flagged-oversized features (craters, rivers) calibrate to a smaller footprint (higher base frequency).",
       "verifyVia": {
         "input": "npx vitest run tests/planet-scale.test.js (helper property oracle) + tests/planet-scale-calibration.test.js (calibration guard): sample each helper across radius_km 0.3..16 RE and a feature size_km sweep; pin the crater/river calibrated inputs against their documented pre-change baselines",
         "observable": "frequency monotonically increases with radius_km and decreases with size_km, bounded; amplitude == height_km/radius_km; rate ~ 1/radius_km; reliefGravityFactor monotonic-decreasing in surfaceGravity within [floor,ceil]; calibration guard: at RE=1 crater base frequency (≈12.0) and river base frequency (=4.6) are each strictly GREATER than their documented pre-change defaults (crater 6.0, river 2.3) — smaller footprint; both suites green"
@@ -55,7 +55,7 @@
       },
       "layer": "integration",
       "live": true,
-      "testDebt": "AC5 headless oracle deferred 2026-06-17 (Max-approved): size-source (drawPresetRadius / NAMED_BODY / archetype map) is inline in planet-lod-lab.html, not vitest-importable. Verified live on :9223 (dc04806). Follow-up: extract to an importable module + add the in-range/canonical vitest oracle."
+      "testDebt": "AC5 headless oracle deferred 2026-06-17 (Max-approved): size-source (drawPresetRadius / NAMED_BODY / archetype map) is inline in world-engine-lab.html, not vitest-importable. Verified live on :9223 (dc04806). Follow-up: extract to an importable module + add the in-range/canonical vitest oracle."
     },
     {
       "id": "AC6-scaleconstants-extraction",
@@ -80,7 +80,7 @@
       "id": "AC8-single-source",
       "statement": "All conversion lives once in deriveUniforms (planet-lod-lab-core.js; off-limits caution relaxed for this WS) as the named helpers — NOT scattered per-combiner constants in GLSL. core.js edits are confined to deriveUniforms (no gradient/voronoi/shape-math hunks); the game renderer (Planet.js) is untouched; the only src/ changes are the ScaleConstants extraction + the generate() import swap.",
       "verifyVia": {
-        "input": "git diff of the workstream commits over planet-lod-lab-core.js, planet-lod-lab.html, src/core/ScaleConstants.js, src/generation/PlanetGenerator.js",
+        "input": "git diff of the workstream commits over planet-lod-lab-core.js, world-engine-lab.html, src/core/ScaleConstants.js, src/generation/PlanetGenerator.js",
         "observable": "Conversion helpers defined once in deriveUniforms and multiplied into uniform values; core.js diff confined to deriveUniforms; no new per-feature scale constants hand-edited in GLSL combiners; src/objects/Planet.js unmodified; src/ diff limited to the ScaleConstants move + import swap"
       },
       "layer": "unit"
@@ -110,7 +110,7 @@
       "radiusEarth / massEarth / surfaceGravity derived in deriveUniforms (planet-lod-lab-core.js:496-514)",
       "Game size model: radiusRangesEarth (18 types) + earthRadiiToScene + seeded rng.range draw in PlanetGenerator.generate()",
       "src/core/ScaleConstants.js (new home for radiusRangesEarth; already exports earthRadiiToScene, R_EARTH conversions)",
-      "Per-preset bundles in planet-lod-lab.html (~5440+) — radiusEarth becomes a seeded draw + manual override instead of a fixed value",
+      "Per-preset bundles in world-engine-lab.html (~5440+) — radiusEarth becomes a seeded draw + manual override instead of a fixed value",
       "Footprint uniforms (the voronoi3d frequency args, 22 sites): uCraterScale, river/valley, uCrackScale/uLavaScale, uChaosCellScale, uFacetScale, uHexScale, uEdificeScale, dune scale, uKarstDolineFreq, uEcuDistrictScale/uEcuBlockScale, uShatScale, uSubPitScale/uSubPolyScale",
       "Rate uniforms: uLavaGlowRate, water-glint shimmer, storm drift (uStormPosSize train rate), aurora pulse",
       "Relief-amplitude uniforms across F2/F4/F8/F18/F43 combiners",
@@ -128,11 +128,11 @@
       "npx vitest run tests/planet-archetypes.test.js tests/feature-associations.test.js (36/36) + new scale oracles",
       "The game planet-generation test suite (the guard on the radiusRangesEarth extraction) stays green",
       "src/objects/Planet.js and game planet rendering behavior UNCHANGED; PlanetGenerator.generate() behavior unchanged beyond the import swap",
-      "planet-lod-lab.html backtick parity stays even",
+      "world-engine-lab.html backtick parity stays even",
       "planet-lod-lab-core.js off-limits caution RELAXED for this WS (Max, 2026-06-15) — edits confined to deriveUniforms scaling helpers, NOT the analytic-gradient/voronoi/shape math (flag in commit)",
       "Existing gravity uses of radiusEarth/massEarth (surfaceGravity, gas-giant band count ~5928, cloud regime ~6178, giant dynamo ~6320) keep current behavior",
       "Lab GUI: manual per-feature km tweaks still override the radius-derived defaults",
-      "Shared tree: stage explicit paths only (planet-lod-lab.html, planet-lod-lab-core.js, src/core/ScaleConstants.js, src/generation/PlanetGenerator.js, tests/, docs/); never git add -A; src/main.js warp WIP + src/debug/LabMode.js never staged"
+      "Shared tree: stage explicit paths only (world-engine-lab.html, planet-lod-lab-core.js, src/core/ScaleConstants.js, src/generation/PlanetGenerator.js, tests/, docs/); never git add -A; src/main.js warp WIP + src/debug/LabMode.js never staged"
     ]
   }
 }

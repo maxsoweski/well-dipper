@@ -28,12 +28,12 @@ is untouched and still named as a non-goal.
 
 | # | Site (current line) | Consumer | Driver it now reads | What the player sees |
 |---|---|---|---|---|
-| 1 | `planet-lod-lab.html:2863` `rebakeE5Bands` | E5 climate writer `drivers.radius` → LAW 1 Rhines wavenumber `m` | `_gcond.radiusEarth` — the condition vector (`deriveConditionVector(_fp, _gu, state.planetRadiusEarth)`, :2851) | Number and spacing of visible zonal bands on a gas/ice giant |
-| 2 | `planet-lod-lab.html:2947` `applyStormState` | storm-E writer `drivers.radius` → PV staircase the vortex argmax rides | `_scond.radiusEarth` — same condition vector (:2930) | Latitudes the great spot / ovals / barges are placed at |
-| 3 | `planet-lod-lab.html:3306` `applyDrivers` | `state.bandCount` → `uBandCount` → F25 `jetU` / `jetShearGate` / festoon window | `state.planetRadiusEarth` (no condition vector in scope — declared) | Jet-profile stripe frequency, shear gating and festoon scalloping (visible only with Jets on) |
-| 4 | `planet-lod-lab.html:3409` `applyDrivers` | `state.cloudRegime` (the hazy sub-Neptune branch) | `state.planetRadiusEarth` (declared, as above) | Which cloud combiner runs: hazy sub-Neptune deck vs the giant band stack |
-| 5 | `planet-lod-lab.html:3564` `applyDrivers` | `_giantDynamo` → `state.auroraIntensity` / ring latitude / ring width | `state.planetRadiusEarth` (declared, as above) | Whether a giant lights a metallic-/ionic-envelope aurora oval, and how tight it is |
-| — | `planet-lod-lab.html:5206` `worldDefaultEnableSet` | `craterRelevanceOf` boot-enable | **stays canonical `_fp.radiusEarth`** — proven inert | (no change — proven it cannot differ) |
+| 1 | `world-engine-lab.html:2863` `rebakeE5Bands` | E5 climate writer `drivers.radius` → LAW 1 Rhines wavenumber `m` | `_gcond.radiusEarth` — the condition vector (`deriveConditionVector(_fp, _gu, state.planetRadiusEarth)`, :2851) | Number and spacing of visible zonal bands on a gas/ice giant |
+| 2 | `world-engine-lab.html:2947` `applyStormState` | storm-E writer `drivers.radius` → PV staircase the vortex argmax rides | `_scond.radiusEarth` — same condition vector (:2930) | Latitudes the great spot / ovals / barges are placed at |
+| 3 | `world-engine-lab.html:3306` `applyDrivers` | `state.bandCount` → `uBandCount` → F25 `jetU` / `jetShearGate` / festoon window | `state.planetRadiusEarth` (no condition vector in scope — declared) | Jet-profile stripe frequency, shear gating and festoon scalloping (visible only with Jets on) |
+| 4 | `world-engine-lab.html:3409` `applyDrivers` | `state.cloudRegime` (the hazy sub-Neptune branch) | `state.planetRadiusEarth` (declared, as above) | Which cloud combiner runs: hazy sub-Neptune deck vs the giant band stack |
+| 5 | `world-engine-lab.html:3564` `applyDrivers` | `_giantDynamo` → `state.auroraIntensity` / ring latitude / ring width | `state.planetRadiusEarth` (declared, as above) | Whether a giant lights a metallic-/ionic-envelope aurora oval, and how tight it is |
+| — | `world-engine-lab.html:5206` `worldDefaultEnableSet` | `craterRelevanceOf` boot-enable | **stays canonical `_fp.radiusEarth`** — proven inert | (no change — proven it cannot differ) |
 
 Driver connectivity (check 1): every one of the five reads the same D-slot-backed quantity —
 the drawn body radius the slider writes — either through `deriveConditionVector` (the ratified single
@@ -66,7 +66,7 @@ under `src/`, so Rule 14 `Module(s):` registration does not apply (the two new f
 
 ## 2. What changed, site by site
 
-All six edits are in `planet-lod-lab.html`. **No `src/` file was modified.**
+All six edits are in `world-engine-lab.html`. **No `src/` file was modified.**
 
 **1 & 2 — E5 band bake (:2863) and storm bake (:2947).** `(_fp.radiusEarth ?? 1) / 11.2` →
 `(_gcond.radiusEarth ?? 1) / 11.2` and `(_scond.radiusEarth ?? 1) / 11.2`. Both functions already
@@ -98,7 +98,7 @@ by static call-graph closure (GLSL has no indirect dispatch, so reachability is 
 `uBandCount` still reaches rendered pixels through `planet-lod-height.glsl.js:1518` (`jetU`), `:1530`
 (`jetShearGate`) and `:1570` (the festoon window), behind exactly one gate: `uJetStrength > 0`
 (gas preset **and** the Jets checkbox). Two independent roots reach it, and one of them — the
-jets-solo path at `planet-lod-lab.html:680` — deliberately bypasses `bandMask`, so it is *not* gated
+jets-solo path at `world-engine-lab.html:680` — deliberately bypasses `bandMask`, so it is *not* gated
 by `bandStrength`. What the atmo increment actually retired was only the band-VALUE consumer.
 **Consequence for this build:** `state.bandCount` was rewired rather than deleted. **Consequence for
 UAT:** an A/B taken with Jets OFF will show zero difference at this site — that is not "the rewire did
@@ -202,7 +202,7 @@ feed was frozen.
 
 ### `tests/radius-live-feed-fence.test.js` — AC-NOFROZEN (42 tests; was 34 before the lens round)
 
-Source-greps `planet-lod-lab.html` for `radiusEarth` reads on a frozen preset source
+Source-greps `world-engine-lab.html` for `radiusEarth` reads on a frozen preset source
 (`_fp`, the bare `fp` alias, or a `DRIVER_PRESETS[…]` subscript; `.` or `?.`, whitespace/newline
 tolerant).
 **Comment-inclusive by design**, following `tests/vis-scale-fence.test.js` — commented-out code is one
@@ -234,7 +234,7 @@ rewire comments say "the frozen preset constant" in words.
 ### `tests/radius-live-feed.test.js` — AC-BYTE / AC-REGIME / AC-CRATERBOOT / AC-BANDS headless half (43 tests; was 34)
 
 **Method: source execution, not re-implementation.** The rewired consumers live inline in
-`planet-lod-lab.html`, so the suite *cuts each expression out of the live source at run time and
+`world-engine-lab.html`, so the suite *cuts each expression out of the live source at run time and
 executes it* with the lab's own local identifiers in scope. Every extraction throws a loud, explicit
 error if its pattern stops matching, so "the source changed shape" surfaces as a hard failure rather
 than a silently-vacuous green. The lab's own `_gas` gate and `_rotH` read are extracted too, so the
@@ -253,7 +253,7 @@ Stated criteria, per site:
 
 | check | criterion | why that threshold |
 |---|---|---|
-| canonical byte-inertness (all 4 rewired sites, all 18 presets) | exact equality (`toBe`) against a **literal table captured from `git show HEAD:planet-lod-lab.html`** | AC-BYTE demands bit-inertness, so no tolerance is admissible. **REWRITTEN in the lens round:** the original version derived its "frozen" oracle by substituting one symbol for an equal-valued symbol in the live source, which is an algebraic identity and passed even on a fully dead feed. A literal captured from the prior build cannot inherit the live source's defects; falsifiability is proven by four planted defects |
+| canonical byte-inertness (all 4 rewired sites, all 18 presets) | exact equality (`toBe`) against a **literal table captured from `git show HEAD:world-engine-lab.html`** | AC-BYTE demands bit-inertness, so no tolerance is admissible. **REWRITTEN in the lens round:** the original version derived its "frozen" oracle by substituting one symbol for an equal-valued symbol in the live source, which is an algebraic identity and passed even on a fully dead feed. A literal captured from the prior build cannot inherit the live source's defects; falsifiability is proven by four planted defects |
 | boot-radius delta (the whole `AT THE RADIUS THE LAB ACTUALLY DRAWS` block) | exact per-preset tables at `drawPresetRadius(p, radiusSeed, { labUnlock: true })`, seed read from source; exact flip counts over seeds 0…2000 | this is the radius the lab operates at, and nothing tested it before. Exact integers/booleans because the draw is deterministic; the seed-sweep counts are pinned so a threshold nudge invisible at canonical radius still fails |
 | E5 radius driver | `=== R/11.2` exactly, at every R | a single division by a literal — any deviation means it is reading a different number |
 | giant driver triple radius-independence | bit-exact across the slider, all 5 regimes | this is what makes N ∝ √R an *identity*; `drawGiantConditions` back-solves gravity so `M = g·R²` cancels R |
@@ -302,7 +302,7 @@ PLANT B       : the lab's boot seed  radiusSeed: 1 -> 2
                 (a pure boot-APPEARANCE change; no expression, threshold or law is touched)
 result (first attempt, with BOOT_SEED typed as a literal in the test) : 84 passed (84)  <- MISSED
                 -> this was a defect in the NEW instrument, found by planting rather than by review.
-                   BOOT_SEED is now EXTRACTED from planet-lod-lab.html.
+                   BOOT_SEED is now EXTRACTED from world-engine-lab.html.
 result (after the fix) : Tests 4 failed | 81 passed (85)
                 caught by  the boot-seed pin, the BOOT DELTA TABLE, the AURORA pin, the E5 BOOT DELTA
 RESTORED      : sha256 identical
@@ -399,7 +399,7 @@ $ npx vitest run tests/vis-scale-fence.test.js
 
 ```
 $ git status --short   (tracked modifications only)
- M planet-lod-lab.html
+ M world-engine-lab.html
  M src/auto/CameraChoreographer.js     <- NOT-OURS, pre-existing, untouched
  M src/debug/LabMode.js                <- NOT-OURS, pre-existing, untouched
 ```
@@ -463,7 +463,7 @@ defect in one of the *new* instruments, found by planting rather than by review 
 
 ### [1] / [4] — the "bit-inert" claim's antecedent is false at boot
 
-**CONFIRMED.** `state._lastPreset` is never initialised, so the branch at `planet-lod-lab.html:3009`
+**CONFIRMED.** `state._lastPreset` is never initialised, so the branch at `world-engine-lab.html:3009`
 is taken on the first `applyDrivers()` call and `:3010` draws a radius at boot.
 
 Measured (`drawPresetRadius(p, 1, { labUnlock: true })` — byte-for-byte the lab's own call):
@@ -487,7 +487,7 @@ The other fifteen presets show no change at any rewired site at boot.
 `tests/radius-live-feed.test.js → "BOOT DELTA TABLE"` / `"E5 BOOT DELTA"` so it cannot drift.
 **Consequence for UAT, stated per the finding's suggested fix (a):** *the lab's default boot
 appearance changes on Jovian, Saturnian and Neptunian before Max touches anything.* **Max's A/B must
-be against the pre-rewire build (`git show HEAD:planet-lod-lab.html`), not against a slider drag** —
+be against the pre-rewire build (`git show HEAD:world-engine-lab.html`), not against a slider drag** —
 a slider A/B cannot surface a boot-time change by construction.
 
 ### [2] / [6] — the Ice Giant's aurora is extinguished, not dimmed
@@ -551,7 +551,7 @@ Case (4) is the exact defect class this workstream exists to prevent.
 **Folded per the finding's suggested fix:** all four deleted. Replaced with
 `PRE_REWIRE_AT_CANONICAL` — a literal table of `[bandCount, cloudRegime, giantDynamo, E5 radius
 driver]` per preset, captured by executing the **pre-rewire** expressions out of
-`git show HEAD:planet-lod-lab.html` (commit `710f8a2`). A substitution-derived oracle inherits every
+`git show HEAD:world-engine-lab.html` (commit `710f8a2`). A substitution-derived oracle inherits every
 defect of the thing it checks; a literal from the prior build does not. Its falsifiability is itself
 proven by a planted-defect test that runs all four broken variants above and requires each to be
 rejected.
@@ -646,7 +646,7 @@ node .../calibration/lens-claims.mjs
 node .../calibration/lens-lastindex.mjs
     -> the regex lastIndex pollution and the missed offender                            ([G])
 node .../calibration/lens-prerewire.mjs
-    -> regenerates PRE_REWIRE_AT_CANONICAL from `git show HEAD:planet-lod-lab.html`      ([5])
+    -> regenerates PRE_REWIRE_AT_CANONICAL from `git show HEAD:world-engine-lab.html`      ([5])
 node .../calibration/lens-e5boot.mjs
     -> the E5 end-to-end boot delta at the lab's own defaults                            ([1])
 ```

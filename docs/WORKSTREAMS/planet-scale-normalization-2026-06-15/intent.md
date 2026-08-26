@@ -66,7 +66,7 @@ scale system in the lab**. Decisions:
 
 `deriveUniforms()` (`planet-lod-lab-core.js:496`) already receives `radiusEarth`, `massEarth`, and
 computes `surfaceGravity = M/R²`. Every preset bundle already carries an accurate `radiusEarth`
-(`planet-lod-lab.html` ~5440+). That data is currently used for gravity, gas-giant band counts, and
+(`world-engine-lab.html` ~5440+). That data is currently used for gravity, gas-giant band counts, and
 cloud regimes — but is **never read by the surface-feature footprint or animation-rate uniforms**.
 This workstream wires the size we already have into the feature scales/rates/relief via a single
 shared helper, mirroring the province-weight single-source pattern.

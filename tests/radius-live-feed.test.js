@@ -3,7 +3,7 @@
 // headless half of AC-BANDS (the live A/B on the giant is Max's UAT + the browser lane).
 //
 // METHOD — SOURCE EXECUTION, NOT RE-IMPLEMENTATION. The rewired consumers live INLINE in
-// planet-lod-lab.html (inside applyDrivers / rebakeE5Bands / applyStormState), so there is nothing to
+// world-engine-lab.html (inside applyDrivers / rebakeE5Bands / applyStormState), so there is nothing to
 // import. This suite therefore CUTS each expression out of the live source at run time and executes it.
 // That matters: a re-implementation would pass forever while the lab drifted underneath it.
 //
@@ -19,7 +19,7 @@
 //      which names the wrong site and kills collection before one assertion runs.
 //   2. "THE PATTERN STOPS MATCHING" WAS NOT THE FAILURE MODE THAT MATTERED. The lab's habit when a
 //      law moves is to quote the retired statement verbatim in a `//` or `/* */` comment — 7
-//      instances, e.g. planet-lod-lab.html:6299 `//   _lab.setCarveEpoch(false); const off = _lab.sampleRoutedHeight(channelDirs);`.
+//      instances, e.g. world-engine-lab.html:6299 `//   _lab.setCarveEpoch(false); const off = _lab.sampleRoutedHeight(channelDirs);`.
 //      Every extraction here read RAW text and took the FIRST match, and with lazy quantifiers first
 //      means topmost, so a comment ABOVE the live site shadows it. Measured: move the bandCount law
 //      out to `state.bandCount = _pack.bandCount;` and quote the old statement on a bare `//` line
@@ -28,7 +28,7 @@
 //      4 and 5 both declare they will move lab code out; the hole was pre-armed and waiting.
 //
 // THE CONTRACT NOW, stated so it can be checked rather than trusted:
-//   · THE SCAN SET IS A CORPUS, NOT ONE FILE — planet-lod-lab.html, planet-lod-shaders.glsl.js, and
+//   · THE SCAN SET IS A CORPUS, NOT ONE FILE — world-engine-lab.html, planet-lod-shaders.glsl.js, and
 //     every .js under src/worldengine. An extraction therefore FOLLOWS its law when a step moves it
 //     out of the lab, instead of forcing the check to be deleted that day. ⚠ The corpus SIZE is
 //     deliberately not written down here and is asserted nowhere: it read 43 files and then 44 inside
@@ -138,7 +138,7 @@
 //        · A NEVER-CALLED FUNCTION — the statement wrapped in `function _legacyRotH(state, _fp)`.
 //          **175 passed (175)**. Also silent. Reachability needs a control-flow pass, which is the
 //          same refusal the fence's own KNOWN LIMIT #1 records.
-//      ⚠ WHY IT IS NAMED AND NOT CLOSED: measured the same day, `grep -nE '<(pre|textarea|template|noscript|xmp)\b' planet-lod-lab.html`
+//      ⚠ WHY IT IS NAMED AND NOT CLOSED: measured the same day, `grep -nE '<(pre|textarea|template|noscript|xmp)\b' world-engine-lab.html`
 //      returns NOTHING, and the lab's entire HTML surface is six lines before one `<script type="module">`.
 //      An author would have to invent the container, where quoting a retired law in a comment or a
 //      template is a habit the lab documents 7 instances of. Adversarial, not idiomatic — PLAN §11.9's
@@ -182,7 +182,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // planet-lod-shaders.glsl.js was in the list for FORWARD CLOSURE, not because it carries anything
 // today. ⚠ MEASURED 2026-08-08, so nobody later reads its presence as evidence of something: it
 // contributes ZERO matches to every pattern in this file and defines `applyDrivers` ZERO times (the
-// one definition is planet-lod-lab.html:1933 `function applyDrivers(){`). It was here because Step 5's
+// one definition is world-engine-lab.html:1933 `function applyDrivers(){`). It was here because Step 5's
 // driver packs are the kind
 // of thing that lands next to the shader source, and a corpus that has to be widened in the same
 // commit that moves the code is a corpus that will be widened one commit late.
@@ -192,7 +192,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // CORPUS — so a future hit in it would be counted twice and a `toHaveLength(1)` would read 2, which
 // looks like a scanner bug rather than a duplicated corpus entry. The forward-closure claim is now
 // held by the walker, and the coverage assertion below names the new path.
-const CORPUS = ['planet-lod-lab.html', ...jsFilesUnder(ROOT, 'src/worldengine')];
+const CORPUS = ['world-engine-lab.html', ...jsFilesUnder(ROOT, 'src/worldengine')];
 const RAW = new Map(CORPUS.map((rel) => [rel, readFileSync(join(ROOT, rel), 'utf8')]));
 // ⭐ TWO PASSES PER FILE, and the split is the whole of the Step-3-round-2 repair. Both passes come
 // out of the same stripper, are byte-LENGTH-identical to the input, and put their newlines at the
@@ -214,7 +214,7 @@ const SRC = CORPUS.map((rel) => ({
 }));
 // The lab's RAW text. Used ONLY by the prose pins at the bottom of this file, whose subject IS a
 // comment — see the note there. Nothing that gets compiled may read this.
-const LAB_RAW = RAW.get('planet-lod-lab.html');
+const LAB_RAW = RAW.get('world-engine-lab.html');
 
 const PRESETS = Object.keys(DRIVER_PRESETS);
 const TIER = 1.0;
@@ -323,7 +323,7 @@ function envFor(presetName, R) {
   return { ...base, _gas: fGas(base), _rotH: fRotH(base) };
 }
 const canonicalR = (p) => DRIVER_PRESETS[p].radiusEarth ?? 1;
-// The radius the LAB ITSELF produces — planet-lod-lab.html:1955
+// The radius the LAB ITSELF produces — world-engine-lab.html:1955
 // `state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed, { labUnlock: true })`,
 // byte-for-byte the same call, including the { labUnlock: true } flag. This is what the lab boots
 // with; `canonicalR` is what it boots with only for the 6 NAMED_BODY presets. Everything below that
@@ -482,7 +482,7 @@ function sweepFlips(f, samples = SWEEP) {
 // information, presented as AC-BYTE evidence.
 //
 // THE REPLACEMENT: an oracle that cannot inherit the defects of the thing it checks. The values below
-// were captured by executing the PRE-REWIRE expressions out of `git show HEAD:planet-lod-lab.html`
+// were captured by executing the PRE-REWIRE expressions out of `git show HEAD:world-engine-lab.html`
 // (commit 710f8a2, the parent of this working tree) at each preset's canonical radius, and are pinned
 // here as LITERALS. A substitution-derived oracle inherits every defect of the live source; a literal
 // captured from the prior build does not. Verified falsifiable: each of the five broken variants above
@@ -668,7 +668,7 @@ describe('extraction harness — controls (each clause of the contract, shown fa
     // A file-count threshold would prove only that the walker ran (helpers/source-scan.mjs names that
     // limit for `jsFilesUnder` explicitly). The per-carrier fact is better: the E5 partition's
     // excluded member is found in src/worldengine, which the pre-Step-3 scan set could not see at all.
-    expect(CORPUS).toContain('planet-lod-lab.html');
+    expect(CORPUS).toContain('world-engine-lab.html');
     expect(CORPUS).toContain('src/worldengine/shaders/planetShaders.glsl.js');
     expect(E5_HELPER[0].rel.startsWith('src/worldengine/')).toBe(true);
     // Every site's home is recorded; none of them is asserted, because a site is ALLOWED to move —
@@ -1127,7 +1127,7 @@ describe('AC-REGIME — the giant dynamo gate classifies composition, so the sli
 // AT THE RADIUS THE LAB ACTUALLY DRAWS — ADDED 2026-07-25 (lens round). THE MISSING SURFACE.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 // Every check above evaluates either at canonical radius or over the slider's [0.3, 16] sweep. The lab
-// boots at NEITHER for most presets: planet-lod-lab.html:1955
+// boots at NEITHER for most presets: world-engine-lab.html:1955
 // `state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed, { labUnlock: true })`
 // sets it
 // on the first applyDrivers() call (state._lastPreset is undefined at boot, so the branch is taken) with
@@ -1269,7 +1269,7 @@ describe('AT THE RADIUS THE LAB ACTUALLY DRAWS — the boot-time delta, pinned',
     // next agent "helpfully" re-points it at the drawn radius and re-introduces the regression.
     // ⚠ THESE TWO READ **RAW** SOURCE, DELIBERATELY, and it is not an oversight in a file whose whole
     // point is that comments are stripped. Their subject IS the comment: both strings live in `//`
-    // prose (planet-lod-lab.html:2561 `// Radius cutoff 3.5 — HISTORICAL INTENT, AND IT IS NO LONGER A DISCRIMINATION THE RADIUS CAN`
+    // prose (world-engine-lab.html:2561 `// Radius cutoff 3.5 — HISTORICAL INTENT, AND IT IS NO LONGER A DISCRIMINATION THE RADIUS CAN`
     // and :2574 `//   CLASSIFIER reads canonical; a PHYSICS INPUT reads drawn. The three genuine physics inputs`).
     // Scanning stripped text for them would delete their subject and red on day one. The rule this
     // file follows: a pin on the CODE reads the comment-blind, literal-blind pass and must match
@@ -1311,7 +1311,7 @@ describe('AT THE RADIUS THE LAB ACTUALLY DRAWS — the boot-time delta, pinned',
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 // ⚠ THE TITLE BELOW DELIBERATELY CARRIES NO LINE NUMBER. It read "the :5206 canonical read" until
 // 2026-08-08; line 5206 is a comment about dust-veil attenuation and the read is at
-// planet-lod-lab.html:4323 `craterRelevanceOf(deriveConditionVector(`. A line number inside a
+// world-engine-lab.html:4323 `craterRelevanceOf(deriveConditionVector(`. A line number inside a
 // describe title is worse than one in a comment: it is a TEST ID, so the citation fence cannot see
 // it, re-pointing it churns the baseline record, and it rots on every edit above it. Name the site.
 describe('AC-CRATERBOOT — the craterRelevanceOf canonical read is justified by measurement, re-measured here', () => {
@@ -1426,7 +1426,7 @@ describe('AC-CRATERBOOT — the craterRelevanceOf canonical read is justified by
     // present. Whatever these pins fail to notice, nothing else here notices either.
     //
     // WHICH IS WHY THE FIRST ONE MOVED TO STRIPPED SOURCE, AND WHY IT COUNTS (2026-08-08). Measured
-    // on a scratch mirror: replace the live call at planet-lod-lab.html:4323
+    // on a scratch mirror: replace the live call at world-engine-lab.html:4323
     // `if (_fp && craterRelevanceOf(deriveConditionVector(_fp, deriveUniforms(_fp, driverUI.qualityTier), _fp.radiusEarth)) > 0) set.add('craters');`
     // with a pack read while quoting the old call in a comment, and all three of these stayed GREEN —
     // 44/44 — because `LAB` was raw text and the comment satisfied every one of them. The canonical
@@ -1440,7 +1440,7 @@ describe('AC-CRATERBOOT — the craterRelevanceOf canonical read is justified by
     const live = scanCorpus(/craterRelevanceOf\(deriveConditionVector\(_fp,\s*deriveUniforms\(_fp,\s*driverUI\.qualityTier\),\s*_fp\.radiusEarth\)\)/);
     expect(live.map((h) => `${h.rel}:${h.line}`), 'the canonical craterboot read, in LIVE code').toHaveLength(1);
     // The other two are PROSE pins and stay on RAW source for the same reason as the pair in
-    // AC-REGIME above: their subject is the comment. planet-lod-lab.html:4274
+    // AC-REGIME above: their subject is the comment. world-engine-lab.html:4274
     // `// RADIUS-CANONICAL-BY-PROOF — this is the ONE site the radius-live-feed R1 rewire deliberately did`
     // and :4276 `// Evidence: docs/WORKSTREAMS/world-engine-radius-live-feed-2026-07-25/evidence/G2-craterboot-sweep.md`.
     // They assert the exemption is still ARGUED at the site; the stripped pin above asserts it is

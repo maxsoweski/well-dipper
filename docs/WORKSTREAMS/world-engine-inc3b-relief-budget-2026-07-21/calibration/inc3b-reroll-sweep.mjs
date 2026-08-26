@@ -17,7 +17,7 @@
 //
 // WHAT IS PROVEN (all headless, deterministic, cross-checked against the S4 lab captures as ground truth):
 //   (G) GROUND-TRUTH DERIVATION — the 🌍 newPlanet() worldSeed → {macroSeed, radiusSeed, detailSeed, craterOffset}
-//       derivation (planet-lod-lab.html:3917 newPlanet()) is reproduced EXACTLY and cross-checked bit-for-bit
+//       derivation (world-engine-lab.html:3917 newPlanet()) is reproduced EXACTLY and cross-checked bit-for-bit
 //       against the two re-rolled S4 capture states (target-reroll1/2 were produced BY newPlanet). seed1 is the
 //       BOOT default (worldSeed=1 pre-newPlanet, macroSeed=radiusSeed=1) — disclosed, not asserted against the
 //       derivation.
@@ -41,7 +41,7 @@
 //       DETERMINISTIC per worldSeed and VARIES across worldSeeds (was [0,0,0] = re-roll-invariant before the fix).
 //       Cross-checked bit-for-bit against the reroll1/2 recorded craterOffsets.
 //
-// seedOffset() is reproduced verbatim from planet-lod-lab.html:2464 (it is defined inline in the lab, not exported)
+// seedOffset() is reproduced verbatim from world-engine-lab.html:2464 (it is defined inline in the lab, not exported)
 // and its identity is PROVEN by the reroll1/2 cross-check, so the copy cannot silently drift from the shipped hash.
 //
 // Machine-readable summary → inc3b-reroll-sweep-summary.json (deterministic; NO timing fields). Nonzero exit on any
@@ -80,13 +80,13 @@ const condAt = (fp, R) => deriveConditionVector(fp, deriveUniforms(fp, 1.0), R);
 const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const angBetween = (a, b) => Math.acos(Math.max(-1, Math.min(1, dot3(a, b))));   // great-circle angle (unit vecs)
 
-// EXACT reproduction of planet-lod-lab.html:2464 seedOffset() (inline in the lab, not exported). Identity proven
+// EXACT reproduction of world-engine-lab.html:2464 seedOffset() (inline in the lab, not exported). Identity proven
 // by the reroll1/2 craterOffset cross-check below.
 function seedOffset(seed) {
   const h = (n) => { const x = Math.sin(n) * 43758.5453; return (x - Math.floor(x)) * 256.0; };
   return [h(seed * 12.9898 + 78.233), h(seed * 39.346 + 11.135), h(seed * 53.711 + 94.673)];
 }
-// EXACT reproduction of newPlanet()'s worldSeed → sub-seed derivation (planet-lod-lab.html:3918-3932).
+// EXACT reproduction of newPlanet()'s worldSeed → sub-seed derivation (world-engine-lab.html:3918-3932).
 function deriveWorld(worldSeed) {
   const radiusSeed = Math.floor(alea('draw:radius:' + worldSeed)() * 4294967296) >>> 0;
   const macroSeed  = Math.floor(alea('draw:macro:'  + worldSeed)() * 10000);

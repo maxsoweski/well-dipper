@@ -1,6 +1,6 @@
 # Evidence — atmo #3b storms (AC-LIVE / AC-VIS live drives)
 
-Live drives on the atmo worktree lab (`http://localhost:5178/well-dipper/planet-lod-lab.html`,
+Live drives on the atmo worktree lab (`http://localhost:5178/well-dipper/world-engine-lab.html`,
 branch `feature/world-engine-atmo-3b` @ `cb69ad4`), chrome-devtools on :9223, 2026-07-15.
 Pinned rig unless noted: macroSeed 1 · stormSeed 1234 · pixelScale 1 · sunToCamera ·
 viewport 1783×848 @1.25dpr (screenshots 2229×1060). All A/B diffs ran with `jetsEnabled=false`

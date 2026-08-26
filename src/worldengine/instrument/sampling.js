@@ -7,7 +7,7 @@
 // needs a GPU.
 //
 // SPHERE CONVENTION: y is the polar axis, matching the lab shader's own `asin(N.y)` latitude
-// (planet-lod-lab.html:676). lat = asin(y), lon = atan2(z, x). A direction for (lat, lon) is therefore
+// (world-engine-lab.html:676). lat = asin(y), lon = atan2(z, x). A direction for (lat, lon) is therefore
 // (cos lat cos lon, sin lat, cos lat sin lon). This matters for diagnoseAt(): a lat/lon Max reads off
 // the screen has to land where he thinks it lands.
 //
@@ -21,7 +21,7 @@
 //       world" is a physical question.
 //   ANGULAR frame — lengths in degrees of arc, independent of the body's size. On-screen size is this
 //       times the drawn disc scale, so the angular frame is what the shipped display keying actually
-//       holds constant: planet-lod-lab.html keys texture frequencies to a display pseudo-radius
+//       holds constant: world-engine-lab.html keys texture frequencies to a display pseudo-radius
 //       rather than the real radius precisely so on-screen form size stays put as the disc grows.
 //
 // A form held constant on SCREEN while the planet grows is NOT constant in km — it grows as sqrt(R)

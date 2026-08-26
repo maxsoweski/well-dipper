@@ -474,7 +474,7 @@ describe('H — the two seam repairs this leg needed', () => {
 // §H — THE TWO FRONT-END HELPERS. Added 2026-08-22 for the lab's import-back (workstream AC5).
 //
 // ⭐ WHY A PACK NEEDS TWO HELPERS AND NOT ONE CALL, read off the only import-back that has ever
-// worked (`giantDeck`, planet-lod-lab.html:188): the lab's per-frame writer reads `state`, and every
+// worked (`giantDeck`, world-engine-lab.html:188): the lab's per-frame writer reads `state`, and every
 // one of those fields is a live lil-gui slider. Writing pack output STRAIGHT to uniforms would take
 // the lab's authoring surface out of its own loop. So the pack result is MIRRORED into `state`, and
 // only the drivers the frame loop does not own go direct.
@@ -483,7 +483,7 @@ describe('H — the two seam repairs this leg needed', () => {
 // ✓ checkbox at the per-frame writer (`state.edificesEnabled ? state.volcanismStrength : 0.0`). If
 // the mirror ALSO resolved the gate, the decision would be applied twice — a body whose feature is
 // enabled would still read zero the moment the pack's gate map disagreed, and nothing would throw.
-// planet-lod-lab.html:1749 names this hazard by name for pack #1.
+// world-engine-lab.html:1749 names this hazard by name for pack #1.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 describe('§H — the lab mirror and its complement', () => {
   const B = SOLID[0];

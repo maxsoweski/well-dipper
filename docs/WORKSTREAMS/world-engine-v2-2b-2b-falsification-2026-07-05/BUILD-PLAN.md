@@ -158,11 +158,11 @@ compound center (breach continuum) in mixedInterior [V2-2b-2b AC-CORONA-PIERCED]
 ### SLICE 3 — Π falsification assertion + null + cross-check + lab drive/probe
 **Goal:** ASSERT pierce/tent interpenetration on world B (the claim 2b-2a fenced out); add the separable-tiling null
 + the (L0.60,Φ0.42) cross-check; wire the lab drive paths + probe fields for AC-PILOT-LIVE. **ACs:**
-AC-INTERPEN-FALSIFY, AC-PILOT-LIVE prep (+ AC-0, AC-ZERO-CLOBBER threaded). **Files:** `planet-lod-lab.html`,
+AC-INTERPEN-FALSIFY, AC-PILOT-LIVE prep (+ AC-0, AC-ZERO-CLOBBER threaded). **Files:** `world-engine-lab.html`,
 `tests/worldengine-interpen-falsify.test.js` (NEW), BUILD docs. **`planet-lod-rivers.js` NOT touched** — `breachCount`
 rides `mixedDiag → route() {...composerDiag}` automatically; the `primitiveIdHistogram` already exists in `route()`.
 
-**Exact edits (planet-lod-lab.html):**
+**Exact edits (world-engine-lab.html):**
 - **`mixedOv`** — add an `effectiveL` field (a DRIVER OVERRIDE, **NO `*Enabled` key** — AC-0 taxonomy rule).
 - **`applyMixedDrivers` (:3885-3900)** — when `mixedOv.effectiveL` is set, set `_mixedLidOverride.e1.effectiveL` +
   `geodynamicRegime:'stagnant'` (object built OUTSIDE the `route({...})` block — SF1 shadow-audit clean; only the
@@ -187,7 +187,7 @@ in the minority cap) → `interpenetration(c, pid, familyOf)` → `Π < PI_STAR 
 from `interpenetration.js` (single-source). **Guardrails:** AC-ZERO-CLOBBER quartet; `git-diff interpenetration.js`
 + `e1Regime.js` empty (manual, AC-ZERO-CLOBBER(d)); full `npx vitest run` — 4 known failures don't grow.
 **AC-PILOT-LIVE** is driven live by working-Claude post-build (chrome-devtools, `127.0.0.1:9223`,
-`localhost:5173/well-dipper/planet-lod-lab.html`; `list_pages` liveness per sandbox-localhost-probe; close pages
+`localhost:5173/well-dipper/world-engine-lab.html`; `list_pages` liveness per sandbox-localhost-probe; close pages
 after — window hygiene) — NOT a headless test. **AC-PILOT-UAT** is Max's gate, deferred-to-max, never agent-PASSed.
 **Commit:** `feat(worldengine): Π falsification assertion on corona-pierced world + wet-stagnant lab drive [V2-2b-2b AC-INTERPEN-FALSIFY / AC-PILOT-LIVE prep]`
 

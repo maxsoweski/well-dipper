@@ -222,4 +222,4 @@ Legend: ✅ renders-as-declared · `·` correctly inert · ⚠️D dead-render �
 
 ---
 
-*Raw deltas: `docs/FEATURES/.sweep-raw.json`. Auditor: `lab-render-audit.js` (`tests/render-audit.test.js`). Sweep harness: `window._lab.renderDeltaSweep()` in `planet-lod-lab.html`.*
+*Raw deltas: `docs/FEATURES/.sweep-raw.json`. Auditor: `lab-render-audit.js` (`tests/render-audit.test.js`). Sweep harness: `window._lab.renderDeltaSweep()` in `world-engine-lab.html`.*

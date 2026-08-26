@@ -2,7 +2,7 @@
 // neutral-driver extraction (BUILD-PLAN §1 "Byte-safety of Slice A" (1)-(3)).
 //
 //  (1) The extracted DRIVER_PRESETS deep-equals a one-time snapshot of the pre-change literal
-//      scraped from ad156cc's planet-lod-lab.html.
+//      scraped from ad156cc's world-engine-lab.html.
 //  (2) The extracted PRESET_ARCHETYPE deep-equals a one-time snapshot of the ad156cc inline map.
 //  (3) Forward-drift guard: buildNeutralBodyDrivers(deriveUniforms(fp,1.0), fp) over all 15
 //      archetype-mapped presets equals a snapshot captured on the post-A tree (== pre-change

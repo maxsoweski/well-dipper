@@ -1,6 +1,6 @@
 // tests/worldengine-inc3b-synth-law.test.js — Inc-3b S3-fix: the schedule-derived single crater law.
 //
-// The lab's route-time derivation (planet-lod-lab.html, near the state.iceness idiom) turns
+// The lab's route-time derivation (world-engine-lab.html, near the state.iceness idiom) turns
 // craterSchedule(condition) into the uCrater* uniform values for the in-shader analytic sub-floor
 // crater-texture band. This test REPRODUCES that derivation from craterSchedule and pins:
 //   • the exact worked numbers (D_char, uCraterScale, uCraterDensity, uCraterAmp, uCraterRelaxation)
@@ -136,7 +136,7 @@ describe('Inc-3b S3-fix — determinism', () => {
 });
 
 describe('Inc-3b S3-fix — the SHIPPED lab source carries the derivation (not just this test)', () => {
-  const lab = readFileSync(join(__dirname, '../planet-lod-lab.html'), 'utf8');
+  const lab = readFileSync(join(__dirname, '../world-engine-lab.html'), 'utf8');
   it('imports craterSchedule + craterRelevanceOf + D_D_SIMPLE and radPerKm', () => {
     expect(lab).toMatch(/import\s*\{[^}]*\bcraterSchedule\b[^}]*\bcraterRelevanceOf\b[^}]*\bD_D_SIMPLE\b[^}]*\}\s*from\s*['"][^'"]*bombardment/);
     expect(lab).toMatch(/import\s*\{[^}]*\bradPerKm\b[^}]*\}\s*from\s*['"][^'"]*baseStep/);

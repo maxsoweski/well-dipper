@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { holdApparentDistance, visScaleOf, minCameraDistance } from '../src/worldengine/base/labCore.js';
 
 const LAB = fs.readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'planet-lod-lab.html'),
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'world-engine-lab.html'),
   'utf8',
 );
 

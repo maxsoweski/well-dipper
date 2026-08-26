@@ -35,12 +35,12 @@ configuration, so "identical" is not an artifact of capturing the same frame fiv
 
 ## 1. How BEFORE was produced
 
-`git show 2a5daa0:planet-lod-lab.html > planet-lod-lab.BEFORE.html`, served alongside the live lab
+`git show 2a5daa0:world-engine-lab.html > planet-lod-lab.BEFORE.html`, served alongside the live lab
 so both are up at once and no working-tree restore is ever needed. `2a5daa0` is `a2e36de~1` — the
 commit before AC-SAMPLER landed. Confirmed on the live BEFORE page: no `uFieldTap` uniform,
 `fragmentShader.includes('uFieldTap') === false`, no `freezeAnimation`/`tapControl`.
 
-The AC-SAMPLER diff to `planet-lod-lab.html` touches GLSL in exactly four places — the
+The AC-SAMPLER diff to `world-engine-lab.html` touches GLSL in exactly four places — the
 `uniform int uFieldTap;` declaration and three uniform-gated early returns. Everything else in the
 commit is JS.
 

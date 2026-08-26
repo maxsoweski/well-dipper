@@ -25,7 +25,7 @@ committing to the full feature. Two unknowns gate it:
   `ShaderMaterial` computing every feature analytically from `pos`; water bodies (F14) are a level-set
   `h(pos) < uSeaLevel` on the single accumulated height. Rivers committing to the bake path means one
   analytic feature becomes a sampled-texture+carve — additive, not a rebuild. The game already has a
-  bake pipeline. (Confirmed by reading `planet-lod-lab.html` / `-core.js`.)
+  bake pipeline. (Confirmed by reading `world-engine-lab.html` / `-core.js`.)
 
 ## Scope honesty — what the spike proves vs. defers
 - Uses a **JS stand-in height field** of the same *character* as our terrain (FBM on the sphere + a
@@ -79,7 +79,7 @@ death-spiral (standing 3-cycle cap).
 ## Execution
 Built via gated subagents (keeps main-session context low): one builder+verifier subagent per round,
 Max inspects G1 before S2, judges G2. Standing cautions: new file only (don't touch
-`planet-lod-lab.html` / `-core.js` / `LabMode.js`); test on `:9223` GPU Chrome via chrome-devtools at
+`world-engine-lab.html` / `-core.js` / `LabMode.js`); test on `:9223` GPU Chrome via chrome-devtools at
 `127.0.0.1` (server already running — don't start it); screenshots to disk → gallery, never read into
 context.
 

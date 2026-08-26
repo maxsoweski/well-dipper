@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **Isolated lab only.** Create new files at repo root + `tests/`. Do NOT edit `src/generation/PlanetGenerator.js`, `src/generation/PhysicsEngine.js`, `planet-lod-lab.html`, `planet-lod-lab-core.js`, or any `src/**` production file. The D12 hard-zero at `PlanetGenerator.js:565` is production-core-only and irrelevant to this lab — leave it alone; stub D12 in the slice's own base step.
+- **Isolated lab only.** Create new files at repo root + `tests/`. Do NOT edit `src/generation/PlanetGenerator.js`, `src/generation/PhysicsEngine.js`, `world-engine-lab.html`, `planet-lod-lab-core.js`, or any `src/**` production file. The D12 hard-zero at `PlanetGenerator.js:565` is production-core-only and irrelevant to this lab — leave it alone; stub D12 in the slice's own base step.
 - **No new npm dependencies.** Use only what `package.json` already lists.
 - **Determinism is a hard requirement.** Every stochastic step takes a seed and runs through `alea(seed)`; same `(driverBundle, opts, seed)` → byte-identical `substrate.height`. A determinism test gates this.
 - **Pure compute = no three.js.** `relief-substrate.js`, `relief-base-step.js`, `relief-e6-tectonic.js`, `relief-e9-hydrology.js`, `relief-slice.js` import NOTHING from `three`. Only the harness `.main.js` imports three. This keeps the engines headless-testable under vitest (Node).
@@ -43,7 +43,7 @@ UAT (Max's gate alone): the rendered result *reads as a landscape with a history
 | `relief-e6-tectonic.js` | E6: `runE6(substrate, crust, drivers, epoch, seed)` — Melosh latitude stress → grain director + Anderson regime; steered ridged/billow noise; plateau blobs; gravity-capped isostatic amplitude; bounded Jacobi smoothing; optional rotated-pole 2nd-gen overprint. WRITES height + grain. Pure. |
 | `relief-e9-hydrology.js` | E9 (CPU bake reference): `runE9(substrate, drivers, epoch, seed)` — synthesized precipitation weight; D8 flow dirs; priority-flood depression fill; exact flow accumulation; bounded stream-power incision (writes ≤0 delta into shared height); base-level/standing-liquid fill. Pure. |
 | `relief-slice.js` | Orchestrator: `runReliefSlice(driverBundle, opts)` — base step → 2-epoch loop `[tectonic-build:E6, fluvial-carve:E9]`; captures `heightAfterBuild` snapshot; `epoch2` on/off toggle; returns `{ substrate, snapshots, stats }`. Plus `verifyReliefSlice(result)` returning the programmatic signal pass/fail object. Pure. |
-| `relief-presets.js` | Test bodies copied verbatim from `planet-lod-lab.html` DRIVER_PRESETS (Rocky control / Lava high-D12 / Magma saturated / Europa icy regression), shaped as the driver bundle the base step consumes. Pure data. |
+| `relief-presets.js` | Test bodies copied verbatim from `world-engine-lab.html` DRIVER_PRESETS (Rocky control / Lava high-D12 / Magma saturated / Europa icy regression), shaped as the driver bundle the base step consumes. Pure data. |
 | `world-engine-relief-lab.html` | Harness page: canvas + HUD + `<script type=module src=...main.js>`. Served by Vite. |
 | `world-engine-relief-lab.main.js` | Harness glue: three.js renderer/scene/OrbitControls; builds a displaced-plane mesh + 2D drainage canvas from the substrate; `lil-gui` controls; `window._relief` console surface incl. `verifySlice()`. Imports the pure modules + three. |
 | `tests/world-engine-relief-slice.test.js` | vitest unit + integration tests for every task below. |
@@ -170,7 +170,7 @@ The base step is the slice's scoped-down version of the Option-A "expose + deriv
   - `crust` shape: `{ shellThickness (0..1, sets province width), thicknessBlob(ix,iy,n) -> 0..1 (low-freq plateau mask) }`
   - From `relief-presets.js`: `PRESETS = { rocky, lava, magma, europa }`, each a driver bundle with the fields `deriveUniforms` reads (`composition:{ironFraction,density,volatileFraction}`, `T_eq`, `eccentricity`, `orbitRadiusEarth`, `starMassEarth`, `radiusEarth`, `massEarth`, `surfaceHistory:{erosion}`, `age`).
 
-> Implementer note — copy preset NUMBERS verbatim from `planet-lod-lab.html` DRIVER_PRESETS: Rocky ≈ line 2477 (eccentricity 0.017, near-circular control), Lava ≈ line 2478 (eccentricity 0.15, orbit 938 → high tidalHeat), Magma ≈ line 2583 (saturated), Europa ≈ line 2487 (icy, rockyCrust→0). Read those lines and transcribe the orbital + composition fields. If a field is absent in a preset, omit it (the base step default-coalesces).
+> Implementer note — copy preset NUMBERS verbatim from `world-engine-lab.html` DRIVER_PRESETS: Rocky ≈ line 2477 (eccentricity 0.017, near-circular control), Lava ≈ line 2478 (eccentricity 0.15, orbit 938 → high tidalHeat), Magma ≈ line 2583 (saturated), Europa ≈ line 2487 (icy, rockyCrust→0). Read those lines and transcribe the orbital + composition fields. If a field is absent in a preset, omit it (the base step default-coalesces).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -218,10 +218,10 @@ describe('base step', () => {
 Run: `npx vitest run tests/world-engine-relief-slice.test.js -t "base step"`
 Expected: FAIL — cannot find module `../relief-base-step.js`.
 
-- [ ] **Step 3: Write `relief-presets.js`** (transcribe DRIVER_PRESETS numbers — example shape; replace numbers with the real ones read from `planet-lod-lab.html`)
+- [ ] **Step 3: Write `relief-presets.js`** (transcribe DRIVER_PRESETS numbers — example shape; replace numbers with the real ones read from `world-engine-lab.html`)
 
 ```js
-// relief-presets.js — test bodies, fields transcribed from planet-lod-lab.html DRIVER_PRESETS.
+// relief-presets.js — test bodies, fields transcribed from world-engine-lab.html DRIVER_PRESETS.
 // Shape = the driver bundle relief-base-step consumes (mirrors deriveUniforms' reads).
 export const PRESETS = {
   rocky:  { composition:{ ironFraction:0.32, density:5.5, volatileFraction:0.25 }, T_eq:290, eccentricity:0.017, orbitRadiusEarth:23455, starMassEarth:332946, radiusEarth:1.0,  massEarth:1.0,  surfaceHistory:{ erosion:0.6 }, age:0.5 },

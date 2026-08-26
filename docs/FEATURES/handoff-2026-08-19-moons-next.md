@@ -203,7 +203,7 @@ Step 12 deletes the fallbacks. **It IS the trajectory Step 12 commits to.**
   reproducible defect that survived four respawns.
 - ⛔ **`npm run check:conic-gl` needs the agent sandbox DISABLED** — Chrome cannot `socket()` inside
   it and the gate FATALs on launch, which looks exactly like a real failure.
-- ⛔ **Never quote `planet-lod-lab.html:5358` verbatim** in any file under `src/worldengine/**` —
+- ⛔ **Never quote `world-engine-lab.html:5358` verbatim** in any file under `src/worldengine/**` —
   `tests/vis-scale-fence.test.js` sweeps RAW TEXT including comments for the display-scale token.
 - **Probe worktrees `~/wd-b5-probe` and `~/wd-b4-probe` still exist.** Remove when the B5 lane ends.
 

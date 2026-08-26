@@ -2,7 +2,7 @@
 
 Driver: working-Claude via chrome-devtools MCP on 127.0.0.1:9223 (isolated context `lane-a-aclab`,
 pages closed after the drive). "After" server: `:5175` (main checkout, post-C5 `393e1af`).
-"Before" server: `:5178` (atmo worktree — `git diff --stat 69f4ae9..HEAD -- src/ *.js planet-lod-lab.html`
+"Before" server: `:5178` (atmo worktree — `git diff --stat 69f4ae9..HEAD -- src/ *.js world-engine-lab.html`
 is EMPTY, so its lab serves code byte-identical to pre-C1 `69f4ae9`). Viewport 1783×848 @dpr 1.25
 (canvas crops exclude the left GUI panel: `-crop 1879x1060+350+0`).
 

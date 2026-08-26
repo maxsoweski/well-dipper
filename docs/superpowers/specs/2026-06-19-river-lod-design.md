@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-19 · **Feature:** view-dependent river-LOD (instance #1 of a
 future general progressive feature-LOD system) · **Surface:**
-`planet-lod-lab.html` (`window._lab`) · **Status:** **Option B — STEP 2**
+`world-engine-lab.html` (`window._lab`) · **Status:** **Option B — STEP 2**
 (patch-bake + blend). Option A (per-pixel Dendry SDF) was **rejected after the
 topology de-risk** and the design pivoted to Option B; this revision rewrites the
 spec to Option B and is the spec of record. The TOPOLOGY de-risk PASSED (commit
@@ -123,7 +123,7 @@ makes "bloom on approach" *new structure* rather than upsampled blur.
 ### 4.2 v1 bakes DEPTH ONLY (R channel)
 
 Mouth (G) and order (B) stay the **global cube's** job — deltas/coast/outflow
-(AC4/AC5/AC6 consumers at `planet-lod-lab.html:326/363/435`) keep keying off
+(AC4/AC5/AC6 consumers at `world-engine-lab.html:326/363/435`) keep keying off
 `uRiverCarveMap`, **untouched**. The patch RTT carries fine **valley depth** in R
 only. No AC4/5/6 rewiring.
 
@@ -149,7 +149,7 @@ read*, not the fine network's dendricity.
 ### 4.5 Blend in `sampleCarve` = MAX union under an angular smoothstep falloff
 
 For EACH of `sampleCarve`'s **5 taps** (center + 4 finite-diff offsets at
-`planet-lod-lab.html:214-218`), after the global `textureCube(uRiverCarveMap,
+`world-engine-lab.html:214-218`), after the global `textureCube(uRiverCarveMap,
 dir).r`, also compute the patch depth for **that same `dir`** and take
 `max(globalDepth, patchDepth * falloff)`. **Including the patch in ALL 5 taps is
 REQUIRED** so the analytic-normal finite-diff bends the *valley walls* (the
@@ -173,7 +173,7 @@ On-demand bake (window._lab.bakeTributaryPatch / GUI):
     render into the 2D ortho RTT (OrthoCam above center, looking -N, up=u)       [§4.1]
     set uniforms: uRiverCarvePatchMap/Center/U/V/N/Angular, leave Strength to GUI
 
-PER FRAGMENT, inside sampleCarve (planet-lod-lab.html:209-221):
+PER FRAGMENT, inside sampleCarve (world-engine-lab.html:209-221):
   for each of the 5 taps (dir):
      depth = textureCube(uRiverCarveMap, dir).r            // global (unchanged)
      if (uRiverCarvePatchStrength > 0 && dot(dir, N) > cos(angular)):

@@ -15,7 +15,7 @@ ordering proof with the profile-mean integrals evaluated for the record. Matches
 > shield edifices on their hotspots, dark effusive lava plains in the lows, and a substellar magma-ocean
 > basin under the star for extreme-T locked bodies. The writer is the **carrier-side single-source-of-truth**
 > for the shipped **F7 `edificeProfile`** (`planet-lod-height.glsl.js:2218`) and **F41 magma-sea iso-angle law**
-> (`planet-lod-lab.html:3617-3622`, temperature law `:1126`): it adopts both **verbatim** so the carrier
+> (`world-engine-lab.html:3617-3622`, temperature law `:1126`): it adopts both **verbatim** so the carrier
 > geometry and the shader shading never drift. It authors the BASIN *geometry*; F41 remains the complementary
 > surface-temperature/shading layer (retrofit note — not a rewrite of F41).
 
@@ -34,9 +34,9 @@ ordering proof with the profile-mean integrals evaluated for the record. Matches
 **All three candidates hardcoded `BASIN_TSS = 2800` and gated the basin on the `locked` boolean. Every
 skeptic flagged this as the AC9-FAILING defect, and it is confirmed against the repo:**
 
-- `planet-lod-lab.html:2589` — `Lava (hot airless)` is `tidalState:{locked:true}` (T_eq 950).
-- `planet-lod-lab.html:2694` — `Magma (K2-141b)` is `tidalState:{locked:true}` (T_eq 2000).
-- `planet-lod-lab.html:3617-3622` — the shipped F41 gate is
+- `world-engine-lab.html:2589` — `Lava (hot airless)` is `tidalState:{locked:true}` (T_eq 950).
+- `world-engine-lab.html:2694` — `Magma (K2-141b)` is `tidalState:{locked:true}` (T_eq 2000).
+- `world-engine-lab.html:3617-3622` — the shipped F41 gate is
   `_mgTss = locked ? T_eq*1.4 : 0; _magmaClass = !_gas && _mgTss > 1300; magmaSeaAngle = acos((1300/_mgTss)^4)`.
 
 So **both** presets are locked; a `locked`-only gate with a fixed 2800 would give **both** the same wide
@@ -180,7 +180,7 @@ A hemisphere-scale depression on `substellarAxis`, gated on **extreme-T** and sh
 isMagmaOcean = (T_ss > LIQUIDUS)                                  // = F41 _magmaClass (NOT the locked boolean)
 theta_sea    = isMagmaOcean ? acos( clamp01( (LIQUIDUS / T_ss)^4 ) ) : 0        // F41 iso-angle (glsl derivation :3621)
 theta_i      = acos(clamp(-1, 1, dot(verts[i], substellarAxis)))
-// F41 dayside irradiation temperature (verbatim planet-lod-lab.html:1126):  T(theta) = T_ss * cos(theta)^(1/4)
+// F41 dayside irradiation temperature (verbatim world-engine-lab.html:1126):  T(theta) = T_ss * cos(theta)^(1/4)
 g(theta)     = (theta < theta_sea) ? clamp01( (T_ss*pow(cos(theta),0.25) - LIQUIDUS) / (T_ss - LIQUIDUS) ) : 0   // normalized superheat
 magmaOceanMask[i] = (isMagmaOcean && theta_i < theta_sea) ? 1 : 0
 basinU(theta)     = MAGMA_BASE - BASIN_DEPTH * g(theta)           // deepest at substellar pt, continuous with base at shore
@@ -378,7 +378,7 @@ strength; `thetaSea`/`D_flood` are the pinned scalars for the arm's-length probe
 12. **F7 `edificeProfile`** `pow(1−r, mix(1.5,4,shieldStratoMix))` + summit caldera `0.5*(s²−1)`, zero for
     `r≥1` (`planet-lod-height.glsl.js:2218-2230`); **F8 `lavaCombiner`** flood-and-flatten `h*=(1−region)`
     (`:2265-2289`); **F41 magma-sea** `theta_sea = acos((1300/T_ss)^4)`, `T(theta)=T_ss·cos^(1/4)(theta)`,
-    `T_ss=T_eq·1.4` on locked worlds (`planet-lod-lab.html:3617-3622`, `:1126`). The shield body, the
+    `T_ss=T_eq·1.4` on locked worlds (`world-engine-lab.html:3617-3622`, `:1126`). The shield body, the
     flood-and-flatten intent, and the iso-angle + temperature law are adopted **verbatim**. **HIGH.**
 
 **Dropped as unverified/refuted (do not cite):**

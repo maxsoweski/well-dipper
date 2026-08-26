@@ -21,7 +21,7 @@
 //      that the real law was trapped in the un-extracted applyDrivers. It was not — the lab's law
 //      reads only atmosphere.pressure.
 //
-// FENCE PATTERN: planet-lod-lab.html and the game source are read as source TEXT and compared, the
+// FENCE PATTERN: world-engine-lab.html and the game source are read as source TEXT and compared, the
 // same way the other lab fences work. This is deliberate — importing src/objects/Planet.js pulls a
 // bare specifier that only resolves under Vite, and the claims here are claims about the text.
 
@@ -41,7 +41,7 @@ import { atmosphereOpticsOf } from '../src/worldengine/base/atmosphereOptics.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PLANET = readFileSync(join(ROOT, 'src/objects/Planet.js'), 'utf8');
-const LAB = readFileSync(join(ROOT, 'planet-lod-lab.html'), 'utf8');
+const LAB = readFileSync(join(ROOT, 'world-engine-lab.html'), 'utf8');
 const TERMMOD = readFileSync(join(ROOT, 'src/worldengine/base/terminatorOptics.js'), 'utf8');
 
 describe('terminator: the shader computes a band, not a night-side flood', () => {
@@ -100,12 +100,12 @@ describe('terminator: strength and width are the LAB’s laws, not game-authored
     // while the lab held a SECOND COPY of the magnitude, and requiring two copies so they can be
     // compared is the two-routes disease encoded as a test. Max ruled 2026-08-22 — "the important
     // thing here is the game and lab end up working the same" — and the lab now CALLS the module:
-    // planet-lod-lab.html:2497 `state.termStrength = terminatorOpticsOf(_atmoCond).termStrength;`.
+    // world-engine-lab.html:2497 `state.termStrength = terminatorOpticsOf(_atmoCond).termStrength;`.
     //
     // ⭐ SO THE PIN MOVES HERE, AND IT IS STRONGER THAN WHAT IT REPLACES — it pins the VALUE with
     // its provenance, and separately pins that the lab READS the module, which the scrape never did:
     //   · 0.15 is MAX'S OWN UAT RETUNE. The prior value "swamped the surface into a heavy orange
-    //     BELT on every atmospheric world" (Max-reported, recorded at planet-lod-lab.html:2493-2496).
+    //     BELT on every atmospheric world" (Max-reported, recorded at world-engine-lab.html:2493-2496).
     //     It is a taste ruling, not a derived quantity, which is exactly why it needs a literal pin.
     //   · The shared law is `columnFraction * TERM_STRENGTH`, so 0.15 is a CEILING. Max's ruling
     //     cannot be violated upward by the ramp; it can only resolve lower on thin columns.

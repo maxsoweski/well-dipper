@@ -31,7 +31,7 @@ There are **two unrelated planet renderers** (full detail + the deferred-port de
 - **Game** (`src/objects/Planet.js`) — the shipped, March-2026 **type-branch** shader
   (`if (planetType==N)`), gated by a `type` string via `ExoticOverlay`. This is what
   players see today.
-- **Lab** (`planet-lod-lab.html` + `planet-lod-lab-core.js`) — a **feature-composition**
+- **Lab** (`world-engine-lab.html` + `planet-lod-lab-core.js`) — a **feature-composition**
   renderer (provinces + the F1–F51 campaign). This is the next-gen renderer in development.
 
 They share **zero shader code**. They do, however, already share the **physics**: the lab imports

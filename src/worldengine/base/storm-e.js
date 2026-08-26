@@ -5,7 +5,7 @@
 //
 // WHAT THIS BUILDS (plain language). The physics PLACEMENT of discrete storm vortices on a gas-giant
 // deck, plus the continuous storm/convection MASK field over the sphere — both as DATA. It REPLACES the
-// old lab-local mulberry32 hash placement (planet-lod-lab.html F27/F28/F29 derivation closures) with a
+// old lab-local mulberry32 hash placement (world-engine-lab.html F27/F28/F29 derivation closures) with a
 // writer that places vortices by the ANTICYCLONIC-SHEAR ARGMAX over the #3a jet profile (the "PV
 // staircase" read), band-confined, deterministic tie-break lowest-lat→lowest-node. Every discrete
 // vortex carries a place-once seeded AGE scalar (the chromophore substrate #V-α.4 consumes) and a

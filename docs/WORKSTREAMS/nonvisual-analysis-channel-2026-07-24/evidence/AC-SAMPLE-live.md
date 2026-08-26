@@ -47,12 +47,12 @@ The first live run reported **488 km RMS relief** and a **±1700 km elevation ra
 Earth-like world. Earth's RMS relief is ~2–3 km, so this was wrong by a factor of ~200. Root cause,
 traced through the source rather than guessed:
 
-- **Relief is shaded, not displaced** (`planet-lod-lab.html:1544`). The height field drives a normal
+- **Relief is shaded, not displaced** (`world-engine-lab.html:1544`). The height field drives a normal
   perturbation for shading; it never becomes geometry. There is no displacement to calibrate against.
 - **Amplitudes are dimensionless artistic values.** `deriveUniforms` sets
   `mountainAmp = clamp01(mix(0.25, 0.6, 1 - erosion)) * rockyCrust` — no km anywhere.
 - **The km-named knobs are not what drive it.** `mountainHeightKm = 9` exists, and a comment at
-  `planet-lod-lab.html:2251` describes an intended `reliefAmplitudeFromKm(heightKm, RE) * K` path,
+  `world-engine-lab.html:2251` describes an intended `reliefAmplitudeFromKm(heightKm, RE) * K` path,
   but the live write at `:6127` uses `state.mountainAmp` directly.
 - **The relief envelope is applied downstream of the sample.** `uPerturb = perturb *
   reliefEnvelope(R, g)` lands at shading time, after the field this instrument reads.

@@ -54,7 +54,7 @@ so an entry the lab has since imported is deleted rather than left standing as c
 | Instrument C | ZERO delta on all shipped shared uniforms, exit 0 |
 | Citations | **815, exit 0 — CHECKED ROSE from 814** (the two new refs were authored in checked form) |
 | Fence suites | 176/176 across the 5 named suites |
-| `Planet.js` / `planet-lod-lab.html` | **2304 / 6559 — neither file touched.** No citation event. |
+| `Planet.js` / `world-engine-lab.html` | **2304 / 6559 — neither file touched.** No citation event. |
 
 ## What AC4 does NOT do
 

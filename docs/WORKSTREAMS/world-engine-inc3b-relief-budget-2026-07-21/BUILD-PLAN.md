@@ -125,8 +125,8 @@ return range[0] + r * (range[1] - range[0]);
 2. **`drawPresetRadius` callers, grep-verified repo-wide:**
    | Caller | Path | Passes canonical today via |
    |---|---|---|
-   | `planet-lod-lab.html:2984` `drawPresetRadius(driverUI.preset, state.radiusSeed)` | **LAB draw** (the R3 target) | `NAMED_BODY.has` → canonical |
-   | `planet-lod-lab.html:6194` `_lab.drawPresetRadius(...)` | AC5 pure-draw probe | `NAMED_BODY.has` → canonical |
+   | `world-engine-lab.html:2984` `drawPresetRadius(driverUI.preset, state.radiusSeed)` | **LAB draw** (the R3 target) | `NAMED_BODY.has` → canonical |
+   | `world-engine-lab.html:6194` `_lab.drawPresetRadius(...)` | AC5 pure-draw probe | `NAMED_BODY.has` → canonical |
    | `…/inc3…/calibration/population-sweep.mjs:162` `drawPresetRadius(name, s)` | **HEADLESS calibration** | `NAMED_BODY.has` → canonical |
    | `…/inc3…/calibration/frozen-ice-trace.mjs:49,63` | **HEADLESS calibration** | `NAMED_BODY.has` → canonical |
    | `…/v2-6…/calibration/population-sweep.mjs:129` `drawPresetRadius(name, s)` (lens-log M4) | **HEADLESS calibration** | `NAMED_BODY.has` → canonical |
@@ -153,7 +153,7 @@ return range[0] + r * (range[1] - range[0]);
    draws are the ONLY ones that change; every golden/headless/NAMED_BODY path passes
    `R===R_c` → byte-exact.**
 
-4. **Re-roll wiring exists:** `newPlanet()` (`planet-lod-lab.html:3871`) derives
+4. **Re-roll wiring exists:** `newPlanet()` (`world-engine-lab.html:3871`) derives
    `state.radiusSeed = alea('draw:radius:'+state.worldSeed)()…` (:3873) and sets
    `state._radiusDirty=true` (:3876); the draw fires at :2983–2987 on preset-change or
    `_radiusDirty`. `craterOffset` stays `[0,0,0]` (:2428, reset :3141) — re-roll-invariant
@@ -163,9 +163,9 @@ return range[0] + r * (range[1] - range[0]);
 
 Verified at HEAD (Inc-3's single-carrier envelope rewire is live):
 
-- `planet-lod-lab.html:5606` `uniforms.uPerturb.value = state.perturb * reliefEnvelope(_RE, _gNow)` —
+- `world-engine-lab.html:5606` `uniforms.uPerturb.value = state.perturb * reliefEnvelope(_RE, _gNow)` —
   the ONE universal relief-strength carrier (`_RE`/`_gNow` stashed at :5601).
-- `planet-lod-lab.html:536` `float reliefAmp = uPerturb * mix(0.7,1.0,uLodRamp)` → `:537`
+- `world-engine-lab.html:536` `float reliefAmp = uPerturb * mix(0.7,1.0,uLodRamp)` → `:537`
   `shadeN = perturbAnalytic(N, grad, reliefAmp)` — the whole accumulated `grad`
   (incl. every combiner's `grad +=`) scaled once by `uPerturb`.
 - `reliefEnvelope(R,g) = clamp(g^-0.58, 0.40, 133)` at `planet-lod-lab-core.js:1006`
@@ -502,13 +502,13 @@ that, **only when `labUnlock && LAB_UNLOCKED_RANGES[presetName]`**, draws
 `lo + alea('draw:radius:'+(seed>>>0))()·(hi−lo)` **before** the `NAMED_BODY.has` check.
 Moon/Mercury **stays in `NAMED_BODY`** (headless/test/probe paths, which omit the flag,
 keep canonical — the hard constraint). Only the LAB draw site opts in:
-`planet-lod-lab.html:2984` → `drawPresetRadius(driverUI.preset, state.radiusSeed,
+`world-engine-lab.html:2984` → `drawPresetRadius(driverUI.preset, state.radiusSeed,
 { labUnlock: true })`. (Leave the `_lab` probe at :6194 flagless so it mirrors headless;
 AC-REROLL's headless evidence harness opts in explicitly — §1.S4.)
 
 - **Files touched:** NEW `src/worldengine/base/reliefBudget.js`; `planet-lod-rivers.js`
   (:210 signature, :569 attach, :1322 thread); `driver-presets.js` (LAB_UNLOCKED_RANGES
-  + drawPresetRadius param); `planet-lod-lab.html:2984` (labUnlock:true).
+  + drawPresetRadius param); `world-engine-lab.html:2984` (labUnlock:true).
 - **Tests added (new files, all-green, don't grow the baseline):**
   - `tests/worldengine-inc3b-relief-budget.test.js` — `deriveReliefBudget` unit:
     identity outside domain (`w_e=w_i=1.0` exact); `f_I` in the S0 band at the boot
@@ -682,7 +682,7 @@ Then:
   Frozen g-mediated deltas differ across radius draws. **State stamped-count
   R-invariance as a mesh-floor instrument limit — NOT sold as variety.**
   - **Drive the RIGHT control (lens-log m-4).** "Layout varies on Moon/Mercury" needs
-    **`newPlanet()`** (the 🌍 **"new planet (re-roll all)"** button, `planet-lod-lab.html:3871`)
+    **`newPlanet()`** (the 🌍 **"new planet (re-roll all)"** button, `world-engine-lab.html:3871`)
     — it re-rolls `worldSeed → macroSeed` (`:3874`, `'draw:macro:'+worldSeed`), which drives
     crater placement via `forEachCrater(cond, macroSeed, …)` (`bombardment.js:305`). It does
     **NOT** mean **`rerollRadius()`** (the 🎲 button, `:3861`), which bumps only `radiusSeed` —
@@ -789,7 +789,7 @@ Then:
   all-green additions.
 - **Goldens NEVER re-captured** — `v2-0-carrier-goldens.json` is immutable; Frozen's 5
   rows ride the `despunRef` reconstruction, not a capture.
-- **Atmo-owned sections of `planet-lod-lab.html`** (section-ownership fence) — untouched.
+- **Atmo-owned sections of `world-engine-lab.html`** (section-ownership fence) — untouched.
   The relief/render edits touch only the composite seam (S1) and, conditionally, the
   crater/relevance/bake path (S3); leave the F27–F30 storm block, `mulberry32`, F29/F43
   atmo/crystal blocks alone.

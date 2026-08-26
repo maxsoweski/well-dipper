@@ -61,7 +61,7 @@ re-capture. Atmo-owned lab.html regions (F27–F30 storm block :651–1090, mulb
 presence, F43 crystal) UNTOUCHED. e1-shadow-audit: bombardment.js must not gain an e1Regime import (it
 won't). `feature-associations.test.js` stays green (rendersOn unmodified). Files touched:
 `planet-lod-height.glsl.js` (crater/ejecta combiner region + uniform decls ONLY),
-`planet-lod-lab.html` (crater uniform writes/defaults/route-derivation/newPlanet seed; preservation-chain
+`world-engine-lab.html` (crater uniform writes/defaults/route-derivation/newPlanet seed; preservation-chain
 crater lines deleted), `src/worldengine/base/bombardment.js` (export craterRelevanceOf), + 2 new test files.
 
 ## Tests

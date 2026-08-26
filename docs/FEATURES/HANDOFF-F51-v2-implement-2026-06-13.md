@@ -80,7 +80,7 @@ first. The static-buffer-first / escalate-only-if-needed ordering is deliberate 
 - **chrome-devtools MCP tools are DEFERRED** — load via ToolSearch:
   `select:mcp__chrome-devtools__list_pages,mcp__chrome-devtools__navigate_page,mcp__chrome-devtools__take_screenshot,mcp__chrome-devtools__evaluate_script,mcp__chrome-devtools__list_console_messages`
 - Harness URL: `http://localhost:5173/well-dipper/rings-lod-lab.html?fresh=1`
-  Lab URL: `http://localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`
+  Lab URL: `http://localhost:5173/well-dipper/world-engine-lab.html?fresh=1`
 
 ## Commit discipline (shared tree — a parallel warp session has WIP in `src/`)
 **NEVER `git add -A`.** Stage explicit paths only (untracked loose PNGs + `src/` warp WIP must
@@ -94,7 +94,7 @@ confirms pushes.
 - **HEAD `d08cde7`** = "docs(F51): v2 design spec + implementation plan". Working tree on
   campaign paths is clean; only loose untracked PNGs + `src/` warp WIP sit outside (leave them).
 - New files this session: the spec + plan (committed). The plan CREATES `ring-particle-cloud.js`,
-  `tests/ring-particle-cloud.test.js`, `rings-lod-lab.html` and MODIFIES `planet-lod-lab.html`
+  `tests/ring-particle-cloud.test.js`, `rings-lod-lab.html` and MODIFIES `world-engine-lab.html`
   (+ docs at verdict). None of those exist yet.
 
 ## Skills for the next session

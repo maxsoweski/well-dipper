@@ -468,7 +468,7 @@ The build is a pipeline:
    clouds/haze, optical, exotic/overlay).
 3. **Stage C — Implement in parallel in the lab.** As each major research
    domain completes, **begin implementing its features in
-   `planet-lod-lab.html` in parallel** (while the next domain's research
+   `world-engine-lab.html` in parallel** (while the next domain's research
    proceeds). Isolated-harness-first (per MEMORY rule); verify visually via
    chrome-devtools :9223.
 

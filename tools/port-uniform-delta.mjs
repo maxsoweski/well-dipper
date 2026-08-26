@@ -309,7 +309,7 @@ function flatten(v) {
 //   surfaceMaterial.js:304 `export function surfacePaletteOf(cond) {` (body :304-318) returns
 //   FOUR endmembers
 //   {fresh, weathered, craton, sediment}. The lab wrote three of them to
-//   uFreshColor / uBaseColor / uSedColor (planet-lod-lab.html:5431-5433, and the import comment
+//   uFreshColor / uBaseColor / uSedColor (world-engine-lab.html:5431-5433, and the import comment
 //   at :176 said so). The GAME wrote the same three to
 //   uFreshColor / uWeatheredColor / uSedColor (src/objects/Planet.js:1628 `uFreshColor`,
 //   :1603 `uWeatheredColor`, :1604 `uSedColor`).
@@ -433,7 +433,7 @@ const UNIFIED_NAMES = [
     why: 'surfacePaletteOf(cond).weathered through applyAlbedoTransfer. Game: Planet.js:1629 '
        + '`uWeatheredColor` reads planetData.landPalette.weathered, baked at PlanetGenerator.js '
        + '`planetData.landPalette = applyAlbedoTransfer(surfacePaletteOf(condition)`. Lab: '
-       + 'planet-lod-lab.html:5431 writes the same endmember from the same call at :2794. '
+       + 'world-engine-lab.html:5431 writes the same endmember from the same call at :2794. '
        + 'THE PROVEN CASE — this is the alias the name intersection missed, and the drift PLAN.md §2 '
        + 'names as the shape every other divergence started in. The game spelling won: it names the '
        + 'ENDMEMBER rather than a position in a ramp. Zero behaviour change — Instrument C reported '
@@ -470,7 +470,7 @@ const ALIASES = [
   },
   // ── F37 aurora. Four pairs, u-prefix aside identical spellings, and the plan (§2) records them
   //    as TWO DIVERGENT LAWS today (PlanetGenerator.js:490 `const auroraColors` … :503
-  //    `const ringWidth` vs planet-lod-lab.html:2585-2611,
+  //    `const ringWidth` vs world-engine-lab.html:2585-2611,
   //    under a lab comment claiming it mirrors the game). They are the same FEATURE and the same
   //    slot in the shader; they are not yet the same law. Watched game-side, `record` tier — see
   //    the fingerprint-shadow caveat above. Listed here rather than left off so that when Step 4+
@@ -563,7 +563,7 @@ const COLLISIONS = [
   { game: 'planetRadius', lab: 'uBodyRadius', why: 'Different units and different jobs. uBodyRadius is the object-space radius of the mesh the material is bound to (planet-lod-uniforms.js:24 `uBodyRadius`, 1.0 in the lab\'s unit sphere); planetRadius is the body\'s scene radius.' },
   { game: 'uLimbMix', lab: 'uLimbStrength', why: 'Both gate the limb, neither is the other. uLimbMix is the game\'s A/B port dial (a constant); uLimbStrength is the lab\'s driven F34 rim-glow magnitude (planet-lod-uniforms.js:40 `uLimbStrength`).' },
   { game: 'cloudDensity', lab: 'uCloudCoverage', why: 'Same concept, two unrelated laws: a legacy generator draw vs a condition-driven coverage. Aliasing them would put two different quantities in one row.' },
-  { game: '(none)', lab: 'uCratonColor', why: 'LAB-ONLY. surfacePaletteOf returns FOUR endmembers; the game consumes three and DROPS `craton` (planet-lod-lab.html:5460 `uniforms.uCratonColor` writes it, Planet.js has no uniform). Not a spelling gap — a missing consumer, and therefore port work, not map work.' },
+  { game: '(none)', lab: 'uCratonColor', why: 'LAB-ONLY. surfacePaletteOf returns FOUR endmembers; the game consumes three and DROPS `craton` (world-engine-lab.html:5460 `uniforms.uCratonColor` writes it, Planet.js has no uniform). Not a spelling gap — a missing consumer, and therefore port work, not map work.' },
 ];
 
 // Resolve the watched set. ⛔ makeUniforms() is consulted for KEYS and for a KIND tag only — no
@@ -975,7 +975,7 @@ const CITE_FILES = {
   // Added by Step 7: never had an entry, and the move made its refs UNRESOLVABLE rather than
   // merely unchecked (PLAN.md:614 cites it). Same key convention as the four above.
   'planet-lod-shaders.glsl.js': 'src/worldengine/shaders/planetShaders.glsl.js',
-  'planet-lod-lab.html': 'planet-lod-lab.html',
+  'world-engine-lab.html': 'world-engine-lab.html',
   'driver-presets.js': 'driver-presets.js',
   'body-identity-fence.test.js': 'tests/body-identity-fence.test.js',
   'port-limb-optics.test.js': 'tests/port-limb-optics.test.js',
@@ -1076,7 +1076,7 @@ const CITE_SOURCES = [
   // ⛔ THAT GREEN IS THE TRAP, AND IT IS WHY THIS COMMENT EXISTS. Before Step 3 these two files
   // carried FOUR refs and every one was symbol-less, so adding them would have moved CHECKED by 0
   // and satisfied §11.3.4 while gating nothing. THREE OF THE FOUR WERE ALSO WRONG: two cited
-  // planet-lod-lab.html:3010 (a river-overlay debounce) for a statement at :1955, and one cited
+  // world-engine-lab.html:3010 (a river-overlay debounce) for a statement at :1955, and one cited
   // giant-drivers.js:235 — a BLANK LINE — for text at :231. An off-by-four onto a blank line
   // survives every check this fence runs: UNRESOLVED 0, PAST-EOF 0, MALFORMED 0, and it reads as
   // freshly verified. The refs were rewritten into `line + symbol` form in the same commit, so this

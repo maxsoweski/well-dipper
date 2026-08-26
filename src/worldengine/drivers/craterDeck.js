@@ -56,8 +56,8 @@ import { sizeKm, scalar, assertDisplayPolicy, assertPackResult, resolveDriver, P
 // ── The two declared gate names ──────────────────────────────────────────────────────────────────
 // ⭐ NAMES, NOT HARDCODED 1.0s, and TWO of them rather than one, because the lab has two independent
 // toggles over this family and they do not switch together:
-//   planet-lod-lab.html:5354 `= state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
-//   planet-lod-lab.html:5361 `* state.craterRelevance : 0.0;`
+//   world-engine-lab.html:5354 `= state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
+//   world-engine-lab.html:5361 `* state.craterRelevance : 0.0;`
 // Ejecta off with craters on is a real lab state; collapsing the two into one gate would delete a
 // rendering decision rather than express it. One spelling each, shared by the driver and BOTH
 // entries — src/worldengine/drivers/rockySurface.js re-exports them so neither pack can declare a
@@ -68,7 +68,7 @@ export const CRATER_GATE = 'craters';
 export const EJECTA_GATE = 'ejecta';
 
 // ⚠ C_CRATER is the per-feature calibration constant of the km→frequency law, ported from the lab's
-// own declaration, planet-lod-lab.html:821 `const C_CRATER = 1.0;`, whose comment two lines above
+// own declaration, world-engine-lab.html:821 `const C_CRATER = 1.0;`, whose comment two lines above
 // states the identity it encodes: C = 1 means `uCraterScale = radius_km / craterSizeKm`. It is
 // written out rather than inlined into the `sizeKm(...)` call for the reason recorded at
 // src/worldengine/drivers/giantDeck.js:101 `and that is a byte-identity decision, not a` — a
@@ -104,7 +104,7 @@ export function craterDriverBlock(condition) {
   // condition function — src/worldengine/base/bombardment.js:220 `export function craterRelevanceOf(condition) {`
   // — so folding it here reproduces the lab's product exactly while keeping the relevance CHANNEL
   // empty and every pack that keys nothing on it unchanged. It is also what the lab itself does one
-  // step earlier: planet-lod-lab.html:2834 `state.craterRelevance = craterRelevanceOf(_bodyDrivers.condition);`
+  // step earlier: world-engine-lab.html:2834 `state.craterRelevance = craterRelevanceOf(_bodyDrivers.condition);`
   // derives the same 0/1 from the same condition vector; the frame writer is only the multiply.
   const rel = craterRelevanceOf(condition);
 
@@ -140,7 +140,7 @@ export function craterDriverBlock(condition) {
     // so the two arms agree on every radius at or above that floor and only there. Below it the
     // display policy is refused outright, so there is no silent band.
     // ⚠ AND THE BYTE-IDENTITY ARM AGAINST THE LAB IS STRUCTURALLY IMPOSSIBLE ON THIS ONE NAME. The
-    // lab's write is planet-lod-lab.html:5358 `featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER)`
+    // lab's write is world-engine-lab.html:5358 `featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER)`
     // — the REAL radius and then a further display multiply, i.e. R^1.5, while every other km-keyed
     // lab uniform resolves at the display pseudo-radius alone. The pack must NOT carry that trailing
     // multiply (it is the front-end's, and this file may not name it), so the gate over this driver
@@ -290,24 +290,24 @@ export const CRATER_DECK_UNIFORMS = Object.freeze([
 // ⭐ THE MAP IS THE THING THAT MUST NOT BE WRITTEN TWICE, and this family is the one where the lab
 // already writes it twice ITSELF. Three of the seven bound names are authored in BOTH of the lab's
 // driver functions, from two DIFFERENT sources:
-//   planet-lod-lab.html:2024 `      state.craterDensity    = u.craterDensity;`        (applyDrivers, off `deriveUniforms`)
-//   planet-lod-lab.html:2854 `        state.craterDensity = _cu.density;`             (ensureNetworkRouted, off `craterUniformsFrom`)
+//   world-engine-lab.html:2024 `      state.craterDensity    = u.craterDensity;`        (applyDrivers, off `deriveUniforms`)
+//   world-engine-lab.html:2854 `        state.craterDensity = _cu.density;`             (ensureNetworkRouted, off `craterUniformsFrom`)
 // and the same pairing for `craterComplexD` (:2025 / :2871) and `craterRelaxation` (:2026 / :2879).
 // The remaining four are authored once each — `craterAmp` only at :2866 (ensureNetworkRouted),
 // `terraceCount` (:2027), `ejectaStrength` (:2040) and `ejectaRampart` (:2041) only in applyDrivers.
 // ⛔ THIS FILE DOES NOT COLLAPSE THE DUPLICATED THREE AND MAY NOT: which of the two writes wins
-// depends on call order, and the merge is an edit to planet-lod-lab.html. It is recorded because a
+// depends on call order, and the merge is an edit to world-engine-lab.html. It is recorded because a
 // reader who finds only ONE of the two sites will conclude the mirror duplicates it, and will be
 // exactly half right.
 //
 // ⛔⛔ THREE OF THE TEN EMITTED NAMES ARE ABSENT FROM THE BINDING, EACH FOR ITS OWN MEASURED REASON.
 //
 //   1. `uCraterScale` — THE LAB HAS NO STATE FIELD IN THIS UNIFORM'S UNITS. Its field is
-//      `state.craterSizeKm`, which is KILOMETRES — planet-lod-lab.html:1155 `      craterSizeKm: 530,       // real-units scale: characteristic crater diameter in km`,
+//      `state.craterSizeKm`, which is KILOMETRES — world-engine-lab.html:1155 `      craterSizeKm: 530,       // real-units scale: characteristic crater diameter in km`,
 //      written from this pack's own producer at
-//      planet-lod-lab.html:2845 `        state.craterSizeKm = _cu.Dchar > 0 ? _cu.Dchar : state.craterSizeKm;`
+//      world-engine-lab.html:2845 `        state.craterSizeKm = _cu.Dchar > 0 ? _cu.Dchar : state.craterSizeKm;`
 //      — and the lab's frame writer resolves the frequency ITSELF, one line per frame:
-//      planet-lod-lab.html:5358 `      uniforms.uCraterScale.value      = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER)`
+//      world-engine-lab.html:5358 `      uniforms.uCraterScale.value      = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER)`
 //      ⚠ THAT QUOTE IS TRUNCATED ON PURPOSE, not for width: the line ends with a multiply by the
 //      lab's display-scale factor, and tests/vis-scale-fence.test.js bars every file under
 //      `src/worldengine/**` from spelling that token AT ALL — comments included. Reproducing the
@@ -316,7 +316,7 @@ export const CRATER_DECK_UNIFORMS = Object.freeze([
 //      FREQUENCY — src/worldengine/port/writePackUniforms.js:220 `    v = featureFrequencyFromKm(dispR, d.featureSizeKm, d.cFeature);`.
 //      So a binding here would put a frequency into a field labelled kilometres, and the lab would
 //      then resolve THAT as a size: finite, in-band, wrong on every body, and printed back to the
-//      user as a plausible crater footprint by planet-lod-lab.html:3294 `.toFixed(0)+' km Ø'`.
+//      user as a plausible crater footprint by world-engine-lab.html:3294 `.toFixed(0)+' km Ø'`.
 //      ⚠ IT IS ALSO THE ONE NAME WHOSE BYTE-IDENTITY ARM AGAINST THE LAB IS STRUCTURALLY IMPOSSIBLE
 //      — DECISION 1's second ⚠ above measures why (the lab resolves at the REAL radius and then
 //      multiplies by the display scale again, i.e. R^1.5, which this file may not name).
@@ -324,15 +324,15 @@ export const CRATER_DECK_UNIFORMS = Object.freeze([
 //   2/3. `uEjectaAmp` and `uEjectaLump` — THE LAB'S DECLARED TUNABLES, NOT DERIVED FIELDS. Unlike
 //      every name in the binding, NO lab function writes either. The lab says so twice in its own
 //      words, at the state declaration and again at the frame writer:
-//      planet-lod-lab.html:1168 `      // rayBrightness from the preset) + lab-tunable (amp/lump/ray count/sharpness).`
-//      planet-lod-lab.html:5360 `      // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.`
+//      world-engine-lab.html:1168 `      // rayBrightness from the preset) + lab-tunable (amp/lump/ray count/sharpness).`
+//      world-engine-lab.html:5360 `      // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.`
 //      and their two sliders are the only ones in the crater folders carrying neither `.listen()`
-//      nor an `.onChange` (planet-lod-lab.html:3375-3376), i.e. nothing in the lab ever expects
+//      nor an `.onChange` (world-engine-lab.html:3375-3376), i.e. nothing in the lab ever expects
 //      them to move on their own. This is polarDeck.js's `POLAR_LAB_KNOBS` case with one difference
 //      that matters: THIS PACK DOES EMIT BOTH, so each omission is a refusal rather than an absence,
 //      and each refusal is measured:
 //        · `uEjectaLump` WOULD MOVE NOTHING. src/worldengine/port/craterUniforms.js:83 `const EJECTA_LUMP = 0.6;`
-//          is byte-equal to the lab default planet-lod-lab.html:1173 `      ejectaLump: 0.6,`. Wiring a
+//          is byte-equal to the lab default world-engine-lab.html:1173 `      ejectaLump: 0.6,`. Wiring a
 //          constant is not wiring a law — it grows the mirror's claimed set for zero pixels, which is
 //          the refusal solidFeatures.js's header makes for its seven per-feature constants.
 //        · `uEjectaAmp` WOULD MOVE A LOT, and in a direction only Max can accept. The pack emits
@@ -355,7 +355,7 @@ export const CRATER_DECK_UNIFORMS = Object.freeze([
 // :2854 stores the UNfolded `_cu.density`, so on a crater-irrelevant body the mirror leaves 0 in
 // `state.craterDensity` where the lab left the raw density. The uniform is identical (the frame
 // writer multiplies by a 0 relevance either way); only the `.listen()`-bound slider at
-// planet-lod-lab.html:3361 reads differently.
+// world-engine-lab.html:3361 reads differently.
 export const CRATER_DECK_LAB_BINDING = Object.freeze({
   // ⛔ uEjectaStrength IS DELIBERATELY UNBOUND, and binding it ALONE is worse than binding neither.
   // It is one factor of a product the shader forms as `uEjectaStrength * uEjectaAmp * pw`
@@ -376,8 +376,8 @@ export const CRATER_DECK_LAB_BINDING = Object.freeze({
 /**
  * ⛔⛔ EVERY GATE ON, AND ON THIS FAMILY THERE ARE TWO OF THEM. The lab re-applies its OWN ✓
  * checkboxes at the per-frame writer, once per gate:
- *   planet-lod-lab.html:5354 `uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
- *   planet-lod-lab.html:5361 `uniforms.uEjectaStrength.value   = state.ejectaEnabled ?` (⚠ QUOTED AS A FRAGMENT SINCE 2026-08-25: that line now carries the [E] bare-key A/B, so its middle swaps between the lab's `state.ejectaStrength` and this pack's amplitude family. The relevance re-multiply this note is about is the tail, and it is unchanged.)
+ *   world-engine-lab.html:5354 `uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
+ *   world-engine-lab.html:5361 `uniforms.uEjectaStrength.value   = state.ejectaEnabled ?` (⚠ QUOTED AS A FRAGMENT SINCE 2026-08-25: that line now carries the [E] bare-key A/B, so its middle swaps between the lab's `state.ejectaStrength` and this pack's amplitude family. The relevance re-multiply this note is about is the tail, and it is unchanged.)
  * so the values this mirror puts into `state.craterDensity` and `state.ejectaStrength` must be the
  * UNGATED ones. A mirror that resolved the gate too would apply each decision TWICE: a body whose
  * feature is enabled would still read zero the moment this pack's gate map disagreed with the

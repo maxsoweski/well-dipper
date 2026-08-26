@@ -26,8 +26,8 @@ looks like a small airless world" (Player-Experience tier: *believable worlds*).
 
 ### 0.1 The relief multiplier (`reliefNorm`) — EXISTS, live, defective
 
-**Seam:** `planet-lod-lab.html` → `function reliefNorm(heightKm, radiusEarth, surfaceGravity)`
-(currently ~L1971), built from two core helpers imported at `planet-lod-lab.html`
+**Seam:** `world-engine-lab.html` → `function reliefNorm(heightKm, radiusEarth, surfaceGravity)`
+(currently ~L1971), built from two core helpers imported at `world-engine-lab.html`
 L151:
 
 - `planet-lod-lab-core.js` → `reliefAmplitudeFromKm(featureHeightKm, radiusEarth)`
@@ -57,7 +57,7 @@ block); it touches **no carrier byte**.
 > point**, and it changes the whole S1 strategy.
 
 **Path A — per-family amp uniforms carry `reliefNorm`** (grep of `reliefNorm(` in
-the per-frame uniform block, `planet-lod-lab.html` ~L5602–6002). Five uniforms:
+the per-frame uniform block, `world-engine-lab.html` ~L5602–6002). Five uniforms:
 
 | Uniform (symbol) | Height arg | gravity arg | note |
 |---|---|---|---|
@@ -74,7 +74,7 @@ combiner (`mountainCombiner`, `craterCombiner`, `canyonCombiner`, `ecuRelief`,
 into a single `grad`, then:
 
 ```
-float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);   // planet-lod-lab.html:536
+float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);   // world-engine-lab.html:536
 shadeN = perturbAnalytic(N, grad, reliefAmp);            // :537
 // perturbAnalytic: perturbed = normalize(N - gTan * strength * 0.6)  (glsl :1482)
 ```
@@ -173,7 +173,7 @@ re-capture**. The Derivation Note documents all seven by grep; it does not chang
 
 **BUT — the bake-seam composite the write-side view cannot see (lens physics MF3 +
 mechanism MF3, source-verified).** The lab runs `reliefBakeStrength = 1.0` **live
-by default** (`planet-lod-lab.html:2535` "LAB live initial = ON"). In that branch
+by default** (`world-engine-lab.html:2535` "LAB live initial = ON"). In that branch
 `hd = baked` (the baked carrier: `height + shelfDepth + craterField`, L377–381),
 `grad = hd.yzw`, and the whole baked gradient is then scaled by
 `reliefAmp = uPerturb·mix` at `perturbAnalytic` (§0.2 Path B). So at the live default
@@ -196,7 +196,7 @@ render branches on `uReliefBakeStrength` between baked-carrier and in-shader syn
 **CORRECTION (lens physics MF3, source-verified).** The pre-lens claim that
 `craterField` "flows through **unmultiplied by `reliefNorm`**" is **false at the
 live render.** `uReliefBakeStrength` is **1.0 by default in the lab**
-(`planet-lod-lab.html:2535`), and the UAT scenario renders through the baked branch,
+(`world-engine-lab.html:2535`), and the UAT scenario renders through the baked branch,
 where the baked composite (including `craterField`) **is** scaled by
 `uPerturb·mix` at `perturbAnalytic` (§0.2 Path B / §0.4 bake-seam). The `raw sum`
 is only true of the *carrier byte* (`compositeMargins`), NOT of the *rendered
@@ -250,7 +250,7 @@ discipline; do not present `1/g²` as the derivation of the shipped exponent.
 | **bake seam** (baked carrier × `uPerturb`, live `reliefBakeStrength=1`) | carrier `gCap`(`g^-0.5`) **× envelope**(`g^-0.58`) ⇒ composed **`g^-1.08`** | render-side composition of two g-signals for the same effect (physics MF3) | **accept-and-document, bounded**: both factors are clamped, so composed apparent is bounded; **live AC-LAB-READ is the in-band gate** (the linear model does not see this path, §2.1). Alternative if live reads hot: exclude the baked branch from the `uPerturb` multiply — a one-line S1 fallback, flagged. |
 | Crater **depth** (`craterAmplitude`) | angular δ; g enters only at `D_t(g)` transition | none | new law reads g **once** (transition), δ for size (§2). Rendered apparent = carrier d/D × `uPerturb` envelope (bounded). |
 | Crater **count/size** (`craterSchedule`) | `R²` (count), `radPerKm∝1/R` (size), `g^-K_GS` (size) | none (distinct laws) | **untouched** — separate physical laws, not a relief double-dip. |
-| **atmo / albedo — NOT relief** (`uPolarAmp` F29 polar-vortex polygon MEANDER, `planet-lod-height.glsl.js:1757`) | none (raw) | **misclassified pre-lens** (mechanism MF2) | **OUT of the km-relief family AND atmo-lane fenced** — F29 is "ALBEDO/LUMINANCE ONLY" (glsl L389), assigned inside the F27–F30 storm block (`planet-lod-lab.html:5804`). **Do NOT wire; do NOT touch** (lane fence). |
+| **atmo / albedo — NOT relief** (`uPolarAmp` F29 polar-vortex polygon MEANDER, `planet-lod-height.glsl.js:1757`) | none (raw) | **misclassified pre-lens** (mechanism MF2) | **OUT of the km-relief family AND atmo-lane fenced** — F29 is "ALBEDO/LUMINANCE ONLY" (glsl L389), assigned inside the F27–F30 storm block (`world-engine-lab.html:5804`). **Do NOT wire; do NOT touch** (lane fence). |
 | **Crystal — deferred wholesale** (`uFacetAmp` F43 crystalline facet relief, glsl L515/L2528) | none (raw) | out of scope (mechanism MF4) | **OUT** — Crystal/exotics deferred wholesale (intent non-goal, Max ruling 2026-07-21). Do NOT wire. |
 | **Ejecta — fenced channel** (`uEjectaAmp`, glsl L2017 `uEjectaStrength·uEjectaAmp`) | none (raw) | fenced (mechanism MF5) | **OUT** — ejecta is fenced pending Max's product call (intent non-goal / audit Q1). Do NOT wire until the fence is resolved. |
 | micro-texture (`uDuneAmp`, `uDustDepth`, `uFrostNoiseAmp`, `uTalusAmp`, `uLobeAmp`) | none (raw) | n/a | **out of the km-relief family** — surface textures, not km-authored relief. Already single-normalized via `uPerturb`; do NOT add a second factor. |
@@ -363,7 +363,7 @@ are right; metrological tightening is deferred, not silent.
    (export the constants too). `radiusEarth` is accepted for signature symmetry but
    **unused in the return** (radius flows via g). Do **not** edit
    `reliefGravityFactor` / `reliefAmplitudeFromKm` (shared, separately tested — §0.4).
-2. **Rewire `uPerturb` (the ONE envelope application):** `planet-lod-lab.html:5608`
+2. **Rewire `uPerturb` (the ONE envelope application):** `world-engine-lab.html:5608`
    `uniforms.uPerturb.value = state.perturb * reliefEnvelope(_RE, _gNow)` (was
    `· reliefNorm(state.mountainHeightKm, _RE, _gNow)`).
 3. **Strip the double-application** from the three squaring families + edifice —
@@ -375,7 +375,7 @@ are right; metrological tightening is deferred, not silent.
    §1.2 edifice row). Update the `uEdificeAmp` inline comment (the "g=1 avoids
    double-applying" note is now stale). **Do NOT wire any raw pass-through family**
    (they are already enveloped once via `uPerturb` — §0.2).
-4. **Retire the now-unused `reliefNorm` function** (`planet-lod-lab.html` ~L1971) —
+4. **Retire the now-unused `reliefNorm` function** (`world-engine-lab.html` ~L1971) —
    after steps 2–3 nothing calls it (grep-confirm zero `reliefNorm(` consumers
    remain). **Update the stale comment block L1962–1970** (it documents the
    `(1/RE)·reliefGravityFactor(g)` law — false post-edit; lens byte-fence MINOR-5).
@@ -515,7 +515,7 @@ stays at the 4-failure baseline.
 
 1. **Carrier / golden byte-identity (structural + empirical).**
    - *Structural:* the envelope edits live in `planet-lod-lab-core.js`
-     (`reliefEnvelope`, new) + `planet-lod-lab.html` (render-side uniforms) —
+     (`reliefEnvelope`, new) + `world-engine-lab.html` (render-side uniforms) —
      **no `src/worldengine/**` carrier writer is touched for relief.**
      `bombardment.js` writes only `craterField` (unhashed) — its own header +
      the v2-5 test (`craterField !== height/shelfDepth/maturity`) prove the
@@ -594,7 +594,7 @@ verification. Verdicts folded:
 
 - **MF-A — double-application via `uPerturb` [mechanism MF1].** Verified:
   `perturbAnalytic(N, grad, reliefAmp)` with `reliefAmp = uPerturb·mix`
-  (`planet-lod-lab.html:536–537`), `perturbed = normalize(N − gTan·strength·0.6)`
+  (`world-engine-lab.html:536–537`), `perturbed = normalize(N − gTan·strength·0.6)`
   (`planet-lod-height.glsl.js:1482`) scales the WHOLE `grad`; `uMountainAmp` (:5969)
   / `uCraterAmp` (:5959) / `uEcuCanyonDepth` (:5922) each also carry `reliefNorm` and
   add to `grad` (glsl 1479/1968/2781) ⇒ `reliefNorm²`. **Fold:** §0.2 rewritten

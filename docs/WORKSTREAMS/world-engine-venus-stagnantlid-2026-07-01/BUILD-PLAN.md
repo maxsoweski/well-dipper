@@ -40,7 +40,7 @@ Streams (fixed draw order): `stagnant:plumes:` (N_plume then N_plume×randDir, 2
 
 Dispatch becomes 5-way: plate(:442) → shell(:451) → volcanic(:458) → **stagnant-lid(new)** → despun(:474). Collision-free: `'stagnant-lid'` isn't terrestrial/ocean (plate misses), isn't a SHELL_REGIMES key and Venus is locked:false so shell's locked-fallback can't fire (shell misses), isn't in `VOLCANIC_ARCHETYPES` (volcanic misses).
 
-## EDIT planet-lod-lab.html — 2 edits
+## EDIT world-engine-lab.html — 2 edits
 - One `PRESET_ARCHETYPE` line among **:1904-1917**: `'Venus (sulfuric shroud)': 'stagnant-lid',` (Magma's line is the format precedent). Venus is already in `NAMED_BODY` (**:1900**) so `drawPresetRadius` short-circuits at **:1927** → radius stays canonical 0.95 R⊕.
 - `stagnantLidProbe()` sibling of `magmaProbe` (**:6136-6192**): read `riverOverlay.stagnantDiag`; null-branch note off-path; rebuild the **squared-Gaussian** plume predictor from `diag.plumeCenters`; return `{ heightSource, regime, plumeCount, coronaCount, tesseraFrac, plainsFrac, activeFrac, varExplainedByPlume, varExplainedByLatitude, meanTessera, meanPlains, meanRiftTrench (trench-annulus∪rift mask), U:Array.from(U) }`.
 

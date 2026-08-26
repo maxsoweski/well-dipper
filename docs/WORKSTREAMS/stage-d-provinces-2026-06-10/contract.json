@@ -37,7 +37,7 @@
       "id": "AC4-no-signature-changes",
       "statement": "No combiner signature changes: Stage-D lands by swapping the reserved scalar for the spatial accessor; combiner bodies multiply by provinceWeight(FEATURE_ID). The uSpikeProvince spike toggle is removed (subsumed).",
       "verifyVia": {
-        "input": "git diff of the Stage-D commit(s) over planet-lod-lab.html",
+        "input": "git diff of the Stage-D commit(s) over world-engine-lab.html",
         "observable": "Combiner function signatures unchanged; uSpikeProvince and spikeProvinceField absent from the file; provinceWeight() accessor present and read by all built combiners"
       },
       "layer": "unit"
@@ -74,7 +74,7 @@
   ],
   "architecturalConnections": {
     "inputs": [
-      "Reserved uProvinceWeight uniform + GLSL decl (planet-lod-lab.html, registry \u00a71 row, index \u00a74 #8)",
+      "Reserved uProvinceWeight uniform + GLSL decl (world-engine-lab.html, registry \u00a71 row, index \u00a74 #8)",
       "noised() / fbmd() noise primitives (the field is built from them)",
       "Built combiners F1-F11, F17, F18, F22, F23 + lavaCrackEmissive (retrofit targets)",
       "planet-archetypes.js FEATURES registry (affinity data mirror)",
@@ -89,9 +89,9 @@
     "mustStayWorking": [
       "All 15 Phase-3 verdicted features at their verdicted look (uProvinceWeight=0 escape hatch + spot-checks)",
       "npx vitest run tests/planet-archetypes.test.js (8/8 + new oracles)",
-      "planet-lod-lab.html backtick parity stays even (currently 20)",
+      "world-engine-lab.html backtick parity stays even (currently 20)",
       "Analytic-gradient discipline: province mask treated locally-constant is documented at each multiply (relief doc \u00a75.4)",
-      "Shared tree: src/main.js warp WIP never staged; only planet-lod-lab.html, planet-archetypes.js, docs/ paths",
+      "Shared tree: src/main.js warp WIP never staged; only world-engine-lab.html, planet-archetypes.js, docs/ paths",
       "Lab GUI: existing feature folders/toggles keep working; solo() unaffected"
     ]
   }

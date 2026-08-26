@@ -10,13 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-15-lod-lab-feature-info-cards-design.md`
 
-**Sibling pattern:** `docs/superpowers/plans/2026-06-15-lod-lab-menu-declutter.md` (Phase 1 of this overhaul — shipped). This is Phase 2 (Ask 2). The declutter is already merged into `planet-lod-lab.html` (`fWorld`, `relocateEnableToTitle()`, `FEATURE_LAYOUT`, `fNotRelevant`, `applyArchetypeFilter()` reparenting all present).
+**Sibling pattern:** `docs/superpowers/plans/2026-06-15-lod-lab-menu-declutter.md` (Phase 1 of this overhaul — shipped). This is Phase 2 (Ask 2). The declutter is already merged into `world-engine-lab.html` (`fWorld`, `relocateEnableToTitle()`, `FEATURE_LAYOUT`, `fNotRelevant`, `applyArchetypeFilter()` reparenting all present).
 
 ---
 
 ## Verification reality (read before any GUI step)
 
-The lab GUI is an **inline `<script>` in `planet-lod-lab.html`** — NOT importable by Vitest. Per [[well-dipper-testing-reference]] the lab is verified **live on `:9223`** (GPU Chrome, NOT Playwright, NOT image recognition) via `window._lab.*` and DOM queries (`mcp__chrome-devtools__evaluate_script`). The **generator IS a Node module → it has a real Vitest unit test** (Task 2).
+The lab GUI is an **inline `<script>` in `world-engine-lab.html`** — NOT importable by Vitest. Per [[well-dipper-testing-reference]] the lab is verified **live on `:9223`** (GPU Chrome, NOT Playwright, NOT image recognition) via `window._lab.*` and DOM queries (`mcp__chrome-devtools__evaluate_script`). The **generator IS a Node module → it has a real Vitest unit test** (Task 2).
 
 **Existing test contract that must stay green (this is the "test #16" pin the declutter plan referenced):**
 `tests/planet-archetypes.test.js:14-16` scans the lab source with the regex `/\.add\(state, '(\w+Enabled)'\)/g` to learn which enable keys the panel binds (and cross-checks `cityLightsEnabled` → `PROV_CITYLIGHTS` at L111). **Our card injection is plain DOM and adds NO `.add(state, '…Enabled')` calls and removes none** — so this regex's match set is unchanged. Do not refactor any `.add(state, 'xEnabled')` line.
@@ -25,9 +25,9 @@ The lab GUI is an **inline `<script>` in `planet-lod-lab.html`** — NOT importa
 
 ## Standing cautions
 
-- **Line numbers are HINTS** — `grep -n` every edit site before editing (line drift is a known hazard in `planet-lod-lab.html`).
-- **Stage explicit paths only.** Allowed paths this plan touches: `scripts/gen-feature-cards.mjs`, `planet-feature-cards.generated.js`, `package.json`, `planet-lod-lab.html`, `scripts/doc-rot-check.sh`, `tests/gen-feature-cards.test.js`, `docs/NOW.md`. **NEVER `git add -A`** — the shared working tree has unrelated warp WIP + loose `.png`/`.webm`/`.html` litter.
-- Reload `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1` before each live verification (`:9223` may hold a stale session; `?fresh=1` opts out of the sessionStorage scenario-restore).
+- **Line numbers are HINTS** — `grep -n` every edit site before editing (line drift is a known hazard in `world-engine-lab.html`).
+- **Stage explicit paths only.** Allowed paths this plan touches: `scripts/gen-feature-cards.mjs`, `planet-feature-cards.generated.js`, `package.json`, `world-engine-lab.html`, `scripts/doc-rot-check.sh`, `tests/gen-feature-cards.test.js`, `docs/NOW.md`. **NEVER `git add -A`** — the shared working tree has unrelated warp WIP + loose `.png`/`.webm`/`.html` litter.
+- Reload `localhost:5173/well-dipper/world-engine-lab.html?fresh=1` before each live verification (`:9223` may hold a stale session; `?fresh=1` opts out of the sessionStorage scenario-restore).
 - End every commit message with: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 
 ---
@@ -58,7 +58,7 @@ These were the spec's open questions; resolved by reading the actual files:
 | `planet-feature-cards.generated.js` | `export const FEATURE_CARDS = { <featureKey>: { fNum, name, variants, examples, status } }` (prose-only). Auto-generated; banner header. | **Create** (via the generator) |
 | `tests/gen-feature-cards.test.js` | Unit test: parse a known `.md` row → expected object; assert the F#→key join (`mountains`→F1). | **Create** |
 | `package.json` | Add `"gen-feature-cards": "node scripts/gen-feature-cards.mjs"`. | **Modify** (`scripts` block, ~L7-19) |
-| `planet-lod-lab.html` | Import `FEATURE_CARDS` + `PROCESSES`/`DRIVERS`/`driversFor`; add `buildFeatureCard()` + ⓘ-toggle injection; re-render State line on enable/preset change. | **Modify** (inline `<script>`) |
+| `world-engine-lab.html` | Import `FEATURE_CARDS` + `PROCESSES`/`DRIVERS`/`driversFor`; add `buildFeatureCard()` + ⓘ-toggle injection; re-render State line on enable/preset change. | **Modify** (inline `<script>`) |
 | `scripts/doc-rot-check.sh` | New check: regen `planet-feature-cards.generated.js` to a temp file, diff against committed, flag on mismatch. Mirrors the existing Check-6 doc-graph snapshot/regen/diff/restore pattern. | **Modify** (add a `section` + check block) |
 
 ---
@@ -87,7 +87,7 @@ If `import` throws (browser-only dep), STOP — the regex fallback would be need
 
 - [ ] **Step 0.2: Confirm the dev server + lab are reachable on `:9223`.**
 
-Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`.
+Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `localhost:5173/well-dipper/world-engine-lab.html?fresh=1`.
 Expected: page loads, planet renders, left (Drivers/World) + right (Features) GUI panels visible.
 
 - [ ] **Step 0.3: Snapshot the baseline GUI tree** so card injection can be verified against it.
@@ -365,7 +365,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Add the data imports and the `buildFeatureCard()` renderer. No DOM injection yet (Task 5) — this task only defines the pieces and proves the data resolves.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — imports (~L108-115); a new `buildFeatureCard()` near the feature-folder plumbing (after `featureFolders`/`relocateEnableToTitle`, ~L6943-6946)
+- Modify: `world-engine-lab.html` — imports (~L108-115); a new `buildFeatureCard()` near the feature-folder plumbing (after `featureFolders`/`relocateEnableToTitle`, ~L6943-6946)
 
 - [ ] **Step 4.1: Add the imports.**
 
@@ -378,7 +378,7 @@ Re-grep `import { ASSOCIATIONS } from './planet-feature-associations.js'` (~L111
 
 - [ ] **Step 4.2: Add a CSS block for the card.**
 
-Re-grep the existing title-toggle CSS: `grep -n 'title-has-toggle' planet-lod-lab.html` (~L94). After the `.lil-gui .title-toggle .lil-widget` rule (~L97), add:
+Re-grep the existing title-toggle CSS: `grep -n 'title-has-toggle' world-engine-lab.html` (~L94). After the `.lil-gui .title-toggle .lil-widget` rule (~L97), add:
 ```css
     /* Per-feature info card (Ask 2) — plain DOM injected as a folder's first child. */
     .lil-gui .feature-card { display: none; font-size: 11px; line-height: 1.45; padding: 6px 8px;
@@ -395,7 +395,7 @@ Re-grep the existing title-toggle CSS: `grep -n 'title-has-toggle' planet-lod-la
 
 - [ ] **Step 4.3: Add the `buildFeatureCard()` renderer.**
 
-Re-grep the enable-relocation loop: `grep -n 'relocateEnableToTitle(folder, FEATURES\[key\].enableKey)' planet-lod-lab.html` (~L6945, inside the `for … of Object.entries(featureFolders)` loop ending ~L6946). **After** that loop closes, add:
+Re-grep the enable-relocation loop: `grep -n 'relocateEnableToTitle(folder, FEATURES\[key\].enableKey)' world-engine-lab.html` (~L6945, inside the `for … of Object.entries(featureFolders)` loop ending ~L6946). **After** that loop closes, add:
 ```js
     // ── Per-feature info card (Ask 2) ─────────────────────────────────────────
     // Read-only reference card. Prose comes from FEATURE_CARDS (generated from the
@@ -472,7 +472,7 @@ Expected: `{ pageOk: true, mountainsFolder: true }`. (If the page failed to load
 - [ ] **Step 4.5: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): card renderer + imports for per-feature info cards
 
 buildFeatureCard(key) builds a read-only DOM card (prose from FEATURE_CARDS,
@@ -489,11 +489,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Wire `buildFeatureCard()` into each feature folder: an ⓘ button in the title bar (mirroring `relocateEnableToTitle()`), injecting the card as the folder's first child, collapsed by default. Re-render the State line on enable/preset change.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — extend the feature-folder loop (~L6944-6946); hook State refresh into `applyDrivers`/`applyArchetypeFilter` and the enable controllers
+- Modify: `world-engine-lab.html` — extend the feature-folder loop (~L6944-6946); hook State refresh into `applyDrivers`/`applyArchetypeFilter` and the enable controllers
 
 - [ ] **Step 5.1: Inject the ⓘ button + card per feature folder.**
 
-Re-grep the enable-relocation loop again (`grep -n 'for (const \[key, folder\] of Object.entries(featureFolders))' planet-lod-lab.html` — there are two such loops: the `relocateEnableToTitle` one ~L6944 and the solo-button one ~L7110). Add a **new** loop immediately after `buildFeatureCard`/`refreshCardState` are defined (end of Task 4's block):
+Re-grep the enable-relocation loop again (`grep -n 'for (const \[key, folder\] of Object.entries(featureFolders))' world-engine-lab.html` — there are two such loops: the `relocateEnableToTitle` one ~L6944 and the solo-button one ~L7110). Add a **new** loop immediately after `buildFeatureCard`/`refreshCardState` are defined (end of Task 4's block):
 ```js
     // Inject an ⓘ toggle into each feature folder's title bar and a (hidden) card
     // as the folder's FIRST body child. Mirrors relocateEnableToTitle()'s title-bar
@@ -628,7 +628,7 @@ Expected: `open === true`, `hasState === true` (the card works regardless of whi
 - [ ] **Step 5.9: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): inline per-feature info cards behind an ⓘ toggle
 
 Each feature folder gets an ⓘ title-bar button (mirrors relocateEnableToTitle)

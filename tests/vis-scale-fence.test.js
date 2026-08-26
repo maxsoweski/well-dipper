@@ -26,7 +26,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
 // this fence reads both as one corpus so its assertions keep testing what the lab compiles.
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8')
-  + (rel === 'planet-lod-lab.html' ? '\n' + readFileSync(join(ROOT, 'src/worldengine/shaders/planetShaders.glsl.js'), 'utf8') : '');
+  + (rel === 'world-engine-lab.html' ? '\n' + readFileSync(join(ROOT, 'src/worldengine/shaders/planetShaders.glsl.js'), 'utf8') : '');
 
 // The three tokens that carry the display scale. \bsVis\b so it can't match e.g. a
 // substring; the pure-fn names are distinctive enough to match plainly.
@@ -151,7 +151,7 @@ describe('AC-ZERO-CLOBBER — the lab GLSL regions are sVis-free (breach only al
   }
 
   it('finds the lab shader blocks and none contains a display-scale token', () => {
-    const lab = read('planet-lod-lab.html');
+    const lab = read('world-engine-lab.html');
     const regions = extractGlslRegions(lab);
     expect(regions.length).toBeGreaterThanOrEqual(8);   // the 8 /* glsl */ blocks
     const offending = regions.filter((r) => DENY.test(r));
@@ -179,7 +179,7 @@ describe('AC-ZERO-CLOBBER — the lab GLSL regions are sVis-free (breach only al
   });
 
   it('only the display-frequency allowlist may carry sVis in a planet uniform write', () => {
-    const lab = read('planet-lod-lab.html');
+    const lab = read('world-engine-lab.html');
     // Re-scope (D1): sVis MAY set a NAMED display-frequency term at the live frame write.
     // The allowlist = P4 synth craters + the P5b fixed-uniform relief combiners (incl. warp
     // partners) + Slice C's single uDispDomainScale lever + the P5 km-keyed writes (which
@@ -226,7 +226,7 @@ describe('AC-ZERO-CLOBBER — the lab GLSL regions are sVis-free (breach only al
 });
 
 describe('AC-LOD-KEY — the four lab call sites key on logical distance (source pins)', () => {
-  const lab = read('planet-lod-lab.html');
+  const lab = read('world-engine-lab.html');
   it('defines logicalDist = state.distance / sVis', () => {
     expect(lab).toMatch(/const\s+logicalDist\s*=\s*state\.distance\s*\/\s*sVis/);
   });
@@ -242,7 +242,7 @@ describe('AC-LOD-KEY — the four lab call sites key on logical distance (source
 });
 
 describe('AC-0 — sVis derivation reads ONLY state.planetRadiusEarth (spine conformance)', () => {
-  const lab = read('planet-lod-lab.html');
+  const lab = read('world-engine-lab.html');
   it('the sVis assignment takes exactly planetRadiusEarth (no label/archetype/regime read)', () => {
     expect(lab).toMatch(/sVis\s*=\s*visScaleOf\(\s*state\.planetRadiusEarth\s*\)/);
   });
@@ -252,7 +252,7 @@ describe('AC-0 — sVis derivation reads ONLY state.planetRadiusEarth (spine con
 });
 
 describe('P4/P5/P5b — display-frequency keying is identity at sVis=1 (Slice B)', () => {
-  const lab = read('planet-lod-lab.html');
+  const lab = read('world-engine-lab.html');
 
   it('featureFrequencyFromKm(sVis=1, …) === the real-R value at radius 1 (identity)', () => {
     // visScaleOf(1) === 1 exactly, so the P5 pseudo-radius swap is a no-op at radius 1 R⊕ —
@@ -290,7 +290,7 @@ describe('P4/P5/P5b — display-frequency keying is identity at sVis=1 (Slice B)
 
 describe('Slice C RETIRED — uDispDomainScale is pinned at 1.0 (AC-PLATESCALE item 2)', () => {
   const WORLD_LIGHT = new THREE.Vector3(1, 0, 0);
-  const lab = read('planet-lod-lab.html');
+  const lab = read('world-engine-lab.html');
   // RESOLVED, not raw source. These assertions are about the shader that actually COMPILES, and
   // as of the hash3/noised/fbmd hoist (2026-07-30) one of the read sites below — fbmd's
   // `uNoiseScale * 0.3 * uDispDomainScale` — lives in src/worldengine/shaders/heightNoise.glsl.js
@@ -353,7 +353,7 @@ describe('Slice C RETIRED — uDispDomainScale is pinned at 1.0 (AC-PLATESCALE i
 });
 
 describe('Slice D — bake→synth crossover (P2 reaches the live bake=1 default)', () => {
-  const lab = read('planet-lod-lab.html');
+  const lab = read('world-engine-lab.html');
 
   it('bakeReliefCrossover(1) === 1 exactly (identity ⇒ byte-identical at radius 1 R⊕)', () => {
     // sVis=1 ⇒ |log2(1)|=0 ⇒ smoothstep(0,SPAN,0)=0 ⇒ crossover=1. The frame write is then

@@ -27,7 +27,7 @@ DATA, and the renderer merely expresses it. A surface violates it if the rendere
 | Surface | What is generated as DATA (upstream) | What the RENDERER actually consumes | Who decides the relief STRUCTURE | Verdict |
 |---|---|---|---|---|
 | **(1) GAME L0** `src/generation/*` + `src/objects/Planet.js` | D1–D16 physics SCALARS + WS1's `systemContext` flat graph + D11 3-scalar surface-history budget. **Zero spatial field.** (PlanetGenerator.js:708–742; StarSystemGenerator.js:624–679) | baseColor/accentColor, noiseScale/noiseDetail, **one `planetType` int**, + feature toggles. **No physics driver, no graph, no field** (Planet.js:1038–1078; grep for any driver in Planet.js = ZERO) | **The fragment shader**, from `snoise(pos*noiseScale)` inside `if(planetType==N)` branches; perturbStrength/seaLevel are hardcoded per-type literals (Planet.js:438–441,:474,:550–553) | **VIOLATES** (most total) |
-| **(2) PROD LOD LAB** `planet-lod-lab.html` + `-core.js` + `-height.glsl.js` + WS4 (`-tectonic.js`/`-rivers.js`) | ~40 per-body relief SCALARS/gates + 6 seeded per-body ORIENTATION axes (deriveUniforms, core:496–953). WS4 adds: an **E6 orientation cube** (strike+mag+regime) and an **E9 drainage carve cube** (order-tent depth) | the ~40 scalars + 6 axes + the grain cube (orientation) + the carve cube (a subtractive depth). **No height/province field crosses** | **The fragment shader**, from ~25 `noised()` combiners (height.glsl.js); the grain only re-AIMS the noise via `mix(axis,grainStrike,strength)` (height.glsl.js:950) | **VIOLATES** (relief is noise, oriented) |
+| **(2) PROD LOD LAB** `world-engine-lab.html` + `-core.js` + `-height.glsl.js` + WS4 (`-tectonic.js`/`-rivers.js`) | ~40 per-body relief SCALARS/gates + 6 seeded per-body ORIENTATION axes (deriveUniforms, core:496–953). WS4 adds: an **E6 orientation cube** (strike+mag+regime) and an **E9 drainage carve cube** (order-tent depth) | the ~40 scalars + 6 axes + the grain cube (orientation) + the carve cube (a subtractive depth). **No height/province field crosses** | **The fragment shader**, from ~25 `noised()` combiners (height.glsl.js); the grain only re-AIMS the noise via `mix(axis,grainStrike,strength)` (height.glsl.js:950) | **VIOLATES** (relief is noise, oriented) |
 | **(3) RELIEF SLICE** repo-root `relief-*.js` + `world-engine-relief-lab.main.js` (Max-UAT-PASSED 2026-06-23) | a real `ReliefSubstrate`: 9 co-registered typed arrays (`height`, `grainAngle`, `grainMag`, `regime`, `faultDensity`, `flowAccum`, `baseLevel`, `standing`, `maturity`) — relief-substrate.js:5–19. E6 WRITES `height += …`, E9 carves `height -= dz` into the SAME array | the renderer displaces vertices DIRECTLY from `substrate.height[i]` and colors from `standing`/`flowAccum` (main.js:55–63) — "preset-blind" | **The data.** E6 (tectonic) builds it, E9 (hydrology) carves it; the renderer synthesizes nothing | **HONORS** (the only one) |
 | **(4) WS2 BASE STEP** `src/worldengine/base/*` | the production PORT of the slice's BUILD side: `makeSubstrate` (same 9 arrays), `runE6` writes `height`, `makeBaseStep` derives structured fields incl. a materialized `crust.crustalThickness` Float32Array (baseStep.js:94–99). Adds a sphere carrier (`sphereField.js`) the slice lacks | **Nothing in any renderer.** `runE6`/`makeBaseStep`/`makeSubstrate` are reached only by `worldengine-fieldviz.html` (a read-only viz page) + 12 vitest files (grep §6.1) | n/a — not on a render path | **HONORS as data, but UNWIRED** to any player-facing renderer |
 
@@ -187,14 +187,14 @@ a lock be surfaced; here the lock is intact and this only sharpens it.
 - `planet-lod-tectonic.js:28–29` imports **only** `writeGrainSphere, stressAtLat` + `makeSphereField` from
   `src/worldengine/base/` — never `runE6`/`makeBaseStep`/`makeSubstrate`.
 - `planet-lod-rivers.js:22` imports `bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube` (orientation
-  baker); `planet-lod-lab.html:159` imports `bakeTectonicGrain` as a read-back probe.
-- `perNodeIncision`/`applyIncision` consumers outside the module = `tests/ws4-*` + `planet-lod-lab.html:5791–5792`
+  baker); `world-engine-lab.html:159` imports `bakeTectonicGrain` as a read-back probe.
+- `perNodeIncision`/`applyIncision` consumers outside the module = `tests/ws4-*` + `world-engine-lab.html:5791–5792`
   (the `sampleRoutedHeight` PROBE) — **never** `buildValleyGeometry`/the live cube.
 - Planet.js grep for tidalHeating|eccentricity|magneticField|systemContext|surfaceHistory|composition|
   habitability|T_eq|age = **zero**.
 
 ### 6.2 Load-bearing lines read first-hand
-- LIVE carve subtraction: `planet-lod-lab.html:425 h -= carveDepth * uRiverCarveDepth`.
+- LIVE carve subtraction: `world-engine-lab.html:425 h -= carveDepth * uRiverCarveDepth`.
 - LIVE carve depth source = order-tent: `planet-lod-rivers.js:753 d: depthAt(strahler[idx]…)`; def `:663–666`
   (`VALLEY_DEPTH_LO + (HI-LO)*t`, `t` from stream order).
 - Stream-power Δ default law present but probe-only: `planet-lod-rivers.js:783,:845 r = CARVE_K*pow(A,M)*pow(S,N)`.

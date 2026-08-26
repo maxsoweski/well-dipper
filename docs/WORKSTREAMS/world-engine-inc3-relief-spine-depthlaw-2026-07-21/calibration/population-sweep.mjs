@@ -9,7 +9,7 @@
 //
 // PURPOSE (V2-6, unchanged): AC-POPSWEEP judges the DRAWN POPULATION, not a boot state (INTENT FRAME "no defaults").
 // For every seed-varying archetype preset × N_SEEDS seeds it draws a radius through the SHARED draw law
-// (driver-presets.js drawPresetRadius — the same symbol planet-lod-lab.html imports, grep-asserted below so the two
+// (driver-presets.js drawPresetRadius — the same symbol world-engine-lab.html imports, grep-asserted below so the two
 // can never drift), derives the condition vector at the DRAWN radius, runs the crater schedule, and (for
 // impact-surface archetypes only) resolves a full stamped carrier on a ~10k-node mesh. It then gates the ensemble:
 //
@@ -126,8 +126,8 @@ const meshLazy = () => (mesh ??= buildIrregularSphere(MESH_N, 2));
 
 // ── grep-assert: the lab consumes the SHARED draw law so the harness and GUI never drift ────────────────
 function assertSharedDrawLaw() {
-  const lab = execSync('grep -c "drawPresetRadius" planet-lod-lab.html', { cwd: REPO }).toString().trim();
-  const imports = execSync("grep -n \"import {.*drawPresetRadius.*} from './driver-presets.js'\" planet-lod-lab.html || true",
+  const lab = execSync('grep -c "drawPresetRadius" world-engine-lab.html', { cwd: REPO }).toString().trim();
+  const imports = execSync("grep -n \"import {.*drawPresetRadius.*} from './driver-presets.js'\" world-engine-lab.html || true",
     { cwd: REPO }).toString().trim();
   const ok = Number(lab) >= 1 && imports.length > 0;
   return { ok, count: Number(lab), importLine: imports.split('\n')[0] || null };
@@ -141,11 +141,11 @@ function assertSharedDrawLaw() {
 //    no `reliefNorm(` token can resolve to a call. ────────────────────────────────────────────────────────────
 function assertEnvelopeWiring() {
   const uPerturbEnv = execSync(
-    "grep -c 'uPerturb.value = state.perturb \\* reliefEnvelope' planet-lod-lab.html || true",
+    "grep -c 'uPerturb.value = state.perturb \\* reliefEnvelope' world-engine-lab.html || true",
     { cwd: REPO }).toString().trim();
-  const imports = execSync("grep -c 'reliefEnvelope' planet-lod-lab.html || true", { cwd: REPO }).toString().trim();
+  const imports = execSync("grep -c 'reliefEnvelope' world-engine-lab.html || true", { cwd: REPO }).toString().trim();
   // reliefNorm FUNCTION DEFINITIONS remaining in the lab (S1 retired it); expect 0 ⇒ no call can resolve.
-  const normDefs = execSync("grep -c 'function reliefNorm' planet-lod-lab.html || true", { cwd: REPO }).toString().trim();
+  const normDefs = execSync("grep -c 'function reliefNorm' world-engine-lab.html || true", { cwd: REPO }).toString().trim();
   const ok = Number(uPerturbEnv) >= 1 && Number(imports) >= 1 && Number(normDefs) === 0;
   return { ok, uPerturbEnv: Number(uPerturbEnv), reliefEnvelopeRefs: Number(imports), reliefNormDefs: Number(normDefs) };
 }

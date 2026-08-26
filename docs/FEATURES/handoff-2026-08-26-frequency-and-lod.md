@@ -53,7 +53,7 @@ the top. Do not "fix" it by capping the maximum.
 
 ## 2. THE INSTRUMENTS THAT FOUND THIS — three bare keys in the lab
 
-`planet-lod-lab.html`, badge at top-centre. **A is always the unpressed page-load arm (what ships
+`world-engine-lab.html`, badge at top-centre. **A is always the unpressed page-load arm (what ships
 today); B is what the key flips to.** Every arm prints its own `A ·` / `B ·` marker.
 
 | key | A (on load) | B (pressed) |
@@ -68,7 +68,7 @@ Moon/Frozen, *"B looks messed up"* on Lava.
 ⚠ `[E]` forces `state.ejectaEnabled` on, because it is false on all 13 presets by default and both
 arms would otherwise be blank.
 
-**Server:** already running at `http://localhost:5173/well-dipper/planet-lod-lab.html`. If not,
+**Server:** already running at `http://localhost:5173/well-dipper/world-engine-lab.html`. If not,
 Max runs `npm run dev` in `~/projects/well-dipper` — ⛔ Claude must never start it.
 
 ---
@@ -198,7 +198,7 @@ screen-resolvability rule §3 wants to borrow for the wavelength — do these to
 
 ## 5. TRAPS FROM THE LAST SESSION — every one of these bit, some more than once
 
-1. ⛔⛔ **APPEND-PAST-A-COMMENT KILLED CODE THREE TIMES IN ONE SESSION.** `planet-lod-lab.html` stays
+1. ⛔⛔ **APPEND-PAST-A-COMMENT KILLED CODE THREE TIMES IN ONE SESSION.** `world-engine-lab.html` stays
    LINE-NEUTRAL (500+ line-anchored citations at/past `:1933`), so edits append to existing lines —
    and three times the new statement landed after that line's trailing `//`, inside the comment,
    dead. A uniform write at `:5359`, a stash at `:2879`, and the entire `craterDeckPack` call at

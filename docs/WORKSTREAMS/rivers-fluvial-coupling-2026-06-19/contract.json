@@ -71,7 +71,7 @@
       "id": "AC7-no-regression",
       "statement": "Editing the SHARED modules (planet-lod-rivers.js to retain graph + bake channels; planet-lod-height.glsl.js to re-gate deltaCombiner/outflowCombiner) introduces zero regression: the router-lab stays clean, the height-combiner finite-diff parity holds, the test cluster is green, backtick parity stays even, and non-fluvial features render unchanged.",
       "verifyVia": {
-        "input": "npx vitest run tests/planet-lod-*.test.js tests/planet-archetypes.test.js tests/planet-lod-sealevel.test.js; reload rivers-terrain-lab.html and read window._rivers.stats; grep -o backtick planet-lod-lab.html | wc -l; before/after lab screenshot of a non-fluvial (dry) preset",
+        "input": "npx vitest run tests/planet-lod-*.test.js tests/planet-archetypes.test.js tests/planet-lod-sealevel.test.js; reload rivers-terrain-lab.html and read window._rivers.stats; grep -o backtick world-engine-lab.html | wc -l; before/after lab screenshot of a non-fluvial (dry) preset",
         "observable": "Test cluster 282/282; router lab stats 0 orphan/uphill, Strahler ~5, R_b ~5.15; backtick count even (126); non-fluvial preset renders identically (no drift to mountains/F14 water/generic coast)"
       },
       "layer": "integration",
@@ -91,9 +91,9 @@
     "inputs": [
       "The router graph from routeAndOrder: receiver[], accum[], strahler[], isChannel[], isOcean[], height[] (planet-lod-rivers.js:462-464) -- currently LOCAL to route() and DISCARDED; this workstream retains it.",
       "The carve cube uRiverCarveMap: THREE.WebGLCubeRenderTarget, HalfFloatType/RGBA, 1024^2, R=valley depth, G/B free, A=1 (createCarveCubeMap planet-lod-rivers.js:~685; rasterized by buildValleyGeometry ~:596 + cube frag ~:701; MAX-blend MaxEquation OneFactor/OneFactor ~:705).",
-      "The shared height GLSL: deltaCombiner (planet-lod-height.glsl.js:~1353-1373, gated today by uDeltaDensity x fluvialWet), outflowField/outflowCombiner (~:982-1069, synthetic decorrelated seed uOutflowOffset), and the F20 shore-distance SDF block (planet-lod-lab.html:410-431).",
-      "F14 sea level-set uSeaLevel + the sea cut (planet-lod-lab.html:382-398) -- the mouth/outlet condition (h < uSeaLevel) and the carve->flood->shoreline chain.",
-      "The shipped dendritic rivers feature (eca2973): state.riversEnabled, route()/riverReroute (planet-lod-lab.html:~3407-3433), and the per-pixel relief gate uRiverCarveGateHi (planet-lod-lab.html:~372-385).",
+      "The shared height GLSL: deltaCombiner (planet-lod-height.glsl.js:~1353-1373, gated today by uDeltaDensity x fluvialWet), outflowField/outflowCombiner (~:982-1069, synthetic decorrelated seed uOutflowOffset), and the F20 shore-distance SDF block (world-engine-lab.html:410-431).",
+      "F14 sea level-set uSeaLevel + the sea cut (world-engine-lab.html:382-398) -- the mouth/outlet condition (h < uSeaLevel) and the carve->flood->shoreline chain.",
+      "The shipped dendritic rivers feature (eca2973): state.riversEnabled, route()/riverReroute (world-engine-lab.html:~3407-3433), and the per-pixel relief gate uRiverCarveGateHi (world-engine-lab.html:~372-385).",
       "The climate scalars state.fluvial* (fluvialDensity/deltaDensity, fluvialActivity/outflowActivity) -- demoted here to neutral-by-default global intensity trim."
     ],
     "outputs": [
@@ -111,7 +111,7 @@
       "The R-channel carve depth + relief gate uRiverCarveGateHi -- adding G/B under MAX-blend must not alter the shipped depth carve or reintroduce mountain-gouging.",
       "planet-lod-height.glsl.js finite-diff parity tests (the combiner chain is unit-tested).",
       "Test cluster green: npx vitest run tests/planet-lod-*.test.js tests/planet-archetypes.test.js tests/planet-lod-sealevel.test.js -> 282/282 (NOT bare npm test; 4 pre-existing galaxy/star-catalog/deep-sky failures are unrelated).",
-      "Backtick parity in planet-lod-lab.html stays EVEN (126 now).",
+      "Backtick parity in world-engine-lab.html stays EVEN (126 now).",
       "Non-fluvial features render unchanged: mountains/relief, F14 water rendering + level-set cut, generic F20 coast on river-free shoreline.",
       "The lab's presets, render path, and GUI; the climate fluvial* sliders still function (now as intensity trim).",
       "All carve-fed features inherit the 40k-mesh ~140km resolution floor -- that ceiling is the SEPARATE rivers-viewdependent-lod-2026-06-18 workstream, NOT addressed here (mouths/deltas will be coarse at that resolution, by design)."

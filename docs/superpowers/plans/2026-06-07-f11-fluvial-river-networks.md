@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Render branching river/valley networks as driver-gated relief carved into the planet surface in `planet-lod-lab.html`, covering the four F11 variants (dendritic, single-trunk+tributaries, meanders, relict).
+**Goal:** Render branching river/valley networks as driver-gated relief carved into the planet surface in `world-engine-lab.html`, covering the four F11 variants (dendritic, single-trunk+tributaries, meanders, relict).
 
 **Architecture:** A pure GLSL `drainageField(pos, …)` primitive returns channel strength + analytic gradient — channels are the near-zero band of a domain-warped FBM field, with a gated tributary octave for the dendritic feeder look. A `fluvialCombiner` carves that channel into the shared `canyonHeight` accumulator at Stage 4 (after `canyonCombiner`), biased toward low ground, and bends the shading gradient by chain rule so `perturbAnalytic` lights the walls. Drivers (`uFluvial*`) are derived in `applyDrivers` from already-surfaced `deriveUniforms` outputs (`precipitation`, `surfaceGravity`, `liquidStability`) + the preset's raw `surfaceHistory.erosion`. **Spike-first:** the primitive is proven in a standalone harness before it touches the big shader.
 
 **Tech Stack:** three.js r183.1 RawShaderMaterial (GLSL ES 3.0), lil-gui 0.21.0, Vite dev server (`:5173`), vitest (the one automated gate: `planet-archetypes`), chrome-devtools MCP on `:9223` GPU Chrome for visual verification.
 
-**Verification model (read first — this is not classic unit-TDD):** GLSL shader output is not unit-testable. The automated gate is the `planet-archetypes` vitest (Task 5 guards the registry wiring). Everything else is verified **visually on `:9223`** + **0 console errors** + **even backtick parity** in `planet-lod-lab.html` (was 30; re-count after every shader edit). Each task states its concrete acceptance check. Don't claim a task passes without running its check and observing the result (memory rule `verify-before-claiming-health`).
+**Verification model (read first — this is not classic unit-TDD):** GLSL shader output is not unit-testable. The automated gate is the `planet-archetypes` vitest (Task 5 guards the registry wiring). Everything else is verified **visually on `:9223`** + **0 console errors** + **even backtick parity** in `world-engine-lab.html` (was 30; re-count after every shader edit). Each task states its concrete acceptance check. Don't claim a task passes without running its check and observing the result (memory rule `verify-before-claiming-health`).
 
 **Environment facts (don't re-discover):**
 - Lab accessor is `window._lab` (NOT `window.__wd`). Enables: `window._lab.state.<key>`; derived bundle: `window._lab._derived`; `setPreset(name)` / `setQuality(q)` helpers exist.
-- URL: `http://localhost:5173/well-dipper/planet-lod-lab.html`. Max runs Vite — **do not start servers**. Check liveness with `mcp__chrome-devtools__list_pages` (NOT Bash curl — sandbox returns 000). Launch 2nd GPU Chrome per `memory/chrome-devtools-9223-launch.md` if needed.
+- URL: `http://localhost:5173/well-dipper/world-engine-lab.html`. Max runs Vite — **do not start servers**. Check liveness with `mcp__chrome-devtools__list_pages` (NOT Bash curl — sandbox returns 000). Launch 2nd GPU Chrome per `memory/chrome-devtools-9223-launch.md` if needed.
 - **Shared working tree has unrelated warp WIP** (`docs/NOW.md`, untracked `cryo-*.png`/`f10-*.png`/`qa-results/**`/`WarpTunnel.js`/warp labs/`research/**`). **Never `git add -A`.** Stage only the explicit paths each task names. One `git add <paths> && git commit` per commit in a SINGLE Bash call (a hook unstages between calls). Sign-off line: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`. Do not push.
 - lil-gui 0.21.0 prefixes CSS with `lil-`; the enable-in-title pattern is `relocateEnableToTitle(folder, prop)` (lab :2393).
 
@@ -23,7 +23,7 @@
 | File | Responsibility | Change |
 |---|---|---|
 | `fluvial-drainage-lab.html` | **Spike harness** — prove `drainageField` in isolation (sphere toy) before the big shader | Create (Task 1) |
-| `planet-lod-lab.html` | Production lab: uniforms, `drainageField` + `fluvialCombiner` GLSL, Stage-4 call, Stage-6 species tint, `state`, `applyDrivers` derivation, frame-loop writes, GUI folder | Modify (Tasks 2,3,4,6) |
+| `world-engine-lab.html` | Production lab: uniforms, `drainageField` + `fluvialCombiner` GLSL, Stage-4 call, Stage-6 species tint, `state`, `applyDrivers` derivation, frame-loop writes, GUI folder | Modify (Tasks 2,3,4,6) |
 | `planet-archetypes.js` | Shared FEATURES/ARCHETYPES registry | Modify (Task 5) — add `rivers` |
 | `tests/planet-archetypes.test.js` | Bidirectional registry drift-guard | Run only (Task 5) — must stay green |
 
@@ -40,14 +40,14 @@ Task order: **spike → port primitive → drivers/state → GUI → registry+te
 
 - [ ] **Step 1: Create the spike harness**
 
-A minimal full-screen three.js sphere with ONLY the drainage primitive driving a grayscale height (no posterize, no other combiners — isolate the variable). Copy the `noised(vec3)` analytic-noise helper from `planet-lod-lab.html` (it's at :434, a self-contained `vec4 noised(vec3 x)`), plus a basic orbit camera. Drive these as `lil-gui` knobs: `meander`, `width`, `freq`, `warpAmt`, `warpFreq`, `tribLac`, `tribGate`. Shade the sphere as `vec3(channel)` so channels read white on black, and add a second toggle to shade by the *gradient-lit* carved height (so you can confirm walls light).
+A minimal full-screen three.js sphere with ONLY the drainage primitive driving a grayscale height (no posterize, no other combiners — isolate the variable). Copy the `noised(vec3)` analytic-noise helper from `world-engine-lab.html` (it's at :434, a self-contained `vec4 noised(vec3 x)`), plus a basic orbit camera. Drive these as `lil-gui` knobs: `meander`, `width`, `freq`, `warpAmt`, `warpFreq`, `tribLac`, `tribGate`. Shade the sphere as `vec3(channel)` so channels read white on black, and add a second toggle to shade by the *gradient-lit* carved height (so you can confirm walls light).
 
 Starting `drainageField` GLSL to iterate from (the spike's job is to refine THIS until it reads):
 
 ```glsl
 // channel = near-zero band of a domain-warped FBM field; +1 gated tributary octave.
 // Returns vec4(channelStrength in [0,1], d(channel)/dpos). Analytic gradient via the
-// same fold/chain-rule discipline as fbmdRidged (planet-lod-lab.html:564).
+// same fold/chain-rule discipline as fbmdRidged (world-engine-lab.html:564).
 vec4 drainageField(vec3 pos){
   // domain warp: displace along a low-freq noise gradient (curl-free, cheap — the
   // same "warp by noise, ignore exact Jacobian" shortcut F5 scarpCombiner uses).
@@ -95,7 +95,7 @@ git add fluvial-drainage-lab.html && git commit -m "F11 spike: drainageField pri
 
 Standalone sphere toy — branching/meanders/wall-lighting confirmed on :9223.
 Final knob defaults + any GLSL deltas recorded in the file header; ported to
-planet-lod-lab.html in the next task.
+world-engine-lab.html in the next task.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -106,7 +106,7 @@ Expected: one new file committed, warp WIP untouched (`git status` shows the war
 ## Task 2: Port `drainageField` + `fluvialCombiner` + uniforms into the big shader
 
 **Files:**
-- Modify: `planet-lod-lab.html` — uniform declarations (~:160–330 GLSL block + ~:1559–1694 JS uniforms object), GLSL functions (after `fbmdRidged`, ~:600), Stage-4 call site (:1432–1433), shared accumulators (:1407).
+- Modify: `world-engine-lab.html` — uniform declarations (~:160–330 GLSL block + ~:1559–1694 JS uniforms object), GLSL functions (after `fbmdRidged`, ~:600), Stage-4 call site (:1432–1433), shared accumulators (:1407).
 
 - [ ] **Step 1: Add the fluvial uniform declarations (GLSL)**
 
@@ -226,7 +226,7 @@ In the `uniforms` object (after `uGlacialOffset` at :1682), add:
 
 Backtick parity check (must stay EVEN — was 30):
 
-Run: `grep -o '\`' planet-lod-lab.html | wc -l`
+Run: `grep -o '\`' world-engine-lab.html | wc -l`
 Expected: an even number (the shader is one template literal; an odd count means a stray backtick broke it).
 
 Then on `:9223`: `mcp__chrome-devtools__list_pages` → navigate/reload → `mcp__chrome-devtools__list_console_messages`. Temporarily force the feature on to see *something* carve (the driver wiring is Task 3): run via `mcp__chrome-devtools__evaluate_script`:
@@ -241,7 +241,7 @@ Expected: **0 console errors** (no shader-compile error), and a screenshot shows
 - [ ] **Step 7: Commit**
 
 ```bash
-git add planet-lod-lab.html && git commit -m "F11: port drainageField + fluvialCombiner into planet-lod-lab shader
+git add world-engine-lab.html && git commit -m "F11: port drainageField + fluvialCombiner into planet-lod-lab shader
 
 Stage-4 carve into the shared canyonHeight accumulator (after canyonCombiner),
 low-ground biased, analytic gradient lights the walls. Drivers wired next task;
@@ -255,7 +255,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 3: Driver derivation (`applyDrivers`) + `state` + frame-loop writes
 
 **Files:**
-- Modify: `planet-lod-lab.html` — `state` object (~:1923–1936), `applyDrivers` (~:2168 end, before `state._derived = u;`), the `🎲 transient` offset-reset line (:2164–2167), frame-loop uniform writes (~:2688).
+- Modify: `world-engine-lab.html` — `state` object (~:1923–1936), `applyDrivers` (~:2168 end, before `state._derived = u;`), the `🎲 transient` offset-reset line (:2164–2167), frame-loop uniform writes (~:2688).
 
 - [ ] **Step 1: Add fluvial fields to `state`**
 
@@ -326,7 +326,7 @@ Expected: Rocky/Ocean density > 0 (water rivers); Titan density > 0 (methane); *
 - [ ] **Step 6: Commit**
 
 ```bash
-git add planet-lod-lab.html && git commit -m "F11: derive uFluvial* drivers in applyDrivers + frame-loop writes
+git add world-engine-lab.html && git commit -m "F11: derive uFluvial* drivers in applyDrivers + frame-loop writes
 
 liquidStability existence-gate; density tracks D4 rain, depth +D14 gravity; relict
 path (low stab + erosion) gives faint softened channels. riversEnabled gates
@@ -340,7 +340,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 4: GUI — "Surface — Gradational" folder → "Rivers & valleys (F11)"
 
 **Files:**
-- Modify: `planet-lod-lab.html` — new folder after the `fGlacial` block (~:2378), the `featureFolders` bridge map (:2382–2387).
+- Modify: `world-engine-lab.html` — new folder after the `fGlacial` block (~:2378), the `featureFolders` bridge map (:2382–2387).
 
 - [ ] **Step 1: Add the new top-level folder + subfolder with knobs**
 
@@ -387,7 +387,7 @@ Expected: panel renders correctly, **0 console errors**. (The registry test in T
 - [ ] **Step 4: Commit**
 
 ```bash
-git add planet-lod-lab.html && git commit -m "F11: add Surface — Gradational GUI folder + Rivers & valleys (F11) subfolder
+git add world-engine-lab.html && git commit -m "F11: add Surface — Gradational GUI folder + Rivers & valleys (F11) subfolder
 
 Headline knobs (density/depth/meander/activity) + shape knobs (width/freq/warp/
 lowBias), enable-in-title + solo + 🎲. Registered fRivers in featureFolders so the
@@ -440,7 +440,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 6: Stage-6 species floor-tint + full verification sweep
 
 **Files:**
-- Modify: `planet-lod-lab.html` — Stage-6 albedo region (:1475–1476).
+- Modify: `world-engine-lab.html` — Stage-6 albedo region (:1475–1476).
 
 - [ ] **Step 1: Add the faint species-keyed channel-floor tint (albedo, not relief)**
 
@@ -455,7 +455,7 @@ At :1475 (`vec3 albedoCol = mix(uBaseColor, frostShade, frostCover);`), insert b
 
 - [ ] **Step 2: Backtick parity + console check**
 
-Run: `grep -o '\`' planet-lod-lab.html | wc -l`
+Run: `grep -o '\`' world-engine-lab.html | wc -l`
 Expected: even (unchanged parity).
 
 Reload `:9223`, `mcp__chrome-devtools__list_console_messages` → **0 errors**. Screenshot Rocky (water — channels show a faint blue floor) and Titan (methane — faint amber). Confirm the tint is subtle, not a hard new posterize band.
@@ -479,7 +479,7 @@ Expected: PASS (Stage-6 edit shouldn't touch it, but confirm).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add planet-lod-lab.html && git commit -m "F11: Stage-6 species floor-tint (water/methane) + full verification
+git add world-engine-lab.html && git commit -m "F11: Stage-6 species floor-tint (water/methane) + full verification
 
 Faint channel-floor albedo, species-keyed, regression-safe at coverage=0. Full
 :9223 sweep passed: branching on wet worlds, none on airless, relict via activity

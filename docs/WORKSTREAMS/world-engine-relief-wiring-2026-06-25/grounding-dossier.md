@@ -14,7 +14,7 @@ any drifted cite in the plan). Cites are relative to repo root `~/projects/well-
 ## TL;DR for the planner — the 5 things that change the build
 
 1. **The carve already lowers height.** Plan §WS4 F2 says "promote the COSMETIC carve to a true
-   host-edit" — that framing is half-stale. `planet-lod-lab.html:424` already does
+   host-edit" — that framing is half-stale. `world-engine-lab.html:424` already does
    `h -= carveDepth * uRiverCarveDepth` ("lower the floor → F14 floods it"). WS4's real F2 work is
    **epoch ordering + shared substrate + stream-power depth**, NOT "make h drop at all."
 2. **The grain CONSUMPTION side is 100% greenfield.** `grep uTectonicGrain` across every renderer
@@ -93,7 +93,7 @@ a directional field. WS4 inserts ONE grain field feeding all six combiners, gate
 | `provinceWeight(int fid)` | `planet-lod-height.glsl.js` | **811** | Affinity LUT (48 PROV_* features) → `mix(1.0, fl+(1-fl)*f, uProvinceWeight)`. vitest-drift-guarded vs `planet-archetypes.js`. |
 | `gProvince.y` direct read (F41 magma) | `planet-lod-height.glsl.js` | **~2233** | The augment-behind-a-dial idiom WS4 should mirror: `mix(constFallback, gProvince.y, uProvinceWeight)`. |
 
-**Bridge / bake host (where axes are written):** `applyDrivers()` in `planet-lod-lab.html`,
+**Bridge / bake host (where axes are written):** `applyDrivers()` in `world-engine-lab.html`,
 axis-write block — `uChasmaAxis.value[i].set` **:2778**, `uScarpAxis.value.set` **:2785**,
 `uTesseraAxis.value[i].set` **:2794** (chasma/scarp/tessera copy straight to uniform);
 orogeny/lava/cryo route via state→frame-loop. `deriveUniforms` call is in this same host. This is the
@@ -107,7 +107,7 @@ once-per-body bake site for the bake-once AC.
 
 ## Slice 3 — carve / router (E9)
 
-**Ground-truth mechanism — the carve is REAL, not cosmetic.** In `planet-lod-lab.html` main(),
+**Ground-truth mechanism — the carve is REAL, not cosmetic.** In `world-engine-lab.html` main(),
 after all relief combiners and BEFORE the F14 sea cut:
 - `h -= carveDepth * uRiverCarveDepth` (**:424**, comment "lower the floor → F14 floods it") — a REAL
   height drop; the carved floor can cross below `uSeaLevel` and flood as water via the SAME mechanism
@@ -117,7 +117,7 @@ after all relief combiners and BEFORE the F14 sea cut:
   partial subtractive guard — the UAT "rivers cut into mountains" fix).
 - Floor darkening at Stage 6 is the ONLY cosmetic part.
 - The OLD in-shader F11 noise carve (`fluvialCombiner`, `h += carve`) is **permanently OFF**:
-  `uFluvialDensity` forced 0 at `planet-lod-lab.html:5540` (retired 2026-06-19). The overlay carve is
+  `uFluvialDensity` forced 0 at `world-engine-lab.html:5540` (retired 2026-06-19). The overlay carve is
   the ONE active river height-lowering carve.
 
 **The subtractive-ness gap (why F2 is non-trivial):** the carve is subtractive in FORM (h only
@@ -145,10 +145,10 @@ decreases) but NOT over a shared substrate:
 | `buildStats` | `planet-lod-rivers.js` | **766** | Source of the regression bands (oceanPct, maxStrahler, orphanPct, uphillPct). |
 | `ensureMesh` (idempotent) / `route` | `planet-lod-rivers.js` | **808 / 821** | Mesh built once; route() re-reads/re-routes/re-bakes the cube each call. |
 | `ROUTER_MAIN` | `planet-lod-rivers.js` | **113** | Routing height proxy — F11/F14 stripped. NOT the rendered h. |
-| carve subtraction `h -= carveDepth*uRiverCarveDepth` | `planet-lod-lab.html` | **424** | PROOF the carve lowers h. |
-| `reliefGate` | `planet-lod-lab.html` | **421** | Fades carve on peaks; tuned by uRiverCarveGateHi (default 0.18). |
-| `uFluvialDensity = 0` (F11 retired) | `planet-lod-lab.html` | **5540** | In-shader noise carve permanently off. |
-| `ensureNetworkRouted` / `riverRerouteDebounced` | `planet-lod-lab.html` | **~3528 / ~3649** | Always-on route path; 220ms debounce (bake-once cadence). |
+| carve subtraction `h -= carveDepth*uRiverCarveDepth` | `world-engine-lab.html` | **424** | PROOF the carve lowers h. |
+| `reliefGate` | `world-engine-lab.html` | **421** | Fades carve on peaks; tuned by uRiverCarveGateHi (default 0.18). |
+| `uFluvialDensity = 0` (F11 retired) | `world-engine-lab.html` | **5540** | In-shader noise carve permanently off. |
+| `ensureNetworkRouted` / `riverRerouteDebounced` | `world-engine-lab.html` | **~3528 / ~3649** | Always-on route path; 220ms debounce (bake-once cadence). |
 
 ---
 
@@ -221,8 +221,8 @@ band constants `:14-17`; lab oracle `tests/world-engine-relief-slice.test.js:77`
    (**:13**, the SAME shared module → zero-DRIFT) and exposes `window._rivers.stats` (**:147**) +
    `window.__riversTerrainReady` (**:166**). Assert oceanPct≈35, maxStrahler≈5, orphanPct===0,
    uphillPct===0 (off `buildStats`). **Rule: if WS4 touches `planet-lod-rivers.js` (F2), re-run this
-   page; if it only touches shader-side `planet-lod-lab.html`, the regression is structurally safe.**
-3. **Live probe surface for the LAB = `window._lab`** (`planet-lod-lab.html:5631`) — NOT the game
+   page; if it only touches shader-side `world-engine-lab.html`, the regression is structurally safe.**
+3. **Live probe surface for the LAB = `window._lab`** (`world-engine-lab.html:5631`) — NOT the game
    `window.__wd`/`enterSol` (that's `src/main.js`, OUT of scope). The lab boots straight into the
    planet (no splash). `_lab` exposes `{state, uniforms, planet, applyDrivers, setPreset, rivers(on),
    riversReroute(), riverStats}`. Probe `_lab.uniforms.uTectonicGrainStrength.value` etc.
@@ -247,13 +247,13 @@ exists — the live model lives in `docs/ARCHIVE/TESTING_CONVENTIONS_LEGACY.md`.
 - The router-lab zero-drift regression exists and consumes the shared `planet-lod-rivers.js` module.
 - No `Date.now`/`Math.random` in the grain derivation path is achievable — `seededUnitVec3`/sin-hash
   and `writeGrainSphere` are all pure. (Note the `randUnitVec3` `Math.random` reroll helper at
-  `planet-lod-lab.html:2390` must NOT be the grain derivation source — see risks.)
+  `world-engine-lab.html:2390` must NOT be the grain derivation source — see risks.)
 - The E6 oracle (equator→thrust / mid-lat→strike-slip / pole→normal) reproduces deterministically;
   already pinned in `tests/worldengine-base-tectonic.test.js`.
 
 ### Cites/claims that were STALE → corrected
 - **Plan §WS4 F2 "promote the COSMETIC carve to a true host-edit"** → STALE FRAMING. The carve
-  ALREADY lowers h (`planet-lod-lab.html:424`) and floods via F14. Only the Stage-6 floor darkening
+  ALREADY lowers h (`world-engine-lab.html:424`) and floods via F14. Only the Stage-6 floor darkening
   is cosmetic. WS4's gap is epoch ordering + shared substrate + stream-power depth, not "make h drop."
 - **Plan §WS4 F1 / contract outputs "replace per-feature axis hashing at initProvinces:797 /
   fbmdRidged:880"** → SEMANTIC CONFLATION (lines are correct, the mechanism is not). `initProvinces`
@@ -263,7 +263,7 @@ exists — the live model lives in `docs/ARCHIVE/TESTING_CONVENTIONS_LEGACY.md`.
   tessera:725, lava:772, cryo:888) + the `seededUnitVec3:483` primitive — NOT initProvinces.
 - **Test-harness slice's own briefing cites were stale** (not the contract's): `docs/TESTING_
   CONVENTIONS.md` does not exist (only the ARCHIVE legacy); the `window.__wd`/`enterSol` probe surface
-  is the GAME (`src/main.js`), not the lab — the lab surface is `window._lab` (`planet-lod-lab.html:5631`).
+  is the GAME (`src/main.js`), not the lab — the lab surface is `window._lab` (`world-engine-lab.html:5631`).
 - No line-number drift found in any contract cite. The `:797` collision (initProvinces in
   height.glsl.js vs createRiverOverlay in rivers.js) is coincidental, both correct.
 
@@ -307,7 +307,7 @@ reads + their deriveUniforms hashes," with initProvinces explicitly preserved.
    adding it (default 0) AND routing every grained combiner through `mix(oldAxis, grainAxis, strength)`
    without perturbing the seed-hash path at strength=0. Confirmed absent in all renderer files.
 7. **Six edit sites + reroll buttons** — missing one combiner leaves an independent random axis that
-   fails `one-shared-grain`. The 🎲 reroll buttons (`planet-lod-lab.html`, `randUnitVec3` at :2390,
+   fails `one-shared-grain`. The 🎲 reroll buttons (`world-engine-lab.html`, `randUnitVec3` at :2390,
    `Math.random`-based) write axes directly and must ALSO respect the grain gate, or they re-introduce
    independent random axes. Do NOT use `randUnitVec3` as the grain derivation source.
 8. **Two copies of the E6 math** (`relief-e6-tectonic.js` lab + `src/worldengine/base/tectonic.js`

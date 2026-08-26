@@ -1,12 +1,12 @@
-// Capture the PRE-REWIRE values straight out of `git show HEAD:planet-lod-lab.html`, so the byte-
+// Capture the PRE-REWIRE values straight out of `git show HEAD:world-engine-lab.html`, so the byte-
 // inertness oracle is literals from the real prior build — not a substitution on the live source.
 import { execSync } from 'node:child_process';
 import { DRIVER_PRESETS, drawPresetRadius } from '../../../../driver-presets.js';
 import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
 import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 
-const OLD = execSync('git show HEAD:planet-lod-lab.html', { cwd: new URL('../../../../', import.meta.url).pathname, maxBuffer: 64 * 1024 * 1024 }).toString();
-const NEW_SRC = (await import('node:fs')).readFileSync(new URL('../../../../planet-lod-lab.html', import.meta.url), 'utf8');
+const OLD = execSync('git show HEAD:world-engine-lab.html', { cwd: new URL('../../../../', import.meta.url).pathname, maxBuffer: 64 * 1024 * 1024 }).toString();
+const NEW_SRC = (await import('node:fs')).readFileSync(new URL('../../../../world-engine-lab.html', import.meta.url), 'utf8');
 const TIER = 1.0;
 const PRESETS = Object.keys(DRIVER_PRESETS);
 
@@ -31,7 +31,7 @@ const NEW_reg    = mkB(grab(NEW_SRC, /(let _cloudRegime = 0;[\s\S]*?;)\s*\n\s*st
 const OLD_rad    = mkE(OLD.split('\n').filter((l) => /^\s*radius:\s*.*\/\s*11\.2\s*,/.test(l))[0].match(/radius:\s*(.*?)\s*,\s*(?:\/\/.*)?$/)[1]);
 const NEW_rad    = mkE(NEW_SRC.split('\n').filter((l) => /^\s*radius:\s*.*\/\s*11\.2\s*,/.test(l))[0].match(/radius:\s*(.*?)\s*,\s*(?:\/\/.*)?$/)[1]);
 
-console.log('// PRE-REWIRE VALUES, captured from `git show HEAD:planet-lod-lab.html` (commit 710f8a2).');
+console.log('// PRE-REWIRE VALUES, captured from `git show HEAD:world-engine-lab.html` (commit 710f8a2).');
 console.log('// [preset]: [bandCount, cloudRegime, giantDynamo, e5RadiusDriver]');
 console.log('const PRE_REWIRE = {');
 for (const p of PRESETS) {

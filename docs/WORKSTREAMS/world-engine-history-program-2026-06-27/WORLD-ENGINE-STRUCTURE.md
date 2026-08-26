@@ -1,6 +1,6 @@
 # Well Dipper — World Engine Structure Report
 
-The World Engine is a **generative** (not simulative) procedural-planet system: it places the *determined end-state* of a world as closed-form / seeded fields over an F3 sphere carrier — functions of latitude, longitude, and per-body driver scalars — never time-stepped simulation. Base writers live in `src/worldengine/base/` (three-free: `alea` + `simplex-noise` + `mathutil` only) and are byte-deterministic. The engine is **LAB-ONLY today** (`planet-lod-lab.html`); the game `Planet.js` renderer port is **ROADMAP increment 9 — the 11th/last program item** (later).
+The World Engine is a **generative** (not simulative) procedural-planet system: it places the *determined end-state* of a world as closed-form / seeded fields over an F3 sphere carrier — functions of latitude, longitude, and per-body driver scalars — never time-stepped simulation. Base writers live in `src/worldengine/base/` (three-free: `alea` + `simplex-noise` + `mathutil` only) and are byte-deterministic. The engine is **LAB-ONLY today** (`world-engine-lab.html`); the game `Planet.js` renderer port is **ROADMAP increment 9 — the 11th/last program item** (later).
 
 ---
 
@@ -101,13 +101,13 @@ The 11 canonical archetypes are the `ARCHETYPES` taxonomy in `planet-archetypes.
 | `createHeightSampler` | render-stage | ✅ | RTT readback: point-cloud → FloatType → readPixels. Pins uOctaves=9 for deterministic routing. | `planet-lod-rivers.js:334-387` |
 | `createCarveCubeMap` | render-stage | ✅ | Valley carve cube (1024 HalfFloat). R=depth, G=mouth, B=order. MAX blend. | `planet-lod-rivers.js:999-1046` |
 | `smoothStrikeAngle` / `macroSeedRotateDeg` | field | ✅ | T6 continuous director (avoids {0,π/2} hardflip) + D9 seed→lat offset ±45° (sin-hash, no RNG). | `planet-lod-tectonic.js:44-64` |
-| `PRESET_ARCHETYPE mapping` | dispatch-gate | ✅ | Lab UI preset→archetype keys. 13 presets → 11 keys. Mars/Venus/HotJupiter/Magma **have NO entry (inert sliders)**; Neptunian+Sub-Neptune collide on 'sub-neptune'. | `planet-lod-lab.html:1901-1921` |
-| `ensureNetworkRouted` / `riverReroute` / `applyDrivers` / `buildBodyDrivers` | render-stage | ✅ | Lab route orchestration + inc-2 driver-vector build (mass/volatile/tidal harvest, opt-in slider override). | `planet-lod-lab.html:2818-3838` |
-| `applyReliefBake` / `setRiverOverlay` | render-stage | ✅ | A/B relief visibility toggle + ribbon visibility gating (routes even when hidden). | `planet-lod-lab.html:2487-3839` |
+| `PRESET_ARCHETYPE mapping` | dispatch-gate | ✅ | Lab UI preset→archetype keys. 13 presets → 11 keys. Mars/Venus/HotJupiter/Magma **have NO entry (inert sliders)**; Neptunian+Sub-Neptune collide on 'sub-neptune'. | `world-engine-lab.html:1901-1921` |
+| `ensureNetworkRouted` / `riverReroute` / `applyDrivers` / `buildBodyDrivers` | render-stage | ✅ | Lab route orchestration + inc-2 driver-vector build (mass/volatile/tidal harvest, opt-in slider override). | `world-engine-lab.html:2818-3838` |
+| `applyReliefBake` / `setRiverOverlay` | render-stage | ✅ | A/B relief visibility toggle + ribbon visibility gating (routes even when hidden). | `world-engine-lab.html:2487-3839` |
 | `HEIGHT_GLSL` / `ROUTER_MAIN` / `HEIGHT_VERT` | shader | ✅ | AC1 single-source h(pos) GLSL shared by lab planet + router; RTT main/vertex. | `planet-lod-height.glsl.js`; `rivers.js:212-269` |
-| `relief-gate (UAT item 3)` | dispatch-gate | ✅ | smoothstep carve-aliasing guard where relief > mesh resolution. | `planet-lod-lab.html:427-437` |
+| `relief-gate (UAT item 3)` | dispatch-gate | ✅ | smoothstep carve-aliasing guard where relief > mesh resolution. | `world-engine-lab.html:427-437` |
 | `TextureBaker` | render-stage | 💡 | Standalone equirect MRT baker (diffuse+heightmap). NOT integrated into route() pipeline. | `src/rendering/TextureBaker.js` |
-| `rivers band-fallback` | dispatch-gate | 💡 | Rivers below ~140km mesh res auto-vanish; no fine-LOD fallback wired (patchStrength=0 default). | `planet-lod-lab.html:3732-3778` |
+| `rivers band-fallback` | dispatch-gate | 💡 | Rivers below ~140km mesh res auto-vanish; no fine-LOD fallback wired (patchStrength=0 default). | `world-engine-lab.html:3732-3778` |
 
 ---
 

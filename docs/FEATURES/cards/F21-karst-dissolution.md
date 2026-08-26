@@ -7,7 +7,7 @@ F21 Karst / dissolution (domain: Fluvial; family F-gradational, docs/FEATURES/pl
 
 ## 2. Current shader approach (HOW, as-built)
 
-Unbuilt (aspirational). No karst key exists in the FEATURES registry (planet-archetypes.js:6-23) and no karstCombiner in the lab; the only mention is the Stage-4 roadmap comment that explicitly reserves the slot — "Stage 4: FLUVIAL incision — channels/karst carve, add into canyonHeight; uLiquidMask cut at seaLevel" (planet-lod-lab.html:1523). Nearest machinery it should plug into: the F11 fluvialCombiner (planet-lod-lab.html:653-670), which carves into the shared canyonHeight accumulator, bends grad for perturbAnalytic wall lighting, early-outs on uFluvialDensity≤0 (uniform declared :331, default 0.0 at :1761, driven from state.riversEnabled at :2823), and writes fluvialWet for the Stage-6 species floor-tint (:1551) — a karstCombiner would be a sibling in the same Stage-4 call block (:1504), reusing the lowGround bias, the canyonHeight/grad contract, and the uLiquidSpecies tint + seaLevel cut for collapse lakes.
+Unbuilt (aspirational). No karst key exists in the FEATURES registry (planet-archetypes.js:6-23) and no karstCombiner in the lab; the only mention is the Stage-4 roadmap comment that explicitly reserves the slot — "Stage 4: FLUVIAL incision — channels/karst carve, add into canyonHeight; uLiquidMask cut at seaLevel" (world-engine-lab.html:1523). Nearest machinery it should plug into: the F11 fluvialCombiner (world-engine-lab.html:653-670), which carves into the shared canyonHeight accumulator, bends grad for perturbAnalytic wall lighting, early-outs on uFluvialDensity≤0 (uniform declared :331, default 0.0 at :1761, driven from state.riversEnabled at :2823), and writes fluvialWet for the Stage-6 species floor-tint (:1551) — a karstCombiner would be a sibling in the same Stage-4 call block (:1504), reusing the lowGround bias, the canyonHeight/grad contract, and the uLiquidSpecies tint + seaLevel cut for collapse lakes.
 
 ## 3. Reference images (real + art)
 
@@ -34,7 +34,7 @@ Geomorphology models dissolution as rate ∝ solvent undersaturation × dissolut
 
 ## 5. Isolation recipe (:9223)
 
-Unbuilt — recipe once built. Register in planet-archetypes.js FEATURES as karst: { label: 'Karst (F21)', enableKey: 'karstEnabled', archetypes: ['tectonic-terrestrial','volatile-cold'] } so the existing solo plumbing (planet-lod-lab.html:2561-2569, setFeatureEnables) picks it up automatically. Then on the :9223 lab: (1) window._lab.setPreset('Titan (methane seas)') for the labyrinth/methane variant (the preset already carries n2 atmosphere + methane liquid species, planet-lod-lab.html:2153) or window._lab.setPreset('Rocky (Earthlike)') for limestone doline fields; (2) window._lab.solo('karst') to zero every other combiner; (3) judge at window._lab.state.distance = 3 (mid LOD ramp — field-scale pattern: doline clustering, plateau dissection) and window._lab.state.distance = 1.5 (near-LOD2 — wall lighting, pit floors, collapse-lake tint); (4) sweep the maturity knob 0→1 and the master density to 0 to confirm the regression-safe early-out leaves the Stage-A base untouched; window._lab.solo(null) / enableAllFeatures() to clear.
+Unbuilt — recipe once built. Register in planet-archetypes.js FEATURES as karst: { label: 'Karst (F21)', enableKey: 'karstEnabled', archetypes: ['tectonic-terrestrial','volatile-cold'] } so the existing solo plumbing (world-engine-lab.html:2561-2569, setFeatureEnables) picks it up automatically. Then on the :9223 lab: (1) window._lab.setPreset('Titan (methane seas)') for the labyrinth/methane variant (the preset already carries n2 atmosphere + methane liquid species, world-engine-lab.html:2153) or window._lab.setPreset('Rocky (Earthlike)') for limestone doline fields; (2) window._lab.solo('karst') to zero every other combiner; (3) judge at window._lab.state.distance = 3 (mid LOD ramp — field-scale pattern: doline clustering, plateau dissection) and window._lab.state.distance = 1.5 (near-LOD2 — wall lighting, pit floors, collapse-lake tint); (4) sweep the maturity knob 0→1 and the master density to 0 to confirm the regression-safe early-out leaves the Stage-A base untouched; window._lab.solo(null) / enableAllFeatures() to clear.
 
 ## 6. What to judge (UAT checklist)
 
@@ -97,7 +97,7 @@ Unbuilt — recipe once built. Register in planet-archetypes.js FEATURES as kars
   Rocky-scale relief. Persisted 0.08. Structural note for the integration pass: the plateau
   mask is ABSOLUTE in h, so it interacts with per-world relief amplitude — a relative/quantile
   mask is the right deferred fix; per-archetype profiles (Phase 6) can paper over it meanwhile.
-- Verification gotcha (cost ~6 probe rounds): editing planet-lod-lab.html triggers a Vite
+- Verification gotcha (cost ~6 probe rounds): editing world-engine-lab.html triggers a Vite
   full-reload of the :9223 lab page, silently resetting preset/solo/distance state — early
   "zero-diff" karst readings were measured against a reset page (Rocky, d20, all features on),
   not the configured Titan scenario. Re-set the whole scenario after ANY file edit.

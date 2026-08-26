@@ -84,7 +84,7 @@ half-periods), so `uBandM` is a drop-in for the ladder count.
 
 ### 0.3 The broken Rhines wires (session-verified; trust, don't re-derive)
 
-`planet-lod-lab.html`:
+`world-engine-lab.html`:
 - `rebakeE5Bands()`: `drivers = { ..._gd, rotationRate: (9.9/(_fp.rotationHours ?? 24))·(state.e5RotationScale ?? 1), radius: (_fp.radiusEarth ?? 1)/11.2 }`
   — **preset constants**, while `deriveConditionVector(_fp, _gu, state.planetRadiusEarth)` two
   lines up already receives the drawn radius.
@@ -118,7 +118,7 @@ present; `[envelope]` = exactly one `attribute float aStorm` in the lab + no uni
 proof. Downstream consumers #4 lightning / #5 brown-dwarf / #8 Mars-oscillator read the phase
 bank + mask — untouched fields.
 
-Lab carriage (`planet-lod-lab.html`): `applyStormState()` maps writer output → `state.spot*` /
+Lab carriage (`world-engine-lab.html`): `applyStormState()` maps writer output → `state.spot*` /
 `state.trainSpots[]` (**drops `ageScalar` and `mode` for train members today** — the per-frame
 block passes literal mode `0` for train slots: `uStormParams.value[_stormN].set(s.rot,
 s.aspect, 0, s.companion)`; only `uStormParams[0].z` is ever read in GLSL today, by the GRS
@@ -181,7 +181,7 @@ proven plumbing.
 
 ### 2.1 Radius wire (one-token-class, both call sites)
 
-In `rebakeE5Bands()` AND `applyStormState()` (`planet-lod-lab.html`), replace the drivers
+In `rebakeE5Bands()` AND `applyStormState()` (`world-engine-lab.html`), replace the drivers
 assembly with a single-sourced helper so the two sites can never diverge again:
 
 ```js
@@ -238,7 +238,7 @@ export function drawRotationHours({ archetype, canonicalHours, locked, hydrogenA
 ```
 
 Lab wrapper `drawPresetRotation(presetName, seed)` beside `drawPresetRadius`
-(`planet-lod-lab.html`): compute `isHotJupiterClass = _fp.tidalState?.locked &&
+(`world-engine-lab.html`): compute `isHotJupiterClass = _fp.tidalState?.locked &&
 _fp.atmosphere?.composition === 'h2-he'`. NAMED_BODY and NOT hot-Jupiter-class → canonical
 `_fp.rotationHours` (Europa, Magma, Venus stay canonical); the hot-Jupiter-class preset takes
 the derivation branch even though it is NAMED (the contract's explicit ruling: "the preset
@@ -306,7 +306,7 @@ table as a documented divergence with a named owner.
 - **AC-ONECOUNT greps (lab + GLSL source-text, the storm-e SRC-matchAll house pattern),
   COMMENT-STRIPPED (the K_CODE/I_CODE house pattern — lens folds F4/F16-grep; belt-and-braces
   with the §2.3 comment reword):** `uBandCount` absent from `planet-lod-height.glsl.js`,
-  `planet-lod-uniforms.js`, `planet-lod-lab.html`; `jetsDisp`/`jetU`/`jetShearGate` bodies
+  `planet-lod-uniforms.js`, `world-engine-lab.html`; `jetsDisp`/`jetU`/`jetShearGate` bodies
   contain `uBandM`; both lab driver-assembly call sites contain
   `giantDriverScalars(state.planetRadiusEarth`.
 - **Guard extension (exact non-weakening shape — lens fold F6; builder does NOT improvise):**
@@ -353,7 +353,7 @@ as a design refinement of designDecision-8's "`stormE:deck` stream" example: the
 condition-derived (stronger AC-0 driver-connectivity), the stochastic per-storm scalars
 (emboss/billow) are the alea draws. Adjudicable, logged in Build deviations.
 
-### 3.2 Carriage (`planet-lod-lab.html` + `planet-lod-uniforms.js` + `HEIGHT_GLSL`)
+### 3.2 Carriage (`world-engine-lab.html` + `planet-lod-uniforms.js` + `HEIGHT_GLSL`)
 
 - `applyStormState()` stashes: `state.spotAge/spotEmboss/spotBillow` (from
   `_p.ageScalar/embossDir/billowPhase`) and extends the `trainSpots` map with
@@ -668,7 +668,7 @@ ride `PROV_GREATSPOT`/`PROV_BANDS` weights already in place).
 
 | Slice | Ships | Fence surface | Closes (code-side) |
 |---|---|---|---|
-| **S1 wires** | radius wire ×2 via `giantDriverScalars`; `drawRotationHours` (hot-Jupiter-class = locked+h2-he derivation ONLY; locked solids canonical — F10) /`tidalLockRotationHours`/`ROTATION_RANGES_HOURS` (gas-giant + sub-neptune only — F11) + lab `drawPresetRotation` + `state.rotationHours`; `uBandCount` retired → `uBandM` (+ historical-comment reword — F4) | `giant-drivers.js` (+ F6-shaped guard extension), `planet-lod-lab.html` (driver assembly, `_radiusDirty`, `_rotH`, GUI row removal, per-frame line), `planet-lod-uniforms.js`, `planet-lod-height.glsl.js` (jets ladder) | AC-RHINES (NEPTUNIAN-pinned ice leg — F12), AC-ROTDRAW, AC-ONECOUNT, AC-0(1) |
+| **S1 wires** | radius wire ×2 via `giantDriverScalars`; `drawRotationHours` (hot-Jupiter-class = locked+h2-he derivation ONLY; locked solids canonical — F10) /`tidalLockRotationHours`/`ROTATION_RANGES_HOURS` (gas-giant + sub-neptune only — F11) + lab `drawPresetRotation` + `state.rotationHours`; `uBandCount` retired → `uBandM` (+ historical-comment reword — F4) | `giant-drivers.js` (+ F6-shaped guard extension), `world-engine-lab.html` (driver assembly, `_radiusDirty`, `_rotH`, GUI row removal, per-frame line), `planet-lod-uniforms.js`, `planet-lod-height.glsl.js` (jets ladder) | AC-RHINES (NEPTUNIAN-pinned ice leg — F12), AC-ROTDRAW, AC-ONECOUNT, AC-0(1) |
 | **S2 substrate** | `stormE:emboss`/`stormE:billow` post-pass + `STORM_DECK` frozen export (F16-consts); `uStormAux[8]` carriage (F2 slot-sync: written inside BOTH gated `_stormN` blocks) + decl; train `s.mode` pass-through | `storm-e.js`, lab carriage, `planet-lod-uniforms.js`, `HEIGHT_GLSL` decl | AC-FENCE re-proof, AC-0(2/3) groundwork |
 | **S3 deckZ** | hood reorder + `stormColTerms(…, hood)`; deck-weighted haze + `DECK_HAZE`-minuend hoodExposure (F16-hood: documented-marginal, unprobed); mode-0 emboss + cold annulus + prominence; mode-1 deep-deck fill (donor ratio clamped 1.5 — F-deep) + rim wisps | `planet-lod-height.glsl.js` (storm section only) | AC-DECK enablement, AC-OFFGATE (structural), AC-STATIC |
 | **S4 dSpiral** | `BAND_SPIRAL` (rr-coupled LEAN — F15) + `spiralDisplacement` mirror (radial-Δψ wrap props — F9; envelope ×(1+SCAL) — F-env); `dSpiralVec` (I_BODIES naming constraint — F7) + dual consumption via BRANCHED `NrawD`/`posD` from the received `pos` (F1/F8; jag sample excluded — F3); calibrate script (wrap_visible + superposition envelope — F9/F17) | `band-flow.js`, `planet-lod-height.glsl.js` (`zonalBandCol` head), `tools/` | AC-SPIRAL enablement, AC-OFFGATE, AC-STATIC |
@@ -751,7 +751,7 @@ per `feedback_record-build-intent`) + gate bundle from the worktree dir.
 ### Fold 1 — adversarial lens pass (bytes-fence / fluid-mechanism / population-wiring), folded 2026-07-19 (overnight)
 
 Every disposition re-verified against source anchors this session before folding (files:
-`planet-lod-lab.html`, `planet-lod-height.glsl.js`, `driver-presets.js`,
+`world-engine-lab.html`, `planet-lod-height.glsl.js`, `driver-presets.js`,
 `body-condition-vector.js`, `src/worldengine/base/climate-e5.js`, `src/worldengine/base/storm-e.js`,
 `tests/worldengine-base-band-flow.test.js`, `tests/worldengine-base-giant-drivers.test.js`,
 `src/core/ScaleConstants.js`). 17 findings; 15 accepted (3 with modification), 0 rejected

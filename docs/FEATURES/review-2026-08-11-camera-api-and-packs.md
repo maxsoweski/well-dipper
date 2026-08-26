@@ -51,7 +51,7 @@ Found independently by two verifiers. The four-step ordering comment is correct 
 and silent about this interaction.
 
 ### 3. HIGH · the lab's `frameBody` converts radii through a stale `sVis`
-`planet-lod-lab.html:~5634`.
+`world-engine-lab.html:~5634`.
 
 `sVis` is written **only** inside `frame()`. Any radius change made since the last render makes the
 requested body-radii convert to the wrong absolute `state.distance`. The game side has no equivalent
@@ -71,7 +71,7 @@ those frames trips `clampedFromAsk` and gets reported as a clamp. Unverified —
 the orbital speed at 1.2 radii without a live run.
 
 ### 5. MEDIUM · the lab's sweep drops the caption that explains its own nulls
-`planet-lod-lab.html` `approachSweep`.
+`world-engine-lab.html` `approachSweep`.
 
 It drops `shot.lod.note` from its rows and carries no aggregate. With `octAuto` OFF it returns
 `lodAgrees: null` at every rung **and** a confident `saturatedNote` — the exact shape of a result
@@ -104,7 +104,7 @@ below shows is not universal.
 
 ### 8. LOW · `check:instruments` green does not mean the new packs' citations are right
 Measured: `polarDeck.js` carries **5 unchecked refs**, `limbDeck.js` **1**. One of them —
-`polarDeck.js:57` citing `planet-lod-lab.html:5174` — is **wrong by 26 lines**; the quoted
+`polarDeck.js:57` citing `world-engine-lab.html:5174` — is **wrong by 26 lines**; the quoted
 `uniforms.uPolarStrength.value = …` line is at `:5200`. The fence prints *"all 399 symbol-anchored
 citations resolve. Exit 0."*
 
@@ -161,7 +161,7 @@ piece of work."*
 the **shared** sites a 4th pack must touch: `drivers/index.js` (the 1 import + 1 entry §5 promises),
 `tools/port-uniform-delta.mjs` `CITE_SOURCES` (a hardcoded file list), `tests/gas-body-lab-material.test.js`,
 `tests/pack-contract.test.js`, `tests/material-parity-list.test.js`, `tests/lab-surface-ratchet.test.js`
-+ `tests/fixtures/lab-surface-baseline.mjs`, `planet-lod-lab.html` (the import-back), and
++ `tests/fixtures/lab-surface-baseline.mjs`, `world-engine-lab.html` (the import-back), and
 `step6-parity-ledger.md`.
 
 That is ~8, consistent with the 8 the last session measured — and with the pack's own test file

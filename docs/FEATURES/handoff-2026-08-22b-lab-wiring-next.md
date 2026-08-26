@@ -9,7 +9,7 @@
 
 ## 1. THE ONE THING TO DO
 
-**Wire `solidFeaturesPack` into `planet-lod-lab.html`.** Max ruled **ADOPT** on the radius-aware
+**Wire `solidFeaturesPack` into `world-engine-lab.html`.** Max ruled **ADOPT** on the radius-aware
 gravity (2026-08-22). The adapters are built, tested and shipped; only the lab edit remains.
 
 ### What is already done — do not redo it
@@ -40,14 +40,14 @@ gravity (2026-08-22). The adapters are built, tested and shipped; only the lab e
    is now RED. That is deliberate.
 
 ### ⛔ THE HARD CONSTRAINT
-**`planet-lod-lab.html` must stay EXACTLY 6559 lines.** 500 line-anchored citations sit at or past
+**`world-engine-lab.html` must stay EXACTLY 6559 lines.** 500 line-anchored citations sit at or past
 `:1933`, 175 inside 1933–2760. Freed lines get **neutralised into comments**, never deleted —
 count preserved, dead code gone. Same for `Planet.js` (2304) and `limbDeck.js` (199).
 
 ### Why the three values change (the ruling)
 All three derive from `surfaceGravity`. `deriveUniforms` uses the canonical **radius-BLIND** g; the
 condition vector carries the **radius-AWARE** one. ⭐ The lab already made this exact conversion once
-— `planet-lod-lab.html:1964`, comment: *"both were radius-deaf until this line changed"* — for the
+— `world-engine-lab.html:1964`, comment: *"both were radius-deaf until this line changed"* — for the
 bulk relief envelope and the on-screen gravity readout. These three were never brought along.
 
 ---
@@ -60,7 +60,7 @@ bulk relief envelope and the on-screen gravity readout. These three were never b
 | Instrument C | `port-uniform-delta:check` — ZERO delta, exit 0 |
 | Citations | `port-uniform-delta:citations` — **815**, exit 0. ⭐ CHECKED must RISE |
 | Fences | one-pipeline **31/31** · the 5 named suites 176/176 |
-| Line counts | `planet-lod-lab.html` 6559 · `Planet.js` 2304 |
+| Line counts | `world-engine-lab.html` 6559 · `Planet.js` 2304 |
 
 ⛔ **RE-RUN GATES AFTER THE LAST EDIT, NOT BEFORE IT.**
 ⚠ **THREE flaky suites now, not one** — `worldengine-inc3b-composite-budget`,

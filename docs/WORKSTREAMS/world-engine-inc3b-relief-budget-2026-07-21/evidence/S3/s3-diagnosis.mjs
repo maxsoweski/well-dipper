@@ -121,9 +121,9 @@ const WALL_FRAC = (1 - FLOOR_FRAC);                         // 0.5 of the radius
 const thetaWallRad = (deltaRad) => WALL_FRAC * 0.5 * deltaRad;   // = δ/4 at FLOOR_FRAC=0.5
 
 // perturb strength: state JSON does not record `perturb`; the lab default is 0.55
-// (planet-lod-lab.html:1997) and captures were shot at defaults. reliefAmp = perturb ·
+// (world-engine-lab.html:1997) and captures were shot at defaults. reliefAmp = perturb ·
 // reliefEnvelope(R,g) · mix(0.7,1.0,lodRampOf(distance)). Computed per-capture below.
-const PERTURB_DEFAULT = 0.55;                               // planet-lod-lab.html:1997 (cited; state omits it)
+const PERTURB_DEFAULT = 0.55;                               // world-engine-lab.html:1997 (cited; state omits it)
 const PERTURB_MUL_LO = 0.6;                                 // perturbAnalytic: N − gTan·strength·0.6
 
 // ── linear algebra (three .elements COLUMN-MAJOR: element(row,col)=m[col*4+row]) ──
@@ -751,7 +751,7 @@ const report = {
     displayFloorDeg_rejected: THETA_FLOOR_DEG, samplingFloorDeg: +SAMPLING_FLOOR_DEG.toFixed(4),
     meshSpacingDeg: +MESH_SPACING_DEG.toFixed(4), bakePitchDeg: +BAKE_PITCH_DEG.toFixed(4), measuredEdgeDeg: MEASURED_EDGE_DEG, posterizeLevels: LEVELS,
     bakeModelSubstitution: 'The 256²/face GPU CubeCamera bake (createHeightCube/bakeHeightCube, planet-lod-tectonic.js) requires a WebGL renderer and is NOT runnable headless. Its attenuation is modeled with the committed box-filter model (calibration/bake-attenuation-model.json, S0.5) — flagged, not hidden.',
-    perturbAssumption: `state JSON omits 'perturb'; the lab default 0.55 (planet-lod-lab.html:1997) is used with reliefEnvelope(R,g) and lodRampOf(distance) to reconstruct reliefAmp. Sensitivity: reliefAmp scales the carrier asymmetry ~linearly.`,
+    perturbAssumption: `state JSON omits 'perturb'; the lab default 0.55 (world-engine-lab.html:1997) is used with reliefEnvelope(R,g) and lodRampOf(distance) to reconstruct reliefAmp. Sensitivity: reliefAmp scales the carrier asymmetry ~linearly.`,
   },
   verdict: {
     verdict, convictedLayer, evidence,

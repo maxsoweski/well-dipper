@@ -20,7 +20,7 @@
 
 The gas deck composites in `zonalBandCol(N, pos, wBand, wShear, wMush, wStorm)`
 (`planet-lod-height.glsl.js`), called ONCE from the lab band block
-(`planet-lod-lab.html`, the `bandMask > 0.0` branch). There the swirl is applied to the DIRECTION:
+(`world-engine-lab.html`, the `bandMask > 0.0` branch). There the swirl is applied to the DIRECTION:
 `bandN = stormSwirl(normalize(vPos)); bandPos = bandN * length(vPos);` (both only when `uStormCount>0`),
 then `zonalBandCol(bandN, bandPos, vBand, vShear, vMush, vStorm)`.
 
@@ -365,7 +365,7 @@ nor any `stormE:*` stream (mask golden). Draw: `uBandRough = ROUGH_MEAN + (rng()
 `rebakeE5Bands`, which runs on BOTH reseed AND every `applyDrivers` (knob-drag) — so a manual `uBandRough`
 slider drag would be re-clobbered on the next knob touch unless it carries a touched-flag. Reuse the exact
 D-slot override mechanism already in the lab: the `_driverTouched` Set + `resetDriverOverrides()` clear
-(lab `planet-lod-lab.html`). Concretely: add `uBandRough` to the touched-set on its slider `.onChange`;
+(lab `world-engine-lab.html`). Concretely: add `uBandRough` to the touched-set on its slider `.onChange`;
 `rebakeE5Bands` re-draws it from `bandFlow:rough` ONLY when it is NOT in the touched-set (untouched ⇒
 per-seed derived; touched ⇒ the slider value persists across reseeds until `resetDriverOverrides`). Same
 opt-in semantics as the bodyDrivers sliders — determinism is unaffected (same seed → same derived draw).
@@ -464,7 +464,7 @@ set, read `bake.params` → set the six proxy uniforms (every reseed re-exports 
 | Slice | Ships | Fence surface | Gate |
 |---|---|---|---|
 | **J — jaggedness** (FIRST) | slice-J edge term (`cyc` belt/zone base + `wShear` edge boost); `uBandRough` + `bandFlow:rough` stream; `bandRoughness`/`drawBandRoughness` mirrors | `planet-lod-height.glsl.js` (`zonalBandCol` edge term + **`uBandRough` `uniform` decl IN HEIGHT_GLSL**); `planet-lod-uniforms.js` (`uBandRough` value); NEW `band-flow.js` (roughness only) + NEW `tests/worldengine-base-band-flow.test.js`; lab (roughness slider + export + touched-flag override) | AC-0, AC-JAG, AC-ZERO-CLOBBER |
-| **K — ink-in-water** (SECOND — lands the shared proxy) | proxy uniforms + `bandProxy` GLSL; the `dBand` term; `dAdvect`; `uAtmoInk`/`uInkStretch`; `bandProxy`/`advectDisplacement` mirrors + parity | `planet-lod-height.glsl.js` (`bandProxy` fn + `dBand`/`dAdvect` in `zonalBandCol` + `zonalBandCol` 7th param `Nraw` + **all 8 K-uniform `uniform` decls IN HEIGHT_GLSL** — 6 proxy + 2 ink); `planet-lod-lab.html` (call-site `, N`; proxy-uniform export; ink sliders); `planet-lod-uniforms.js` (6 proxy + 2 ink uniform VALUES); `band-flow.js` (proxy/advect) + its test | AC-0, AC-ADVECT, AC-ZERO-CLOBBER, AC-LIVE(partial) |
+| **K — ink-in-water** (SECOND — lands the shared proxy) | proxy uniforms + `bandProxy` GLSL; the `dBand` term; `dAdvect`; `uAtmoInk`/`uInkStretch`; `bandProxy`/`advectDisplacement` mirrors + parity | `planet-lod-height.glsl.js` (`bandProxy` fn + `dBand`/`dAdvect` in `zonalBandCol` + `zonalBandCol` 7th param `Nraw` + **all 8 K-uniform `uniform` decls IN HEIGHT_GLSL** — 6 proxy + 2 ink); `world-engine-lab.html` (call-site `, N`; proxy-uniform export; ink sliders); `planet-lod-uniforms.js` (6 proxy + 2 ink uniform VALUES); `band-flow.js` (proxy/advect) + its test | AC-0, AC-ADVECT, AC-ZERO-CLOBBER, AC-LIVE(partial) |
 | **I — interaction** (THIRD — the live headline) | `dWake` (bow + downstream cone/meander); downstream sign from `bandProxy(latC)` (needs K's proxy); reinforcement of `stormColTerms`/`stormSwirl` if live A/B needs it | `planet-lod-height.glsl.js` (`dWake` in `zonalBandCol`, reads `uStorm*` + `bandProxy`); `band-flow.js` `stormBandDrag` mirror + wake-reach floor + perceptual bow/wake floor | AC-0, AC-INTERACT, AC-LIVE, AC-ZERO-CLOBBER |
 
 **Order rationale (which first + why):**
@@ -548,7 +548,7 @@ legitimately contains `uTime`/`ph0`/`ph1`/`r0`/`r1` in the LEGACY jets-on path I
 (`CameraChoreographer.js`, `LabMode.js`).
 
 **Live gates:** Max-started dev server (`npm run dev -- --port 5178`; lab
-`http://localhost:5178/well-dipper/planet-lod-lab.html`); liveness via chrome-devtools `list_pages` (NEVER
+`http://localhost:5178/well-dipper/world-engine-lab.html`); liveness via chrome-devtools `list_pages` (NEVER
 sandbox-curl); screenshots → `evidence/`; **all agent pages closed after** (window hygiene). K carries an
 extra live check: two frames at different `uTime` with storms on must be pixel-identical in the advected
 region (the F1 static-invariance frame check the grep can't catch). **Isolation matrix (state the term
@@ -634,7 +634,7 @@ folding. **6 must-fixes folded, 0 rejected; 10 minors folded, 1 no-change (lens 
 - **MINOR 3 — `uBandRough` re-draw must carry the D-slot override flag or a manual slider is re-clobbered
   on the next knob-drag.** → **[FOLDED]** §4.3 override-flag pin (reuse `_driverTouched` + `resetDriverOverrides`);
   §6 redraw note made touched-gated. *Verified:* `_driverTouched` Set + `_driverAbMode` pattern exists in
-  `planet-lod-lab.html`.
+  `world-engine-lab.html`.
 - **MINOR 4 — AC-0 value-slider registration must be a WRITTEN BUILD-NOTES artifact.** → **[FOLDED]** §8
   AC-0 row now specifies the verbatim note verify-workstream's AC-0 audit consumes.
 

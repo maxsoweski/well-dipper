@@ -1,6 +1,6 @@
 # Design — planet-lab: split panel into two sides + toggle-in-title
 
-**Date:** 2026-06-07 · **File:** `planet-lod-lab.html` (three.js r183.1 / lil-gui 0.21.0) · **Branch:** `master`
+**Date:** 2026-06-07 · **File:** `world-engine-lab.html` (three.js r183.1 / lil-gui 0.21.0) · **Branch:** `master`
 **Predecessor:** `2026-06-07-lab-panel-ux-redesign-design.md` (shipped archetype filter + per-feature solo).
 
 ## Goal (Max's words)
@@ -112,5 +112,5 @@ mechanism that doesn't work in isolation.
 ## Risk notes
 - `folder.$title` is the documented lil-gui 0.21 handle; the spike confirms it before reliance.
 - Two-GUI `save()` merge is export-only; if a future load path is added it must read both GUIs.
-- Backtick parity in `planet-lod-lab.html` must stay EVEN (currently 30) — this touches panel JS, not the
+- Backtick parity in `world-engine-lab.html` must stay EVEN (currently 30) — this touches panel JS, not the
   shader template literal, so re-check after edits.

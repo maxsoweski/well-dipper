@@ -13,7 +13,7 @@ drawing buffer 1750×1377. Same GPU as every prior measurement filed in this wor
 
 ## 1. What the law is, confirmed against the running renderer
 
-`uniforms.uDispDomainScale.value = sVis` (`planet-lod-lab.html:5976`) — the single writer — feeds three
+`uniforms.uDispDomainScale.value = sVis` (`world-engine-lab.html:5976`) — the single writer — feeds three
 sites in the shared height GLSL:
 
 | site | what it scales |
@@ -53,7 +53,7 @@ by `|log2 sVis| = 1`, i.e. **R = 4**. Measured on the running page, after lettin
 | 4.0 | 2.000000 | **0.000000** | 1.000000 | **pure synth** (else branch, no cube fetch) | `sampler` |
 
 `uReliefBakeStrength + uCraterBakeRestore = 1.000000` at every row — the crater-restore complement
-(`planet-lod-lab.html:5998`) holds exactly, so craters are not being deleted at any radius sampled.
+(`world-engine-lab.html:5998`) holds exactly, so craters are not being deleted at any radius sampled.
 
 Two things follow, both of which matter beyond item 2:
 
@@ -157,7 +157,7 @@ off the fixed-camera set.** The `ld3` and `AB` sets exist because of this.
 
 ## 4b. THE EDIT, AND ITS VERIFICATION (added after the edit landed)
 
-The edit: `planet-lod-lab.html` — the frame-loop write `uniforms.uDispDomainScale.value = sVis` is
+The edit: `world-engine-lab.html` — the frame-loop write `uniforms.uDispDomainScale.value = sVis` is
 deleted, replaced by a comment recording why and what it deliberately does not do. The uniform keeps
 its `1.0` initializer (`planet-lod-uniforms.js:17`) at every radius. **The GLSL string is untouched**,
 so the compiled shader program is bit-for-bit the same binary and no FMA/reassociation decision can
@@ -181,7 +181,7 @@ deterministic given state + clock.
 
 ### The valid comparison — the handoff's two-page recipe
 
-`git show HEAD:planet-lod-lab.html > planet-lod-lab.BEFORE.html`, served from the same origin, both
+`git show HEAD:world-engine-lab.html > planet-lod-lab.BEFORE.html`, served from the same origin, both
 pages driven to the same state with the clock pinned to 0, compared by a **GPU readback hash** of the
 centre 256×256 (`gl.readPixels` + FNV-1a, plus a pixel sum) rather than a screenshot, so GUI chrome
 cannot confound it. Both canvases forced to **1750×1375** — an initial 2 px width mismatch (1752 vs
@@ -242,7 +242,7 @@ files references anything this edit touches.
 ### Wider footprint than continents, disclosed
 
 Six animated decks call `fbmd` and inherit its internal `uDispDomainScale` factor, so their **cell
-sizes** revert too: F31 clouds (`planet-lod-lab.html:869`), F33 silicate night deck (`:1131`), F40 dust
+sizes** revert too: F31 clouds (`world-engine-lab.html:869`), F33 silicate night deck (`:1131`), F40 dust
 shreds (`:825-830`), F24 band warp, F25 jet turbulence, F26 weather warp. An earlier claim that their
 DRIFT SPEEDS also change was **refuted** on verification: the `uTime` term sits inside the `fbmd`
 argument and is multiplied by `freq` along with the spatial term, so object-space advection velocity is
@@ -263,6 +263,6 @@ term stops being scaled.
   but that is an argument, not a measurement.
 - The on-screen "✦ current: relief:" summary line lags the uniforms — it refreshes on GUI events, not per
   frame, so in several captures it reads `LEGACY synth (carrier off)` while the uniforms say otherwise.
-  **Read the fingerprints, not the panel text.** `carrierOn` is computed at `planet-lod-lab.html:4377`
+  **Read the fingerprints, not the panel text.** `carrierOn` is computed at `world-engine-lab.html:4377`
   from `grainCarveUI.reliefBakeStrength` (the GUI *base*) and `riverOverlay.heightSource`, neither of
   which is the effective uniform.

@@ -135,7 +135,7 @@ count. Pure plumbing with fully-headless ACs; no visual mechanism yet (deck/spir
 | `tidalLockRotationHours(orbitRadiusEarth, starMassEarth)` | pure export | Kepler P = 2π√(a³/GM), a in Earth radii, M in Earth masses → hours | used ONLY for the hot-Jupiter-class identity, never for a drawn value |
 | `drawRotationHours({archetype, canonicalHours, locked, hydrogenAtmo, orbitRadiusEarth, starMassEarth}, seed)` | pure export | draws the rotation period; `locked && hydrogenAtmo` → `tidalLockRotationHours` (derived); gas archetype → uniform on `giantD:rot:` alea stream; else canonical | **hot-Jupiter-class = locked+h2-he ONLY (F10):** gating on `locked` alone would Kepler-derive every locked solid (Eyeball/Lava/Europa/Magma) — a real behavior change breaking the off-gate solid-preset identity proof. Hot-Jupiter preset is ABSENT from `PRESET_ARCHETYPE`, so the identity can never be archetype-keyed. alea is the ONLY entropy |
 
-### New / changed symbols (`planet-lod-lab.html`)
+### New / changed symbols (`world-engine-lab.html`)
 
 - `drawPresetRotation(presetName, seed)` — sibling of `drawPresetRadius`. `isHotJupiterClass =
   preset.tidalState?.locked && preset.atmosphere?.composition === 'h2-he'`. NAMED_BODY & not
@@ -251,7 +251,7 @@ the phase bank + every #4/#5/#8 downstream consumer are byte-identical **by cons
 | `stormE:emboss` / `stormE:billow` | alea streams | post-pass over the FINALIZED `vortices` list sets `v.embossDir = rngEmboss()·2π`, `v.billowPhase = rngBillow()·2π` | append-only AFTER `stormE:{place,age,phase,polar}` — the golden mask + phase-bank tests are the non-disturbance proof; both are STATIC place-once (no uTime) |
 | `STORM_DECK` | frozen export (no alea) | the five-row deck table `{FLOOR 0.0, BELT 0.35, ZONE 0.7, TOWER 0.9, HAZE 1.0}` | F16-consts: computational values live where consumed — the lab carriage's `_stormDeckZ` reads FLOOR/ZONE/TOWER now; GLSL `DECK_HAZE` (hood minuend) + BELT (deepBase deriver) get their consumers in S3. Guard-safe: no alea in the decl |
 
-### New / changed symbols (`planet-lod-lab.html`)
+### New / changed symbols (`world-engine-lab.html`)
 
 - `_stormDeckZ(mode, age)` — the deckZ derivation (deckZ is DERIVED, not a drawn scalar: the
   deck a storm occupies IS the storm). Mode 0 (warm) ⇒ `mix(ZONE, TOWER, 0.35 + 0.65·age)` (a

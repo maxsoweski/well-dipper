@@ -63,7 +63,7 @@
       "statement": "NO-CLOBBER (plate / shell / volcanic / despun) + scope guard: routing terrestrial/ocean (plate), Europa (shell), a volcanic body (volcanic), and a gas-giant-unlocked (despun) through writeBodyRelief returns each prior path byte-identical with stagnantDiag null; carrier.regime untouched (verify.js regime in {0,1,2} — no 4th regime constant); the commit diff touches ONLY the in-scope files.",
       "verifyVia": {
         "input": "Call writeBodyRelief with terrestrial/ocean, ice (Europa), a volcanic preset, and gas-giant unlocked; compare returned fields to captured pre-change baselines; run the plate/shell/volcanic regime-gate suites; git show the commit.",
-        "observable": "plate/shell/volcanic/despun U byte-identical to baseline with stagnantDiag null off the stagnant path; the regime-gate suites pass; carrier.regime stays in {0,1,2}; git diff touches ONLY stagnantLid.js (new), planet-lod-rivers.js, planet-lod-lab.html, the new stagnant test file, and workstream docs — NOT plates.js / shellRelief.js / tectonic.js / sphereField.js / verify.js / planet-archetypes.js."
+        "observable": "plate/shell/volcanic/despun U byte-identical to baseline with stagnantDiag null off the stagnant path; the regime-gate suites pass; carrier.regime stays in {0,1,2}; git diff touches ONLY stagnantLid.js (new), planet-lod-rivers.js, world-engine-lab.html, the new stagnant test file, and workstream docs — NOT plates.js / shellRelief.js / tectonic.js / sphereField.js / verify.js / planet-archetypes.js."
       },
       "layer": "integration",
       "live": false
@@ -113,7 +113,7 @@
       "carrier.regime UNTOUCHED — verify.js:39 asserts regime in {0,1,2}; introduce NO 4th regime constant",
       "resurfAge (normalized [0,1] age field) RETURNED IN DIAGNOSTICS ONLY — carrier channel deferred to E12 palette (#8)",
       "stagnantDiag object (U, plumeCenters, centerIsAncient, isTessera/tesseraFrac, coronaCenters/coronaRadius/coronaActive/coronaCount/activeFrac, inRift/plainsFrac, resurfAge/deformIntensity/foldAngle, meanEdgeAngle/relaxPasses) threaded through writeBodyRelief -> route() -> a new get stagnantDiag() accessor",
-      "live stagnantLidProbe() in planet-lod-lab.html (sibling of plateProbe/shellProbe), rebuilding predictors arm's-length from plumeCenters",
+      "live stagnantLidProbe() in world-engine-lab.html (sibling of plateProbe/shellProbe), rebuilding predictors arm's-length from plumeCenters",
       "ONE PRESET_ARCHETYPE line ('Venus (sulfuric shroud)':'stagnant-lid') + the dispatch predicate isStagnantLidPath exported from planet-lod-rivers.js"
     ],
     "mustStayWorking": [
@@ -129,7 +129,7 @@
   "filesTouched": [
     "NEW src/worldengine/base/stagnantLid.js — writeStagnantLidReliefSphere + stagnantLidRegimeOf + STAGNANT_LID_KEYS; copy steeredNoise3 / randDir / meanEdgeAngle / vec3 helpers VERBATIM from tectonic.js / shellRelief.js / plates.js",
     "EDIT planet-lod-rivers.js — import the writer + regime resolver; export isStagnantLidPath; make writeBodyRelief N-way (insert the stagnant-lid branch AFTER volcanic, BEFORE despun); thread stagnantDiag through route(); add a get stagnantDiag() overlay accessor",
-    "EDIT planet-lod-lab.html — ONE PRESET_ARCHETYPE line ('Venus (sulfuric shroud)':'stagnant-lid') + the stagnantLidProbe() live probe (sibling of plateProbe/shellProbe)",
+    "EDIT world-engine-lab.html — ONE PRESET_ARCHETYPE line ('Venus (sulfuric shroud)':'stagnant-lid') + the stagnantLidProbe() live probe (sibling of plateProbe/shellProbe)",
     "NEW tests/worldengine-base-stagnantlid-structure.test.js — the AC1-AC7 headless blocks (determinism, structure bar, latitude control, random control, variety, no-clobber, seam-fires)",
     "DOC record-build-intent note (function + intent + non-goals) in the workstream dir; Rule-3 FEATURES.md row on ship"
   ],
@@ -144,6 +144,6 @@
   ],
   "buildSlices": [
     "SLICE A (the writer + its headless structure test — the bulk, three-free): src/worldengine/base/stagnantLid.js — the seeded mantle-plume field (centers/count/type + domain-warp + nearest-center Gaussian proximity), tessera (ancient-cap threshold + orthogonal ribbon+fold double-fabric via two crossed steeredNoise3 ridged fields + grainAngle), coronae (field-biased accept pool + heavy-tailed size draw + active/inactive analytic radial profiles + CORONA_ACTIVE_FRAC selector), rift corridors, resurfAge diagnostics, assembly (ordered base constants + bounded texture + REPLACE .set(U) + RELAX_PASSES), and stagnantLidRegimeOf. Plus tests/worldengine-base-stagnantlid-structure.test.js covering AC1-AC5. Everything headless.",
-    "SLICE B (dispatch + lab wiring + live): planet-lod-rivers.js N-way dispatch (insert stagnant-lid after volcanic, before despun) + isStagnantLidPath + stagnantDiag threading + get stagnantDiag(); planet-lod-lab.html ONE PRESET_ARCHETYPE line + stagnantLidProbe(); the no-clobber (AC6) + seam-fires (AC7) headless blocks. Then working-Claude drives the live AC8 probe on the running lab and screenshots; AC9 UAT deferred to Max."
+    "SLICE B (dispatch + lab wiring + live): planet-lod-rivers.js N-way dispatch (insert stagnant-lid after volcanic, before despun) + isStagnantLidPath + stagnantDiag threading + get stagnantDiag(); world-engine-lab.html ONE PRESET_ARCHETYPE line + stagnantLidProbe(); the no-clobber (AC6) + seam-fires (AC7) headless blocks. Then working-Claude drives the live AC8 probe on the running lab and screenshots; AC9 UAT deferred to Max."
   ]
 }

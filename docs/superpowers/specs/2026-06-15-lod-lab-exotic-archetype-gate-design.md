@@ -3,7 +3,7 @@
 **Date:** 2026-06-15
 **Author:** working-Claude (brainstormed with Max; revised after Max-approved refinements)
 **Status:** spec — pending Max review → implementation plan
-**Scope:** `planet-lod-lab.html` (lab `applyDrivers` + per-frame writers) + one doc edit to
+**Scope:** `world-engine-lab.html` (lab `applyDrivers` + per-frame writers) + one doc edit to
 `docs/FEATURES/relief-triage-verdicts-2026-06-15.md`. **No manifest edit** (`planet-feature-associations.js`
 `rendersOn` is already correct — verified below: this is a no-op verification, not an edit). **Almost
 certainly NO shader/core change** (`planet-lod-lab-core.js` untouched — verified below: every affected
@@ -81,9 +81,9 @@ GUI-parallel cross-check. (Detail + alternatives in Deviations D2.)
 
 #### Deriving the per-feature relevance signal (code-grounded)
 
-`applyDrivers()` (`planet-lod-lab.html:5514`) has everything it needs in scope:
+`applyDrivers()` (`world-engine-lab.html:5514`) has everything it needs in scope:
 
-- The manifest is imported at `planet-lod-lab.html:111`
+- The manifest is imported at `world-engine-lab.html:111`
   (`import { ASSOCIATIONS } from './planet-feature-associations.js';`). `ASSOCIATIONS.shatter.rendersOn`
   = `['Frozen (airless)']` (`:402`) and `ASSOCIATIONS.hexTess.rendersOn` = `['Frozen (airless)']`
   (`:395`, with `rendersOnDivergent: true` at `:394`).
@@ -129,7 +129,7 @@ mountains** — see "mountains is a targeted knockdown" below.
 
 ### Per-feature wiring (each grounded in its real writer line)
 
-Both gated writers AND the mountains writer live **in the lab** (`planet-lod-lab.html`), in the same
+Both gated writers AND the mountains writer live **in the lab** (`world-engine-lab.html`), in the same
 per-frame writer block as `habGate`. **None are baked in `deriveUniforms` with no lab writer** — so
 every gate is a one-line `×=` at the lab layer and **`planet-lod-lab-core.js` stays untouched**
 (verified per feature below; line numbers are HINTS — re-`grep -n` every site).
@@ -227,7 +227,7 @@ surprises, raise it — do not edit speculatively.
 ## Investigation findings (grounded; VERIFIED line numbers unless marked HINT)
 
 1. **`habGate` precedent — confirmed, lab-level.** Computed in `applyDrivers()`
-   (`planet-lod-lab.html:5524`, HINT) from `state.habitability` (`:5520`), seeded `:4950`, consumed by
+   (`world-engine-lab.html:5524`, HINT) from `state.habitability` (`:5520`), seeded `:4950`, consumed by
    per-frame overlay writers via `× state.habGate`. `habGate` does **not** exist in
    `planet-lod-lab-core.js`. This is the exact pattern the relevance gate copies.
 
@@ -265,7 +265,7 @@ surprises, raise it — do not edit speculatively.
    precisely why the hexTess gate must read `rendersOn` (which lists Frozen), not the raw set (see D2).
 
 6. **Render-audit re-run mechanism — confirmed.** `window._lab.renderDeltaSweep()` exists
-   (`planet-lod-lab.html:7045`, HINT; exposed `:7820`, HINT); generator `scripts/gen-render-audit.mjs`
+   (`world-engine-lab.html:7045`, HINT; exposed `:7820`, HINT); generator `scripts/gen-render-audit.mjs`
    exists; report `docs/FEATURES/lab-render-audit.md` exists with current counts **64 false-renders /
    51 dead-renders** (after `248b355`). The verification re-runs this.
 
@@ -301,7 +301,7 @@ These surfaced only by reading the code; they don't break the design but change 
 
 ## Mechanics & risks (on the record)
 
-- **Line-number drift** in `planet-lod-lab.html` is real — line numbers marked HINT are hints;
+- **Line-number drift** in `world-engine-lab.html` is real — line numbers marked HINT are hints;
   re-`grep -n` each edit site (`habGate`, `applyDrivers`, `relevantFeatureSet`, `uShatStrength`,
   `uHexStrength`, `uMountainAmp`, `ARCHETYPES`, `ASSOCIATIONS`) before editing. (Writer `.value`
   lines `:7507/:7518/:7527/:7536/:7617`, `state.mountainAmp` `:5560`, `relevantFeatureSet` `:7083`,
@@ -345,7 +345,7 @@ Campaign-style — render-audit Δ **and** live `:9223` **and** Max UAT.
     member presets (byte-identical-when-1 — member worlds unchanged).
   - The accepted faint `craters` traces (#3) remain (intended; documented).
 - **Live on chrome-devtools GPU `:9223`** (NOT Playwright — GPU path; per
-  `well-dipper-testing-reference.md`). `127.0.0.1:5173/well-dipper/planet-lod-lab.html?fresh=1`,
+  `well-dipper-testing-reference.md`). `127.0.0.1:5173/well-dipper/world-engine-lab.html?fresh=1`,
   **reload `?fresh=1` before each check**, verify via `window._lab.*` + `evaluate_script` (DOM/uniform
   reads, not image recognition):
   - **Force-enable `shatter` on Rocky** → renders nothing; `uShatStrength` reads 0 (hard gate beats
@@ -370,7 +370,7 @@ Campaign-style — render-audit Δ **and** live `:9223` **and** Max UAT.
   the Stage-D GLSL drift-guard, the `rendersOn ⊆ archetype-union` test) stay green. Since no manifest
   edit is made and the divergent flag is preserved, none of these should need updating; if any breaks,
   that signals an unexpected manifest interaction — flag it, don't paper over it.
-- **Commit explicit paths only** (`planet-lod-lab.html`,
+- **Commit explicit paths only** (`world-engine-lab.html`,
   `docs/FEATURES/relief-triage-verdicts-2026-06-15.md`, `docs/FEATURES/lab-render-audit.md` regen) —
   never `git add -A` (shared-tree litter: warp WIP + loose `.png`/`.webm`/`.html` + a file literally
   named `HEAD`).

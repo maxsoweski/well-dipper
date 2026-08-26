@@ -39,7 +39,7 @@ architectural rethinking, brainstorming is reasonable before committing to an ap
 
 ### What v1 is (and why it's the wrong substrate)
 A single flat `THREE.RingGeometry` + one fragment shader (committed `093523c`, in
-`planet-lod-lab.html`, toggled by `state.ringsEnabled` / `window._lab.rings(true)`). It's a
+`world-engine-lab.html`, toggled by `state.ringsEnabled` / `window._lab.rings(true)`). It's a
 2D disk: no depth, no per-particle structure, no LOD, scene interaction limited to an analytic
 planet-shadow cylinder test. The physics chain (ringlets/gaps/density from
 `generateRingPhysics()`) and the retro envelope (Bayer dither-discard alpha, 6-level posterize,
@@ -75,7 +75,7 @@ lod (if we get close enough, can resolve individual particles)."
 Campaign discipline = prototype in the lab first. BUT this is big enough that the
 `feedback_isolated-test-harnesses` rule likely applies: **build a standalone
 `rings-lod-lab.html` harness** (just a planet + ring + camera-distance control) to get the LOD
-particle mechanism working in isolation BEFORE integrating into `planet-lod-lab.html` /
+particle mechanism working in isolation BEFORE integrating into `world-engine-lab.html` /
 production. If the mechanism doesn't work isolated, the integration can't save it.
 
 ### Design questions to resolve WITH Max (brainstorm pass)
@@ -125,7 +125,7 @@ terrestrial/ocean/venus bases F38/F39 list). Watch the live aurora nightMask for
   `000` false-negative on localhost ports).
 - **GPU Chrome :9223:** UP, left on the lab (`?fresh=1`, zero console errors). innerW 1402 /
   dpr 1.25 (sane, no scaling trap). Re-navigate to
-  `http://localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`; relaunch only if the window
+  `http://localhost:5173/well-dipper/world-engine-lab.html?fresh=1`; relaunch only if the window
   closed (`~/.claude/projects/-home-ax/memory/chrome-devtools-9223-launch.md`).
 - **chrome-devtools MCP tools are DEFERRED** — load via ToolSearch:
   `select:mcp__chrome-devtools__list_pages,mcp__chrome-devtools__navigate_page,mcp__chrome-devtools__take_screenshot,mcp__chrome-devtools__evaluate_script,mcp__chrome-devtools__list_console_messages`.
@@ -133,7 +133,7 @@ terrestrial/ocean/venus bases F38/F39 list). Watch the live aurora nightMask for
 
 ## Commit discipline (shared tree — a parallel warp session has WIP in `src/`)
 Two-commit pattern, **explicit paths only, NEVER `git add -A`** (untracked loose PNGs + parallel
-`src/` warp WIP must stay out): (1) `git add planet-lod-lab.html planet-archetypes.js
+`src/` warp WIP must stay out): (1) `git add world-engine-lab.html planet-archetypes.js
 tests/planet-archetypes.test.js` (+ any new `rings-lod-lab.html`) → commit → grab sha;
 (2) stamp the sha into the card §7 + flip the tracker row → `git add` explicit doc paths →
 commit. The commit hook prints harmless `grep: subpattern name expected` lines — not a failure.

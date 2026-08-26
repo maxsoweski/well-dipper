@@ -7,7 +7,7 @@ import { DRIVERS, PROCESSES, driversFor } from '../planet-drivers.js';
 const featureKeys = Object.keys(FEATURES);
 
 // ── Tier-1 ground truth (cross-source) ──────────────────────────────────────
-// The 17 DRIVER_PRESETS keys, hard-pinned from planet-lod-lab.html L5326–5520.
+// The 17 DRIVER_PRESETS keys, hard-pinned from world-engine-lab.html L5326–5520.
 // rendersOn strings must be members of this set. If a preset is added/renamed in
 // the lab, update this list (it is the manifest's external contract for rendersOn).
 const DRIVER_PRESETS = [

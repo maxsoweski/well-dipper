@@ -52,7 +52,7 @@
       "statement": "NO-CLOBBER + DISPATCH SAFETY: the plate, shell, and despun paths are byte-identical to their pre-change baselines (bodyDrivers stays null off the volcanic path, exactly as #2), the volcanic gate order (plate -> shell -> volcanic -> despun) is unchanged, and no out-of-scope file is edited.",
       "verifyVia": {
         "input": "Call writeBodyRelief with terrestrial/ocean (plate), Europa (shell), impact-airless unlocked (despun) and confirm byte-identical fields + null magma tune; git-diff the commit; run the no-clobber + regime-gate harness.",
-        "observable": "plate/shell/despun U byte-identical to baseline with magmaDiag.appliedTune null off the volcanic path; git show touches ONLY magmatism.js, planet-lod-rivers.js, planet-lod-lab.html, the magma test(s), and workstream docs (NOT plates.js/shellRelief.js/tectonic.js/sphereField.js); carrier.regime untouched (verify.js regime in {0,1,2}); the plate/shell regime-gate suites pass."
+        "observable": "plate/shell/despun U byte-identical to baseline with magmaDiag.appliedTune null off the volcanic path; git show touches ONLY magmatism.js, planet-lod-rivers.js, world-engine-lab.html, the magma test(s), and workstream docs (NOT plates.js/shellRelief.js/tectonic.js/sphereField.js); carrier.regime untouched (verify.js regime in {0,1,2}); the plate/shell regime-gate suites pass."
       },
       "layer": "integration",
       "live": false
@@ -106,7 +106,7 @@
   "filesTouched": [
     "EDIT src/worldengine/base/magmatism.js (add MAGMA_REF + export magmaDriversToTune (mirror plates driversToTune) + ELONGATION_GAIN default 0 in MAGMA_DEFAULTS; consume the tune for PLUME_COUNT/EDIFICE_HEIGHT/STRENGTH + ELONGATION_GAIN; add the disjoint 'magma:grain:' per-plume axis draw; make the STEP-6 edifice profile anisotropic (decompose plume-top->node displacement into along/cross axis, stretch along by E=1+ELONGATION_GAIN*H'))",
     "EDIT planet-lod-rivers.js (volcanic branch ~:465: pass bodyDrivers + tune: magmaDriversToTune(bodyDrivers); extend magmaDiag with appliedTune)",
-    "EDIT planet-lod-lab.html (Drivers folder: thermal-driver override slider(s) + A/B for the volcanic path; magmaProbe exposes appliedTune + elongation)",
+    "EDIT world-engine-lab.html (Drivers folder: thermal-driver override slider(s) + A/B for the volcanic path; magmaProbe exposes appliedTune + elongation)",
     "EDIT tests/worldengine-base-magmatism-structure.test.js (add the #4-MULTIPLY AC blocks: byte-identity-at-reference, monotone response, anisotropy, ordering-under-sweep) — or a NEW sibling test file",
     "DOC SLICE-B-calibration.md (MAGMA_REF + transfer-fn calibration) + record-build-intent note (function + intent + non-goals)"
   ],

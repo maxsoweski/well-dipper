@@ -1,6 +1,6 @@
 // tests/lab-shader-body-radius.test.js — LAYER 2 item 1 fence: the object-space radius divide.
 //
-// WHAT THIS PROTECTS. The lab renders a UNIT sphere (planet-lod-lab.html:202 `const R = 1.0`) and
+// WHAT THIS PROTECTS. The lab renders a UNIT sphere (world-engine-lab.html:202 `const R = 1.0`) and
 // every noise domain in the fragment shader is written against that ±1.0 extent. The game builds
 // IcosahedronGeometry at the body's SCENE radius (radiusEarth × 0.0426), so before this fix an
 // Earth-sized body sampled 1/23rd of one voronoi cell and rendered as a flat wash — one of three

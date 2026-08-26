@@ -3,7 +3,7 @@
 **Date:** 2026-06-15
 **Author:** working-Claude (brainstormed with Max)
 **Status:** spec — pending Max review → implementation plan
-**Scope:** `planet-lod-lab.html` only — GUI wiring. **No shader/core changes** (`planet-lod-lab-core.js`
+**Scope:** `world-engine-lab.html` only — GUI wiring. **No shader/core changes** (`planet-lod-lab-core.js`
 untouched), so this cannot regress any planet rendering.
 **Campaign frame:** this is lab *tooling*, not a planet feature — the campaign per-feature UAT loop
 does NOT govern. It's a UI refactor, verified live on `:9223`.
@@ -87,7 +87,7 @@ Per "declutter first," these are NOT in this spec:
 They hang on the clean frame this phase builds.
 
 ## Verification
-- Live on chrome-devtools GPU `:9223` (NOT Playwright): `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`.
+- Live on chrome-devtools GPU `:9223` (NOT Playwright): `localhost:5173/well-dipper/world-engine-lab.html?fresh=1`.
   - World folder: picking a preset updates the adjacent archetype label; no second archetype field remains.
   - bioMats/cityLights: their sliders live in their own right-panel folders; toggling enable from the
     title bar works; Envelope no longer shows bio/city sliders.
@@ -97,4 +97,4 @@ They hang on the clean frame this phase builds.
 - Tests: `npx vitest run` for any suite touching the lab GUI/feature registry (e.g.
   `feature-associations`, `planet-archetypes`, and the test #16 that pins the `cityLightsEnabled`
   literal). Expect green; this is GUI-only.
-- Commit **explicit path only** (`planet-lod-lab.html`) — never `git add -A` (shared tree litter).
+- Commit **explicit path only** (`world-engine-lab.html`) — never `git add -A` (shared tree litter).

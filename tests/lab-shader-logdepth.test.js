@@ -11,7 +11,7 @@
 // because the warp tunnel wrote conventional depth against bodies writing log depth, and sparse
 // belt pixels survived through the walls. Same convention mismatch, different material.
 //
-// ⛔ THE LAB MUST STAY INERT. planet-lod-lab.html builds its renderer WITHOUT the flag, so
+// ⛔ THE LAB MUST STAY INERT. world-engine-lab.html builds its renderer WITHOUT the flag, so
 // USE_LOGDEPTHBUF is undefined there and all four chunks compile to nothing. That is asserted
 // against the lab's source below rather than assumed — it is the whole reason this fix is allowed
 // to live in the shared module instead of being patched game-side.
@@ -79,7 +79,7 @@ describe('LAYER 2 item 4 — logarithmic depth', () => {
     it('⛔ the LAB does not, so the chunks compile to nothing there', () => {
       // If this ever flips, the chunks stop being free in the lab and the lab's own look changes.
       // That is a decision, not an accident — this assertion is where it gets noticed.
-      const lab = read('planet-lod-lab.html');
+      const lab = read('world-engine-lab.html');
       expect(lab).toMatch(/new THREE\.WebGLRenderer\(/);
       expect(lab).not.toMatch(/logarithmicDepthBuffer/);
     });

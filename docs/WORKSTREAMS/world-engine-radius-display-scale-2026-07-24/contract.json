@@ -100,8 +100,8 @@
     }
   ],
   "architecturalConnections": [
-    "planet-lod-lab.html:196 R=1.0 unit sphere + :5643 dist = state.distance * R (the absolute-distance camera this design relies on)",
-    "planet-lod-lab.html:3902 radius slider (applyDrivers) + :2987 drawPresetRadius labUnlock draws (inc3b R3) — the two producers of state.planetRadiusEarth this feature expresses",
+    "world-engine-lab.html:196 R=1.0 unit sphere + :5643 dist = state.distance * R (the absolute-distance camera this design relies on)",
+    "world-engine-lab.html:3902 radius slider (applyDrivers) + :2987 drawPresetRadius labUnlock draws (inc3b R3) — the two producers of state.planetRadiusEarth this feature expresses",
     "lodRampOf / autoOctaves / lodHysteresis (:5652-5655) — re-keyed on logical distance",
     "provinceOverlayMesh (:1507) + riverOverlay/tributaryPatch ribbons (:1549-1550) — must track planet.scale",
     "planet-lod-lab-core.js — home of the pure visScaleOf export (CPU-testable, lab imports it)",

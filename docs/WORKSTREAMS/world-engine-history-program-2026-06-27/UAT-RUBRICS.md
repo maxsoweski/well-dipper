@@ -49,7 +49,7 @@ Each card is prefixed with **Test in lab via** — the *preset the user actually
 
 The rubric must test the **lab preset**, because the lab's `PRESET_ARCHETYPE` short-key routing diverges from the
 canonical 11-archetype taxonomy in ways that change *which increment a preset actually exercises*. Verified live
-against `planet-lod-lab.html:1901` + `src/worldengine/base/shellRelief.js`:
+against `world-engine-lab.html:1901` + `src/worldengine/base/shellRelief.js`:
 
 | Lab preset (what Max picks) | short key | Routes to increment | Gotcha |
 |---|---|---|---|

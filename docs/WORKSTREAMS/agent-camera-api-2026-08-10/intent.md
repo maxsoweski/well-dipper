@@ -51,7 +51,7 @@ Each was paid for in a previous session; each is why an obvious-looking implemen
    348 units away one frame later.
 2. **The lab overwrites a written camera every frame too**, for a different reason: `frame()`
    recomputes `camera.position` from `state.distance/yaw/pitch`
-   (`planet-lod-lab.html:4896`). So on *both* front-ends the API must write the state the frame loop
+   (`world-engine-lab.html:4896`). So on *both* front-ends the API must write the state the frame loop
    reads, never the camera object.
 3. **The game rebases coordinates.** `cameraPose().position` and `mesh.matrixWorld` are in different
    frames — a camera genuinely at 1.8 body radii measured as 26,824. The rebase-immune method

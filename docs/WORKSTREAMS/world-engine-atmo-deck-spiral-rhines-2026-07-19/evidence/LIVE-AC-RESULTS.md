@@ -1,7 +1,7 @@
 # Live integration-AC results — world-engine-atmo-deck-spiral-rhines-2026-07-19
 
 **Driven by:** working-Claude, 2026-07-20, fresh isolated CDP context on `:5178`
-(`http://localhost:5178/well-dipper/planet-lod-lab.html`), atmo worktree on
+(`http://localhost:5178/well-dipper/world-engine-lab.html`), atmo worktree on
 `feature/world-engine-atmo-3b` (HEAD `64ce6a9`). Puppeteer-core over the existing Chrome
 (`:9223`); one new page opened, reused for every probe, closed at the end. Max's three other
 pages (`:5173/:5175/:5176`) left untouched.

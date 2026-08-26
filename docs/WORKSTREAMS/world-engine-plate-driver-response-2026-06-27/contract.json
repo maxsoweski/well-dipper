@@ -92,7 +92,7 @@
   "filesTouched": [
     "EDIT src/worldengine/base/plates.js (add the D_earth constant + driversToTune(D) export + calibrated transfer functions; consume the drivers arg ONLY when producing a tune; remove the `void drivers` once consumed)",
     "EDIT planet-lod-rivers.js (thread a NEW bodyDrivers channel through route() ~1120 -> writeBodyRelief ~424 -> writePlateUpliftSphere ~428 as tune:driversToTune(bodyDrivers); keep grainDrivers separate)",
-    "EDIT planet-lod-lab.html (derive + pass the real per-preset D-vector (gravity/volatiles/tidal) into route() for the plate path; driver-sweep UI + plateProbe additions for AC6)",
+    "EDIT world-engine-lab.html (derive + pass the real per-preset D-vector (gravity/volatiles/tidal) into route() for the plate path; driver-sweep UI + plateProbe additions for AC6)",
     "NEW tests/worldengine-base-plate-driver-response.test.js (AC1-AC5)",
     "DOC record-build-intent note + UAT-RUBRICS.md increment-2 card folded in as the AC7 framing"
   ],

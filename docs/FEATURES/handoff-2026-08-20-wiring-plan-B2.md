@@ -84,7 +84,7 @@ colours**; uLevels 64 → **804** (23.6×). Removing the retro pixel grid instea
 ## 4. ⛔ WHAT IS TRUE ABOUT THIS CODEBASE THAT COSTS A SESSION TO REDISCOVER
 
 - ⭐⭐ **`deriveUniforms(` HAS ZERO CALL SITES IN `src/`.** 39 occurrences: 36 in `tests/`, one in
-  `planet-lod-lab.html`, and the single `src/` hit is a COMMENT. **The game does not run the lab's
+  `world-engine-lab.html`, and the single `src/` hit is a COMMENT. **The game does not run the lab's
   derivation layer — it runs the four packs.** `ROCKY_SURFACE_UNIFORMS` (`rockySurface.js:515`) is
   **21 names**. No pack writes `uLavaActivity`, `uCryoActivity`, `uOutflowDensity`, `uDustDepth`.
   ⛔ **So "wiring a feature" means AUTHORING A PACK DRIVER, not fixing an input.** A healthy law in

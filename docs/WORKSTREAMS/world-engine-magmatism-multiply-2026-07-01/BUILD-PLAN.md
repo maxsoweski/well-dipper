@@ -53,7 +53,7 @@ export function magmaDriversToTune(drivers){
 3. `planet-lod-rivers.js:32`: import `{ writeMagmatismSphere, magmaDriversToTune }`.
 4. `planet-lod-rivers.js:465`: mirror the plate branch —
    `const magmaTune = magmaDriversToTune(bodyDrivers); const magmaDiag = writeMagmatismSphere(carrier, bodyDrivers, { macroSeed, locked, T_ss, tune: magmaTune }); magmaDiag.appliedTune = magmaTune;`
-5. `planet-lod-lab.html` magmaProbe: add `appliedTune: state._lastBodyDrivers ? magmaDriversToTune(state._lastBodyDrivers) : null` (arm's-length, like plateProbe). Null in SLICE A.
+5. `world-engine-lab.html` magmaProbe: add `appliedTune: state._lastBodyDrivers ? magmaDriversToTune(state._lastBodyDrivers) : null` (arm's-length, like plateProbe). Null in SLICE A.
 6. **Byte-identity test** (new block in the magma structure suite): `magmaDriversToTune(MAGMA_REF)===null`;
    for s∈{1,2,3,7,42}×L∈{false,true} (T_ss threaded on locked), the reference call byte-equals the #4a
    baseline for U/plumeId/hotspotProximity/edificeMask/lavaPlainMask/magmaOceanMask/A_e/Psi_e; static-grep

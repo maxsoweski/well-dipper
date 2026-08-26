@@ -32,7 +32,7 @@ const UNIF_CODE = strip(src('../src/worldengine/shaders/uniforms.js'));
 // ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
 // SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
 // this fence reads both as one corpus so its assertions keep testing what the lab compiles.
-const LAB_SRC_TEXT = src('../planet-lod-lab.html') + '\n' + src('../src/worldengine/shaders/planetShaders.glsl.js');
+const LAB_SRC_TEXT = src('../world-engine-lab.html') + '\n' + src('../src/worldengine/shaders/planetShaders.glsl.js');
 const LAB_CODE = strip(LAB_SRC_TEXT);
 const LAB_RAW = LAB_SRC_TEXT;
 const STORM_SRC = src('../src/worldengine/base/storm-e.js');
@@ -179,12 +179,12 @@ describe('S1 AC-ROTDRAW — drawRotationHours', () => {
 // ── AC-ROTDRAW (wrapper) — the LAB's inline drawPresetRotation: NAMED_BODY gate + isHotJupiterClass ──
 // The pure drawRotationHours math is pinned above (ranges/lock/derivation/alea/determinism); the gap this
 // block closes is the LAB WRAPPER doing the NAMED_BODY bypass + hot-Jupiter dispatch before delegating.
-// The wrapper is INLINE in planet-lod-lab.html and — like its sibling drawPresetRadius (source-pinned via
+// The wrapper is INLINE in world-engine-lab.html and — like its sibling drawPresetRadius (source-pinned via
 // the storm-e `LAB.toContain('mulberry32')` guard, never module-extracted) — is closed by the source-read
 // house pattern (fnBody over LAB_CODE, the same extractor the S2 carriage block uses). A behavioral leg
 // then drives the SHIPPED preset data through the real drawRotationHours/tidalLockRotationHours so the
 // documented per-class outcomes are an automated assertion, not a code-reading claim (BUILD-NOTES
-// §"New / changed symbols (planet-lod-lab.html)" → drawPresetRotation).
+// §"New / changed symbols (world-engine-lab.html)" → drawPresetRotation).
 describe('S1 AC-ROTDRAW — drawPresetRotation lab wrapper (NAMED_BODY gate + hot-Jupiter dispatch)', () => {
   const WRAP = fnBody(LAB_CODE, 'function drawPresetRotation');
   const SEEDS = [0, 1, 7, 42, 256, 9999];

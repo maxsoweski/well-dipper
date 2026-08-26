@@ -30,7 +30,7 @@ import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 
 const condOf = (fp) => deriveConditionVector(fp, deriveUniforms(fp, 1.0), fp.radiusEarth);
 
-// The OLD lab `_facetClass` boolean — read off the STIPULATED surfaceHistory data (planet-lod-lab.html).
+// The OLD lab `_facetClass` boolean — read off the STIPULATED surfaceHistory data (world-engine-lab.html).
 function oldBoolean(fp) {
   const sh = fp.surfaceHistory ?? {};
   const airless = !fp.atmosphere;

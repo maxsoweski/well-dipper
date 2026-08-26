@@ -8,7 +8,7 @@
 //
 // AC-CRATERBOOT measurement harness (WS world-engine-radius-live-feed-2026-07-25).
 //
-// THE CLAIM UNDER TEST (planet-lod-lab.html:5146 source comment):
+// THE CLAIM UNDER TEST (world-engine-lab.html:5146 source comment):
 //   "Canonical radius suffices: the relevance predicate is a domain class (impact surface + schedule
 //    fired), R-stable within a preset."
 // The boot-time feature-enable set calls

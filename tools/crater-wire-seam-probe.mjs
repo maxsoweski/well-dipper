@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // tools/crater-wire-seam-probe.mjs — the instrument for THE CRATER WIRE (rockySurface + craterDeck
-// mirrors into planet-lod-lab.html's `ensureNetworkRouted`).
+// mirrors into world-engine-lab.html's `ensureNetworkRouted`).
 //
 //   node tools/crater-wire-seam-probe.mjs
 //
@@ -37,7 +37,7 @@ import { applyAlbedoTransfer } from '../src/worldengine/display/albedoTransfer.j
 
 const SEEDS = [1, 7, 42, 1337, 90210, 424242, 8675309, 271828];
 // ⛔ BOTH GATES ARE OPEN. The lab re-applies its own ✓ checkboxes at the per-frame writer
-// (planet-lod-lab.html:5354 craters, :5361 ejecta), so a mirror resolving them too would apply one
+// (world-engine-lab.html:5354 craters, :5361 ejecta), so a mirror resolving them too would apply one
 // decision twice. This matches `LAB_MIRROR_CTX` inside both packs.
 const GATES = { craters: true, ejecta: true };
 const OFFSETS = { macroOffset: [1, 2, 3], detailOffset: [4, 5, 6], craterOffset: [7, 8, 9] };
@@ -51,7 +51,7 @@ const differs = (a, b) => {
 const tally = (o, k) => { o[k] = (o[k] || 0) + 1; };
 const show = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${v}`).join('  ') || '(none)';
 
-// ── THE LAB'S TEN SUPERSEDED LINES, transcribed from planet-lod-lab.html with their line numbers.
+// ── THE LAB'S TEN SUPERSEDED LINES, transcribed from world-engine-lab.html with their line numbers.
 // `cond` is `_bodyDrivers.condition`, the PER-SEED draw (:2776 -> :2783). `u` is `state._derived`,
 // i.e. `deriveUniforms` — the two applyDrivers lines read that, not the condition.
 function labInline(cond, u, prevSizeKm) {
@@ -73,7 +73,7 @@ function labInline(cond, u, prevSizeKm) {
 }
 // ⭐ `craterOffset` IS A ROUND-TRIP, NOT A LAW, and the first version of this probe reported it as a
 // 104/104 divergence purely because the lab side had no entry for it. The lab OWNS the value
-// (planet-lod-lab.html:5500 writes from `state.craterOffset`), hands it to the pack on `ctx`, and
+// (world-engine-lab.html:5500 writes from `state.craterOffset`), hands it to the pack on `ctx`, and
 // the mirror hands the identical array back. MEASURED verbatim: ctx `[7,8,9]` in, `[7,8,9]` out. So
 // the lab side's expectation for it is the ctx itself, and comparing against `undefined` measured
 // this probe rather than the wire.
@@ -93,7 +93,7 @@ function flatten(o) {
 }
 
 // ── THE UNIFORM LAYER. The lab's per-frame writer re-applies the relevance factor to the two gated
-// names (planet-lod-lab.html:5354 `uCraterDensity`, :5361 `uEjectaStrength`), so this is what the
+// names (world-engine-lab.html:5354 `uCraterDensity`, :5361 `uEjectaStrength`), so this is what the
 // SHADER sees on either route. `craterAmp` rides bare (:5359) and is deliberately NOT multiplied.
 const atUniform = (row, rel) => ({ ...row, craterDensity: (row.craterDensity ?? 0) * rel });
 

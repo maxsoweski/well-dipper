@@ -1,6 +1,6 @@
 # Design — Planet-lab control-panel UX redesign (archetype-filtered + per-feature solo)
 
-**Date:** 2026-06-07 · **Project:** `~/projects/well-dipper` · **Target file:** `planet-lod-lab.html` (+ a new
+**Date:** 2026-06-07 · **Project:** `~/projects/well-dipper` · **Target file:** `world-engine-lab.html` (+ a new
 small data module) · **Status:** DESIGN APPROVED (Max, via brainstorming 2026-06-07). Build deferred to a
 fresh session per Max's request — this spec is the blueprint that session executes.
 
@@ -8,7 +8,7 @@ fresh session per Max's request — this spec is the blueprint that session exec
 
 ## 1. Problem
 
-`planet-lod-lab.html` drives every planet-rendering feature through ONE vertical lil-gui panel. It now holds
+`world-engine-lab.html` drives every planet-rendering feature through ONE vertical lil-gui panel. It now holds
 ~16 feature sub-folders under `Surface — Relief` (Craters F2, Ejecta F3, Mountains F1, Canyons F4, Scarps F5,
 Plateaus F6, Tessera F6, Edifices F7, Lava F8, Chaos F9, Ridged-icy F10, Frost F23/F22, Sublimation F18,
 Glacial F17), plus View&LOD, Debug, Envelope, Drivers, Seeds, Presets. Two pains, confirmed with Max as
@@ -115,7 +115,7 @@ PLANET LOD LAB
 
 ## 5. Implementation approach
 
-1. **Add `planet-archetypes.js`** (§3) and import it in `planet-lod-lab.html`.
+1. **Add `planet-archetypes.js`** (§3) and import it in `world-engine-lab.html`.
 2. **Refactor feature-folder construction into a registry-driven loop.** Today each of the 14 folders is
    built ad-hoc (lines ~2151–2350). Keep each folder's *controls* exactly as-is, but:
    - hold folder refs in a `featureFolders = { craters: fCraters, … }` map (keyed by FEATURES key);

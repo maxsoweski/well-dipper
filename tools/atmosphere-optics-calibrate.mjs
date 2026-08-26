@@ -1,6 +1,6 @@
 // tools/atmosphere-optics-calibrate.mjs — prints the V2-7 atmosphere-optics derive across all 18 presets
 // beside the two hand-authored name-keyed tables it REPLACED (LIMB_COLOR_BY_PRESET /
-// TERM_COLOR_BY_PRESET, formerly in planet-lod-lab.html). The authored values are frozen here as the
+// TERM_COLOR_BY_PRESET, formerly in world-engine-lab.html). The authored values are frozen here as the
 // historical reference the derive was calibrated against — they are NOT a contract, and a future law
 // change that moves a hue for a physical reason should move these numbers with a note, not chase them.
 //

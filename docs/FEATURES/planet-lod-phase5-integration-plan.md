@@ -75,7 +75,7 @@ Each WS, when built, gets its own `dev-collab-scope` pass (`intent.md` + `contra
 ### WS1 — Keystone (recommended first build)
 The router's priority-flood already computes per-basin pour-point `filled` levels
 (`planet-lod-rivers.js` ~L288-309) but rendering **discards** it and uses a global sea-level cut
-only (`planet-lod-lab.html` L435). Surface `filled` as a carve-cube channel / per-basin fill
+only (`world-engine-lab.html` L435). Surface `filled` as a carve-cube channel / per-basin fill
 texture → `max()` into the liquid mask; let the river carve breach a rim where its basin overtopped.
 **One discarded signal closes seven gaps** — including Max's own crater-lake example. Wireable now;
 no new architecture. This is the highest leverage-per-effort item in the whole audit.

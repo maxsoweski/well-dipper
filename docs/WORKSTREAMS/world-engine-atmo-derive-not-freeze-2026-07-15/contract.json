@@ -9,10 +9,10 @@
     "WIRING FIX IS SLICE 1 (Max folded it here, not a standalone light fix): the 'New planet' button (~L5188) and macro-seed GUI slider (~L5186) call updateSeedUniforms()+rebakeE5Bands() but never applyDrivers() — the storm/polar writer never re-runs on those reseed paths (verified live 2026-07-15: _lab.setSeed(42) left spotCenter/trainLons/polarPhase bit-identical). Standalone it would under-deliver anyway: latitudes stay frozen-shear-shared, and Max's handoff diagnosis records longitude-only motion doesn't read as different placement. Cite symbol anchors, not line numbers, in build docs.",
     "D-SLOT DERIVATION (the increment's namesake): shellDepthFrac, internalHeat, dissipation stop being frozen constants and derive from the condition bundle per ATMOSPHERE-PLAN §(e) — per-seed shear profile => per-seed storm latitudes. This discharges atmo-3b AC-0's declared-frozen-constant debt; the derivation forms are pinned at BUILD-PLAN with a research slice if needed (slice-R pattern).",
     "CANONICAL-N DEMOTED TO PRIOR (Max re-ruling 2026-07-15, supersedes the ratified rider B pin): polar-N becomes a regime-conditioned bias the seed varies around; vortex PRESENCE is gated per-seed by derived conditions. Saturn-like regimes stay hexagon-LIKELY, not hexagon-pinned; other regimes can morph N/shape/size/position or lack vortices entirely. Same seed still reproduces exactly.",
-    "PROVENANCE ROUTED OUT: no GUI provenance/badging work in this increment — that is planet-lod-lab-ux-2026-07-15 on L1 (avoids two branches reorganizing the same GUI). This increment keeps its planet-lod-lab.html footprint MINIMAL: the reseed wiring + any new D-slot sliders only.",
+    "PROVENANCE ROUTED OUT: no GUI provenance/badging work in this increment — that is planet-lod-lab-ux-2026-07-15 on L1 (avoids two branches reorganizing the same GUI). This increment keeps its world-engine-lab.html footprint MINIMAL: the reseed wiring + any new D-slot sliders only.",
     "GENERATIVE-NOT-SIMULATIVE HOLDS: still no uTime in storm terms; variety is place-once per seed. Render primitives (filamentation/wake/interior/chromophore GLSL) are consumed unchanged — this increment moves DERIVATION, not expression.",
     "DETERMINISM DISCIPLINE: new derivations on disjoint alea namespaces (stormE:*/climateE5:* families, pinned at BUILD-PLAN); no Math.random/Date.now; static-source test mold (climate-e5.test.js).",
-    "CONCURRENCY FENCE (standing): this branch owns storm/band sections of planet-lod-lab.html / planet-lod-height.glsl.js / planet-lod-uniforms.js + atmosphere writers; NEVER relief/dispatch files (planet-lod-rivers.js, lidResponse.js, e1Regime.js out of the diff fence). Rebase onto L1 before merge-back — REQUIRED this time since lab-ux is actively editing the lab HTML on L1.",
+    "CONCURRENCY FENCE (standing): this branch owns storm/band sections of world-engine-lab.html / planet-lod-height.glsl.js / planet-lod-uniforms.js + atmosphere writers; NEVER relief/dispatch files (planet-lod-rivers.js, lidResponse.js, e1Regime.js out of the diff fence). Rebase onto L1 before merge-back — REQUIRED this time since lab-ux is actively editing the lab HTML on L1.",
     "BUILD MECHANICS: workflows build (opus-pinned agents per feedback_subagent-model); OOM sequential rule SUSPENDED while Max is out of VS Code (his 2026-07-14 ruling) — reinstate ≤2-3 concurrent the moment he returns."
   ],
   "acceptanceCriteria": [
@@ -96,7 +96,7 @@
       "src/worldengine/base/storm-e.js (resolveStormE/resolveStormPlacement — the #3b writer this increment feeds per-seed shear into)",
       "src/worldengine/base/climate-e5.js (u(lat)/shear/band substrate; E5_REGIME)",
       "body-drivers condition bundle + driver-presets.js (the D-vector the new shellDepthFrac/internalHeat/dissipation derivations read)",
-      "planet-lod-lab.html reseed paths: New-planet button, macro-seed slider, storm-folder dice, setPreset (the applyDrivers wiring seam)",
+      "world-engine-lab.html reseed paths: New-planet button, macro-seed slider, storm-folder dice, setPreset (the applyDrivers wiring seam)",
       "alea seeded streams (stormE:*/climateE5:* namespaces)"
     ],
     "outputs": [

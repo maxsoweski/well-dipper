@@ -12,7 +12,7 @@ F39's identity in one line: *the only antisolar concentric colored-ring feature 
 
 ## 2. Current shader approach (HOW, as-built)
 
-**ABSENT — build from scratch.** No glory, rainbow, cloud-optics term, uniform, registry key, or GUI folder exists in `planet-lod-lab.html` or `src/` (confirmed: no glory/rainbow/cloudOptics identifier anywhere, per tracker:90-91). §6.5 below is the build contract.
+**ABSENT — build from scratch.** No glory, rainbow, cloud-optics term, uniform, registry key, or GUI folder exists in `world-engine-lab.html` or `src/` (confirmed: no glory/rainbow/cloudOptics identifier anywhere, per tracker:90-91). §6.5 below is the build contract.
 
 TARGET approach (what to build): an additive emissive term `cloudOpticsC` on the **★ EMISSIVE-bypass channel** — the post-quantizer family (the `gl_FragColor` `min(...)` sum at ~L4063, where `auroraC`/`airglowC`/`bioC`/`cityC` already live) that SKIPS the 6-level posterizer, so the glory's discrete bands are never *double*-quantized by the Bayer dither. It must NOT fold into the posterized `cloudC` (which IS posterized at ~L3636) — the glory rides *beside* the deck, not inside it. The term is the product of three things: a **glory ring** (discrete colour bands quantized from the backscatter angle `theta = acos(dot(V, uLightDir))`, V = view-to-camera, stepped against `uGloryRadius` into 2–3 hard hue steps), a **dayside gate** (`smoothstep(0.0, 0.1, diff)`, `diff = max(dot(shadeN, uLightDir), 0.0)` — the OPPOSITE of airglow's night mask; a glory is a lit-cloud-top phenomenon), and a **cloud-deck gate** (`uCloudCoverage > 0.0`, the F31 master gate). Intensity is `uCloudOpticsIntensity`, gated so OFF or a cloudless world produces exactly `vec3(0.0)`. The bypass channel is what lets the discrete bands read as clean colour steps rather than as a posterized banding artifact (the same property that makes aurora/airglow work there).
 
@@ -54,7 +54,7 @@ Drivers/gate: P26 optical/atmospheric scattering; gate on the F31 cloud deck (`d
 
 Once built, isolate via the registry solo path (F39 WILL have a key in `planet-archetypes.js` FEATURES). On the :9223 second Chrome (chrome-devtools MCP, per well-dipper-testing-reference.md — GPU Chrome, NOT Playwright/CPU; append `?fresh=1` so toggles don't trigger the sessionStorage scenario-restore that resets camera/uTime mid-test; check rAF fps before trusting any telemetry — a backgrounded window throttles to ~1 fps and lies):
 
-1. Open `planet-lod-lab.html?fresh=1`.
+1. Open `world-engine-lab.html?fresh=1`.
 2. `window._lab.setPreset('Venus (sulfuric shroud)')` — the canonical/brightest carrier (thick cloud deck → `uCloudCoverage` nonzero). ('Rocky (Earthlike)' and 'Ocean (temperate)' are the other carriers.)
 3. **Solo it: `window._lab.solo('cloudOptics')` — this MUST re-enable `clouds` via `isolationKit:['clouds']`** (precedent: `solo('sunglint')` re-enables `lakes`, lab L5013/L7000). Without the deck, `uCloudCoverage` is 0 → the `> 0.0` guard zeroes the whole term → the glory renders NOTHING. If solo shows nothing, the isolationKit coupling is the first thing to check.
 4. Crank for inspection: `window._lab.uniforms.uCloudOpticsIntensity.value = 1.0;` and widen `window._lab.uniforms.uGloryRadius.value` if the rings read too tight to resolve.
@@ -77,7 +77,7 @@ Once built, isolate via the registry solo path (F39 WILL have a key in `planet-a
 
 Strategy: NEW feature from scratch following F38 airglow's 8-site lab pattern + 4 enforced registry rows. F39 has no production exemplar to port; it is authored directly to the §4 model. Exemplar wiring to mirror: the F38 airglow sites (`uAirglowIntensity` decl ~L231, the airglow GLSL block ~L4055, composite ~L4063, init ~L4102, frame writer ~L7778, GUI ~L7029, PROV_AIRGLOW ~L976) and the F36 sunglint *isolationKit-on-a-dependency* precedent (re-enable the host so solo renders).
 
-1. **Uniform decls** (`planet-lod-lab.html`, near the airglow decls ~L231): `uniform float uCloudOpticsIntensity;`, `uniform float uGloryRadius;`, and a small constant palette — either three `uniform vec3 uGloryColorA/B/C;` (outer→inner) or a hardcoded GLSL palette (constant, NO composition lookup — mirrors airglow). `uLightDir` (~L263) and `uCloudCoverage` (~L223) already exist; reuse.
+1. **Uniform decls** (`world-engine-lab.html`, near the airglow decls ~L231): `uniform float uCloudOpticsIntensity;`, `uniform float uGloryRadius;`, and a small constant palette — either three `uniform vec3 uGloryColorA/B/C;` (outer→inner) or a hardcoded GLSL palette (constant, NO composition lookup — mirrors airglow). `uLightDir` (~L263) and `uCloudCoverage` (~L223) already exist; reuse.
 2. **GLSL block** (in the emissive-bypass family, right after the airglow block which ends ~L4060, before the composite): guard `vec3 cloudOpticsC = vec3(0.0); if (uCloudOpticsIntensity > 0.0 && uCloudCoverage > 0.0) { ... }` so off / no-cloud ⇒ exactly `vec3(0.0)`. Inside:
    - view-to-camera: `vec3 V = normalize(cameraPosition - vPos);` (the live form, ~L3302 — confirm `vPos` in scope at the block, else reuse the existing `V`).
    - backscatter angle: `float theta = acos(clamp(dot(V, uLightDir), -1.0, 1.0));`.

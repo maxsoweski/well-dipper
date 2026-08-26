@@ -171,8 +171,8 @@ Replace each type lookup with a driver/field threshold. *Drivers + fields decide
   `ExoticOverlay` type-swap+regen (`ExoticOverlay.js:286-323`).
 - *Lab-side (type-as-label — ~80% already done; the real WS3 target):* `rendersOn` allowlists
   (`planet-feature-associations.js:46…`, a **live render-gate** via `applyDrivers`→`featureRelevant`,
-  `planet-lod-lab.html:2701-2712`) + `featuresOf`/archetypes (`planet-archetypes.js`); `DRIVER_PRESETS` parallel
-  named-bundle table (`planet-lod-lab.html ~:5326`).
+  `world-engine-lab.html:2701-2712`) + `featuresOf`/archetypes (`planet-archetypes.js`); `DRIVER_PRESETS` parallel
+  named-bundle table (`world-engine-lab.html ~:5326`).
 
 **Features**
 - **F1 · E1 emits `type` as a derived label** — pure fn (new `world-engine/E1-composition.js`) over drivers+context →

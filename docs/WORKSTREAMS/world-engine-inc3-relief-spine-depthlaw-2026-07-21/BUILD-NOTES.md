@@ -44,7 +44,7 @@ strength cap
 `reliefEnvelope = clamp(g^-Q_RELIEF, RELIEF_FLOOR, RELIEF_CEIL)`
 (`planet-lod-lab-core.js`, new export; constants `Q_RELIEF=0.58`,
 `RELIEF_FLOOR=0.40`, `RELIEF_CEIL=133`) is applied **exactly once**, on
-`uPerturb` (`planet-lod-lab.html`, per-frame uniform block). `uPerturb` is the
+`uPerturb` (`world-engine-lab.html`, per-frame uniform block). `uPerturb` is the
 **universal `perturbAnalytic` strength** that scales the *entire accumulated
 gradient* (base FBM + every combiner) — so every height-bearing family is
 enveloped once through it. `reliefEnvelope` reads **only `surfaceGravity`** (a
@@ -297,11 +297,11 @@ green at the S3 commit (goldens gate), and its envelope-wiring grep re-confirms 
 
 - **Comment-only, additive to plan step 4:** the plan named the stale comment
   block at the retired `reliefNorm` (fixed) but the frame-loop comment at
-  (formerly) `planet-lod-lab.html:5604` also referenced `reliefNorm()` by name.
+  (formerly) `world-engine-lab.html:5604` also referenced `reliefNorm()` by name.
   Updated it to `reliefEnvelope()` so no comment dangles a retired symbol
   (same rationale as byte-fence MINOR-5). No code effect.
 - **Import line:** `reliefAmplitudeFromKm` / `reliefGravityFactor` are now only
-  comment-referenced in `planet-lod-lab.html` (their sole live consumer,
+  comment-referenced in `world-engine-lab.html` (their sole live consumer,
   `reliefNorm`, was retired) but were **left in the import** per plan step 1 ("do
   NOT edit `reliefGravityFactor` / `reliefAmplitudeFromKm`"). Harmless unused
   imports in an inline ES module; removing them was not in scope.

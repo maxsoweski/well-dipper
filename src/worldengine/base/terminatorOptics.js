@@ -39,7 +39,7 @@
 import { atmosphereOpticsOf } from './atmosphereOptics.js';
 
 // Terminator gaussian half-width, in units of dot(N, L) — the LAB'S OWN LAW, ported verbatim from
-// planet-lod-lab.html (state.termWidth). It reads only atmosphere.pressure, so it never needed
+// world-engine-lab.html (state.termWidth). It reads only atmosphere.pressure, so it never needed
 // anything out of the un-extracted applyDrivers; the earlier provisional 0.18 constant is retired.
 // Hairline 0.06 at <= ~0.1 bar, 0.12 at 1 bar, ~0.14 at 1.5 bar, saturating at the 0.30
 // Venus-class ceiling. The 1e-3 floor keeps log10 finite on airless bodies, whose width is inert
@@ -71,7 +71,7 @@ export const TERM_STRENGTH = 0.15;
  * expression Planet.js shipped. The `?? 0` is load-bearing on a body whose optics somehow lack the
  * field: a NaN uniform renders as an indistinguishable black frame.
  *
- * ⚠ THE LAB'S OWN STRENGTH EXPRESSION IS THE BINARY planet-lod-lab.html:2497
+ * ⚠ THE LAB'S OWN STRENGTH EXPRESSION IS THE BINARY world-engine-lab.html:2497
  * `      state.termStrength = _fp.atmosphere?.retained ? 0.15 : 0.0;` — NOT this continuous one.
  * The game's form is kept because it is the one this row is instructed to forward, and because it
  * agrees with the lab's everywhere except on the thinnest columns.

@@ -105,7 +105,7 @@ rigorous." Flagged so a future reader knows the km value there is a modeling cho
 
 ### Test-debt
 - AC5 headless oracle deferred 2026-06-17 (Max-approved): size-source (drawPresetRadius /
-  NAMED_BODY / archetype map) is inline in planet-lod-lab.html, not vitest-importable. Verified
+  NAMED_BODY / archetype map) is inline in world-engine-lab.html, not vitest-importable. Verified
   live on :9223. Follow-up: extract to an importable module + add the in-range/canonical vitest
   oracle.
 

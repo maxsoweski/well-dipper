@@ -77,7 +77,7 @@ real but is not the cause of this.
 ## 4. ⭐ THE INSTRUMENT UNDERSTATES THE DEFECT — the lab is 3–7x kinder than the game
 
 Two independent causes, both measured live:
-1. the lab writes `physical * sVis` (`planet-lod-lab.html:5359`) and `sVis < 1` on small bodies;
+1. the lab writes `physical * sVis` (`world-engine-lab.html:5359`) and `sVis < 1` on small bodies;
 2. the lab renders at full canvas resolution; the game divides by `pixelScale` 3.
 
 | preset | physical | lab written | lab oct-0 | game oct-0 | lab is kinder by |

@@ -5,7 +5,7 @@
 // (`new Function`) or DENY-scan it. Both took the FIRST regex match in the whole file with no notion of
 // what is live code and what is a comment. Measured 2026-08-08 against a scratch mirror: moving a law
 // out of `applyDrivers` while quoting the old statement verbatim in a `//` or `/* */` comment — which
-// is the lab's OWN established habit, 7 instances, e.g. planet-lod-lab.html:6160-6161 — left the
+// is the lab's OWN established habit, 7 instances, e.g. world-engine-lab.html:6160-6161 — left the
 // extraction suite at 44/44 GREEN, compiling and measuring DEAD COMMENT TEXT. Six sites, six mutants,
 // all green. PLAN §4 Steps 4 and 5 both declare they will move lab code out. That is the hole.
 //
@@ -32,7 +32,7 @@
 //      already passes is the move this file exists to stop.
 // The two regex-based strippers in the tree (tests/worldengine-v2-3-dispatch-oracle.test.js:242 and
 // tests/relief-router-repoint.test.js:48 `function stripComments(src) {`) are NOT usable here and the
-// reason is measured, not stylistic: planet-lod-lab.html has 104 lines carrying `//` INSIDE a string
+// reason is measured, not stylistic: world-engine-lab.html has 104 lines carrying `//` INSIDE a string
 // literal, 98 lines with backticks, 6 `/* glsl */` template literals and 3 regex literals. A regex
 // stripper eats live code on every one of them.
 //

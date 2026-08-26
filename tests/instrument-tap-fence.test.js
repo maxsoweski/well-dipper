@@ -48,7 +48,7 @@ const read = (rel) => readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
 // ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
 // SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
 // this fence reads both as one corpus so its assertions keep testing what the lab compiles.
-const labSrc = read('planet-lod-lab.html') + '\n' + read('src/worldengine/shaders/planetShaders.glsl.js');
+const labSrc = read('world-engine-lab.html') + '\n' + read('src/worldengine/shaders/planetShaders.glsl.js');
 const samplerSrc = read('src/worldengine/instrument/fieldSampler.js');
 const riversSrc = read('planet-lod-rivers.js');
 

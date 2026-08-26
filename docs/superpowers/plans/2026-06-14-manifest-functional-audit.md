@@ -61,7 +61,7 @@ summed-abs pixel delta on the low-res `_lab.sceneTarget`, ~5-frame settle, non-d
 ## Part 2 — Assessment against the criteria (what's already determinable)
 
 Run headless: `node` cross-check of the manifest vs `planet-archetypes.js` + grep of the
-shader call-order in `planet-lod-lab.html`. (Throwaway script logic is reproduced in §Appendix.)
+shader call-order in `world-engine-lab.html`. (Throwaway script logic is reproduced in §Appendix.)
 
 ### Claim 1 — rendersOn validity → **PASS, but untested**
 0 of the ~250 `rendersOn` strings reference a non-existent preset. Clean today — but **nothing
@@ -72,7 +72,7 @@ preset in the future panel. → add the one-line test.
 Grounded against the shader, not guessed:
 
 - **`massWasting.dependsOn.features` lists 8; the shader feeds it 20.** The F19 contract
-  (`planet-lod-lab.html` ~L3107, L3131-3135) is explicit: *every combiner above the
+  (`world-engine-lab.html` ~L3107, L3131-3135) is explicit: *every combiner above the
   `massWastCombiner` line writes `grad` additively, and F19 derives its gate from
   `gradIn − gradBase`.* Counting the call order (L3117-3137), **20 features write `grad`
   before the F19 read**; the manifest names only `mountains,canyons,scarps,plateaus,tessera,
@@ -187,7 +187,7 @@ The defects above are symptoms; the schema choices that *let* them happen:
 - Manifest×data cross-check: `node` importing `FEATURES,ARCHETYPES,PROVINCES` +
   `ASSOCIATIONS`; checks A–G (preset validity, archetype-union, modifies/dependsOn symmetry
   both directions, isolationKit transitive closure, self-ref, kit archetype-compat).
-- Shader grounding: combiner call-order `planet-lod-lab.html` L3117-3137 (grad writers before
+- Shader grounding: combiner call-order `world-engine-lab.html` L3117-3137 (grad writers before
   the F19 line ~L3137); `liquidMask` writer L3160 + readers L3179/3212/3215/3696/3928; lakes
   level-set L3160-61; sunglint-needs-lakes hard-coded note L4938.
 - 17 presets = `Object.keys(DRIVER_PRESETS)`, lab L5326-5520.

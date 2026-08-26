@@ -6,11 +6,11 @@
 
 **Architecture:** Tasks 1–5 are doc/apparatus setup (no shader code). Task 6 runs the Stream-A research Workflow and writes 48 dossier cards. Task 7 is the runbook + exact `/goal` launch cards for phases 2–6 (Max types these; working-Claude executes inside them).
 
-**Tech Stack:** Claude Code `/goal` (≥2.1.139), Workflow tool (in-harness), chrome-devtools MCP on `:9223`, vitest, `planet-lod-lab.html` / `planet-archetypes.js`.
+**Tech Stack:** Claude Code `/goal` (≥2.1.139), Workflow tool (in-harness), chrome-devtools MCP on `:9223`, vitest, `world-engine-lab.html` / `planet-archetypes.js`.
 
 **Hard guardrails (apply to every task and every goal turn):**
-- Stage explicit paths only — **never `git add -A`** (warp WIP shares this tree). Allowed paths: `planet-lod-lab.html`, `planet-archetypes.js`, `docs/FEATURES/**`, `docs/superpowers/**`, `.gitignore`, `tests/planet-archetypes.test.js`.
-- `planet-lod-lab.html` backtick parity stays EVEN (check with `grep -c '\`' planet-lod-lab.html` → even number).
+- Stage explicit paths only — **never `git add -A`** (warp WIP shares this tree). Allowed paths: `world-engine-lab.html`, `planet-archetypes.js`, `docs/FEATURES/**`, `docs/superpowers/**`, `.gitignore`, `tests/planet-archetypes.test.js`.
+- `world-engine-lab.html` backtick parity stays EVEN (check with `grep -c '\`' world-engine-lab.html` → even number).
 - Testing on `:9223` GPU Chrome via chrome-devtools MCP, never Playwright, never Bash curl for liveness (`memory/well-dipper-testing-reference.md`).
 - 3-cycle cap per uncertain mechanism → mark `parked`, move on.
 - Commit at every feature seam.
@@ -369,25 +369,25 @@ Copy-paste one per phase, in order, each in a FRESH session started in
 the plan. Constraints inside each goal protect the warp WIP.
 
 **Phase 2:**
-/goal Foundation pass for the planet refinement campaign (read docs/FEATURES/planet-lod-campaign-tracker.md and the plan first): docs/FEATURES/cards/FOUNDATION.md section 7 contains a dated 🟢/🟡/🔴 verdict with evidence for all four substrate checks, at least one screenshot per check exists under docs/FEATURES/cards/shots/ (ls output shown in transcript), all fixes and card edits are committed, and `git status --porcelain planet-lod-lab.html planet-archetypes.js docs/FEATURES` printed in the transcript shows no output. Only modify planet-lod-lab.html, planet-archetypes.js, and docs/ paths; never git add -A. Or stop after 15 turns and summarize what's parked.
+/goal Foundation pass for the planet refinement campaign (read docs/FEATURES/planet-lod-campaign-tracker.md and the plan first): docs/FEATURES/cards/FOUNDATION.md section 7 contains a dated 🟢/🟡/🔴 verdict with evidence for all four substrate checks, at least one screenshot per check exists under docs/FEATURES/cards/shots/ (ls output shown in transcript), all fixes and card edits are committed, and `git status --porcelain world-engine-lab.html planet-archetypes.js docs/FEATURES` printed in the transcript shows no output. Only modify world-engine-lab.html, planet-archetypes.js, and docs/ paths; never git add -A. Or stop after 15 turns and summarize what's parked.
 
 **Phase 3:**
-/goal Refine-built pass: each of the 15 built-feature cards in docs/FEATURES/cards/ (F01,F02,F03,F04,F05,F06,F07,F08,F09,F10,F11,F17,F18,F22,F23) has a section-7 verdict (🟢/🟡/🔴 or parked, dated, with screenshot filenames listed), `npx vitest run tests/planet-archetypes.test.js` passes in the transcript, and `git status --porcelain planet-lod-lab.html planet-archetypes.js docs/FEATURES` shows no output. Max 3 fix cycles per feature then mark parked. Only modify planet-lod-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 35 turns and summarize what's parked.
+/goal Refine-built pass: each of the 15 built-feature cards in docs/FEATURES/cards/ (F01,F02,F03,F04,F05,F06,F07,F08,F09,F10,F11,F17,F18,F22,F23) has a section-7 verdict (🟢/🟡/🔴 or parked, dated, with screenshot filenames listed), `npx vitest run tests/planet-archetypes.test.js` passes in the transcript, and `git status --porcelain world-engine-lab.html planet-archetypes.js docs/FEATURES` shows no output. Max 3 fix cycles per feature then mark parked. Only modify world-engine-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 35 turns and summarize what's parked.
 
 **Phase 4a:**
-/goal Build pass, fluvial+aeolian: each of the 8 cards F12,F13,F14,F15,F16,F19,F20,F21 in docs/FEATURES/cards/ has a section-7 verdict; every newly built feature is registered in planet-archetypes.js FEATURES with a working solo toggle (state shown via window._lab.featureEnabled in transcript); `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain planet-lod-lab.html planet-archetypes.js docs/FEATURES` shows no output. Heavy loop per the campaign spec §13.4 (card §6.5 build plan → subagent implement → code-review → verify). Max 3 fix cycles per mechanism then park. Only modify planet-lod-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 45 turns and summarize what's parked.
+/goal Build pass, fluvial+aeolian: each of the 8 cards F12,F13,F14,F15,F16,F19,F20,F21 in docs/FEATURES/cards/ has a section-7 verdict; every newly built feature is registered in planet-archetypes.js FEATURES with a working solo toggle (state shown via window._lab.featureEnabled in transcript); `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain world-engine-lab.html planet-archetypes.js docs/FEATURES` shows no output. Heavy loop per the campaign spec §13.4 (card §6.5 build plan → subagent implement → code-review → verify). Max 3 fix cycles per mechanism then park. Only modify world-engine-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 45 turns and summarize what's parked.
 
 **Phase 4b:**
-/goal Build pass, atmosphere: each of the 10 cards F24,F25,F26,F27,F28,F29,F30,F31,F32,F33 in docs/FEATURES/cards/ has a section-7 verdict; newly built features registered in planet-archetypes.js FEATURES with working solo toggles; `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain planet-lod-lab.html planet-archetypes.js docs/FEATURES` shows no output. Heavy loop per spec §13.4; max 3 fix cycles then park. Only modify planet-lod-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 45 turns and summarize what's parked.
+/goal Build pass, atmosphere: each of the 10 cards F24,F25,F26,F27,F28,F29,F30,F31,F32,F33 in docs/FEATURES/cards/ has a section-7 verdict; newly built features registered in planet-archetypes.js FEATURES with working solo toggles; `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain world-engine-lab.html planet-archetypes.js docs/FEATURES` shows no output. Heavy loop per spec §13.4; max 3 fix cycles then park. Only modify world-engine-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 45 turns and summarize what's parked.
 
 **Phase 4c:**
-/goal Build pass, optical+exotic+overlay+rings: each of the 15 cards F34,F35,F36,F37,F40,F41,F42,F43,F44,F45,F46,F47,F48,F49,F51 has a section-7 verdict; F38 and F39 each have a recorded keep/stylize/drop recommendation marked parked-for-Max in the tracker; newly built features registered with working solo toggles; `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain planet-lod-lab.html planet-archetypes.js docs/FEATURES` shows no output. Heavy loop per spec §13.4; max 3 fix cycles then park. Only modify planet-lod-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 45 turns and summarize what's parked.
+/goal Build pass, optical+exotic+overlay+rings: each of the 15 cards F34,F35,F36,F37,F40,F41,F42,F43,F44,F45,F46,F47,F48,F49,F51 has a section-7 verdict; F38 and F39 each have a recorded keep/stylize/drop recommendation marked parked-for-Max in the tracker; newly built features registered with working solo toggles; `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain world-engine-lab.html planet-archetypes.js docs/FEATURES` shows no output. Heavy loop per spec §13.4; max 3 fix cycles then park. Only modify world-engine-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 45 turns and summarize what's parked.
 
 **Phase 5:**
-/goal Integration pass: docs/FEATURES/cards/INTEGRATION.md section 7 has a verdict (🟢/🟡/🔴/parked with screenshot filenames) for every check I-1 through I-15; `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain planet-lod-lab.html planet-archetypes.js docs/FEATURES` shows no output. Max 3 fix cycles per check then park. Only modify planet-lod-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 25 turns and summarize what's parked.
+/goal Integration pass: docs/FEATURES/cards/INTEGRATION.md section 7 has a verdict (🟢/🟡/🔴/parked with screenshot filenames) for every check I-1 through I-15; `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain world-engine-lab.html planet-archetypes.js docs/FEATURES` shows no output. Max 3 fix cycles per check then park. Only modify world-engine-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 25 turns and summarize what's parked.
 
 **Phase 6:**
-/goal Profiles pass: every one of the 18 type rows in docs/FEATURES/cards/PROFILES.md has a verdict; missing lab presets authored as data in planet-archetypes.js/lab preset list; the Appendix-B cross-check note at the bottom of PROFILES.md is filled in; `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain planet-lod-lab.html planet-archetypes.js docs/FEATURES` shows no output. Max 3 fix cycles per row then park. Only modify planet-lod-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 25 turns and summarize what's parked.
+/goal Profiles pass: every one of the 18 type rows in docs/FEATURES/cards/PROFILES.md has a verdict; missing lab presets authored as data in planet-archetypes.js/lab preset list; the Appendix-B cross-check note at the bottom of PROFILES.md is filled in; `npx vitest run tests/planet-archetypes.test.js` passes; `git status --porcelain world-engine-lab.html planet-archetypes.js docs/FEATURES` shows no output. Max 3 fix cycles per row then park. Only modify world-engine-lab.html, planet-archetypes.js, docs/ paths; never git add -A. Or stop after 25 turns and summarize what's parked.
 
 **Phase 7 (no /goal):** say "review lap" — working-Claude assembles
 docs/FEATURES/REVIEW-LAP.md (ordered card links + Windows-pasteable shot paths +
@@ -446,7 +446,7 @@ const DOSSIER_SCHEMA = {
     featureId: { type: 'string' },
     slug: { type: 'string' },
     description: { type: 'string', description: 'Card §1 — feature, variants, real-body examples, from the inventory' },
-    currentShaderApproach: { type: 'string', description: 'Card §2 — as-built in planet-lod-lab.html with file:line refs, or "Unbuilt (aspirational)" + nearest existing machinery' },
+    currentShaderApproach: { type: 'string', description: 'Card §2 — as-built in world-engine-lab.html with file:line refs, or "Unbuilt (aspirational)" + nearest existing machinery' },
     references: {
       type: 'array', minItems: 3, maxItems: 8,
       items: {
@@ -469,7 +469,7 @@ const PROMPT = (f) => `Research dossier for planet-lab feature ${f.id} "${f.name
 
 1. Read docs/FEATURES/planet-visual-features.md. Find the ${f.id} row in the L2 tables; also read its source P#/D# rows (L1/L0) so the description reflects the physical chain. Card §1 = that content, condensed, with variants and real-body examples.
 
-2. Grep planet-archetypes.js and planet-lod-lab.html for this feature (search the F-number, the feature name words, and likely combiner/uniform names). If built: document the actual approach with file:line references — combiner function, its drivers/uniforms, GUI folder. If absent: currentShaderApproach = "Unbuilt (aspirational)." plus one sentence on the nearest existing machinery it should plug into.
+2. Grep planet-archetypes.js and world-engine-lab.html for this feature (search the F-number, the feature name words, and likely combiner/uniform names). If built: document the actual approach with file:line references — combiner function, its drivers/uniforms, GUI folder. If absent: currentShaderApproach = "Unbuilt (aspirational)." plus one sentence on the nearest existing machinery it should plug into.
 
 3. References: WebSearch for REAL photographic/data references (NASA photojournal, USGS Astrogeology, ESA, JAXA, LPI, university pages) AND art/stylized references (game art, concept art, retro-styled renders). HARD RULE: cite ONLY URLs that actually appeared in your search/fetch results — never construct, guess, or pattern-complete a URL. Prefer stable institutional pages over hotlinked images. kind: "real" or "art". Each caption = one line on what to notice for OUR style target.
 

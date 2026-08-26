@@ -9,7 +9,7 @@
       "id": "AC1-shared-height-module",
       "statement": "The lab's height GLSL (noised, fbmd, the combiner chain) plus its uniform derivation are extracted into a reusable module imported by BOTH the planet shader and the river router, so there is a single source of h(pos). Zero behavioral change to the planet: the extraction is a pure code-lift (the diff is the gate).",
       "verifyVia": {
-        "input": "git diff over the extracted module + planet-lod-lab.html; run the existing planet/core test suites (npx vitest run, incl. the core.js finite-diff parity guards); load the lab on :9223 and compare a fixed Rocky preset render before/after",
+        "input": "git diff over the extracted module + world-engine-lab.html; run the existing planet/core test suites (npx vitest run, incl. the core.js finite-diff parity guards); load the lab on :9223 and compare a fixed Rocky preset render before/after",
         "observable": "Height GLSL + uniform derivation defined once in the shared module and consumed by both the planet shader and the river router; existing test suites stay green (zero behavioral drift); the before/after lab render of the fixed preset is visually identical (no pixel-diff beyond noise)"
       },
       "layer": "unit"
@@ -85,7 +85,7 @@
   ],
   "architecturalConnections": {
     "inputs": [
-      "The lab's accumulated analytic height h(pos): base fbm + the ~25-combiner height chain (planet-lod-lab.html:320-354, analytic uNormalMode==0 branch in main()), province-weighted -- consumed via the new shared height module (AC1). [line refs verified 2026-06-18; handoff's :3170-3204 was stale by ~2850 lines]",
+      "The lab's accumulated analytic height h(pos): base fbm + the ~25-combiner height chain (world-engine-lab.html:320-354, analytic uNormalMode==0 branch in main()), province-weighted -- consumed via the new shared height module (AC1). [line refs verified 2026-06-18; handoff's :3170-3204 was stale by ~2850 lines]",
       "The F14 water level-set: uSeaLevel (used at :382) and the sea cut (:382-385) -- the river outlet condition (h < uSeaLevel)",
       "The irregular spherical-Delaunay mesh: Fibonacci -> 4x Lloyd -> ConvexHull adjacency (proven in rivers-lab.html) -- routing + render substrate",
       "Theme-B km scale system: featureFrequencyFromKm / reliefAmplitudeFromKm / animationRateFactor (planet-lod-lab-core.js:960-988) + radiusRangesEarth in src/core/ScaleConstants.js -- footprint/width/resolution scaling"

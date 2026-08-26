@@ -12,7 +12,7 @@ factor is exactly 1). So Ocean is the entire visible surface of this change.
 
 ## How the A/B was isolated
 
-`git show HEAD~1:planet-lod-lab.html > planet-lod-lab.BEFORE.html`, served from the same origin beside
+`git show HEAD~1:world-engine-lab.html > planet-lod-lab.BEFORE.html`, served from the same origin beside
 the edited page. The two files differ by **exactly one statement** — the
 `coreRadiusFraction: base.coreRadiusFraction` passthrough in `buildBodyDrivers` — and every module they
 import is identical. Because the BEFORE page omits that passthrough, `driversToTune` falls back to

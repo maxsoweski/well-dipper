@@ -64,7 +64,7 @@ criterion to reachable-AND-called, (b) add a third list for reachable-not-called
 | Instrument C | ZERO delta, exit 0 |
 | Citations | **826** (815 at session start), exit 0 |
 | Fences | the 8 named suites **363/363** |
-| Line counts | `planet-lod-lab.html` **6559** · `Planet.js` 2304 · `limbDeck.js` 199 |
+| Line counts | `world-engine-lab.html` **6559** · `Planet.js` 2304 · `limbDeck.js` 199 |
 
 ⚠ **FLAKES CONFIRMED, NOT ASSUMED.** The first full pass showed two NEWLY RED —
 `GalacticFeatures.test.js` and `worldengine-inc3b-composite-budget`. Both passed in isolation AND on

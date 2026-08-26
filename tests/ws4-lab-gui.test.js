@@ -7,7 +7,7 @@
 // grain-driven features, and a "⊞grain" tag on each of those 6 relief feature folders.
 //
 // WHY a SOURCE-SCAN, not a runtime call: the GUI is page-scoped lil-gui code inside
-// planet-lod-lab.html that needs a DOM + WebGL renderer; it can't run headless. So we assert the
+// world-engine-lab.html that needs a DOM + WebGL renderer; it can't run headless. So we assert the
 // folder + controls + tags EXIST and WIRE to the existing API/uniforms. The "does the slider
 // actually move terrain on screen" check is the LIVE :9223 verify, never faked here.
 //
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), 'utf8');
+const labSrc = readFileSync(path.resolve(__dirname, '../world-engine-lab.html'), 'utf8');
 const uniformsSrc = readFileSync(path.resolve(__dirname, '../src/worldengine/shaders/uniforms.js'), 'utf8');
 
 describe('WS4 LAB-GUI — Tectonic grain & carve folder + grained-feature tags', () => {

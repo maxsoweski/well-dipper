@@ -12,7 +12,7 @@
 // ⚠ ROOT IS DERIVED FROM import.meta.url ON PURPOSE.
 // Stryker copies the project into a sandbox (.stryker-tmp/sandbox-*) and runs
 // there. The three suites in scope also derive their own ROOT from
-// import.meta.url and then read real files off disk (planet-lod-lab.html,
+// import.meta.url and then read real files off disk (world-engine-lab.html,
 // planet-lod-shaders.glsl.js, src/worldengine/**). If this config hard-coded an
 // absolute repo path, vitest would run the sandbox's *mutated* test files
 // against the REAL repo's sources — and every mutant would look identical to

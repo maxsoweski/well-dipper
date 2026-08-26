@@ -14,7 +14,7 @@ landed**, so deleting the page does not delete the provenance.
 
 ## The three programs
 
-### 1. GPU shader combiner chain — `planet-lod-lab.html` (LIVE, 201 commits, 7593 lines)
+### 1. GPU shader combiner chain — `world-engine-lab.html` (LIVE, 201 commits, 7593 lines)
 The world-engine lab. ~28 relief stages composed per fragment in GLSL, plus the driver/preset
 system. **This is what the game port consumes** (`src/worldengine/**`, port slices 1–3).
 Supporting: `planet-lod-lab-core.js` (CPU oracles/mirrors), `planet-lod-height.glsl.js`,
@@ -30,7 +30,7 @@ and pick the current lab up on their next rebase — they were never forks needi
 their apparent "divergence" is staleness, not conflicting work. Check before assuming otherwise:
 
     for br in <branches>; do b=$(git merge-base <main-lane> $br)
-      git log --oneline $b..$br -- planet-lod-lab.html | wc -l; done
+      git log --oneline $b..$br -- world-engine-lab.html | wc -l; done
 
 ⚠ **Two contradictory fences now guard the same two driver-assembly lines** (`rebakeE5Bands` and
 `applyStormState`), a scar from the fork: atmo's `worldengine-atmo-deck-spiral-rhines` test pins the
@@ -80,7 +80,7 @@ in the production files are left intact on purpose — they still record where t
 | `autopilot-lab.html` | empirical easing-curve selection | `src/auto/AutopilotMotion.js` (cubic-out, commit `3ced806`) |
 | `portal-traversal-lab.html` | warp traversal state machine + gate geometry | `src/effects/WarpPortal.js`, `src/core/ScaleConstants.js` |
 | `planet-titletoggle-lab.html` | 46-line title-toggle spike | superseded by the title screen in `index.html` |
-| `rings-lod-lab.html` | near-tier ring particle-cloud LOD | `planet-lod-lab.html` F51 rings-v2 + `ring-particle-cloud.js` |
+| `rings-lod-lab.html` | near-tier ring particle-cloud LOD | `world-engine-lab.html` F51 rings-v2 + `ring-particle-cloud.js` |
 
 None had any test dependency (verified) and every inbound reference was either archived planning
 docs or a provenance comment — no imports, so nothing breaks.

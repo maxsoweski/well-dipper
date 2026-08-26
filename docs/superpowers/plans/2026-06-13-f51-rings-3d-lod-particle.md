@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace F51's rejected flat-annulus ring (v1) with a 3D LOD ring: a far-tier impostor (the v1 shader, reused) plus a near-tier point-sprite particle cloud that *emerges* as the camera approaches and resolves into individual glinting particles — proven in a standalone harness first, then integrated into `planet-lod-lab.html`.
+**Goal:** Replace F51's rejected flat-annulus ring (v1) with a 3D LOD ring: a far-tier impostor (the v1 shader, reused) plus a near-tier point-sprite particle cloud that *emerges* as the camera approaches and resolves into individual glinting particles — proven in a standalone harness first, then integrated into `world-engine-lab.html`.
 
 **Architecture:** Approach B ("emergence, not swap"). The v1 impostor annulus renders ALWAYS (the ring's permanent body / far tier). A `THREE.Points` cloud layered on top is sized+faded per-particle by camera distance (full near, zero beyond a cull distance), so detail appears only where the camera is close while the impostor carries the rest — no pop, no dissolve. Cloud particle placement is baked from the SAME `generateRingPhysics()` density profile the impostor uses, so the seam is invisible. Build in an isolated `rings-lod-lab.html` first (isolated-test-harness rule); integrate only after the mechanism proves out.
 
@@ -14,8 +14,8 @@
 
 ## Key reference code (read these live before coding)
 
-- **v1 impostor block** — `planet-lod-lab.html:4456-4695` (`makeRingPhysics()`, `ringUniforms`, `ringMat`, `ring` mesh). Reused verbatim as the far tier; the harness ports it.
-- **RT downscale pipeline** — `planet-lod-lab.html:4697-4760ish` (`rebuildTarget()`, NearestFilter low-res RT + nearest blit). The harness must port this so the retro envelope (dither cell size) is judged at true scale.
+- **v1 impostor block** — `world-engine-lab.html:4456-4695` (`makeRingPhysics()`, `ringUniforms`, `ringMat`, `ring` mesh). Reused verbatim as the far tier; the harness ports it.
+- **RT downscale pipeline** — `world-engine-lab.html:4697-4760ish` (`rebuildTarget()`, NearestFilter low-res RT + nearest blit). The harness must port this so the retro envelope (dither cell size) is judged at true scale.
 - **Point-cloud shader idiom** — `src/objects/Galaxy.js` (full file): `THREE.Points`, attributes `aColor`/`aSize`, perspective `gl_PointSize = aSize * (300/max(-mvPos.z,1))`, `clamp`, twinkle hash, 4×4 `bayerDither`, dither-discard. The cloud shader adapts this (but NormalBlending + LOD ramp + per-particle shadow, NOT additive).
 - **Physics object shape** — `generateRingPhysics()` returns `{ ringlets:[{innerR,outerR,opacity,composition}], gaps:[{radius,width}], innerRadius, outerRadius, density, color1, color2 }`. (`src/generation/PhysicsEngine.js:793-905`.)
 
@@ -24,7 +24,7 @@
 - **Create `ring-particle-cloud.js`** (repo root, sibling to `planet-archetypes.js`) — exports `bakeRingCloud(physics, opts)` (PURE, unit-testable) + `makeRingCloudPoints(baked, opts)` (returns a configured `THREE.Points`). Imported by both the harness and the lab. Root placement mirrors `planet-archetypes.js` and keeps it out of `src/` (parallel warp WIP lives in `src/`).
 - **Create `tests/ring-particle-cloud.test.js`** — vitest unit tests for `bakeRingCloud`.
 - **Create `rings-lod-lab.html`** (repo root) — standalone harness: scene + planet + v1 impostor (ported) + cloud + camera distance/pitch GUI + RT downscale.
-- **Modify `planet-lod-lab.html`** — integration (after harness proves out): import the module, build the cloud next to the existing `ring` mesh (~4695), per-frame LOD-uniform write + tilt + visibility (~7039), GUI checkbox already exists for `ringsEnabled`.
+- **Modify `world-engine-lab.html`** — integration (after harness proves out): import the module, build the cloud next to the existing `ring` mesh (~4695), per-frame LOD-uniform write + tilt + visibility (~7039), GUI checkbox already exists for `ringsEnabled`.
 - **Modify `docs/FEATURES/cards/F51-rings.md`** (§6.5 rewrite + §7 v2 verdict) and **`docs/FEATURES/planet-lod-campaign-tracker.md`** (F51 row + phase row) — at verdict time.
 
 ## Commit discipline (shared tree — NEVER `git add -A`)
@@ -301,7 +301,7 @@ Expected: FAIL — `makeRingCloudPoints is not a function`.
  *
  * The cloud is centered on the planet (add it as a child of / sibling tilted with the
  * planet), so `position` is already relative to the planet center → the shadow test
- * mirrors the impostor's (planet-lod-lab.html:4676-4682).
+ * mirrors the impostor's (world-engine-lab.html:4676-4682).
  *
  * @param {object} baked - output of bakeRingCloud
  * @param {object} opts - { pointScale, dResolve, dCull, planetRadius, lightDir:[x,y,z], sizeClamp }
@@ -363,7 +363,7 @@ export function makeRingCloudPoints(baked, opts = {}) {
         gl_PointSize = clamp(sz, 0.0, uSizeClamp);
 
         // Per-particle analytic planet-shadow (object space; position is relative to
-        // planet center). Mirrors impostor planet-lod-lab.html:4676-4682.
+        // planet center). Mirrors impostor world-engine-lab.html:4676-4682.
         float shadowDist = length(cross(position, uLightDir));
         float behind = step(dot(position, uLightDir), 0.0);
         float inShadow = behind * (1.0 - smoothstep(uPlanetRadius * 0.9, uPlanetRadius * 1.1, shadowDist));
@@ -440,14 +440,14 @@ Standalone minimal scene to isolate the LOD-emergence mechanism. NO cloud yet �
 **Files:**
 - Create: `rings-lod-lab.html`
 
-- [ ] **Step 1: Build the scaffold.** Model the boilerplate on `planet-lod-lab.html` lines 100-130 (renderer/scene/camera) and the RT downscale at 4697-4760. Contents:
+- [ ] **Step 1: Build the scaffold.** Model the boilerplate on `world-engine-lab.html` lines 100-130 (renderer/scene/camera) and the RT downscale at 4697-4760. Contents:
   - `import * as THREE from 'three';` (bare import — Vite serves it, same as the lab).
   - `const R = 1.0;` planet radius. `const WORLD_LIGHT = new THREE.Vector3(0.6,0.35,0.7).normalize();`
   - A planet `new THREE.SphereGeometry(R, 128, 128)` with a simple `MeshBasicMaterial({color:0x335577})` (the harness is about the RING, not the planet surface — a plain sphere is enough to occlude/shadow against).
   - A directional-ish look: orient WORLD_LIGHT; no need for real lighting on the plain planet.
   - A small starfield backdrop (a `THREE.Points` of ~2000 random far points, or a dark background `scene.background = new THREE.Color(0x05060a)`) so dither-translucency against stars is checkable.
   - **Camera controls via GUI** (use the same lil-gui the lab imports, or plain DOM sliders): `state.distance` (1.1–30, default 12) and `state.pitch` (0=face-on … ~1.5=edge-on). Each frame, position the camera at distance/pitch around the planet looking at origin.
-  - **RT downscale:** port `rebuildTarget()` + the render-to-target-then-blit from `planet-lod-lab.html:4697-4760`, with `state.pixelScale` (default 3). This makes the retro dither cell size faithful.
+  - **RT downscale:** port `rebuildTarget()` + the render-to-target-then-blit from `world-engine-lab.html:4697-4760`, with `state.pixelScale` (default 3). This makes the retro dither cell size faithful.
   - `window._rlab = { state, camera, scene, THREE }` for chrome-devtools `evaluate_script` control.
 
 - [ ] **Step 2: Verify it loads clean.** Ask Max to confirm the Vite dev server is up on `:5173` (Claude cannot start it — `feedback_no-start-servers`). Load via chrome-devtools on `:9223`:
@@ -471,9 +471,9 @@ git commit -m "feat(F51): standalone rings-lod-lab harness scaffold (scene+plane
 **Files:**
 - Modify: `rings-lod-lab.html`
 
-- [ ] **Step 1: Port the impostor block.** Copy `planet-lod-lab.html:4456-4695` into the harness verbatim (the `RING_MAX_*` consts, `RING_COMPOSITION_COLORS`, `makeRingPhysics()`, the flatten loops, `ringUniforms`, `ringMat`, `ringGeo`, `ring` mesh, `scene.add(ring)`). It needs `generateRingPhysics` — add at top: `import { generateRingPhysics } from './src/generation/PhysicsEngine.js';` (verify the export name/path live first). Set `ring.visible = true` in the harness (always-on here). Keep `ringPhysics` in scope — Task 5 feeds it to the baker.
+- [ ] **Step 1: Port the impostor block.** Copy `world-engine-lab.html:4456-4695` into the harness verbatim (the `RING_MAX_*` consts, `RING_COMPOSITION_COLORS`, `makeRingPhysics()`, the flatten loops, `ringUniforms`, `ringMat`, `ringGeo`, `ring` mesh, `scene.add(ring)`). It needs `generateRingPhysics` — add at top: `import { generateRingPhysics } from './src/generation/PhysicsEngine.js';` (verify the export name/path live first). Set `ring.visible = true` in the harness (always-on here). Keep `ringPhysics` in scope — Task 5 feeds it to the baker.
 
-- [ ] **Step 2: Per-frame impostor light dir.** In the render loop, write the object-space light into `ringUniforms.lightDir.value` each frame (mirror `planet-lod-lab.html:7039` — copy `WORLD_LIGHT` transformed into the ring's local frame; for the harness with an un-rotated ring, `WORLD_LIGHT` directly is fine for first light).
+- [ ] **Step 2: Per-frame impostor light dir.** In the render loop, write the object-space light into `ringUniforms.lightDir.value` each frame (mirror `world-engine-lab.html:7039` — copy `WORLD_LIGHT` transformed into the ring's local frame; for the harness with an un-rotated ring, `WORLD_LIGHT` directly is fine for first light).
 
 - [ ] **Step 2.5: Run the unit tests** to confirm nothing regressed:
 
@@ -552,18 +552,18 @@ git commit -m "feat(F51): LOD particle cloud in harness — emerges to resolved 
 
 ---
 
-### Task 7: Integrate into `planet-lod-lab.html`
+### Task 7: Integrate into `world-engine-lab.html`
 
 Only after Task 6 passes. Port the proven cloud alongside the existing impostor `ring`.
 
 **Files:**
-- Modify: `planet-lod-lab.html`
+- Modify: `world-engine-lab.html`
 
 - [ ] **Step 1: Import the module.** Near the top imports, add `import { bakeRingCloud, makeRingCloudPoints } from './ring-particle-cloud.js';`.
 
-- [ ] **Step 2: Build the cloud after the impostor mesh.** Immediately after `scene.add(ring);` (`planet-lod-lab.html:4695`), insert the bake + `makeRingCloudPoints` + `scene.add(ringCloud)` block (same as harness Task 5 Step 1), using the lab's `ringPhysics`, `R`, and `WORLD_LIGHT`. Set `ringCloud.visible = false` (the toggle drives it).
+- [ ] **Step 2: Build the cloud after the impostor mesh.** Immediately after `scene.add(ring);` (`world-engine-lab.html:4695`), insert the bake + `makeRingCloudPoints` + `scene.add(ringCloud)` block (same as harness Task 5 Step 1), using the lab's `ringPhysics`, `R`, and `WORLD_LIGHT`. Set `ringCloud.visible = false` (the toggle drives it).
 
-- [ ] **Step 3: Per-frame in the lab render loop** (near the impostor's `ring.visible` write at `planet-lod-lab.html:7039-7040`): add
+- [ ] **Step 3: Per-frame in the lab render loop** (near the impostor's `ring.visible` write at `world-engine-lab.html:7039-7040`): add
   ```js
   ringCloud.visible = !!state.ringsEnabled;
   ringCloud.material.uniforms.uTime.value += dt; // use the lab's existing per-frame delta
@@ -572,7 +572,7 @@ Only after Task 6 passes. Port the proven cloud alongside the existing impostor 
   ```
   (The existing `state.ringsEnabled` checkbox + `window._lab.rings()` now drive BOTH impostor and cloud.)
 
-- [ ] **Step 4: Verify in the lab on :9223.** Reload `http://localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`, `window._lab.rings(true)`, repeat the Task-5 distance sweep (`window._lab.state.distance` — lab range 1.1–30). Confirm same behavior as the harness: far impostor → near resolved particles, no pop, shadow sweep, edge-on stable. Save lab shots to `docs/FEATURES/cards/shots/F51-v2-*.png`.
+- [ ] **Step 4: Verify in the lab on :9223.** Reload `http://localhost:5173/well-dipper/world-engine-lab.html?fresh=1`, `window._lab.rings(true)`, repeat the Task-5 distance sweep (`window._lab.state.distance` — lab range 1.1–30). Confirm same behavior as the harness: far impostor → near resolved particles, no pop, shadow sweep, edge-on stable. Save lab shots to `docs/FEATURES/cards/shots/F51-v2-*.png`.
 
 - [ ] **Step 5: Run the full test suite** — must pass UNCHANGED (no FEATURES/PROVINCES edits):
 
@@ -582,7 +582,7 @@ Expected: PASS, planet-archetypes.test.js identical to before.
 - [ ] **Step 6: Commit (code)**
 
 ```bash
-git add planet-lod-lab.html ring-particle-cloud.js tests/ring-particle-cloud.test.js rings-lod-lab.html
+git add world-engine-lab.html ring-particle-cloud.js tests/ring-particle-cloud.test.js rings-lod-lab.html
 git commit -m "feat(F51): integrate 3D LOD particle ring into planet-lod-lab (v2 substrate)"
 # grab the sha for the doc commit
 git rev-parse --short HEAD
@@ -601,7 +601,7 @@ git rev-parse --short HEAD
 - [ ] **Step 3: Update the tracker** — F51 row from `🔁 v1 rejected` to `✅ v2 VERIFIED_PENDING_MAX <sha>`; update the phase-4c row to note F51 rework closed (F38/F39 still open).
 - [ ] **Step 4: Confirm clean tree on campaign paths.**
 
-Run: `git status --porcelain planet-lod-lab.html ring-particle-cloud.js rings-lod-lab.html docs/FEATURES`
+Run: `git status --porcelain world-engine-lab.html ring-particle-cloud.js rings-lod-lab.html docs/FEATURES`
 Expected: no output.
 
 - [ ] **Step 5: Commit (docs)**

@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stop two false-renders in `planet-lod-lab.html` — force-enabled `shatter`/`hexTess` painting non-member worlds, and `mountains` rendering on Carbon/Crystal — via a per-feature relevance hard-gate and a targeted exotic-crust knockdown, plus a doc-only ACCEPT for faint Ocean/Europa craters. Zero core/shader changes; byte-identical on every member world.
+**Goal:** Stop two false-renders in `world-engine-lab.html` — force-enabled `shatter`/`hexTess` painting non-member worlds, and `mountains` rendering on Carbon/Crystal — via a per-feature relevance hard-gate and a targeted exotic-crust knockdown, plus a doc-only ACCEPT for faint Ocean/Europa craters. Zero core/shader changes; byte-identical on every member world.
 
 **Architecture:** Two new `state` signals computed once per preset/quality change in `applyDrivers()` (mirroring the existing `habGate` precedent), consumed by three one-line `×=` multiplies in the per-frame uniform writers. (A) `state.featureRelevant` (a `{shatter, hexTess}` map of `1.0`/`0.0` floats, derived from `ASSOCIATIONS[key].rendersOn.includes(driverUI.preset)` so it honors hexTess's `rendersOnDivergent` Frozen membership) hard-gates shatter+hexTess. (B) `state.isExoticCarbonOrGeometric` (a `1.0`/`0.0` float keyed on Carbon/Crystal archetype membership) knocks mountains to zero on those two presets only — leaving icy-world mountains soft-scaled-and-previewable. `carbon`/`facets` are already honest and are NOT touched.
 
-**Tech Stack:** Inline `<script>` in `planet-lod-lab.html` (NOT importable by Vitest); GLSL shader file `planet-lod-lab-core.js` is **untouched**; verification is **live on GPU Chrome `:9223`** via chrome-devtools MCP (`evaluate_script` + `window._lab.*`, NOT Playwright, NOT image recognition) plus a render-audit Δ re-run (`window._lab.renderDeltaSweep()` → `node scripts/gen-render-audit.mjs`); Vitest only to confirm existing suites stay green.
+**Tech Stack:** Inline `<script>` in `world-engine-lab.html` (NOT importable by Vitest); GLSL shader file `planet-lod-lab-core.js` is **untouched**; verification is **live on GPU Chrome `:9223`** via chrome-devtools MCP (`evaluate_script` + `window._lab.*`, NOT Playwright, NOT image recognition) plus a render-audit Δ re-run (`window._lab.renderDeltaSweep()` → `node scripts/gen-render-audit.mjs`); Vitest only to confirm existing suites stay green.
 
 **Spec:** `docs/superpowers/specs/2026-06-15-lod-lab-exotic-archetype-gate-design.md` (approved, committed `e339b9f`)
 
@@ -42,11 +42,11 @@ If the Δ shows *any* member-world change, the multiply was not byte-identical-w
 
 ## Standing cautions
 
-- **Line numbers are HINTS** — `grep -n` every edit site before editing (line drift in `planet-lod-lab.html` is a known hazard). The sites below were VERIFIED at authoring time; re-grep anyway: `habGate`, `applyDrivers`, `relevantFeatureSet`, `uShatStrength`, `uHexStrength`, `uMountainAmp`, `ARCHETYPES`, `ASSOCIATIONS`, `state.mountainAmp`, `renderDeltaSweep`.
+- **Line numbers are HINTS** — `grep -n` every edit site before editing (line drift in `world-engine-lab.html` is a known hazard). The sites below were VERIFIED at authoring time; re-grep anyway: `habGate`, `applyDrivers`, `relevantFeatureSet`, `uShatStrength`, `uHexStrength`, `uMountainAmp`, `ARCHETYPES`, `ASSOCIATIONS`, `state.mountainAmp`, `renderDeltaSweep`.
 - **Stage EXPLICIT paths only. NEVER `git add -A`.** The working tree has loose litter including a file literally named `HEAD` (verified: 0-byte `-r--r--r-- HEAD` in repo root), plus warp WIP and loose `.png`/`.webm`/`.html`. `git add -A` would stage all of it.
 - **Do NOT run `git show HEAD`** — it collides with the loose `HEAD` file. Use `git log`, `git rev-parse HEAD`, or `git show <sha>` with an explicit sha instead.
 - **Branch is `master`** (verified). Commit on `master` per the project's normal flow; the campaign tracks on `master`.
-- **Verification is GPU Chrome `:9223`, NOT Playwright** (per `well-dipper-testing-reference.md` — the lab needs the GPU path; Playwright is CPU and will not render the shader correctly). Reload `127.0.0.1:5173/well-dipper/planet-lod-lab.html?fresh=1` before EACH live check (`?fresh=1` opts out of the sessionStorage scenario-restore; use `127.0.0.1`, not `localhost`, per `chrome-devtools-screenshot-scaling.md`).
+- **Verification is GPU Chrome `:9223`, NOT Playwright** (per `well-dipper-testing-reference.md` — the lab needs the GPU path; Playwright is CPU and will not render the shader correctly). Reload `127.0.0.1:5173/well-dipper/world-engine-lab.html?fresh=1` before EACH live check (`?fresh=1` opts out of the sessionStorage scenario-restore; use `127.0.0.1`, not `localhost`, per `chrome-devtools-screenshot-scaling.md`).
 - **Do NOT start a dev server** (`npm run dev` etc.) — assume it is already running on `:5173`; if `:9223` has no page, ask Max to open the lab (per `feedback_no-start-servers.md` + `feedback_specify-user-interactions.md`).
 - End every commit message with: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 
@@ -87,7 +87,7 @@ These were resolved in the approved spec and re-confirmed against the live sourc
 
 | File | Responsibility | Action |
 |---|---|---|
-| `planet-lod-lab.html` | Add `state.featureRelevant` + `state.isExoticCarbonOrGeometric` derivation in `applyDrivers()` (next to `habGate`) + seed safe defaults next to `habGate`'s seed; multiply the three writers (`uShatStrength`, `uHexStrength`, `uMountainAmp`). | **Modify** (inline `<script>` only; NO core/shader, NO new function) |
+| `world-engine-lab.html` | Add `state.featureRelevant` + `state.isExoticCarbonOrGeometric` derivation in `applyDrivers()` (next to `habGate`) + seed safe defaults next to `habGate`'s seed; multiply the three writers (`uShatStrength`, `uHexStrength`, `uMountainAmp`). | **Modify** (inline `<script>` only; NO core/shader, NO new function) |
 | `docs/FEATURES/relief-triage-verdicts-2026-06-15.md` | Record the ACCEPT decision for faint Ocean/Europa craters (#3), citing Max's 2026-06-15 call. | **Modify** (doc only) |
 | `docs/FEATURES/lab-render-audit.md` | Regenerated by `node scripts/gen-render-audit.mjs` after the render-audit Δ re-run (Task 5). | **Modify** (generated) |
 | `docs/NOW.md` | Close-out: note Thread B landed `VERIFIED_PENDING_MAX <sha>`. | **Modify** |
@@ -100,7 +100,7 @@ No new files. No generator, no generated module, no new unit test, no `package.j
 
 - [ ] **Step 0.1: Confirm the dev server + lab are reachable on `:9223`.**
 
-Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `127.0.0.1:5173/well-dipper/planet-lod-lab.html?fresh=1`.
+Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `127.0.0.1:5173/well-dipper/world-engine-lab.html?fresh=1`.
 Expected: page loads, planet renders, left (Drivers/World) + right (Features) GUI panels visible. If `list_pages` shows no page on `:9223`, STOP and ask Max to open the lab in the GPU Chrome (`--remote-debugging-port=9223`, per `chrome-devtools-9223-launch.md`) — do NOT start a server yourself.
 
 - [ ] **Step 0.2: Capture the pre-change baseline from the live runtime** (so later checks have exact expected before/after values, and so we can prove the hard-gate is actually changing behavior).
@@ -143,11 +143,11 @@ Expected (pre-fix): `rockyShatterEnabled === true`, `rockyHexEnabled === true`; 
 Add the per-feature relevance map and the exotic-carbon/geometric flag where `habGate` is computed, and seed safe defaults where `habGate` is seeded — so the first frame can never read `undefined`. **No writer change yet** (Tasks 2–3), so this task is behavior-neutral: the planet renders exactly as before. This isolates the derivation from the writer multiplies for clean regression bisection.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — the `habGate` seed (~`:4950`) and the `habGate` derivation in `applyDrivers()` (~`:5524`).
+- Modify: `world-engine-lab.html` — the `habGate` seed (~`:4950`) and the `habGate` derivation in `applyDrivers()` (~`:5524`).
 
 - [ ] **Step 1.1: Seed safe defaults next to `habGate`'s seed.**
 
-Re-grep: `grep -n "habGate: 1," planet-lod-lab.html` (~`:4950`). That line seeds initial `state` defaults. **After** that line (in the same state-init object), add the seeds so the first frame, before `applyDrivers` runs, multiplies by safe values:
+Re-grep: `grep -n "habGate: 1," world-engine-lab.html` (~`:4950`). That line seeds initial `state` defaults. **After** that line (in the same state-init object), add the seeds so the first frame, before `applyDrivers` runs, multiplies by safe values:
 ```js
       featureRelevant: { shatter: 1, hexTess: 1 },  // per-feature relevance hard-gate seed (1 = pass; recomputed by applyDrivers from rendersOn). Safe first-frame default.
       isExoticCarbonOrGeometric: 0,                 // Carbon/Crystal exotic-crust knockdown seed (0 = no knockdown). Safe first-frame default.
@@ -156,7 +156,7 @@ Re-grep: `grep -n "habGate: 1," planet-lod-lab.html` (~`:4950`). That line seeds
 
 - [ ] **Step 1.2: Add the derivation in `applyDrivers()`, right after the `habGate` computation.**
 
-Re-grep: `grep -n "state.habGate = t \* t" planet-lod-lab.html` (~`:5524`). That line ends the `habGate` block (the `{ const t = …; state.habGate = …; }` one-liner). **Immediately after** that closing `}`, add:
+Re-grep: `grep -n "state.habGate = t \* t" world-engine-lab.html` (~`:5524`). That line ends the `habGate` block (the `{ const t = …; state.habGate = …; }` one-liner). **Immediately after** that closing `}`, add:
 ```js
       // ── Per-feature relevance hard-gate (Thread B) ────────────────────────────
       // Each gated feature is multiplied by ITS OWN relevance to the current preset
@@ -222,7 +222,7 @@ If `frozen.hexRel !== 1`, the D2 signal is wrong (you used the raw set, not `ren
 - [ ] **Step 1.4: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): derive per-feature relevance + exotic-crust signals (Thread B)
 
 applyDrivers() now computes state.featureRelevant.{shatter,hexTess} from
@@ -242,11 +242,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Multiply the two pure-enable writers by their relevance gate. This is the fix for residual #1. Separate task from mountains (Task 3) so a regression is isolatable to exactly one gate.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — `uShatStrength` writer (~`:7536`), `uHexStrength` writer (~`:7527`).
+- Modify: `world-engine-lab.html` — `uShatStrength` writer (~`:7536`), `uHexStrength` writer (~`:7527`).
 
 - [ ] **Step 2.1: Multiply the hexTess writer by its relevance.**
 
-Re-grep: `grep -n "uniforms.uHexStrength.value" planet-lod-lab.html` (~`:7527`). It currently reads:
+Re-grep: `grep -n "uniforms.uHexStrength.value" world-engine-lab.html` (~`:7527`). It currently reads:
 ```js
       uniforms.uHexStrength.value    = state.hexTessEnabled ? 1.0 : 0.0;   // ✓ enable gate
 ```
@@ -257,7 +257,7 @@ Change it to (keep the original alignment/comment style; the relevant value IS `
 
 - [ ] **Step 2.2: Multiply the shatter writer by its relevance.**
 
-Re-grep: `grep -n "uniforms.uShatStrength.value" planet-lod-lab.html` (~`:7536`). It currently reads:
+Re-grep: `grep -n "uniforms.uShatStrength.value" world-engine-lab.html` (~`:7536`). It currently reads:
 ```js
       uniforms.uShatStrength.value    = state.shatterEnabled ? 1.0 : 0.0;   // ✓ enable gate
 ```
@@ -305,7 +305,7 @@ For a tighter uniform-level proof, see the optional probe in Step 5.4 (exposes `
 - [ ] **Step 2.4: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "fix(lod-lab): hard-gate shatter + hexTess by per-feature relevance (Thread B #1)
 
 uShatStrength/uHexStrength writers now multiply by state.featureRelevant.<key>,
@@ -323,11 +323,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Multiply the mountains writer's `state.mountainAmp` copy by `(1.0 − state.isExoticCarbonOrGeometric)`. This is the fix for residual #2. Asymmetric by design: hard-zero on Carbon/Crystal only; icy worlds keep soft-scale + preview.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — `uMountainAmp` writer (~`:7617`).
+- Modify: `world-engine-lab.html` — `uMountainAmp` writer (~`:7617`).
 
 - [ ] **Step 3.1: Apply the knockdown in the mountains writer.**
 
-Re-grep: `grep -n "uniforms.uMountainAmp.value" planet-lod-lab.html` (~`:7617`). It currently reads:
+Re-grep: `grep -n "uniforms.uMountainAmp.value" world-engine-lab.html` (~`:7617`). It currently reads:
 ```js
       uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp : 0.0;   // ✓ enable gate
 ```
@@ -365,14 +365,14 @@ Expected:
 - `europa.exoticCG === 0` and `europa.writerAmp === europa.derivedAmp` (> 0 if `rockyCrust` lets icy worlds preview; the asymmetry is preserved — knockdown does NOT touch icy).
 - `rocky.exoticCG === 0` and `rocky.writerAmp === rocky.derivedAmp` (unchanged).
 
-> **Preset-name caution:** the exact icy preset key may be `'Europa (ice shell)'`, `'Titan (…)'`, or `'Frozen (airless)'` — if `setPreset` no-ops (state unchanged), re-grep `DRIVER_PRESETS` for the exact spelling (`grep -n "Europa\|Titan\|Frozen" planet-lod-lab.html`) and use a confirmed icy key. Any icy world demonstrates the asymmetry; Frozen also doubles as the shatter/hexTess member world.
+> **Preset-name caution:** the exact icy preset key may be `'Europa (ice shell)'`, `'Titan (…)'`, or `'Frozen (airless)'` — if `setPreset` no-ops (state unchanged), re-grep `DRIVER_PRESETS` for the exact spelling (`grep -n "Europa\|Titan\|Frozen" world-engine-lab.html`) and use a confirmed icy key. Any icy world demonstrates the asymmetry; Frozen also doubles as the shatter/hexTess member world.
 
 If `europa.writerAmp === 0`, the knockdown leaked onto an icy world (the signal is too broad) — STOP, re-check that `relevantFeatureSet().archs` on the icy preset does NOT contain `exotic-carbon`/`exotic-geometric`.
 
 - [ ] **Step 3.3: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "fix(lod-lab): knock down mountains on Carbon/Crystal only (Thread B #2)
 
 uMountainAmp writer now multiplies the state.mountainAmp copy by
@@ -462,7 +462,7 @@ If ANY member-world cell changed (a new ⚠️D/🔴F/⚠️F where there was a 
 
 - [ ] **Step 5.4: Consolidated live integration sweep on `:9223` (the spec's Verification checklist).**
 
-Reload `?fresh=1`. (Optional tighter proof: temporarily expose the writer uniforms by re-grepping the `_lab` export object `grep -n "renderDeltaSweep(opts)" planet-lod-lab.html` ~`:7820` and adding `getStrengths(){ return { shat: uniforms.uShatStrength.value, hex: uniforms.uHexStrength.value, mtn: uniforms.uMountainAmp.value }; },` to it — then assert against it below, and REMOVE the probe line before Step 5.6's commit, reload, and confirm `list_console_messages` shows no new error. This mirrors Ask 3's Step-1.4/1.6 probe pattern.)
+Reload `?fresh=1`. (Optional tighter proof: temporarily expose the writer uniforms by re-grepping the `_lab` export object `grep -n "renderDeltaSweep(opts)" world-engine-lab.html` ~`:7820` and adding `getStrengths(){ return { shat: uniforms.uShatStrength.value, hex: uniforms.uHexStrength.value, mtn: uniforms.uMountainAmp.value }; },` to it — then assert against it below, and REMOVE the probe line before Step 5.6's commit, reload, and confirm `list_console_messages` shows no new error. This mirrors Ask 3's Step-1.4/1.6 probe pattern.)
 
 Run (`evaluate_script`) — covers each spec acceptance check:
 ```js
@@ -502,7 +502,7 @@ Expected: every field `true`. (The icy mountains-preview asymmetry was proven in
 ```bash
 cd /home/ax/projects/well-dipper
 git add docs/FEATURES/lab-render-audit.md
-# If the probe was added then removed, also: git add planet-lod-lab.html
+# If the probe was added then removed, also: git add world-engine-lab.html
 git commit -m "docs(render-audit): regen after Thread B gate (targeted false-renders cleared)
 
 renderDeltaSweep + gen-render-audit re-run: shatter/hexTess force-enable
@@ -549,7 +549,7 @@ State to Max: agent-closeable layers (existing suites green + render-audit Δ cl
 - "Render-audit Δ: renderDeltaSweep + gen-render-audit.mjs → lab-render-audit.md; expect targeted clears vs 64/51 @ 248b355, no member regressions" → Steps 5.2–5.3. ✔
 - "Max UAT deferred-to-Max, never agent-closeable; integration-green → VERIFIED_PENDING_MAX <sha>" → Step 5.9 + Task 5 preamble. ✔
 - "Existing vitest suites stay green (additive)" → Step 5.1. ✔
-- "All commits stage explicit paths (planet-lod-lab.html, relief-triage doc, NOW.md, lab-render-audit.md); never git add -A; don't git show HEAD" → every commit names paths; Standing cautions. ✔
+- "All commits stage explicit paths (world-engine-lab.html, relief-triage doc, NOW.md, lab-render-audit.md); never git add -A; don't git show HEAD" → every commit names paths; Standing cautions. ✔
 
 **2. Placeholder scan:** No TBD/TODO/"handle edge cases". Every code step shows the exact before/after line. The "re-grep before editing" notes are deliberate line-drift caution (verified anchors given), not placeholders. The one prose-edit (Task 4.2) specifies exact required content (residual/verdict/authority/action) rather than dumping a table row, because the target doc's row format must be matched in-place — the implementer reads the live rows in Step 4.1 first. ✔
 

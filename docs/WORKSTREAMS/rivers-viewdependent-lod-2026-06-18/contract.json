@@ -7,9 +7,9 @@
   "acceptanceCriteria": [
     {
       "id": "S1-isolated-harness",
-      "statement": "A standalone view-dependent rivers harness (e.g. rivers-viewdependent-lab.html) exists that loads the existing global router output as the coarse authority and adds the view-dependent amplification + render on top -- WITHOUT modifying the production river path (planet-lod-rivers.js and planet-lod-lab.html's river integration stay byte-identical). The spike lives entirely in the harness per the isolated-test-harness rule.",
+      "statement": "A standalone view-dependent rivers harness (e.g. rivers-viewdependent-lab.html) exists that loads the existing global router output as the coarse authority and adds the view-dependent amplification + render on top -- WITHOUT modifying the production river path (planet-lod-rivers.js and world-engine-lab.html's river integration stay byte-identical). The spike lives entirely in the harness per the isolated-test-harness rule.",
       "verifyVia": {
-        "input": "git diff over planet-lod-rivers.js and planet-lod-lab.html (river-integration regions); load the new harness on :9223",
+        "input": "git diff over planet-lod-rivers.js and world-engine-lab.html (river-integration regions); load the new harness on :9223",
         "observable": "Harness loads and renders a planet with rivers; planet-lod-rivers.js is unchanged and the production lab's river wiring is unchanged (diff empty for those paths); the global overlay lab (rivers-dendritic-drainage) still works"
       },
       "layer": "integration",
@@ -78,8 +78,8 @@
   "architecturalConnections": {
     "inputs": [
       "The existing GLOBAL river route as the coarse authority: planet-lod-rivers.js createRiverOverlay.route() -> priority-flood + flow-accumulation + Horton-Strahler trunk topology (the LOD-independent network the local layer amplifies). Code map confirms this route CANNOT be decomposed per-chunk (drainage area needs the whole upstream network)",
-      "The composed analytic height field h(pos): base fbm + the ~25-combiner chain (planet-lod-lab.html:320-354, analytic uNormalMode==0 branch) -- rivers already drain the composed relief of every other combiner (read-coupling)",
-      "The F14 water level-set: uSeaLevel (used at planet-lod-lab.html:382) + the sea cut (:382-385) -- the river outlet condition (h < uSeaLevel)",
+      "The composed analytic height field h(pos): base fbm + the ~25-combiner chain (world-engine-lab.html:320-354, analytic uNormalMode==0 branch) -- rivers already drain the composed relief of every other combiner (read-coupling)",
+      "The F14 water level-set: uSeaLevel (used at world-engine-lab.html:382) + the sea cut (:382-385) -- the river outlet condition (h < uSeaLevel)",
       "Theme-B km scale system: featureFrequencyFromKm / reliefAmplitudeFromKm (planet-lod-lab-core.js:966-975) + RADIUS_RANGES_EARTH / planetRadiusEarth (src/core/ScaleConstants.js) -- proportioning the amplified network for the body, and pixels-per-km at the camera driving the LOD laws",
       "Prior art (2026-06-18 scan, research/): Dendry (Gaillard et al., I3D 2019; ref impl github.com/mgaillard/Noise); Derzapf et al. 2011 'River Networks for Instant Procedural Planets'; Bruneton & Neyret 2008 / Proland (vector rivers + footprint/appearance shaders, view-dependent quadtree); quantitative laws (Hack h~0.57, width ~ area^0.35, drainage density)"
     ],
@@ -91,7 +91,7 @@
     ],
     "mustStayWorking": [
       "The production global river overlay and its lab (rivers-dendritic-drainage-2026-06-17 workstream) -- untouched during the spike",
-      "planet-lod-rivers.js -- shared by both labs (rivers-terrain-lab.html and planet-lod-lab.html); must not regress",
+      "planet-lod-rivers.js -- shared by both labs (rivers-terrain-lab.html and world-engine-lab.html); must not regress",
       "The planet generation, scale (Theme-B), and water/level-set systems",
       "The existing planet-generation vitest suite + planet-lod-lab-core.js finite-diff parity guards"
     ]

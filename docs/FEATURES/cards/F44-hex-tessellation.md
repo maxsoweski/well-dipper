@@ -7,7 +7,7 @@ F44 Hexagonal-tessellated crust (F-exotic-natural, EXOTIC family; flagged specul
 
 ## 2. Current shader approach (HOW, as-built)
 
-Unbuilt (aspirational). No hex/tessellation combiner, uniform, or GUI folder exists — grep of /home/ax/projects/well-dipper/planet-lod-lab.html and /home/ax/projects/well-dipper/planet-archetypes.js finds no F44/hex code, and the FEATURES registry (planet-archetypes.js:6-23) has no hex key nor any 'exotic' archetype. Nearest existing machinery it should plug into: the voronoi3d keystone primitive (planet-lod-lab.html:499 — seam-free 3D cellular noise returning F1/F2/cellId/grad), and specifically the F18 sublimation N₂-convection-polygon branch (planet-lod-lab.html:1295-1300, uVolatileSpecies==4, uSubPolyScale) which already renders raised-cell-interior / trough-border polygon fields from smoothstep(F2−F1); the F9 chaos-raft combiner (planet-lod-lab.html:1162-1177) supplies the per-cell hashed flat-height convention. F44 is essentially those two mechanisms plus a center-regularity control and its own enable/GUI plumbing.
+Unbuilt (aspirational). No hex/tessellation combiner, uniform, or GUI folder exists — grep of /home/ax/projects/well-dipper/world-engine-lab.html and /home/ax/projects/well-dipper/planet-archetypes.js finds no F44/hex code, and the FEATURES registry (planet-archetypes.js:6-23) has no hex key nor any 'exotic' archetype. Nearest existing machinery it should plug into: the voronoi3d keystone primitive (world-engine-lab.html:499 — seam-free 3D cellular noise returning F1/F2/cellId/grad), and specifically the F18 sublimation N₂-convection-polygon branch (world-engine-lab.html:1295-1300, uVolatileSpecies==4, uSubPolyScale) which already renders raised-cell-interior / trough-border polygon fields from smoothstep(F2−F1); the F9 chaos-raft combiner (world-engine-lab.html:1162-1177) supplies the per-cell hashed flat-height convention. F44 is essentially those two mechanisms plus a center-regularity control and its own enable/GUI plumbing.
 
 ## 3. Reference images (real + art)
 
@@ -34,7 +34,7 @@ Physics: columnar jointing is modeled as thermal-contraction fracture mechanics 
 
 ## 5. Isolation recipe (:9223)
 
-Unbuilt — recipe for once it lands. (1) Register in /home/ax/projects/well-dipper/planet-archetypes.js FEATURES as `hexTess: { label: 'Hex crust (F44)', enableKey: 'hexTessEnabled', archetypes: ['exotic-geometric'] }` with a new 'exotic-geometric' ARCHETYPES entry (the registry inversion auto-wires the panel filter and solo button). (2) In the :9223 debug Chrome (see memory/chrome-devtools-9223-launch.md), open planet-lod-lab.html via vite. (3) `window._lab.solo('hexTess')` — disables every other feature combiner. (4) Preset: until a dedicated 'Hex (exotic)' preset exists, `window._lab.setPreset('Frozen (airless)')` is the best base (cold uniform crust, no atmosphere/weather interference). (5) Distances via `window._lab.state.distance` (radii, 1.1-30; lodRamp = smoothstep(20,6,dist)): 20 for the global-tiling read (does the globe read geometric?), 8 mid-approach (borders resolving as relief), 2.5 for full-LOD2 close-up (trough cross-section + flat/domed tile interiors). (6) Verify with `window._lab.featureEnabled('hexTess')` and the __wd-style state reads, not image recognition; sweep the uHexRegularity knob 0→1 to confirm the random-Voronoi→hex continuum.
+Unbuilt — recipe for once it lands. (1) Register in /home/ax/projects/well-dipper/planet-archetypes.js FEATURES as `hexTess: { label: 'Hex crust (F44)', enableKey: 'hexTessEnabled', archetypes: ['exotic-geometric'] }` with a new 'exotic-geometric' ARCHETYPES entry (the registry inversion auto-wires the panel filter and solo button). (2) In the :9223 debug Chrome (see memory/chrome-devtools-9223-launch.md), open world-engine-lab.html via vite. (3) `window._lab.solo('hexTess')` — disables every other feature combiner. (4) Preset: until a dedicated 'Hex (exotic)' preset exists, `window._lab.setPreset('Frozen (airless)')` is the best base (cold uniform crust, no atmosphere/weather interference). (5) Distances via `window._lab.state.distance` (radii, 1.1-30; lodRamp = smoothstep(20,6,dist)): 20 for the global-tiling read (does the globe read geometric?), 8 mid-approach (borders resolving as relief), 2.5 for full-LOD2 close-up (trough cross-section + flat/domed tile interiors). (6) Verify with `window._lab.featureEnabled('hexTess')` and the __wd-style state reads, not image recognition; sweep the uHexRegularity knob 0→1 to confirm the random-Voronoi→hex continuum.
 
 ## 6. What to judge (UAT checklist)
 
@@ -49,7 +49,7 @@ Unbuilt — recipe for once it lands. (1) Register in /home/ax/projects/well-dip
 ## 6.5 Build plan (HOW to build it)
 
 Strategy: §4's prescription verbatim — extend the `voronoi3d` keystone
-(planet-lod-lab.html:737) with a regularity jitter knob, carve
+(world-engine-lab.html:737) with a regularity jitter knob, carve
 `smoothstep(F2−F1)` trough borders into height+gradient (the F18
 N₂-polygon convention, :2541-2546), and stamp per-cell hashed flat/domed
 interiors (the F9 chaos-raft convention, :2353-2369). Everything routes
@@ -65,7 +65,7 @@ shorter/collision-safe). A reserved-word/identifier collision blacks out
 the whole lab with no static check — keep every F44 local under the `hx`
 prefix.
 
-**EDIT ONLY** `planet-lod-lab.html`, `planet-archetypes.js`,
+**EDIT ONLY** `world-engine-lab.html`, `planet-archetypes.js`,
 `docs/FEATURES/**`. NEVER touch `src/`, `docs/NOW.md`. Stage explicit
 paths only — never `git add -A` (a parallel warp session shares the tree).
 
@@ -139,7 +139,7 @@ Gating is internal to the combiner (`uHexStrength<=0` early-out +
 ### 4. Registration trio + test line (ALL FOUR required by the test)
 - **FEATURES** (planet-archetypes.js, after the `facets:` line ~:111):
   `hexTess: { label: 'Hex crust (F44)', enableKey: 'hexTessEnabled', archetypes: ['exotic-geometric'] },`
-- **featureFolders** map (planet-lod-lab.html ~:6018, after `carbon: fCarbon, facets: fFacets,`):
+- **featureFolders** map (world-engine-lab.html ~:6018, after `carbon: fCarbon, facets: fFacets,`):
   add `hexTess: fHex,`
 - **GUI binding** (the `.add(state,'hexTessEnabled')` controller — see §6 below).
 - **GLSL_NAME test line** (tests/planet-archetypes.test.js ~:107, after `carbon: 'PROV_CARBON', facets: 'PROV_FACETS',`):
@@ -149,7 +149,7 @@ Confirm `exotic-geometric` archetype ALREADY EXISTS (planet-archetypes.js
 :125, added by F43) — REUSE it, do NOT recreate. No `ARCHETYPES` edit needed.
 
 ### 5. Provinces — PROV_HEXTESS = 40 (next after PROV_FACETS=39)
-- GLSL define (planet-lod-lab.html, after PROV_FACETS at :854):
+- GLSL define (world-engine-lab.html, after PROV_FACETS at :854):
   `const int PROV_HEXTESS = 40;  // F44 — neutral (crustal tessellation, not geology): the hex field tiles the WHOLE uniform-lithology crust (surface-history/cooling-driven, planet-global), never gated by rock provinces (FROST-row pattern, like facets F43)`
 - `provinceWeight` switch arm (after the `PROV_FACETS` arm at :911):
   `else if (fid == PROV_HEXTESS)   { f = gProvince.z; fl = 1.00; }`
@@ -287,7 +287,7 @@ memory/well-dipper-testing-reference.md):
   - `hexRegularity` left at 0.85 (walked; deliberate-hex with believable variance).
   - **GUI `cell density` slider range `3–24 → 1–12` (step 0.5→0.1)** — the
     walked default 1.6 sat below the old min of 3; new range keeps it mid-low
-    and walkable. Only `planet-lod-lab.html` edited (state defaults + this slider).
+    and walkable. Only `world-engine-lab.html` edited (state defaults + this slider).
 
 - **Re-verify note:** new defaults reloaded via `?fresh=1`, confirmed clean
   (no console error) and reading at d8 (`F44v2-defaults-d8.png`). uniforms

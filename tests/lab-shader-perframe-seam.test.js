@@ -30,7 +30,7 @@ import {
 import { lodRampOf, autoOctaves } from '../src/worldengine/base/labCore.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const labSource = () => readFileSync(join(ROOT, 'planet-lod-lab.html'), 'utf8');
+const labSource = () => readFileSync(join(ROOT, 'world-engine-lab.html'), 'utf8');
 
 /** A body shaped like the game's: a tilted group with a spinning surface child. */
 function makeBody({ tilt = 0.41, spin = 0 } = {}) {
@@ -307,7 +307,7 @@ describe('B4-1 — the star set on the lab material (ledger P-01 / P-02)', () =>
     });
 
     it('⛔ NO starInfo leaves the PRE-B4 IDENTITY standing — it must not read as a dark body', () => {
-      // The lab harness, every headless probe and planet-lod-lab.html all build with no starInfo.
+      // The lab harness, every headless probe and world-engine-lab.html all build with no starInfo.
       // (white, 1.0) is precisely the implicit light the shader already had, so "no starInfo" has
       // to mean UNCHANGED. Zeroing here instead would black out the entire lab.
       const u = buildLabPlanetMaterial({ lightDir: new THREE.Vector3(1, 0, 0) }).material.uniforms;

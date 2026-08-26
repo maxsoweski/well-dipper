@@ -12,7 +12,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task (Inline Execution — NOT subagent-driven; see spec §6: one coupled shader + one HTML file, live eyes-on verification). Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Land the Stage-A planet-rendering foundation in the isolated lab harness `planet-lod-lab.html` — lil-gui control shell, plumbed `lodRamp` uniform + hysteresis, a tunable envelope composite-split, and the driver→semantic-uniform scaffolding (+ `qualityTier`) that every Stage-B feature plugs into.
+**Goal:** Land the Stage-A planet-rendering foundation in the isolated lab harness `world-engine-lab.html` — lil-gui control shell, plumbed `lodRamp` uniform + hysteresis, a tunable envelope composite-split, and the driver→semantic-uniform scaffolding (+ `qualityTier`) that every Stage-B feature plugs into.
 
 **Architecture:** The lab is one HTML file (renderer + GLSL shader + UI). Pure CPU-side foundation math (lodRamp, hysteresis, qualityTier knobs, driver→uniform derivation) is extracted into a sibling ES module `planet-lod-lab-core.js` imported by **both** the HTML and a vitest test — this is the code that later grafts into production `PlanetGenerator`, so it earns real unit tests. The shader and UI wiring stay in the HTML and are verified visually through chrome-devtools on the GPU Chrome at `:9223`. No production `src/` files are touched this session (harness-first).
 
@@ -24,21 +24,21 @@
 
 - **Approved spec:** `docs/superpowers/specs/2026-06-06-planet-rendering-foundation-design.md` (Parts 1 & 2, build sequence §5). Do not re-derive decisions.
 - **Feature accounting:** `docs/FEATURES/planet-visual-features.md`. **Research:** `research/RESEARCH_high-lod-planet-shaders-2026-06-05.md`.
-- **Current lab state (already present from the design session):** `planet-lod-lab.html` already contains the IQ analytic-gradient `noised()` (value + analytic gradient), variable-octave `fbmd()` with trailing-octave fade + `fwidth` clamp, `perturbAnalytic`, the analytic↔finite-diff A/B toggle (`uNormalMode`), the faithful low-res retro blit (`pixelScale` ÷3), pointer-orbit + wheel-zoom camera, per-layer macro/detail seed steppers, and `window._lab`. **Spec §5 steps 2 & 4 are therefore largely implemented** — Tasks 2 and 4 below are *validation*, not build.
+- **Current lab state (already present from the design session):** `world-engine-lab.html` already contains the IQ analytic-gradient `noised()` (value + analytic gradient), variable-octave `fbmd()` with trailing-octave fade + `fwidth` clamp, `perturbAnalytic`, the analytic↔finite-diff A/B toggle (`uNormalMode`), the faithful low-res retro blit (`pixelScale` ÷3), pointer-orbit + wheel-zoom camera, per-layer macro/detail seed steppers, and `window._lab`. **Spec §5 steps 2 & 4 are therefore largely implemented** — Tasks 2 and 4 below are *validation*, not build.
 - **Driver precedent (the pattern Task 6 generalizes):** `src/generation/PlanetGenerator.js:435-487` derives aurora `fieldStrength = composition.ironFraction * (isLocked ? 0.2 : 1.0)` and color from atmospheric composition — physics → semantic params, CPU-side, no `planetType` branch. Driver fields produced by the generator: `composition.{ironFraction,density}`, `T_eq`, `tidalState.{locked,lockType}`, `atmosphere|null`, `habitability` (`habScore`), `surfaceHistory`, `axialTilt`, `rotationSpeed`.
 
 ## Working discipline (carry-forward, every task)
 
 - **Do NOT start servers.** Max runs Vite. Live verification = chrome-devtools MCP `:9223` (`mcp__chrome-devtools__*`), NOT Playwright. Launch the 2nd Chrome per `memory/chrome-devtools-9223-launch.md`. Entry/inventory per `memory/well-dipper-testing-reference.md`.
 - **Sandbox:** Bash curl/wget to `:9223`/`:5173` returns `000`/refused even when up — check liveness with `mcp__chrome-devtools__list_pages`, never Bash.
-- **Commit hygiene:** the working tree has UNRELATED uncommitted changes (`src/main.js`, `tests/orbit-ring-rebase.test.js`) from the parallel screensaver/warp workstream. **Never `git add -A`.** Stage only this build's files by explicit path: `planet-lod-lab.html`, `planet-lod-lab-core.js`, `tests/planet-lod-foundation.test.js`. Do NOT touch `docs/NOW.md` or the `system-tags-save-search` branch.
+- **Commit hygiene:** the working tree has UNRELATED uncommitted changes (`src/main.js`, `tests/orbit-ring-rebase.test.js`) from the parallel screensaver/warp workstream. **Never `git add -A`.** Stage only this build's files by explicit path: `world-engine-lab.html`, `planet-lod-lab-core.js`, `tests/planet-lod-foundation.test.js`. Do NOT touch `docs/NOW.md` or the `system-tags-save-search` branch.
 - **3-cycle cap** on any mechanism that fails research→implement→test 3×. Likeliest cap-hit: envelope dither-mode banding at high levels.
 - Tone: zero affirmations; flag risk/uncertainty up front; re-anchor to spec §0 (NO parity-with-old goal) before scoping.
 
 ## Preflight (before Task 1)
 
 - [ ] **P1: Confirm GPU Chrome `:9223` + Vite are up.** Run `mcp__chrome-devtools__list_pages`. If it fails, STOP and ask Max to (a) run the Vite dev server and (b) launch the 2nd Chrome per `memory/chrome-devtools-9223-launch.md`. Do not proceed to visual steps without it.
-- [ ] **P2: Confirm the lab loads today.** Navigate `:9223` to the lab URL (`http://localhost:5173/planet-lod-lab.html`, port per Max's Vite). `mcp__chrome-devtools__list_console_messages` → expect no shader-compile errors. `evaluate_script`: `return Object.keys(window._lab)` → expect `state, uniforms, planet, camera, lodRampOf, autoOctaves, rebuildTarget, settingsBlob, applySettings, sceneTarget`.
+- [ ] **P2: Confirm the lab loads today.** Navigate `:9223` to the lab URL (`http://localhost:5173/world-engine-lab.html`, port per Max's Vite). `mcp__chrome-devtools__list_console_messages` → expect no shader-compile errors. `evaluate_script`: `return Object.keys(window._lab)` → expect `state, uniforms, planet, camera, lodRampOf, autoOctaves, rebuildTarget, settingsBlob, applySettings, sceneTarget`.
 - [ ] **P3: Capture the pre-build baseline screenshot** (`mcp__chrome-devtools__take_screenshot`, save `screenshots/planet-foundation-00-baseline-prebuild.png`) at default state — this is the regression reference for Task 1.
 
 ---
@@ -47,14 +47,14 @@
 
 - **Create `planet-lod-lab-core.js`** (repo root, beside the HTML) — pure CPU foundation math, zero three.js/DOM deps. Exports: `smoothstep`, `lodRampOf`, `autoOctaves`, `lodHysteresis`, `qualityKnobs`, `deriveUniforms`, helpers `clamp01`, `mix`. Imported by the HTML (`import { ... } from './planet-lod-lab-core.js'`) and by the test (DRY — one source of truth for the math).
 - **Create `tests/planet-lod-foundation.test.js`** — vitest unit tests for `planet-lod-lab-core.js`.
-- **Modify `planet-lod-lab.html`** — (Task 1) replace hand-rolled `<div class="row">` controls with lil-gui folders; import the core module; (Task 3) plumb `uLodRamp`; (Task 5) envelope composite-split shader + `▸ Envelope` folder; (Task 6) wire `deriveUniforms` + driver-bundle presets; (Task 7) clouds/aurora on `noised()`.
+- **Modify `world-engine-lab.html`** — (Task 1) replace hand-rolled `<div class="row">` controls with lil-gui folders; import the core module; (Task 3) plumb `uLodRamp`; (Task 5) envelope composite-split shader + `▸ Envelope` folder; (Task 6) wire `deriveUniforms` + driver-bundle presets; (Task 7) clouds/aurora on `noised()`.
 
 ---
 
 ## Task 1: lil-gui migration (pure framework swap — regression-verify identical render)
 
 **Files:**
-- Modify: `planet-lod-lab.html` (controls block `:97-113`, all `bindRange`/`bindToggle`/seed/`reset`/`copy` wiring `:447-599`, help overlay `:667-702`)
+- Modify: `world-engine-lab.html` (controls block `:97-113`, all `bindRange`/`bindToggle`/seed/`reset`/`copy` wiring `:447-599`, help overlay `:667-702`)
 - Create: `planet-lod-lab-core.js` (move `smoothstep`, `lodRampOf`, `autoOctaves` out of the inline script)
 
 - [ ] **Step 1: Create the core module with the existing math (no behavior change).**
@@ -62,7 +62,7 @@
 ```js
 // planet-lod-lab-core.js
 // Pure CPU-side foundation math for the Planet LOD Lab.
-// Imported by planet-lod-lab.html AND tests/planet-lod-foundation.test.js (DRY).
+// Imported by world-engine-lab.html AND tests/planet-lod-foundation.test.js (DRY).
 // No three.js / DOM deps — keep it unit-testable in node/vitest.
 
 export const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -85,7 +85,7 @@ export function autoOctaves(lodRamp, qualityTier = 1.0) {
 }
 ```
 
-- [ ] **Step 2: In `planet-lod-lab.html`, import the core and delete the now-duplicated inline defs.** At the top of the `<script type="module">` add `import { smoothstep, lodRampOf, autoOctaves } from './planet-lod-lab-core.js';` and remove the inline `smoothstep` (`:440-443`), `lodRampOf` (`:444`), `autoOctaves` (`:445`). Leave the rest untouched for this step. (Verify in P-step below that the planet still renders before touching controls — fail fast on the import.)
+- [ ] **Step 2: In `world-engine-lab.html`, import the core and delete the now-duplicated inline defs.** At the top of the `<script type="module">` add `import { smoothstep, lodRampOf, autoOctaves } from './planet-lod-lab-core.js';` and remove the inline `smoothstep` (`:440-443`), `lodRampOf` (`:444`), `autoOctaves` (`:445`). Leave the rest untouched for this step. (Verify in P-step below that the planet still renders before touching controls — fail fast on the import.)
 
 - [ ] **Step 3: Add lil-gui import and build the folder shell.** Add `import GUI from 'lil-gui';`. Replace the entire `<div id="controls">` block (`:97-113`) — delete it. After `state` is defined, construct the GUI. Folders per spec §3, collapsed except `View & LOD` and `Envelope` (the active surfaces this session):
 
@@ -124,12 +124,12 @@ fPresets.add({ reset(){ gui.reset(); } }, 'reset').name('Reset');
 
 - [ ] **Step 6: Verify the import + render headlessly first (cheap fail-fast).** Run `node -e "import('./planet-lod-lab-core.js').then(m => console.log(typeof m.lodRampOf, m.lodRampOf(20).toFixed(3), m.autoOctaves(1).toFixed(1)))"`. Expected: `function 0.000 9.0`. (Catches a broken module before involving the browser.)
 
-- [ ] **Step 7: VISUAL REGRESSION via `:9223`.** Reload `planet-lod-lab.html`. `list_console_messages` → no errors. `take_screenshot` → `screenshots/planet-foundation-01-postmigration.png`. **Acceptance:** render is visually identical to `planet-foundation-00-baseline-prebuild.png` (same planet, same dither, same lighting) — this is a pure framework swap, pixels must match. `evaluate_script: return Object.keys(window._lab)` still returns the full API. Drag/zoom/seed-step/preset-save all still function (spot-check 2-3 via clicks).
+- [ ] **Step 7: VISUAL REGRESSION via `:9223`.** Reload `world-engine-lab.html`. `list_console_messages` → no errors. `take_screenshot` → `screenshots/planet-foundation-01-postmigration.png`. **Acceptance:** render is visually identical to `planet-foundation-00-baseline-prebuild.png` (same planet, same dither, same lighting) — this is a pure framework swap, pixels must match. `evaluate_script: return Object.keys(window._lab)` still returns the full API. Drag/zoom/seed-step/preset-save all still function (spot-check 2-3 via clicks).
 
 - [ ] **Step 8: Commit.**
 
 ```bash
-git add planet-lod-lab.html planet-lod-lab-core.js
+git add world-engine-lab.html planet-lod-lab-core.js
 git commit -m "feat(planet-lab): migrate controls to lil-gui folders + extract core math module"
 ```
 
@@ -150,7 +150,7 @@ git commit -m "feat(planet-lab): migrate controls to lil-gui folders + extract c
 **Files:**
 - Modify: `planet-lod-lab-core.js` (add `lodHysteresis`)
 - Create/modify: `tests/planet-lod-foundation.test.js` (hysteresis + lodRamp tests)
-- Modify: `planet-lod-lab.html` (add `uLodRamp` uniform; shader uses it to scale detail amplitude; HUD shows hysteresis flag)
+- Modify: `world-engine-lab.html` (add `uLodRamp` uniform; shader uses it to scale detail amplitude; HUD shows hysteresis flag)
 
 - [ ] **Step 1: Write the failing tests.**
 
@@ -214,7 +214,7 @@ export function lodHysteresis(distanceRadii, prevActive) {
 
 - [ ] **Step 4: Run to verify pass.** Run: `npx vitest run tests/planet-lod-foundation.test.js`. Expected: PASS (9 tests).
 
-- [ ] **Step 5: Plumb `uLodRamp` into the shader.** In `planet-lod-lab.html`: add `uLodRamp: { value: 0.0 }` to `uniforms` (`:355-366`); add `uniform float uLodRamp;` to the fragment shader (`:151-160`); in `fbmd`'s use site, scale detail amplitude by lodRamp so "one scalar drives all complexity" (spec §2.B) — change the analytic-path block (`:337-342`) to multiply `uPerturb` by `mix(0.7, 1.0, uLodRamp)` (relief amplitude grows with approach):
+- [ ] **Step 5: Plumb `uLodRamp` into the shader.** In `world-engine-lab.html`: add `uLodRamp: { value: 0.0 }` to `uniforms` (`:355-366`); add `uniform float uLodRamp;` to the fragment shader (`:151-160`); in `fbmd`'s use site, scale detail amplitude by lodRamp so "one scalar drives all complexity" (spec §2.B) — change the analytic-path block (`:337-342`) to multiply `uPerturb` by `mix(0.7, 1.0, uLodRamp)` (relief amplitude grows with approach):
 
 ```glsl
 // analytic path, replacing the perturbAnalytic call site
@@ -224,14 +224,14 @@ float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
 shadeN = perturbAnalytic(N, hd.yzw, reliefAmp);
 ```
 
-- [ ] **Step 6: Drive `uLodRamp` + the hysteresis flag from `frame()`.** In `planet-lod-lab.html`, import `lodHysteresis`. In `frame()` (`:609-651`): `const lod = lodRampOf(state.distance);` already exists — add `uniforms.uLodRamp.value = lod;`. Track the flag across frames: `state._lod2Active = lodHysteresis(state.distance, state._lod2Active ?? false);`. Add a HUD line: `lod2 flag : ${state._lod2Active ? 'ACTIVE' : 'off'}`.
+- [ ] **Step 6: Drive `uLodRamp` + the hysteresis flag from `frame()`.** In `world-engine-lab.html`, import `lodHysteresis`. In `frame()` (`:609-651`): `const lod = lodRampOf(state.distance);` already exists — add `uniforms.uLodRamp.value = lod;`. Track the flag across frames: `state._lod2Active = lodHysteresis(state.distance, state._lod2Active ?? false);`. Add a HUD line: `lod2 flag : ${state._lod2Active ? 'ACTIVE' : 'off'}`.
 
 - [ ] **Step 7: VISUAL via `:9223`.** Reload. Zoom from 30→1.1 and back. **Acceptance:** relief visibly deepens on approach (amplitude grows with lodRamp), and the `lod2 flag` HUD line flips to ACTIVE only inside ~18 radii and back to off only past ~22 (watch it NOT flicker when hovering near 20). Screenshot near + far → `03a-near-lodramp.png`, `03b-far.png`.
 
 - [ ] **Step 8: Commit.**
 
 ```bash
-git add planet-lod-lab-core.js tests/planet-lod-foundation.test.js planet-lod-lab.html
+git add planet-lod-lab-core.js tests/planet-lod-foundation.test.js world-engine-lab.html
 git commit -m "feat(planet-lab): plumb uLodRamp uniform + hysteresis flag (TDD'd)"
 ```
 
@@ -250,7 +250,7 @@ git commit -m "feat(planet-lab): plumb uLodRamp uniform + hysteresis flag (TDD'd
 ## Task 5: Envelope composite-split + `▸ Envelope` folder (spec §5 step 5, §2.C — the A/B/C decision surface)
 
 **Files:**
-- Modify: `planet-lod-lab.html` (shader final-composite split `:344-351`; new uniforms; `▸ Envelope` lil-gui folder; IGN dither fn)
+- Modify: `world-engine-lab.html` (shader final-composite split `:344-351`; new uniforms; `▸ Envelope` lil-gui folder; IGN dither fn)
 
 The §4 **tracked open goal** lives here: this task delivers the *controls*; settling values per body type is downstream Max playtesting — do NOT pre-commit envelope values.
 
@@ -350,7 +350,7 @@ Write all eight through to uniforms in `frame()`.
 - [ ] **Step 6: Commit.**
 
 ```bash
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(planet-lab): envelope composite-split (emissive/spec/limb + bypass + IGN dither) and ▸ Envelope folder"
 ```
 
@@ -361,7 +361,7 @@ git commit -m "feat(planet-lab): envelope composite-split (emissive/spec/limb + 
 **Files:**
 - Modify: `planet-lod-lab-core.js` (`qualityKnobs`, `deriveUniforms`)
 - Modify: `tests/planet-lod-foundation.test.js` (derivation + qualityTier tests)
-- Modify: `planet-lod-lab.html` (`▸ Drivers` folder + driver-bundle presets; apply `deriveUniforms` output to uniforms)
+- Modify: `world-engine-lab.html` (`▸ Drivers` folder + driver-bundle presets; apply `deriveUniforms` output to uniforms)
 
 This is the production-coupled piece: the lab proves the pattern (`drivers → deriveUniforms → semantic uniforms`, no `planetType` branch) that later grafts into `PlanetGenerator`. The driver schema mirrors `PlanetGenerator.js` real fields.
 
@@ -461,7 +461,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
 
 - [ ] **Step 4: Run to verify pass.** Run: `npx vitest run tests/planet-lod-foundation.test.js`. Expected: PASS (all foundation tests, ~21).
 
-- [ ] **Step 5: Wire driver-bundle presets into the lab.** In `planet-lod-lab.html`, import `deriveUniforms`. Add a small set of representative driver bundles (types = driver-bundle presets, spec §2.D) and an `applyDrivers` that pipes the derived values into uniforms + `state` (so the Envelope sliders reflect them):
+- [ ] **Step 5: Wire driver-bundle presets into the lab.** In `world-engine-lab.html`, import `deriveUniforms`. Add a small set of representative driver bundles (types = driver-bundle presets, spec §2.D) and an `applyDrivers` that pipes the derived values into uniforms + `state` (so the Envelope sliders reflect them):
 
 ```js
 import { deriveUniforms } from './planet-lod-lab-core.js';
@@ -493,7 +493,7 @@ applyDrivers();
 - [ ] **Step 7: Commit.**
 
 ```bash
-git add planet-lod-lab-core.js tests/planet-lod-foundation.test.js planet-lod-lab.html
+git add planet-lod-lab-core.js tests/planet-lod-foundation.test.js world-engine-lab.html
 git commit -m "feat(planet-lab): driver→semantic-uniform scaffolding + qualityTier (TDD'd) + type-preset bundles"
 ```
 
@@ -502,7 +502,7 @@ git commit -m "feat(planet-lab): driver→semantic-uniform scaffolding + quality
 ## Task 7: Convert clouds + aurora onto `noised()` (spec §5 step 7, Q7 all-layers — completes the foundation scope)
 
 **Files:**
-- Modify: `planet-lod-lab.html` (cloud + aurora layers in the shader, sampling `fbmd`/`noised` not plain `snoise`; driven by `cloudCoverage`/`auroraIntensity` from `deriveUniforms`)
+- Modify: `world-engine-lab.html` (cloud + aurora layers in the shader, sampling `fbmd`/`noised` not plain `snoise`; driven by `cloudCoverage`/`auroraIntensity` from `deriveUniforms`)
 
 - [ ] **Step 1: Add the cloud + aurora uniforms** (`:355-366`): `uCloudCoverage: { value: 0.0 }`, `uAuroraIntensity: { value: 0.0 }`, `uTime: { value: 0.0 }`.
 
@@ -540,7 +540,7 @@ Add `cloudC + auroraC` into the final `gl_FragColor` sum (`gl_FragColor = vec4(m
 - [ ] **Step 6: Commit.**
 
 ```bash
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(planet-lab): convert clouds + aurora onto analytic noised() base (Q7 all-layers) — Stage-A foundation complete"
 ```
 

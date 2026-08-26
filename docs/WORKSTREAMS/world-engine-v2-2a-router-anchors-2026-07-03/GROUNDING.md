@@ -57,7 +57,7 @@ with an **optional thin live shadow probe** — never in the render path.
      router is NOT wired into `writeBodyRelief`, that harness never reaches it. That un-changed green **is**
      the ZERO-CLOBBER proof for the shipped dispatch.
 5. **Optional thin live surface** — a `_lab.lidRouteProbe()` shadow read returning the fine-class + T_ss for
-   the current body, mirroring V2-1's `_lab.e1Probe()` (planet-lod-lab.html, sibling of `magmaProbe`/`stagnantLidProbe`).
+   the current body, mirroring V2-1's `_lab.e1Probe()` (world-engine-lab.html, sibling of `magmaProbe`/`stagnantLidProbe`).
    **Optional because V2-2a renders nothing new** — recommend deferring the live probe unless the contract
    wants an AC7-style console-clean check; if added it is `layer:integration, live:true` but is NOT a UAT.
 

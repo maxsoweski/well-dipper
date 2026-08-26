@@ -1,6 +1,6 @@
 // Data-integrity drift guards for planet-archetypes.js — the shared archetype
 // taxonomy the lab panel (and a future Stage-D provinces system) reads. These
-// tests cross-check the taxonomy against the LIVE panel source (planet-lod-lab.html)
+// tests cross-check the taxonomy against the LIVE panel source (world-engine-lab.html)
 // so a feature added/renamed in the lab can't silently drift from this map.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -10,7 +10,7 @@ import { FEATURES, ARCHETYPES, featuresOf } from '../planet-archetypes.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';   // V2-0 Slice A: presets extracted from the lab into a shared module
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), 'utf8');
+const labSrc = readFileSync(path.resolve(__dirname, '../world-engine-lab.html'), 'utf8');
 // AC1 (rivers-dendritic-drainage) extracted the height GLSL — incl. the provinceWeight()
 // if-chain this test mirrors — into the shared single-source module. The lab now splices it
 // at runtime, so the if-chain rows are parsed from there, not the .html. (Panel toggles +
@@ -22,7 +22,7 @@ const panelEnableKeys = new Set(
   [...labSrc.matchAll(/\.add\(state, '(\w+Enabled)'\)/g)].map(m => m[1])
 );
 // The driver-preset keys — imported from the shared module (V2-0 Slice A extracted DRIVER_PRESETS
-// from planet-lod-lab.html). The old labSrc string-scrape is replaced by the lab↔module coupling
+// from world-engine-lab.html). The old labSrc string-scrape is replaced by the lab↔module coupling
 // assertions below, which prove the lab renders THIS module (so `⊂ panelPresetKeys` still means
 // `⊂ what the lab renders`, the check's original purpose).
 const panelPresetKeys = new Set(Object.keys(DRIVER_PRESETS));
@@ -103,7 +103,7 @@ describe('featuresOf inversion round-trips', () => {
 
 // ── Stage-D provinces (LIVE 2026-06-10) — affinity-data drift guards ──
 // PROVINCES (planet-archetypes.js) is the source of truth; the GLSL provinceWeight()
-// if-chain in planet-lod-lab.html mirrors it. These tests parse the GLSL rows and
+// if-chain in world-engine-lab.html mirrors it. These tests parse the GLSL rows and
 // cross-check field/polarity/floor so the two cannot silently drift.
 import { PROVINCES, PROVINCE_FIELDS } from '../planet-archetypes.js';
 import { provinceWeightFromField } from '../src/worldengine/base/labCore.js';

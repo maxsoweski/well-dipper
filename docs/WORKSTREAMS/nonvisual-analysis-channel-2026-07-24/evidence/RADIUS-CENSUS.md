@@ -100,7 +100,7 @@ matches the independent derivation (L_β = √(U/β), N = πa/L_β ∝ √a). No
 **But `a` is fed from a frozen constant:**
 
 ```js
-const _fp = DRIVER_PRESETS[driverUI.preset];          // planet-lod-lab.html:2843 — a FROZEN preset object
+const _fp = DRIVER_PRESETS[driverUI.preset];          // world-engine-lab.html:2843 — a FROZEN preset object
 …
 radius: (_fp.radiusEarth ?? 1) / 11.2,                // :2856, :2935 — Jupiter 11.2 → 1.0
 ```

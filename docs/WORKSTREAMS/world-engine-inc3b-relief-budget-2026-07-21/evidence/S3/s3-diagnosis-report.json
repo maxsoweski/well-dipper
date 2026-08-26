@@ -15,7 +15,7 @@
     "measuredEdgeDeg": 1.11,
     "posterizeLevels": 6,
     "bakeModelSubstitution": "The 256²/face GPU CubeCamera bake (createHeightCube/bakeHeightCube, planet-lod-tectonic.js) requires a WebGL renderer and is NOT runnable headless. Its attenuation is modeled with the committed box-filter model (calibration/bake-attenuation-model.json, S0.5) — flagged, not hidden.",
-    "perturbAssumption": "state JSON omits 'perturb'; the lab default 0.55 (planet-lod-lab.html:1997) is used with reliefEnvelope(R,g) and lodRampOf(distance) to reconstruct reliefAmp. Sensitivity: reliefAmp scales the carrier asymmetry ~linearly."
+    "perturbAssumption": "state JSON omits 'perturb'; the lab default 0.55 (world-engine-lab.html:1997) is used with reliefEnvelope(R,g) and lodRampOf(distance) to reconstruct reliefAmp. Sensitivity: reliefAmp scales the carrier asymmetry ~linearly."
   },
   "verdict": {
     "verdict": "MIXED",

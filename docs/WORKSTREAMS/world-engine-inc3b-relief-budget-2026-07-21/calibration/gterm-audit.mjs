@@ -71,7 +71,7 @@ console.log(`imported: Q_RELIEF=${Q_RELIEF}  RELIEF_FLOOR=${RELIEF_FLOOR}  RELIE
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
 // (a) RENDER envelope — scales the composited SUM ONCE ⇒ crater:base RATIO is INVARIANT under it.
 //     ALGEBRA: the lab bakes reliefAmp = uPerturb·mix(0.7,1.0,uLodRamp) onto the WHOLE accumulated grad
-//     (planet-lod-lab.html:536-537), and uPerturb = perturb·reliefEnvelope(R,g) (:5606). So every additive
+//     (world-engine-lab.html:536-537), and uPerturb = perturb·reliefEnvelope(R,g) (:5606). So every additive
 //     channel in the composite is scaled by the SAME factor E=reliefEnvelope(R,g). RMS(E·x)=|E|·RMS(x),
 //     so RMS(E·crater)/RMS(E·base) = RMS(crater)/RMS(base): E cancels. This is the Inc-3 core finding and
 //     the reason the budget MUST act at the composite (ratio), not the envelope (magnitude).

@@ -5,7 +5,7 @@
 // meant "not in a comment" while a template literal held dead text just as well. Both are closed
 // below, each with the plant that was measured GREEN before and RED after.
 //
-// THE DEFECT THIS FENCE EXISTS TO PREVENT. Six sites in planet-lod-lab.html derived a LIVE quantity
+// THE DEFECT THIS FENCE EXISTS TO PREVENT. Six sites in world-engine-lab.html derived a LIVE quantity
 // (Rhines band drivers, the F25 jet stripe ladder, the storm-vortex drivers, the cloud-regime gate,
 // the giant-dynamo gate) from `_fp = DRIVER_PRESETS[driverUI.preset]` — a FROZEN preset object the
 // radius slider never mutates. The slider writes `state.planetRadiusEarth`. So dragging radius moved
@@ -45,7 +45,7 @@
 //   · the adapter's allowlisted line moved out and its text parked in a backtick template ⇒ the
 //     liveness test `certifies LIVE code` reported `1 passed | 51 skipped (52)`. The exemption
 //     certified a template.
-//   · `state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);` (planet-lod-lab.html:2589)
+//   · `state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);` (world-engine-lab.html:2589)
 //     DELETED and re-quoted inside a single-quoted string ⇒ whole file `52 passed (52)`. The AC-0 pin
 //     that exists to catch that deletion was satisfied by the quote.
 // So the liveness check and every comment-stripped pin run against `LIT_STRIPPED` /
@@ -62,7 +62,7 @@ import { dirname, join } from 'node:path';
 import { stripCommentsPreservingOffsets, jsFilesUnder, lineOf } from './helpers/source-scan.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const LAB_REL = 'planet-lod-lab.html';
+const LAB_REL = 'world-engine-lab.html';
 const ADAPTER_REL = 'src/worldengine/port/conditionFromBody.js';
 
 // ── the corpus ───────────────────────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ const ADAPTER_REL = 'src/worldengine/port/conditionFromBody.js';
 // MEASURED 2026-08-08, and enumerated rather than gestured at — the widened hit set is not unbounded,
 // it is exactly TWO pre-existing hits and both are disposed of below:
 //   · 42 .js files under src/worldengine, ZERO non-.js files in that tree (so `jsFilesUnder`'s
-//     extension filter drops nothing here), plus planet-lod-lab.html and planet-lod-shaders.glsl.js
+//     extension filter drops nothing here), plus world-engine-lab.html and planet-lod-shaders.glsl.js
 //     ⇒ a 44-file corpus. ⭐ RE-MEASURED 2026-08-12 AFTER STEP 7: 53 .js under src/worldengine (the
 //     five moved modules plus the packs landed since) + the lab ⇒ a 54-file corpus, and the shader
 //     module is now INSIDE the walked tree rather than concatenated (see CORPUS_REL).
@@ -147,7 +147,7 @@ const LAB_CODE = LIT_STRIPPED.get(LAB_REL);
 // not a hypothesis, it is LIVE CODE: driver-presets.js:325 `const canonical = preset.radiusEarth ?? 1.0;`
 // inside `drawPresetRadius`, the very function the giantDynamo entry below cites as its proof. The
 // binding form is idiomatic in both files that own preset access; one of three such bindings is
-// planet-lod-lab.html:879 `const preset = DRIVER_PRESETS[presetName] || {};` (kept on ONE line — see
+// world-engine-lab.html:879 `const preset = DRIVER_PRESETS[presetName] || {};` (kept on ONE line — see
 // the tick-parity note in the corpus block: a citation the scanner cannot read is not a citation).
 // MEASURED BEFORE ADDING: a `const _bandR = Math.round(12 * (preset.radiusEarth ?? 1) / 24);` planted
 // directly under lab:879 left the fence at `52 passed (52)` — a real frozen read, invisible.
@@ -419,7 +419,7 @@ const ALLOWLIST = [
 //      file with 9 failures — the same count as the anti-idiomatic plant in #2, and unlike #2 this one
 //      IS idiomatic, so it is a budgeted cost rather than a limit.
 //      ⚠ THAT PROMISE WAS FALSE UNTIL 2026-08-08 IN THE ONE PLACE STEP 4 IS MOST LIKELY TO WRITE IT.
-//      Written on planet-lod-lab.html:4297 — a line that ALREADY IS a
+//      Written on world-engine-lab.html:4297 — a line that ALREADY IS a
 //      `deriveConditionVector(_fp, deriveUniforms(_fp, tier), _fp.radiusEarth)` call, i.e. the nearest
 //      existing example of the shape Step 4 wants to copy — the line-keyed skip forgave it: measured,
 //      the DENY/allowlist test reported `1 passed | 51 skipped (52)` under that exact plant. Only one
@@ -451,13 +451,13 @@ const ALLOWLIST = [
 // LINE, so a SECOND frozen read appended to an allowlisted line was exempt for free. MEASURED, five
 // paired arms whose ONLY difference is line placement (payload byte-identical in each pair):
 //   · `state.bandCount = Math.round(12 * (_fp.radiusEarth ?? 1) / _rotH);` appended to
-//     planet-lod-lab.html:4297 (the crater-boot line) ⇒ 52 passed (52) — FORGIVEN.
+//     world-engine-lab.html:4297 (the crater-boot line) ⇒ 52 passed (52) — FORGIVEN.
 //     The same text on its OWN line one below ⇒ 1 failed | 51 passed (52).
 //   · the same statement appended as a TRAILING `//` COMMENT ⇒ 52 passed (52) — and a commented-out
 //     frozen read is precisely what the comment-INCLUSIVE DENY scan exists to report, so the line-keyed
 //     skip voided that protection on every allowlisted line.
 //   · ` const _giantR = fp.radiusEarth;` appended to src/worldengine/port/conditionFromPlanet.js:652
-//     and ` const _bad = ...(_fp.radiusEarth ?? 1)...` appended to planet-lod-lab.html:2585 ⇒ both
+//     and ` const _bad = ...(_fp.radiusEarth ?? 1)...` appended to world-engine-lab.html:2585 ⇒ both
 //     52 passed (52). ALL THREE allowlisted lines in the corpus exhibited it.
 //   · `const _bad = _fp\n          .radiusEarth;` appended to :4297 — the match STARTS on the
 //     allowlisted line ⇒ 52 passed (52), defeating the line-broken-chain capability claimed above.
@@ -799,7 +799,7 @@ describe('AC-NOFROZEN — THE THIRD GATE CLAUSE: a violation planted in src/worl
   it('an allowlisted site demoted to a COMMENT stops being covered (exemption liveness, planted)', () => {
     // ⭐ THE LIVENESS CONTROL. Comment out the adapter's allowlisted line — the shape of "the law moved
     // and somebody left the old statement quoted above it", which is this codebase's own habit
-    // (tests/helpers/source-scan.mjs header, e.g. planet-lod-lab.html:6250-6161). Under the staleness
+    // (tests/helpers/source-scan.mjs header, e.g. world-engine-lab.html:6250-6161). Under the staleness
     // test alone the entry still "matches a real line" and the exemption survives forever.
     // ⚠ IT ASSERTS THE PREDICATE, NOT A TALLY, AND THAT IS A REPAIR. Round 1 showed this control going
     // red for the WRONG REASON on an unrelated mutant: with the live line already gone, `src.replace`
@@ -1016,7 +1016,7 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
   // an .html file) and the statement wrapped in a NEVER-CALLED FUNCTION each left all three suites at
   // **175 passed (175)**. The `_rotH` pin below, added so "both files must FAIL" would hold, was
   // satisfied by markup. Named rather than closed because both are adversarial: measured 2026-08-09,
-  // `grep -nE '<(pre|textarea|template|noscript|xmp)\b' planet-lod-lab.html` returns nothing and the
+  // `grep -nE '<(pre|textarea|template|noscript|xmp)\b' world-engine-lab.html` returns nothing and the
   // lab's HTML surface is six lines before one `<script type="module">`, whereas re-quoting a law in a
   // comment or a template is a habit with 7 instances. Reachability needs the control-flow pass
   // KNOWN LIMIT #1 refuses; markup could be closed by blanking outside `<script>` on `.html` members.
@@ -1039,7 +1039,7 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
 
   it('a pinned block RE-QUOTED INSIDE A LITERAL stops satisfying its pin (pin liveness, planted)', () => {
     // ⭐ THE CONTROL FOR THE VIEW ITSELF, and it is the mutant round 1 actually walked through:
-    // `state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);` (planet-lod-lab.html:2589) DELETED
+    // `state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);` (world-engine-lab.html:2589) DELETED
     // outright and re-quoted as `const _movedNote = '…';  // moved to giantDeck.js`. MEASURED before
     // the fix: `52 passed (52)`. The pin whose entire job is to catch that deletion was satisfied by a
     // pair of quote marks — the same hole the comment rule closed, wearing a different container.
@@ -1074,7 +1074,7 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
     // very session) —
     // comment-BLIND, because the sibling suite moved to comment-stripped source and the old pattern
     // matched ZERO times there. VERIFIED BY MUTANT: deleting ONLY the trailing comment from
-    // planet-lod-lab.html left tests/radius-live-feed.test.js at `50 passed (50)`. The extraction was
+    // world-engine-lab.html left tests/radius-live-feed.test.js at `50 passed (50)`. The extraction was
     // not broken. A gate whose stated subject does not exist is §11.1's D clause — the subject sits
     // outside the watched set — so the prose had to move to what the pin actually holds.
     //

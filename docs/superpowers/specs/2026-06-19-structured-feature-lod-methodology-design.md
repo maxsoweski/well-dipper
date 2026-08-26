@@ -1,7 +1,7 @@
 # Structured-Feature LOD — methodology design
 
 **Date:** 2026-06-19 · **Status:** design spec, awaiting Max approval ·
-**Surface:** `planet-lod-lab.html` (`window._lab`) · **Campaign:**
+**Surface:** `world-engine-lab.html` (`window._lab`) · **Campaign:**
 [planet-LOD lab](../../FEATURES/planet-lod-campaign-tracker.md), strategic frame
 [`planet-lod-CHARTER.md`](../../FEATURES/planet-lod-CHARTER.md).
 
@@ -141,16 +141,16 @@ reuses **both**:
   `clamp(WIDTH_SCALE·WIDTH_PHI·accum^WIDTH_EXP, MIN, MAX)` (`:480–482`), vertex
   color from the stream-order ramp `cOrd` `0x1d3c5e→0x4486bb` (`:484–489`). One
   persistent `Mesh(MeshBasicMaterial{vertexColors, DoubleSide, depthWrite:false})`,
-  `planet.add(...)` at `planet-lod-lab.html:1401`, `renderOrder=10`.
+  `planet.add(...)` at `world-engine-lab.html:1401`, `renderOrder=10`.
 - **Carve** = the valley that co-depends with real relief and can flood
   (co-dependence). Global: `buildValleyGeometry` → `createCarveCubeMap` cube
   (`planet-lod-rivers.js:589, :710`), sampled by `sampleCarve`
-  (`planet-lod-lab.html:236`) and applied as `h -= carveDepth·uRiverCarveDepth`
+  (`world-engine-lab.html:236`) and applied as `h -= carveDepth·uRiverCarveDepth`
   (floor drop → F14 flood) + `grad += -carveGrad·…` (wall bend) at `:424–425`.
 
 The current fine tier (`planet-lod-tributary-patch.js`) ships **carve only** —
 `buildFineValleyGeometry` (`:49`) emits a planar depth strip into a 2D ortho RTT,
-unioned into `sampleCarve` via `patchDepth()` (`planet-lod-lab.html:223`, union at
+unioned into `sampleCarve` via `patchDepth()` (`world-engine-lab.html:223`, union at
 `:245–249`). **This is exactly UAT failure 1 (CONTRAST):** the fine carve is
 shallow, the dry valley never dips below sea, so the tributaries don't flood/darken
 and read as ~invisible. The fix honors obligation (1): **add a fine RIBBON
@@ -188,16 +188,16 @@ magic constant.
 #### Fork C — Scene attachment of the fine ribbon (decision: second Mesh in the cap, parented to planet)
 
 Add a **second persistent `Mesh`** (the fine-ribbon mesh) next to the trunk
-ribbon, `planet.add(fineRibbon)` adjacent to `planet-lod-lab.html:1401`, same
+ribbon, `planet.add(fineRibbon)` adjacent to `world-engine-lab.html:1401`, same
 `MeshBasicMaterial{vertexColors, DoubleSide, depthWrite:false}`, **`renderOrder=11`**
 (one above the trunk ribbon's `10`) so where fine and trunk overlap at the junction
 the fine rail draws last and there is no z-fight flicker. Its geometry is swapped on
 each tributary bake (the existing `tributaryPatch.bake`, driven by
-`bakeTributaryPatch` at `planet-lod-lab.html:3530`), exactly as `route()` swaps the
+`bakeTributaryPatch` at `world-engine-lab.html:3530`), exactly as `route()` swaps the
 trunk ribbon geometry (`planet-lod-rivers.js:828`). Visibility mirrors
 `state.riversEnabled` (the shared `enableKey`) and
 `riverOverlayState.patchStrength>0`, gated through GUI `onChange` like the other
-patch toggles (`riverOverlayState` at `planet-lod-lab.html:1409`).
+patch toggles (`riverOverlayState` at `world-engine-lab.html:1409`).
 **(Open taste fork — see §8: renderOrder priority at the junction.)**
 
 #### Fork D — Carve depth/flood scaling with Strahler order (decision: order-graded flood threshold)
@@ -210,7 +210,7 @@ only for the larger fine orders.** Concretely: scale fine carve depth so that sm
 tributaries (`fstrahler` near `channelOrderMin`) produce a **thin ribbon + shallow
 DRY valley** (carve floor stays above `uSeaLevel`, so no flood — just an
 albedo-darkened groove via the existing dry-floor darkening at
-`planet-lod-lab.html:582`, the Stage-6 `albedoCol` mix gated by `(1.0 -
+`world-engine-lab.html:582`, the Stage-6 `albedoCol` mix gated by `(1.0 -
 liquidMask)`), while the **larger fine orders near the trunk outlet** carve deep
 enough that `h - carveDepth·uRiverCarveDepth` (applied at `:424`, BEFORE the F14
 cut) crosses `uSeaLevel` and floods through the *same* F14 level-set mechanism
@@ -322,7 +322,7 @@ What scales with zoom vs. fixed, restated as the contract every feature inherits
 ### 3.2 RIVERS-instance application (concrete, with file:line refs)
 
 **Numbers to hit.** Base mesh spacing ≈ 113 km. Current lab bakes at `gridRes: 56`
-over an `8°` half-angle cap (`planet-lod-lab.html:3544` `params:{gridRes:56}`;
+over an `8°` half-angle cap (`world-engine-lab.html:3544` `params:{gridRes:56}`;
 `:3537` `angularRadius = degToRad(riverOverlayState.patchAngularDeg)`, `:1412`
 `patchAngularDeg:8`). At 8° an Earth-sized planet's cap diameter is ~1780 km, so 56
 rows ≈ **~32–40 km/cell** — only ~3× finer than the 113 km base, which is why "fine"
@@ -330,7 +330,7 @@ tributaries don't read (UAT failure #2). Tributary valleys want `s_feat ≈ 5–
 With Nyquist (~2 cells per valley) the cell target is ~3–5 km.
 
 **R_planet is SEED-DERIVED (realistic, not fixed Earth).** The physical radius
-already exists in the lab as `state.planetRadiusEarth` (`planet-lod-lab.html:2129`),
+already exists in the lab as `state.planetRadiusEarth` (`world-engine-lab.html:2129`),
 drawn per-seed from the game's `RADIUS_RANGES_EARTH` (`src/core/ScaleConstants.js:67-86`,
 ~0.3–16 Earth radii — moons through giants) via `drawPresetRadius(preset, radiusSeed)`
 (`:1868-1877`). So `R_planet_km = state.planetRadiusEarth · 6371`. The LOD math READS
@@ -388,7 +388,7 @@ new data structure is needed; the `indexAt` map and `cell`/`rowH`/`offset` const
 already exist in `buildFineGrid`.
 
 **Perf budget (rivers).** Bake is on-demand, static-camera, GUI/`window._lab.bakeTributaryPatch()`
-triggered (host fn `planet-lod-lab.html:3530`, GUI button `:3865`, `window._lab`
+triggered (host fn `world-engine-lab.html:3530`, GUI button `:3865`, `window._lab`
 wrapper `:5600`) — NOT per-frame. The cost is a single bake latency: lattice build
 O(Nf) + GPU height read (one `createHeightSampler` RTT over Nf points,
 `planet-lod-tributary-patch.js:173` — note the sampler internally packs the verts
@@ -406,7 +406,7 @@ frame.**
   Math.tan(angularRadius)` on `:199`), absolute km/cell.
 - Fixed: gridRes ≈ 448, angular cell fraction of the cap, the 5–10 km tributary
   feature target, Nf ≈ 158k (estimate). (Today `gridRes:56` is hard-coded at
-  `planet-lod-lab.html:3544`; the recommendation is to derive it once from `s_feat`
+  `world-engine-lab.html:3544`; the recommendation is to derive it once from `s_feat`
   + cap, then hold it.)
 
 ---
@@ -482,7 +482,7 @@ if (typeof sampleHeight === 'function') {
 (the base mesh's 9-octave-derived routed surface). `sampleHeight` is the **real**
 fine field: the patch bake reads it from `createHeightSampler` at `octaves=12`
 (`planet-lod-tributary-patch.js:173-189`), which is *finer* than the 9-octave base
-router (`planet-lod-rivers.js:218` default, wired `planet-lod-lab.html:1399`/`:1406`).
+router (`planet-lod-rivers.js:218` default, wired `world-engine-lab.html:1399`/`:1406`).
 Blending them 50/50 throws away half of the real sub-base-mesh relief — exactly the
 relief the fine network is supposed to follow. Mountains the base mesh is too coarse
 to see get halved out, so tributaries ignore the topography that should steer them.
@@ -683,18 +683,18 @@ v1, because a static cap still has a spatial boundary.
 
 - **Union operator = `max()` (deepest-valley-wins).** The fine patch depth is
   unioned into the global carve at every one of the 5 finite-difference taps inside
-  `sampleCarve()`: `planet-lod-lab.html:245-249`, each tap
+  `sampleCarve()`: `world-engine-lab.html:245-249`, each tap
   `max(textureCube(uRiverCarveMap, d).r, patchDepth(d))`. This is the same
   `MaxEquation` operator the global carve cube uses internally
   (`planet-lod-rivers.js` `createCarveCubeMap`, fn at `:710`, `CustomBlending`
   `MaxEquation OneFactor/OneFactor` at `:736-737`) and the patch RTT uses
   (`planet-lod-tributary-patch.js:147-148`). Unioning on all 5 taps (not just the
-  center) is deliberate: the finite-diff gradient at `planet-lod-lab.html:250` then
+  center) is deliberate: the finite-diff gradient at `world-engine-lab.html:250` then
   bends the fine valley *walls*, not merely darkens the floor — the fine carve
   participates in the same `h -= carveDepth` / `grad += -carveGrad` displacement the
-  global trunks use (`planet-lod-lab.html:424-425`), satisfying the Section 1 "reuse
+  global trunks use (`world-engine-lab.html:424-425`), satisfying the Section 1 "reuse
   the feature's own renderer" rule.
-- **Apron fade in patch space.** `patchDepth()` at `planet-lod-lab.html:223-234`:
+- **Apron fade in patch space.** `patchDepth()` at `world-engine-lab.html:223-234`:
   `lateral = length(vec2(su,sv))/R` (0 at center, 1 at edge) at `:231`, `falloff =
   1.0 - smoothstep(0.7, 1.0, lateral)` at `:232`, returned as
   `texture2D(uRiverCarvePatchMap, uv).r * falloff` at `:233`. The fine carve is
@@ -708,11 +708,11 @@ v1, because a static cap still has a spatial boundary.
   outside the footprint, is therefore a no-op union — confirming the "present
   everywhere, costs nothing outside the footprint" property. Out-of-cap directions
   are killed *before* the texture is ever sampled by the explicit cap test at
-  `planet-lod-lab.html:226` (`if (cosd <= cos(uRiverCarvePatchAngular)) return
+  `world-engine-lab.html:226` (`if (cosd <= cos(uRiverCarvePatchAngular)) return
   0.0;`); the gnomonic inverse (`projectToPatch`, `planet-lod-tributary-patch.js:29`,
   which exactly inverts `buildFineGrid`'s forward placement `normalize(n + su·u +
   sv·v)` at `planet-lod-tributaries.js:147`; GLSL counterpart
-  `planet-lod-lab.html:223`) only runs for in-cap dirs. For in-cap-but-near-rim UVs
+  `world-engine-lab.html:223`) only runs for in-cap dirs. For in-cap-but-near-rim UVs
   the apron (`:232`) plus the RTT's default `ClampToEdgeWrapping` are
   belt-and-suspenders that drive the near-rim union operand to ~0.
 
@@ -725,17 +725,17 @@ v1, because a static cap still has a spatial boundary.
 **Temporal seam (B) — DEFERRED, policy stated.**
 
 - **v1 = static cap, manual trigger.** `bakeTributaryPatch()`
-  (`planet-lod-lab.html:3530`) is on-demand only — invoked via
+  (`world-engine-lab.html:3530`) is on-demand only — invoked via
   `window._lab.bakeTributaryPatch(...)` / the GUI button, never per-frame. The cap
   center is the object-space camera direction captured *at bake time*: `invQ =
   planet.quaternion.copy().invert()`, `c =
   camera.position.clone().normalize().applyQuaternion(invQ)`
-  (`planet-lod-lab.html:3535-3536`), passed as `center: [c.x,c.y,c.z]` with
+  (`world-engine-lab.html:3535-3536`), passed as `center: [c.x,c.y,c.z]` with
   `angularRadius` from `patchAngularDeg` and `gridRes: 56` (`:3537-3544`). The
-  deferral is documented in-code at `planet-lod-lab.html:3528`: *"Static, on-demand:
+  deferral is documented in-code at `world-engine-lab.html:3528`: *"Static, on-demand:
   re-bake-on-move / windowing are deferred."* The master `uRiverCarvePatchStrength`
   is driven by `riverOverlayState.patchStrength`, which **defaults to 0**
-  (`planet-lod-lab.html:1412`) and is written into the uniform at the end of every
+  (`world-engine-lab.html:1412`) and is written into the uniform at the end of every
   bake (`:3546`), so an un-baked or stale patch is regression-safe (zero
   displacement) until the GUI strength slider is raised.
 - **Deferred item D-R1 — re-bake-on-move (see §9).** Add an angular-threshold check
@@ -837,9 +837,9 @@ A change is `VERIFIED_PENDING_MAX <sha>` only when all six pass; then Max does U
 
 **Cap setup (scripted, deterministic).** Aim the cap at land-with-trunk before
 baking — the patch center is the camera direction (planet quaternion ~identity):
-`center = invQ · normalize(camera.position)` at `planet-lod-lab.html:3535-3536`, so
+`center = invQ · normalize(camera.position)` at `world-engine-lab.html:3535-3536`, so
 set yaw/pitch to a known land-and-trunk direction, then bake via
-`window._lab.bakeTributaryPatch({angularDeg, strength})` (`planet-lod-lab.html:3530`,
+`window._lab.bakeTributaryPatch({angularDeg, strength})` (`world-engine-lab.html:3530`,
 gridRes hardcoded 56 at `:3544`). Reading the cap "wherever it was" is how a
 blank-ocean cap silently passed before.
 
@@ -873,7 +873,7 @@ The six criteria, mapped to rivers:
   `planet-lod-tributaries.js:402-404`), not to sea level, and the carve unions over
   ocean. Screenshot must show fine channels reaching `h == uSeaLevel` (the level-set
   shoreline; there is no baked coast field — `uSeaLevel` at
-  `planet-lod-uniforms.js:282`, liquidMask `planet-lod-lab.html:435`) and **no carve
+  `planet-lod-uniforms.js:282`, liquidMask `world-engine-lab.html:435`) and **no carve
   where `isOcean` is true** (`computeOcean`, `planet-lod-rivers.js:274`). A sunglint
   blob over water = automatic FAIL of the whole gate.
 - **(d) REAL RELIEF — screenshot.** Tributaries must sit in mountain-consistent
@@ -882,19 +882,19 @@ The six criteria, mapped to rivers:
   then `h = macro + fineAmp·fbm` (`:397`), which halves mountain-awareness. After the
   fix (Section 4 Fix 1), the screenshot must show tributaries following real slope
   (carve applied through `sampleCarve` union of cube + patch,
-  `planet-lod-lab.html:245-249`, gated by `reliefGate` `:421`), not draped across
+  `world-engine-lab.html:245-249`, gated by `reliefGate` `:421`), not draped across
   flats.
 - **(e) NO CAP SEAM — screenshot at the cap edge.** The patch is an ortho RTT over
   `±tan(angularRadius)` (`planet-lod-tributary-patch.js:199-201`) unioned into the
-  global cube via `patchDepth()` (GLSL `planet-lod-lab.html:223`), which already
+  global cube via `patchDepth()` (GLSL `world-engine-lab.html:223`), which already
   applies a `smoothstep(0.7,1.0,lateral)` edge falloff (`:232`). Screenshot the cap
   boundary specifically; a visible discontinuity where patch depth meets cube depth
   fails the orchestrator blend policy.
 - **(f) REGRESSION-SAFE AT 0 — objective.** Master strength is GUI-owned and applied
   at `uniforms.uRiverCarvePatchStrength.value = riverOverlayState.patchStrength`
-  (`planet-lod-lab.html:3546`); the bake itself never sets Strength (the
+  (`world-engine-lab.html:3546`); the bake itself never sets Strength (the
   patch-uniform block deliberately omits it, `planet-lod-tributary-patch.js:213-219`).
-  At strength 0, `patchDepth()` early-returns 0 (`planet-lod-lab.html:224`) so it
+  At strength 0, `patchDepth()` early-returns 0 (`world-engine-lab.html:224`) so it
   contributes nothing to the MAX union — the cube path is untouched. Set
   `uRiverCarvePatchStrength = 0` and confirm the render equals the pre-bake baseline
   (capture before/after, diff). Note the lab quirk: uniform writes take immediately,
@@ -950,9 +950,9 @@ promotes them to `VERIFIED_PENDING_MAX`, Max's UAT closes.
    - Add the `inverse(forward(k)) == k` unit test for every k (boundary cells are
      where it diverges).
    - Then derive gridRes from `s_feat ≈ 5–10 km` + the 8° cap + the **seed-derived**
-     `R_planet_km = state.planetRadiusEarth · 6371` (`planet-lod-lab.html:2129`):
+     `R_planet_km = state.planetRadiusEarth · 6371` (`world-engine-lab.html:2129`):
      `gridRes = ceil(2·sin(α)·R_planet_km / s_feat_km)` → **≈ 448 for an Earth-scale
-     seed** (replace the hard-coded `56` at `planet-lod-lab.html:3544`). Recompute on
+     seed** (replace the hard-coded `56` at `world-engine-lab.html:3544`). Recompute on
      seed/radius change (it scales per planet size); hold it fixed across zoom — α
      carries zoom. Do NOT touch the unit-sphere geometry `R = 1.0`.
 
@@ -963,7 +963,7 @@ promotes them to `VERIFIED_PENDING_MAX`, Max's UAT closes.
    - **Fork B:** color from the shared `cOrd` ramp; width via `widthAt` on fine
      `faccum`, clamped to the trunk's outlet width.
    - **Fork C:** second persistent `Mesh`, `planet.add(...)` near
-     `planet-lod-lab.html:1401`, `renderOrder=11`, geometry swapped each bake.
+     `world-engine-lab.html:1401`, `renderOrder=11`, geometry swapped each bake.
    - **Fork D:** order-graded dry→flood carve depth (small orders = dry groove via
      `:582` darkening; large orders cross `uSeaLevel` → F14 flood).
    - **Fork E:** pin the fine outlet vertex to the trunk rail (trunk position +
@@ -1005,7 +1005,7 @@ in a live `:9223` GPU pass with Max or by a one-line decision.
    Taste/perf-ceiling tradeoff.
 5. **§3 — physical planet radius. RESOLVED (Max, 2026-06-19): use realistic
    seed-derived radius.** The lab already carries a per-seed physical radius
-   `state.planetRadiusEarth` (`planet-lod-lab.html:2129`), drawn from the game's
+   `state.planetRadiusEarth` (`world-engine-lab.html:2129`), drawn from the game's
    `RADIUS_RANGES_EARTH` (`src/core/ScaleConstants.js:67-86`, ~0.3–16 RE) via
    `drawPresetRadius(preset, radiusSeed)` (`:1868-1877`). The LOD gridRes derivation
    reads `R_planet_km = state.planetRadiusEarth · 6371` (see §3.2), so density scales

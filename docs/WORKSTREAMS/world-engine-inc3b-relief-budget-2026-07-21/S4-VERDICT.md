@@ -55,7 +55,7 @@ Venus cleared, Rocky enabled-but-invisible (density 2.2e-5). `boot-enable-fix-mo
 
 ## UAT recipe (pinned — Max's gate, no agent closes it)
 
-1. `cd ~/projects/well-dipper && npm run dev` → open the lab (currently :5175) `planet-lod-lab.html`.
+1. `cd ~/projects/well-dipper && npm run dev` → open the lab (currently :5175) `world-engine-lab.html`.
 2. Preset **Moon/Mercury (impact-airless)** — craters are ON by default now (no toggles needed). Sun stays
    at the boot az 40.6°/el 20.79° (the frozen staged light — don't move it for the judged look; moving it
    to full-phase shows the honest near-featureless pre-albedo state, filed as the control).

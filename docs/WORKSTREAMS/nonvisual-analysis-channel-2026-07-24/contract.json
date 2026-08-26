@@ -10,7 +10,7 @@
     "SEED NOISE IS DESIGNED OUT, NOT DISCOVERED LATER. Descriptors are whole-field statistics (distribution moments, counts per area, autocorrelation wavelength) rather than comparisons between different random patterns. This is DIAGNOSIS.md recommendation #3 generalised. Every reported value carries mean +/- SEM over M seeds, and M is chosen from the measured noise so the SEM sits below the effect being resolved.",
     "READ-ONLY ON GENERATION CODE. The instrument observes writers at arm's length exactly as the existing _lab probes do (plateProbe/shellProbe/magmaProbe/stagnantLidProbe/mixedProbe/e1Probe/provinceProbe/grainProbe). It never becomes a writer. Sole exception: AC-POSCTRL, which deliberately unwires a driver and restores it.",
     "POSITIVE CONTROL IS A BUILD GATE, NOT A NICETY. An instrument that has never caught a known defect is unproven. AC-POSCTRL requires demonstrating detection of a deliberately-broken driver and clean restoration.",
-    "AOV READBACK IS THE MECHANISM (research Family B). Float render target + readPixels, the documented WebGL2 technique since GLSL has no printf. The lab already does this for the tributary patch (planet-lod-lab.html:245, :1467) — this generalises existing in-house machinery rather than importing new.",
+    "AOV READBACK IS THE MECHANISM (research Family B). Float render target + readPixels, the documented WebGL2 technique since GLSL has no printf. The lab already does this for the tributary patch (world-engine-lab.html:245, :1467) — this generalises existing in-house machinery rather than importing new.",
     "GOLDEN/PERCEPTUAL-DIFF (Family C) IS EXPLICITLY NOT THE ANSWER. It reports change, never correctness, and procgen re-keys legitimately. The existing goldens + renderDeltaSweep stay untouched and keep their own job.",
     "REALISM CHANNEL CARRIES A DATA DEPENDENCY. Real-body reference values (Earth/Mars/Moon hypsometry, published crater SFDs) must be curated and each figure source-cited. In scope; the natural last slice."
   ],
@@ -127,9 +127,9 @@
   ],
   "architecturalConnections": {
     "inputs": [
-      "planet-lod-lab.html live state + applyDrivers() output (the driven uniforms actually reaching the writers)",
+      "world-engine-lab.html live state + applyDrivers() output (the driven uniforms actually reaching the writers)",
       "planet-lod-lab-core.js CPU mirrors: deriveUniforms, craterProfile, ejectaProfile, reliefEnvelope, featureFrequencyFromKm, reliefAmplitudeFromKm, radiusFromT/tFromRadius, R_EARTH_KM",
-      "Existing FloatType RTT machinery already in the lab (planet-lod-lab.html:245 tributary patch, :1467 live height-field read)",
+      "Existing FloatType RTT machinery already in the lab (world-engine-lab.html:245 tributary patch, :1467 live height-field read)",
       "Existing _lab driver probes as the input-side cross-check: plateProbe, shellProbe, magmaProbe, stagnantLidProbe, mixedProbe, e1Probe, provinceProbe, grainProbe",
       "v2-6 gravity coherence laws as the law registry's first entries: crater count ~ g^0.34, Q_RELIEF=0.58 relief envelope, RELIEF_FLOOR/RELIEF_CEIL bounds",
       "driver-presets.js DRIVER_PRESETS + drawPresetRadius (the preset space the sweeps run over)",

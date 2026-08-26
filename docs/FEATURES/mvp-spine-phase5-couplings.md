@@ -27,7 +27,7 @@ tally.
 ## How the statuses were determined
 
 **LAB status** — read against the lab pipeline as it stands on `feature/world-engine-production-L1`
-at `92277c6`: `planet-lod-height.glsl.js`, `planet-lod-shaders.glsl.js`, `planet-lod-lab.html`,
+at `92277c6`: `planet-lod-height.glsl.js`, `planet-lod-shaders.glsl.js`, `world-engine-lab.html`,
 `planet-lod-rivers.js`, `planet-lod-tectonic.js`, `planet-lod-uniforms.js`.
 
 - **BUILT** — the coupling's mechanism is present *in executed code* and on by default in the lab.
@@ -72,7 +72,7 @@ below comes from the comment-stripped probe.
 **Trap 2 — "true and misleading" default values.** The shared tectonic grain field (below) is real,
 executed code. Its **production uniform default is `uTectonicGrainStrength: { value: 0.0 }`**
 (`planet-lod-uniforms.js:191`), which branches every grained combiner back to its pre-WS4 verbatim
-independent axis. It is the **lab** that sets it live to `1.0` (`planet-lod-lab.html:1442`,
+independent axis. It is the **lab** that sets it live to `1.0` (`world-engine-lab.html:1442`,
 `:1448`). So "canyons and scarps share a lineament field" is **entirely true and entirely
 misleading** if said without the default: true in the lab, inert at the shipped default.
 
@@ -99,7 +99,7 @@ touched the coupling-bearing files in that window. Specifically:
    `canyons × scarps` was verbatim *"a shared tectonic lineament generator both combiners read"*
    (`feature-interaction-audit-2026-06-20.md:123`). That generator is built.
 2. **A rivers→relief incision feedback exists** (`carveEpoch` / `perNodeIncision` / `applyIncision`,
-   `planet-lod-lab.html:6241-6253`), bearing on the router-re-route prerequisite.
+   `world-engine-lab.html:6241-6253`), bearing on the router-re-route prerequisite.
 3. **Grain is a precondition of height generation** — `writeGrainSphere(carrier, grainDrivers)` runs
    *before* `writeHeightSphere(...)` (`planet-lod-rivers.js:664-665`), which invalidates the
    premise the plan's co-genesis section was written on.
@@ -124,7 +124,7 @@ levels (`priorityFlood()` → `filled`, `planet-lod-rivers.js:762-782`, closed o
 `liquidMask = smoothstep(uSeaLevel + 0.02, uSeaLevel - 0.02, h) * provinceWeight(PROV_LAKES)`
 (`planet-lod-shaders.glsl.js:375`). The identifiers `fillLevel`, `basinFill`, `uFill` and
 `pourPoint` **do not occur anywhere in the tree**. The audit cited this cut at
-`planet-lod-lab.html:435`; the GLSL has since been extracted to its own module, so that line
+`world-engine-lab.html:435`; the GLSL has since been extracted to its own module, so that line
 reference is stale but the code is unchanged in substance.
 
 | ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on | QB (spine 2) |
@@ -183,7 +183,7 @@ machC + cityC + ecuC` (`planet-lod-shaders.glsl.js:1383`). No optical channel mo
 
 | ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on | QB (spine 2) |
 |---|---|---|---|---|---|---|---|
-| P5-G27 | canyons × scarps | 2 | needs-arch | **PARTIAL ↑ / UNKNOWN** | ABSENT | **The audit's named fix is built.** Its fix line: *"a shared tectonic lineament generator both combiners read"* (`audit:123`). `canyonCombiner` `:2326-2327` and `scarpCombiner` `:2369-2370` both mix toward `sampleGrainStrike(pos)` under `uTectonicGrainStrength`. ⚠ Lab-live 1.0 (`planet-lod-lab.html:1442`), **production default 0.0** (`planet-lod-uniforms.js:191`). What is shared is orientation, not geometry — **UNKNOWN whether canyon walls now read as scarp escarpments**; settled by one lab render at grain 0 vs 1 on a canyons+scarps preset. | **QB-7** |
+| P5-G27 | canyons × scarps | 2 | needs-arch | **PARTIAL ↑ / UNKNOWN** | ABSENT | **The audit's named fix is built.** Its fix line: *"a shared tectonic lineament generator both combiners read"* (`audit:123`). `canyonCombiner` `:2326-2327` and `scarpCombiner` `:2369-2370` both mix toward `sampleGrainStrike(pos)` under `uTectonicGrainStrength`. ⚠ Lab-live 1.0 (`world-engine-lab.html:1442`), **production default 0.0** (`planet-lod-uniforms.js:191`). What is shared is orientation, not geometry — **UNKNOWN whether canyon walls now read as scarp escarpments**; settled by one lab render at grain 0 vs 1 on a canyons+scarps preset. | **QB-7** |
 | P5-G28 | plateaus × scarps | 2 | needs-arch | UNBUILT | ABSENT | Half the pair only: `scarpCombiner` reads the grain field, `plateauCombiner` `:2474` does **not** (the eight `sampleGrainStrike` call sites are `:960, :2326, :2369, :2524, :2534, :2616, :3058, :3071` — plateau is absent). Cheapest remaining partition win. | — |
 | P5-G29 | tessera × plateaus | 2 | needs-arch | UNBUILT | ABSENT | Same shape inverted: tessera reads grain `:2524`/`:2534`, plateau does not. | — |
 | P5-G30 | chaos × cryoRidge | 2 | needs-arch | UNBUILT | ABSENT | Same shape: cryoRidge reads grain `:3058`/`:3071`, `chaosCombiner` `:2743` does not. | — |
@@ -191,7 +191,7 @@ machC + cityC + ecuC` (`planet-lod-shaders.glsl.js:1383`). No optical channel mo
 | P5-G42 | daysideThermal × clouds | 2 | needs-arch | UNBUILT | ABSENT | Same missing buffer (hotspot cloud-clearing). | — |
 | P5-G05 | edifices × lava | 3 | needs-arch | UNBUILT | ABSENT | **Blocked on lava-as-fluid routing.** `edificeCombiner`'s `uLava` hits are comments (`:2598`, `:2602`). | — |
 | P5-G25 | lava × rivers | 2 | needs-arch | UNBUILT | ABSENT | Same lava-as-fluid prerequisite. | — |
-| P5-G12 | rivers × massWasting | 2 | needs-arch | **PARTIAL ↑ / UNKNOWN** | ABSENT | **The router-re-route prerequisite moved.** `carveEpoch` + `perNodeIncision` + `applyIncision` (`planet-lod-lab.html:6241-6253`, "WS4 T12") is a real rivers→relief incision feedback. But it is applied to a **readback probe field**, not the rendered chain — the code says so at `:6247-6249` (*"the ROUTER_MAIN field the carve is computed over, NOT a rendered-chain sample (that is the deferred T12b)"*), and it is a one-shot incision, not a re-route. UNKNOWN how much of the WS4-1 design pass this retires; settled by reading the T12b deferral. | — |
+| P5-G12 | rivers × massWasting | 2 | needs-arch | **PARTIAL ↑ / UNKNOWN** | ABSENT | **The router-re-route prerequisite moved.** `carveEpoch` + `perNodeIncision` + `applyIncision` (`world-engine-lab.html:6241-6253`, "WS4 T12") is a real rivers→relief incision feedback. But it is applied to a **readback probe field**, not the rendered chain — the code says so at `:6247-6249` (*"the ROUTER_MAIN field the carve is computed over, NOT a rendered-chain sample (that is the deferred T12b)"*), and it is a one-shot incision, not a re-route. UNKNOWN how much of the WS4-1 design pass this retires; settled by reading the T12b deferral. | — |
 | P5-G07 | frost × craters | 2 | needs-arch | UNBUILT | ABSENT | **Blocked on the insolation/aspect term.** ⚠ `wardInsolation()` exists at `src/worldengine/base/climate-e5.js:104` — that is the annual-mean **latitude** insolation driving gas-giant banding, **not** a per-cell sun-axis·slope proxy. Do not match it to this row. | — |
 | P5-G43 | sublimation × craters | 1 | needs-arch | UNBUILT | ABSENT | Same missing aspect term. | — |
 | P5-G35 | dust × dunes | 1 | needs-arch | UNBUILT | ABSENT | **Blocked on a shared sediment-supply buffer.** `duneCombiner` `:1272`: its `dust` hits are all comments (`:1299-1324`). | — |

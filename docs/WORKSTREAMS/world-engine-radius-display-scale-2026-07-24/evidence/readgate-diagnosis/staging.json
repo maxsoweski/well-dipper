@@ -6,7 +6,7 @@
     "branch": "feature/world-engine-production-L1",
     "HEAD": "8c8a0d8 (radius-scale-fix build; gates green, verify PASS)",
     "sliceD_mechanism": "bake->synth crossover (bakeReliefCrossover, BAKE_CROSS_SPAN=1.0) — the FIX-PLAN fallback, not the route re-bake",
-    "url": "http://localhost:5175/well-dipper/planet-lod-lab.html (served via HMR = HEAD)"
+    "url": "http://localhost:5175/well-dipper/world-engine-lab.html (served via HMR = HEAD)"
   },
   "commonStaging": {
     "preset": "Rocky (Earthlike)",
@@ -23,7 +23,7 @@
     "stageSequencePerCapture": "setSeed(macro,detail) -> set radius/octaves/camera/spin -> applyDrivers() [re-routes + re-bakes cube for seed] -> reliefBakeStrength(base) LAST [applyDrivers does NOT touch grainCarveUI.reliefBakeStrength] -> re-hide chrome -> 1200ms settle -> screenshot"
   },
   "bakeMechanism": {
-    "note": "frame() OVERWRITES uniforms.uReliefBakeStrength every frame with grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis) (planet-lod-lab.html:5746). So the controllable input is the BASE grainCarveUI.reliefBakeStrength (set via _lab.reliefBakeStrength(v)); the live/effective uniform is base * crossover(sVis).",
+    "note": "frame() OVERWRITES uniforms.uReliefBakeStrength every frame with grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis) (world-engine-lab.html:5746). So the controllable input is the BASE grainCarveUI.reliefBakeStrength (set via _lab.reliefBakeStrength(v)); the live/effective uniform is base * crossover(sVis).",
     "bakeReliefCrossover": "1 - smoothstep(0, BAKE_CROSS_SPAN=1.0, |log2(sVis)|). sVis=visScaleOf(r)=r^0.5. Values: r0.5->sVis0.707->crossover0.5; r2->sVis1.414->crossover0.5; r8->sVis2.828->crossover0.0.",
     "effectiveBake_byRadius": {
       "base0": { "r0.5": 0.0, "r2": 0.0, "r8": 0.0 },

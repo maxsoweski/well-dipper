@@ -5,7 +5,7 @@
 > captured in Max's words (his per-item phrasing preserved deliberately — it's the spec).
 > My triage hypotheses are in a SEPARATE section at the bottom, clearly marked and droppable.
 >
-> Frame: all of this is **lab renderer** quality work (`planet-lod-lab.html` +
+> Frame: all of this is **lab renderer** quality work (`world-engine-lab.html` +
 > `planet-lod-lab-core.js`), per the CHARTER — NOT game-wiring. Fits the program's
 > **per-feature quality pass** (Phase 2), now expanded by this list.
 

@@ -223,7 +223,7 @@ rotation, and a topology seed) and E14 the *primitives* (the D1/D4/D6/D7
 factors), letting those engines own the composite. Today L0 bakes the answer.
 
 ### C4 — The lab's `DRIVER_PRESETS` is a parallel, hand-authored, per-TYPE input table
-`planet-lod-lab.html:2476+` defines `DRIVER_PRESETS` keyed by preset/type name,
+`world-engine-lab.html:2476+` defines `DRIVER_PRESETS` keyed by preset/type name,
 each hand-supplying `eccentricity, surfaceHistory{erosion,bombardmentIntensity,
 resurfacingRate}, habitability, tidalState, atmosphere{...}`. Two problems for
 the world-engine boundary:

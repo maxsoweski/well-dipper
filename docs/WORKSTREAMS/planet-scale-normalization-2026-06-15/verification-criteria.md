@@ -44,7 +44,7 @@ For each converted feature with uniform `U`, sizeKm var `K`, default km `Kd`, ol
 - **P5 FLAGGED-DOWN (rivers only)** — `uFluvialFreq.value@RE1 > 2.3` (footprint came down vs old).
 
 File-level (run once per batch, not per feature):
-- **P6 BACKTICK-PARITY** — `grep -o '`' planet-lod-lab.html | wc -l` is **even** (baseline 122).
+- **P6 BACKTICK-PARITY** — `grep -o '`' world-engine-lab.html | wc -l` is **even** (baseline 122).
 - **P7 UNIT-GATE** — `npx vitest run tests/planet-scale.test.js tests/planet-archetypes.test.js tests/feature-associations.test.js` → 49/49 (+ generation guard 85/85 if core/src touched; not touched here).
 - **P8 NO-ORPHAN-SYNC** — no `uniforms.U.value = state.<oldFreqVar>;` line survives for a converted U
   (grep: every converted U sync line calls `featureFrequencyFromKm`).

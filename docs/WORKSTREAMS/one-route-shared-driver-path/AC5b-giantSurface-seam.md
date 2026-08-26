@@ -46,7 +46,7 @@ condition instead.
 The call sits in **`ensureNetworkRouted`**, not `applyDrivers`.
 
 ⛔⛔ **The first attempt put it in `applyDrivers` and threw `_gs is not defined` on load.**
-`applyDrivers` ENDS at `planet-lod-lab.html:2760`; seven of this pack's thirteen outputs — the five
+`applyDrivers` ENDS at `world-engine-lab.html:2760`; seven of this pack's thirteen outputs — the five
 palette colours, `iceness`, `biosphere` — are authored in `ensureNetworkRouted`, several hundred
 lines later. **Every headless gate was green with the call in the wrong function.** That is the same
 shape as the 2026-08-21 import-inside-a-comment: the instruments this program owns do not read

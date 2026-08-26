@@ -2,12 +2,12 @@
   "workstream": "rivers-dendritic-drainage-2026-06-17",
   "commit": "ed99e2f",
   "perLayer": { "unit": "PASS", "integration": "PASS", "uat": "PASS" },
-  "liveDriveBy": "verify-workstream wf_69df0b55-7fc (2026-06-18) ran static + adversarial with liveBranch=main, so it left all 5 live-integration ACs INSUFFICIENT pending working-Claude's live drive (the documented pattern). working-Claude (main thread, chrome-devtools :9223 planet-lod-lab.html) drove them green this session AFTER the 3 UAT fixes (348b7a0/ce84c1f/827e40f) + doc reconcile (ed99e2f); results applied below. NOTE: the workflow diffed the WORKING tree (only src/debug/LabMode.js, an unrelated warp WIP) because the rivers fixes are COMMITTED, not uncommitted — it correctly read & statically verified the committed fix code.",
+  "liveDriveBy": "verify-workstream wf_69df0b55-7fc (2026-06-18) ran static + adversarial with liveBranch=main, so it left all 5 live-integration ACs INSUFFICIENT pending working-Claude's live drive (the documented pattern). working-Claude (main thread, chrome-devtools :9223 world-engine-lab.html) drove them green this session AFTER the 3 UAT fixes (348b7a0/ce84c1f/827e40f) + doc reconcile (ed99e2f); results applied below. NOTE: the workflow diffed the WORKING tree (only src/debug/LabMode.js, an unrelated warp WIP) because the rivers fixes are COMMITTED, not uncommitted — it correctly read & statically verified the committed fix code.",
   "perAC": [
     {
       "id": "AC1-shared-height-module",
       "result": "PASS",
-      "evidence": "Unit (static, diff is the gate). Single h(pos): planet-lod-height.glsl.js HEIGHT_GLSL consumed by both planet shader (planet-lod-lab.html) and river router (planet-lod-rivers.js); single uniform factory makeUniforms (planet-lod-uniforms.js) bound by both. Byte-identical code-lift proven: 2878-line GLSL diff vs removed lab lines = 0 (commit 8fcfaeb). vitest planet-lod 263/263 incl. finite-diff parity. Re-confirmed by verify-workstream 2026-06-18.",
+      "evidence": "Unit (static, diff is the gate). Single h(pos): planet-lod-height.glsl.js HEIGHT_GLSL consumed by both planet shader (world-engine-lab.html) and river router (planet-lod-rivers.js); single uniform factory makeUniforms (planet-lod-uniforms.js) bound by both. Byte-identical code-lift proven: 2878-line GLSL diff vs removed lab lines = 0 (commit 8fcfaeb). vitest planet-lod 263/263 incl. finite-diff parity. Re-confirmed by verify-workstream 2026-06-18.",
       "adversarialVotes": "3/3 sufficient"
     },
     {
@@ -49,7 +49,7 @@
     {
       "id": "AC8-reads-as-rivers",
       "result": "PASS",
-      "evidence": "UAT PASSED by Max 2026-06-19. Walked planet-lod-lab.html on :9223 in the clean Earth-like state (Rocky preset, macroSeed 1, spin frozen, distance 2.6 so the planet fills the frame) with all 3 UAT fixes live (relief gate 348b7a0 @ uRiverCarveGateHi 0.18, wall-bend 0.01 ce84c1f, smaller+per-seed width 827e40f — widthRadiusFactor 0.807 × widthSeedFactor 0.773, 0 width violations). Verdict: 'looks good to me' — the rivers read as real dendritic drainage to the seas, no longer cut through mountains, sized right, a clear win over the old F11 worm-trails. No tuning changes requested; defaults retained.",
+      "evidence": "UAT PASSED by Max 2026-06-19. Walked world-engine-lab.html on :9223 in the clean Earth-like state (Rocky preset, macroSeed 1, spin frozen, distance 2.6 so the planet fills the frame) with all 3 UAT fixes live (relief gate 348b7a0 @ uRiverCarveGateHi 0.18, wall-bend 0.01 ce84c1f, smaller+per-seed width 827e40f — widthRadiusFactor 0.807 × widthSeedFactor 0.773, 0 width violations). Verdict: 'looks good to me' — the rivers read as real dendritic drainage to the seas, no longer cut through mountains, sized right, a clear win over the old F11 worm-trails. No tuning changes requested; defaults retained.",
       "adversarialVotes": "n/a — UAT is Max-only"
     }
   ],

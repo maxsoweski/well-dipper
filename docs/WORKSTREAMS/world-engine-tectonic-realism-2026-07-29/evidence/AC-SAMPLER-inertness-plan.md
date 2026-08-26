@@ -36,19 +36,19 @@ artifact.
 
 | Item | Value |
 |---|---|
-| Lab URL | `http://localhost:5175/planet-lod-lab.html` (Max's own tab is page 2 — **never touch it**; use an isolated context) |
+| Lab URL | `http://localhost:5175/world-engine-lab.html` (Max's own tab is page 2 — **never touch it**; use an isolated context) |
 | Server | already running; **do not start one** |
 | Browser hygiene | close every page you opened when finished (`close_page`), then sweep |
 | Do NOT | re-capture goldens; `git add -A`; touch `src/auto/CameraChoreographer.js` or `src/debug/LabMode.js` |
 
 ### 1a. Producing the BEFORE page — the only safe recipe
 
-The AC-SAMPLER work is **uncommitted**, so `git checkout -- planet-lod-lab.html` would destroy it, and
+The AC-SAMPLER work is **uncommitted**, so `git checkout -- world-engine-lab.html` would destroy it, and
 `git stash` risks the two standing NOT-OURS mods. Do this instead:
 
 1. **Commit the AC-SAMPLER work first** (explicit paths only):
    ```
-   git add planet-lod-lab.html planet-lod-rivers.js \
+   git add world-engine-lab.html planet-lod-rivers.js \
            src/worldengine/instrument/fieldSampler.js \
            tests/instrument-tap-fence.test.js \
            docs/WORKSTREAMS/world-engine-tectonic-realism-2026-07-29/evidence/AC-SAMPLER-inertness-plan.md
@@ -57,7 +57,7 @@ The AC-SAMPLER work is **uncommitted**, so `git checkout -- planet-lod-lab.html`
 2. Materialise the pre-edit lab **as a second page**, so both are live at once and no restore is ever
    needed:
    ```
-   git show HEAD~1:planet-lod-lab.html > planet-lod-lab.BEFORE.html
+   git show HEAD~1:world-engine-lab.html > planet-lod-lab.BEFORE.html
    ```
    `HEAD~1` = the commit before the AC-SAMPLER commit (`262e233` at the time of writing).
 3. The BEFORE page is served at `http://localhost:5175/planet-lod-lab.BEFORE.html`. Its imports
@@ -66,7 +66,7 @@ The AC-SAMPLER work is **uncommitted**, so `git checkout -- planet-lod-lab.html`
    reaches. Its **render path** is byte-for-byte HEAD~1's.
 4. When finished: `rm planet-lod-lab.BEFORE.html` (that exact name — no glob, no `-f`).
 
-> If you would rather not commit yet, the fallback is `git stash push -- planet-lod-lab.html` (explicit
+> If you would rather not commit yet, the fallback is `git stash push -- world-engine-lab.html` (explicit
 > path, so the NOT-OURS mods are untouched) → capture A → `git stash pop`. It is strictly riskier and
 > the two-page recipe above is preferred.
 

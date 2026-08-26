@@ -1,7 +1,7 @@
 # F11 — Fluvial river networks & valleys (lab) — design spec
 
 **Date:** 2026-06-07 · **Feature:** F11 (Fluvial domain, first of the
-gradational-landform campaign) · **Surface:** `planet-lod-lab.html`
+gradational-landform campaign) · **Surface:** `world-engine-lab.html`
 (`window._lab`) · **Status:** design APPROVED by Max 2026-06-07; **AUDITED
 2026-06-07** (implementing session — findings folded in below, see §Audit).
 
@@ -41,7 +41,7 @@ pattern with no new machinery.
 Every feature is a per-fragment GLSL `xxxCombiner(vPos, h, grad)` that ADDS a
 height delta + chain-rule gradient onto the analytic-noise base; a single
 `perturbAnalytic(N, grad, reliefAmp)` then bends the normal so everything lights
-correctly. Anchors in `planet-lod-lab.html`:
+correctly. Anchors in `world-engine-lab.html`:
 
 - Shared `canyonHeight` accumulator declared at **:1407**; relief writes tectonic
   graben; **"Fluvial incised gorges … ADD IN at stages 3/4"** (:1406, :1427).
@@ -144,13 +144,13 @@ all-or-none:
 - Channels sit in low ground, not across peaks/crater rims.
 - Enable-in-title toggle, solo, 🎲 randomize all work; boxes resync through
   preset switch / solo / enable-all / reset; `resetAll` doesn't throw.
-- 0 console errors. **Backtick parity in `planet-lod-lab.html` stays EVEN**
+- 0 console errors. **Backtick parity in `world-engine-lab.html` stays EVEN**
   (was 30 last session — re-check after editing the shader template literal).
 - `npm run test -- planet-archetypes` stays green.
 
 ## Audit (2026-06-07, implementing session) — resolutions
 
-Audited the spec against live `planet-lod-lab.html` + `planet-lod-lab-core.js` +
+Audited the spec against live `world-engine-lab.html` + `planet-lod-lab-core.js` +
 `planet-archetypes.js`. Verdict: **sound; implement after these folds.**
 
 - **Anchors accurate** (minor line drift only): canyonHeight :1407, combiner site

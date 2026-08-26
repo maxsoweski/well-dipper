@@ -34,10 +34,10 @@
 - `zonalBandCol(...)` — line 1761. The deck combiner; calls `stormColTerms` (line 1823, gated `uStormCount > 0`) and `polarVortexCol` (line 1835, gated `uPolarStrength > 0.0`). `stormSwirl` feeds the direction it receives.
 
 ### 0.3 The per-frame carriage WRITER — KEEP, re-point its source
-`planet-lod-lab.html` lines **5584-5620**: composes `uStormPosSize/uStormParams/uStormColor` slots + `uStormCount` from `state.spotCenter/spotRadius/spotRot/…/trainSpots[]`, and passes `state.polar*` into the `uPolar*` uniforms. **This block is NOT the legacy placement — it is the carriage filler and it STAYS.** Slice P re-points *what fills the `state.*` fields it reads* (the physics writer), not this block. Enable gates here (`greatSpotEnabled`, `stormTrainEnabled`, `polarVortexEnabled`) are the AC-OFFGATE rails and are preserved verbatim.
+`world-engine-lab.html` lines **5584-5620**: composes `uStormPosSize/uStormParams/uStormColor` slots + `uStormCount` from `state.spotCenter/spotRadius/spotRot/…/trainSpots[]`, and passes `state.polar*` into the `uPolar*` uniforms. **This block is NOT the legacy placement — it is the carriage filler and it STAYS.** Slice P re-points *what fills the `state.*` fields it reads* (the physics writer), not this block. Enable gates here (`greatSpotEnabled`, `stormTrainEnabled`, `polarVortexEnabled`) are the AC-OFFGATE rails and are preserved verbatim.
 
 ### 0.4 The legacy mulberry32 placement — REPLACE + DELETE (exact locations)
-`planet-lod-lab.html`, inside `applyDrivers()`:
+`world-engine-lab.html`, inside `applyDrivers()`:
 - **F27 great-spot derivation, lines ~3154-3190** — the `_spotRng` mulberry32 closure (line 3160-3165, seeded `(Math.imul(state.macroSeed, 2654435761) ^ state.stormSeed)`), setting `state.spotStrength/spotCenter/spotRadius/spotRot/spotAspect/spotMode/spotColor/spotCompanion`.
 - **F28 train derivation, lines ~3191-3280** — `_trBeltY()` belt-snap helper + the vigor-branch pearls/plume/scooters loops → `state.trainSpots/trainCount` (same `_spotRng` stream extended).
 - **F29 polar derivation, lines ~3281-3318** — the `_polRng` mulberry32 closure (line 3289-3294, seed `… ^ 0x9E3779B9`) → `state.polarStrength/polarMode/polarSides/polarR0/polarRing/polarPole/polarPhase/polarTint`.
@@ -51,7 +51,7 @@ Slice V is genuinely XL (filamentation + wake + interior structure + chromophore
 
 | Slice | Ships | Fences to | Gate |
 |---|---|---|---|
-| **P** — physics writer + mask attribute | new `storm-e.js` writer; the one new baked mask attribute; DELETE of mulberry32; carriage re-point | `src/worldengine/base/storm-e.js` (new) + its tests; `planet-lod-lab.html` `applyDrivers` storm derivation + `state`; NO GLSL render change | AC-0, AC-WRITER, AC-FIELDS(a,d), AC-PARITY(a,b), AC-OFFGATE |
+| **P** — physics writer + mask attribute | new `storm-e.js` writer; the one new baked mask attribute; DELETE of mulberry32; carriage re-point | `src/worldengine/base/storm-e.js` (new) + its tests; `world-engine-lab.html` `applyDrivers` storm derivation + `state`; NO GLSL render change | AC-0, AC-WRITER, AC-FIELDS(a,d), AC-PARITY(a,b), AC-OFFGATE |
 | **V-α** — band + storm-interior render | filamentation "ink in water" term (reads `aShear`+mask, static); FFR sign-of-shear asymmetry; GRS wake cone; storm interior structure; chromophore age→`uStormColor`; DS2 sign-packed companion | `planet-lod-height.glsl.js` storm/band GLSL; `planet-lod-uniforms.js` (no new uniforms); writer color/age outputs | AC-VIS(a,b,c), AC-FIELDS(b,c) |
 | **V-β** — polar + lifecycle + regime policy | both-poles polar asymmetry (hexagon N + opposite-pole cap); lattice canonical-N GUI range; ice-giant dark-spot lifecycle phases; haze-mute extension to storm terms; Uranian variant; hot-Jupiter suppression | `planet-lod-height.glsl.js` `polarVortexCol` + haze lever; lab GUI folder; writer regime routing | AC-LIVE, AC-VIS(a) suppression, AC-FIELDS(c) |
 
@@ -77,7 +77,7 @@ Re-scope gate (V2-2b precedent): if V-α or V-β balloons past a coherent unit, 
 
 ## 4. Slice P — physics writer + mask attribute
 
-**Scope fence.** ADD `src/worldengine/base/storm-e.js` (name pinned) + `tests/worldengine-base-storm-e.test.js`. EDIT `planet-lod-lab.html` `applyDrivers` storm-derivation block (delete 3154-3318, replace with a writer call) + the `state` storm fields + the "reroll storms" button. NO edit to `planet-lod-height.glsl.js` render terms in this slice (render stays byte-identical modulo where the slots point). NEVER touch relief/dispatch: `planet-lod-rivers.js`, `src/worldengine/base/{lidResponse,e1Regime,plates,shellRelief,magmatism,stagnantLid,mixedInterior,lidDisruption}.js`; exclude not-ours dirty files (`CameraChoreographer.js`, `LabMode.js`) from every commit.
+**Scope fence.** ADD `src/worldengine/base/storm-e.js` (name pinned) + `tests/worldengine-base-storm-e.test.js`. EDIT `world-engine-lab.html` `applyDrivers` storm-derivation block (delete 3154-3318, replace with a writer call) + the `state` storm fields + the "reroll storms" button. NO edit to `planet-lod-height.glsl.js` render terms in this slice (render stays byte-identical modulo where the slots point). NEVER touch relief/dispatch: `planet-lod-rivers.js`, `src/worldengine/base/{lidResponse,e1Regime,plates,shellRelief,magmatism,stagnantLid,mixedInterior,lidDisruption}.js`; exclude not-ours dirty files (`CameraChoreographer.js`, `LabMode.js`) from every commit.
 
 **Alea namespace (pinned):** `stormE:place`, `stormE:age`, `stormE:phase` — disjoint sub-namespaces, fixed draw order, zero `Math.random`/`Date.now` (the climate-e5 static-source mold).
 
@@ -163,7 +163,7 @@ Re-scope gate (V2-2b precedent): if V-α or V-β balloons past a coherent unit, 
 
 Per-commit fence audit: `git show --stat <sha>` against the §4/§5/§6 scope fences; not-ours dirty files excluded from every commit.
 
-**Live gates (agent-driven, not headless):** AC-LIVE + AC-VIS on the Max-started dev server (`cd ~/projects/well-dipper-atmo && npm run dev -- --port 5178`, lab `http://localhost:5178/well-dipper/planet-lod-lab.html`), liveness via chrome-devtools `list_pages` (never sandbox-curl), screenshots to `evidence/`, all agent pages closed after (window hygiene). AC-UAT is Max's gate alone — never agent-PASSed.
+**Live gates (agent-driven, not headless):** AC-LIVE + AC-VIS on the Max-started dev server (`cd ~/projects/well-dipper-atmo && npm run dev -- --port 5178`, lab `http://localhost:5178/well-dipper/world-engine-lab.html`), liveness via chrome-devtools `list_pages` (never sandbox-curl), screenshots to `evidence/`, all agent pages closed after (window hygiene). AC-UAT is Max's gate alone — never agent-PASSed.
 
 ---
 

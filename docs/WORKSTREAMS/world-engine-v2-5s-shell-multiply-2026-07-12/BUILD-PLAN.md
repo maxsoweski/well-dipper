@@ -269,7 +269,7 @@ proportionally with the whole relief profile (correct — A1 scales the profile 
 
 **Slice B — dispatch threading + lab + integration ACs.** ONE commit.
 - `planet-lod-rivers.js`: import `shellDriversToTune` (:31); thread BOTH call sites (§4).
-- `planet-lod-lab.html`: `shellProbe()` returns `appliedTune`; new `fShellDrivers` folder (shell A/B, mirror
+- `world-engine-lab.html`: `shellProbe()` returns `appliedTune`; new `fShellDrivers` folder (shell A/B, mirror
   `fStagnantDrivers`); update the stale `:2682` + `:3831-3833` comments (the gravity/tidal/volatiles/tsurf
   sliders now also drive the shell path on icy presets).
 - `tests/worldengine-base-shell-multiply.test.js`: append the AC-ZERO-CLOBBER dispatch-level assertions
@@ -364,7 +364,7 @@ Every `describe` must contain at least one `it` that actually executes (no empty
 
 ## 6. The diff fence (verbatim, AC-ZERO-CLOBBER(d))
 
-> ONLY `src/worldengine/base/shellRelief.js`, `planet-lod-rivers.js`, `planet-lod-lab.html`, new/updated
+> ONLY `src/worldengine/base/shellRelief.js`, `planet-lod-rivers.js`, `world-engine-lab.html`, new/updated
 > shell tests, workstream docs — NOT plates/magmatism/stagnantLid/mixedInterior/lidResponse/e1Regime/
 > body-condition-vector/driver-presets, and NOT V2-7d's lidDisruption module.
 

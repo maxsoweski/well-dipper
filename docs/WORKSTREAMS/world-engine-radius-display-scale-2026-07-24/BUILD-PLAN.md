@@ -2,7 +2,7 @@
 
 **Workstream:** `world-engine-radius-display-scale-2026-07-24`
 **Author:** build-planner subagent · **Date:** 2026-07-24
-**Grounded in:** `planet-lod-lab.html` @ HEAD (`feature/world-engine-production-L1`),
+**Grounded in:** `world-engine-lab.html` @ HEAD (`feature/world-engine-production-L1`),
 `planet-lod-lab-core.js`, the pin/golden test suite. All line numbers below were
 read from the working tree, not the contract's KNOWN SOURCE FACTS block (those were
 verified — see notes where a stated line differed).
@@ -26,7 +26,7 @@ verified — see notes where a stated line differed).
 ## 1. Where the pure `visScaleOf` export lives
 
 **Home: `planet-lod-lab-core.js`** — the existing pure CPU module (no three.js/DOM),
-imported by the lab HTML at `planet-lod-lab.html:151` and by ~40 tests / calibration
+imported by the lab HTML at `world-engine-lab.html:151` and by ~40 tests / calibration
 scripts (e.g. `tests/planet-scale.test.js:6-12` imports `featureFrequencyFromKm`,
 `animationRateFactor`, etc. from `../planet-lod-lab-core.js`). This is the DRY pattern
 the feature must follow: the lab consumes the same export the unit tests pin.
@@ -67,7 +67,7 @@ The lab imports these by appending to the `:151` import list:
 
 ## 2. Every consumer of `planet.scale` / implicit scale-1 assumption
 
-Exhaustive enumeration from a full read of `planet-lod-lab.html`. Grouped by whether
+Exhaustive enumeration from a full read of `world-engine-lab.html`. Grouped by whether
 they need a code change. **The big structural finding:** the three overlay meshes are
 **children of `planet`** (parented at `:1475`, `:1509`, `:1524`), so `planet.scale`
 propagates to them for free — **AC-OVERLAY is satisfied by the existing scene graph,
@@ -193,7 +193,7 @@ size" behavior (intent §3):
 
 ## 3. The zoom clamp
 
-**Input site:** `planet-lod-lab.html:5588`
+**Input site:** `world-engine-lab.html:5588`
 ```js
 state.distance = Math.max(1.1, Math.min(30, state.distance * factor));
 ```
@@ -277,7 +277,7 @@ bit-identical to today at radius 1.**
 | AC | Layer | Where | Assertions |
 |----|-------|-------|-----------|
 | **AC-VIS-MONO** | unit | NEW `tests/planet-vis-scale.test.js`, imports `{ visScaleOf, VIS_SCALE_EXP }` from `../planet-lod-lab-core.js` | `visScaleOf(1) === 1` (toBe, exact); `visScaleOf(0.3)` `toBeCloseTo(0.5477, 3)`; `visScaleOf(16)` `toBeCloseTo(4.0, 9)`; **200-point** sweep over [0.3,16] asserts strict monotonicity (`visScaleOf(r_{i}) > visScaleOf(r_{i-1})`); all finite. |
-| **AC-LOD-KEY** | unit + source pins | same NEW file | (a) **keying identity:** a helper assertion `logicalDist(d, sVis) = d/sVis` → at `sVis=1` returns `d` exactly (toBe); at `sVis=visScaleOf(16)=4` returns `d/4`. (b) **source pins** via `readFileSync('planet-lod-lab.html')` + `toMatch`: `/const\s+logicalDist\s*=\s*state\.distance\s*\/\s*sVis/`, `/lodRampOf\(\s*logicalDist\s*\)/`, `/lodHysteresis\(\s*logicalDist\s*,/`, `/autoOctaves\(\s*lod\s*\)/`. |
+| **AC-LOD-KEY** | unit + source pins | same NEW file | (a) **keying identity:** a helper assertion `logicalDist(d, sVis) = d/sVis` → at `sVis=1` returns `d` exactly (toBe); at `sVis=visScaleOf(16)=4` returns `d/4`. (b) **source pins** via `readFileSync('world-engine-lab.html')` + `toMatch`: `/const\s+logicalDist\s*=\s*state\.distance\s*\/\s*sVis/`, `/lodRampOf\(\s*logicalDist\s*\)/`, `/lodHysteresis\(\s*logicalDist\s*,/`, `/autoOctaves\(\s*lod\s*\)/`. |
 | **AC-ZERO-CLOBBER** | unit | NEW `tests/vis-scale-fence.test.js` (denylist grep) + suite/golden gates | `readFileSync` each of `planet-lod-height.glsl.js`, `planet-lod-river-amplifier.glsl.js`, every `src/worldengine/base/*.js`, `tests/golden-trajectories/run-golden.mjs`, and the inline shader region of the lab → assert **none** matches `/visScaleOf|\bsVis\b|VIS_SCALE_EXP/`. Assert `featureFrequencyFromKm(` call sites still take `state.planetRadiusEarth` (never `sVis`): `!lab.match(/featureFrequencyFromKm\([^)]*sVis/)`. **Gate steps (run, not asserted-in-file):** `npm test` → exactly **2289 passed / 4 failed** (baseline unchanged; the new tests add passes); `npm run verify-golden` → **83/83 byte-identical, NO `--record`**. |
 | **AC-CLAMP** | unit (+ live later) | same NEW `planet-vis-scale.test.js`, imports `{ minCameraDistance, CAMERA_CLEARANCE }` | For `r ∈ {0.3, 1, 4, 16}`: `minCameraDistance(visScaleOf(r)) > visScaleOf(r) * 1.05`. Worked points: `minCameraDistance(1) === 1.1`, `minCameraDistance(4) === 4.4`. Live half (main session, chrome-devtools): 16 RE, wheel to min, screenshot shows unclipped disc. |
 | **AC-0** | unit | fence test + BUILD-NOTES | `sVis` derivation reads only `state.planetRadiusEarth` (grep the frame-loop region: `visScaleOf(state.planetRadiusEarth)` — no `.label`/`archetype`/`regime`/`rendersOn`); existing guard suites (`worldengine-*`, taxonomy/drift) pass unchanged; consumer chain documented in BUILD-NOTES. |
@@ -304,7 +304,7 @@ they are immune to the line insertions this feature makes. **No pin updates requ
 - Gate: `npm test` still **2289/4** (+ new passes); goldens untouched.
 
 **Slice B — lab wiring + clamps + LOD keying + shells + sweep + source/fence tests.**
-- `planet-lod-lab.html`: extend import `:151`; module-scope `let sVis=1.0;` (~`:5630`);
+- `world-engine-lab.html`: extend import `:151`; module-scope `let sVis=1.0;` (~`:5630`);
   frame-loop block (§4) — `planet.scale`, haze/ring/ringCloud scale, **ringCloud
   `uDResolve`/`uDCull` threshold scaling by `sVis`** (lens-01, item #14), min-distance
   guard, `logicalDist` keying of `:5652/:5655`; wheel clamp `:5588`; sweep pin `:5216`
@@ -315,7 +315,7 @@ they are immune to the line insertions this feature makes. **No pin updates requ
   no `--record`**; denylist grep zero hits.
 - **Untouched:** `src/auto/CameraChoreographer.js`, `src/debug/LabMode.js` (PRE-EXISTING
   NOT-OURS working-tree mods — never edit, never stage). This slice touches only
-  `planet-lod-lab-core.js`, `planet-lod-lab.html`, and new `tests/*.js`.
+  `planet-lod-lab-core.js`, `world-engine-lab.html`, and new `tests/*.js`.
 
 **Slice C — `BUILD-NOTES.md` (AC-STAGE-DOC + AC-0 chain + `record-build-intent`).**
 - **AC-0 consumer chain:** `state.planetRadiusEarth → visScaleOf() → sVis →
@@ -384,7 +384,7 @@ rings' live look is a UAT taste call, not a correctness gate.
 
 **R7 — NOT-OURS working-tree files.** `CameraChoreographer.js` + `LabMode.js` are
 modified in the tree and must never be touched or staged. *Mitigation:* the edit surface
-is exactly `planet-lod-lab-core.js` + `planet-lod-lab.html` + new `tests/*.js` +
+is exactly `planet-lod-lab-core.js` + `world-engine-lab.html` + new `tests/*.js` +
 `BUILD-NOTES.md`. No overlap. (working-Claude commits at the seam; this plan commits
 nothing.)
 

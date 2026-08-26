@@ -34,7 +34,7 @@
     },
     {
       "id": "AC3",
-      "statement": "DRIVER_PRESETS extraction: an importable module exports all 17 driver-preset vectors (including Mars and Hot Jupiter, which have data but no archetype mapping); the lab consumes the module (no duplicated inline literal remains); planet-archetypes.test.js imports the module instead of string-scraping planet-lod-lab.html; exported values deep-equal the pre-extraction lab literals.",
+      "statement": "DRIVER_PRESETS extraction: an importable module exports all 17 driver-preset vectors (including Mars and Hot Jupiter, which have data but no archetype mapping); the lab consumes the module (no duplicated inline literal remains); planet-archetypes.test.js imports the module instead of string-scraping world-engine-lab.html; exported values deep-equal the pre-extraction lab literals.",
       "verifyVia": {
         "input": "node import of the presets module; grep the lab HTML for a residual literal; run the archetype test suite",
         "observable": "17 entries deep-equal to the pre-extraction values; lab imports the module; tests no longer read the HTML as text"
@@ -54,7 +54,7 @@
       "id": "AC5",
       "statement": "Live wiring intact: the lab page loads and steps through archetype presets without console errors; the drivers bundle visible via _lab shows the new condition-vector fields; the worldengine-fieldviz.html harness (the one non-test baseStep caller, outside the test guard) still loads and renders without errors.",
       "verifyVia": {
-        "input": "chrome-devtools: load planet-lod-lab.html on the dev server, step 4+ presets, inspect _lab state/drivers; load worldengine-fieldviz.html",
+        "input": "chrome-devtools: load world-engine-lab.html on the dev server, step 4+ presets, inspect _lab state/drivers; load worldengine-fieldviz.html",
         "observable": "Zero console errors on both pages; presets render; new fields present in the live bundle"
       },
       "layer": "integration",
@@ -65,7 +65,7 @@
     "inputs": [
       "_fp body fingerprint (composition/density, age, radius, eccentricity, shellThickness — exist today, stop at the lab)",
       "src/worldengine/base/baseStep.js internal scalar locals (thermalState, shellThickness, rawTidal at :10,:23,:42,:85)",
-      "DRIVER_PRESETS inline literal in planet-lod-lab.html (~L2641, 17 entries)",
+      "DRIVER_PRESETS inline literal in world-engine-lab.html (~L2641, 17 entries)",
       "route() → writeBodyRelief seam in planet-lod-rivers.js (current bundle: archetype, locked, grainDrivers, bodyDrivers, macroSeed, heightSeed, T_eq)"
     ],
     "outputs": [

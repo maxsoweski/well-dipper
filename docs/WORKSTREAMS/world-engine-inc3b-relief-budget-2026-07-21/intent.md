@@ -87,5 +87,5 @@ to a body that can express it (Frozen + the newly-drawable Moon/Mercury radius).
 - **Figure / limb re-roll variety** → its own scoped increment, only if S4's variety AC fails.
 - **S3 is conditional and diagnose-first** — no peppering / legacy-F2 mechanism is pre-authorized; it is built only on an
   S2 texture-fail, at the layer a root-cause diagnosis convicts (R4).
-- **Atmo-lane sections** of `planet-lod-lab.html` (section-ownership fence) and **NOT-OURS** files
+- **Atmo-lane sections** of `world-engine-lab.html` (section-ownership fence) and **NOT-OURS** files
   (`src/auto/CameraChoreographer.js`, `src/debug/LabMode.js`) — never touched, never staged.

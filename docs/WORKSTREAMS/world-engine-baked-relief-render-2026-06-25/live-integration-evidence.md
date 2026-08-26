@@ -1,7 +1,7 @@
 # Live-integration evidence — working-Claude drive (AC2/AC3/AC4)
 
 **Workstream:** world-engine-baked-relief-render-2026-06-25 · **Commit:** `e9d6cd5` · **Driven:** 2026-06-25
-**Where:** GPU Chrome `:9223`, `http://localhost:5173/well-dipper/planet-lod-lab.html` (the build tree; NOT `:5174`).
+**Where:** GPU Chrome `:9223`, `http://localhost:5173/well-dipper/world-engine-lab.html` (the build tree; NOT `:5174`).
 **By:** working-Claude (the dev-collab live-integration role; these are objective pass/fail checks, NOT acceptance — AC5 is Max's).
 
 `verdict.json` marks AC2/AC3/AC4 `INSUFFICIENT — pending working-Claude live drive` (by design: verify-workstream ran `liveBranch:main`, so it did not drive the browser). This file supplies that drive. All three pass → **integration layer GREEN**.

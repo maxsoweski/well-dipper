@@ -211,7 +211,7 @@ const marginGrad   = composited ? computeAdjGradient(carrier, composited) : reli
   surfaceHistory: { erosion: 0.05, bombardmentIntensity: 0.9, resurfacingRate: 0.05 },  // battered old surface (legacy-knob consistency; the writer reads condition.age, not these)
 },
 ```
-Also: add `'Moon/Mercury (impact-airless)'` to the lab's `NAMED_BODY` Set (`planet-lod-lab.html`) so `drawPresetRadius` returns the canonical `0.38` (the Mars precedent — no seeded radius draw ⇒ deterministic `surfaceGravity`). `NAMED_BODY` is a lab-local Set, off the drift-guard fixture.
+Also: add `'Moon/Mercury (impact-airless)'` to the lab's `NAMED_BODY` Set (`world-engine-lab.html`) so `drawPresetRadius` returns the canonical `0.38` (the Mars precedent — no seeded radius draw ⇒ deterministic `surfaceGravity`). `NAMED_BODY` is a lab-local Set, off the drift-guard fixture.
 
 **HAND-VERIFICATION that `computeE1` + the dispatch route it dead-lid rocky** (constants from `e1Regime.js`; arithmetic shown):
 - `g = massEarth/radiusEarth² = 0.04/0.38² = 0.277 g`; `mass = g·d² = 0.277·0.1444 = 0.040`.
@@ -229,7 +229,7 @@ Also: add `'Moon/Mercury (impact-airless)'` to the lab's `NAMED_BODY` Set (`plan
 
 ## §6 — LAB-UI INTEGRATION
 
-Per the LAB-UI REQUIREMENT (Max's standing directive: the lab stays updated + logically sorted so he UATs without hand-holding). Enumerated edits, all `planet-lod-lab.html` ground-owned + `planet-feature-associations.js`:
+Per the LAB-UI REQUIREMENT (Max's standing directive: the lab stays updated + logically sorted so he UATs without hand-holding). Enumerated edits, all `world-engine-lab.html` ground-owned + `planet-feature-associations.js`:
 
 **(a) DEFAULT_DRESSING — boots judgment-ready, cratered at judging distance.** Add to `DEFAULT_DRESSING` (`planet-feature-associations.js`):
 ```
@@ -278,7 +278,7 @@ This renders a `✦ current: … · craters: writer overprint` line on the targe
 - Gate: full AC-ZERO-CLOBBER (75-golden + lid anchors + quartet + dispatch-oracle + atmo suites + `planet-archetypes` + the new suite; `git show --stat` fence). **→ COMMIT 1** `V2-5 slice-1: bombardment writer + craterField host channel (power-law, MULTIPLY, byte-inert)`.
 
 **SLICE 2 — render composite + new preset (AC-PRESET). ⚠ THIS SLICE ADDS THE 18TH `DRIVER_PRESETS` KEY — it MUST include the two code-level guard edits below or the AC-ZERO-CLOBBER gate hits a hard RED (dispatch-oracle crashes at collection).**
-- Files (source): `planet-lod-rivers.js` (extend `compositeMargins` to sum `craterField`, null-tolerant — BS-m2); `driver-presets.js` (the new preset); `planet-lod-lab.html` (`NAMED_BODY` add).
+- Files (source): `planet-lod-rivers.js` (extend `compositeMargins` to sum `craterField`, null-tolerant — BS-m2); `driver-presets.js` (the new preset); `world-engine-lab.html` (`NAMED_BODY` add).
 - Files (guard-test edits — REQUIRED, BS-MF1/BS-MF2, the Mars/Hot-Jupiter-join precedent, NOT a re-capture):
   - `tests/worldengine-v2-3-dispatch-oracle.test.js`: add the `ADJUDICATION` row `'Moon/Mercury (impact-airless)': { today: 'despun', derived: { path: 'despun', shellRegime: null } }` (writer-identical, like Mars); bump `NAMES17.length` assert 17→**18** (:132) and the describe/it titles' "17"; bump `equal.length` 15→**16** (:154, leave `rerouted.length` at 2); the `NAMES17 ⇄ ADJUDICATION` key-set equality (:135) and seed-invariance loop (:172) then pass with the new row present.
   - `tests/v2-0-slice-a-byte-safety.test.js`: bump `Object.keys(DRIVER_PRESETS).length` 17→**18** (:31); change the whole-object `toEqual(DP_SNAPSHOT)` (:41) to a **per-original-key** assertion (`for each of the 17 ad156cc keys: expect(DRIVER_PRESETS[key]).toEqual(DP_SNAPSHOT[key])`) — preserves the extraction-pin semantics ("the original 17 are unmutated") WITHOUT re-capturing `v2-0-driver-presets.ad156cc.json` (fixture stays git-diff-empty).
@@ -286,7 +286,7 @@ This renders a `✦ current: … · craters: writer overprint` line on the targe
 - Gate: full AC-ZERO-CLOBBER — the BYTE-UNCHANGED guards (quartet + `planet-archetypes` + conformance) green with no edit; the dispatch-oracle + slice-a green AFTER the enumerated row/assertion edits; ALL fixture files (`v2-0-carrier-goldens.json`, `v2-0-driver-presets.ad156cc.json`, `v2-0-preset-archetype.ad156cc.json`) **git-diff-empty**. **→ COMMIT 2** `V2-5 slice-2: route() crater composite + Moon/Mercury impact-airless preset (dead-lid, non-golden; oracle+slice-a rows join, no re-capture)`.
 
 **SLICE 3 — lab-UI (AC-LAB working-Claude live drive).**
-- Files: `planet-feature-associations.js` (DEFAULT_DRESSING); `planet-lod-lab.html` (age slider + gravity→condition plumbing + `✦ current` summary bit + dropdown placement).
+- Files: `planet-feature-associations.js` (DEFAULT_DRESSING); `world-engine-lab.html` (age slider + gravity→condition plumbing + `✦ current` summary bit + dropdown placement).
 - Tests: `planet-archetypes.test.js` green (no `*Enabled` key added); AC-LAB is working-Claude's fresh-context browser drive on `:5175` (preset boots cratered; gravity/age sweeps visibly move count/size; console clean; screenshots archived in `evidence/`; agent pages closed — window hygiene).
 - Gate: full AC-ZERO-CLOBBER + AC-LAB evidence. **→ COMMIT 3** `V2-5 slice-3: lab-UI (Moon/Mercury dressing + age slider + gravity-plumb + ✦ crater summary)`.
 

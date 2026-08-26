@@ -66,7 +66,7 @@ not as *what Max asked for*.
 ## Non-goals (named, so they don't creep in)
 
 - **The `uPerturb` wiring gap.** The global relief-amplitude uniform is fed the *canonical,
-  radius-blind* gravity (`planet-lod-lab.html:3016` ← `planet-lod-lab-core.js:609-611`), and
+  radius-blind* gravity (`world-engine-lab.html:3016` ← `planet-lod-lab-core.js:609-611`), and
   `reliefEnvelope` discards its `radiusEarth` argument outright. So this fix will **not** move the
   global relief amplitude. That is a pre-existing defect of the same family as the census's
   frozen-`_fp` finding and Max's own observation (a) at the R1 ship — filed, not fixed here. The

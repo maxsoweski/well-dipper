@@ -119,7 +119,7 @@ to the vision, and it has already been proven (in the lab, on a flat DEM) and ex
 
 ### 2.1 What WS4 actually wired (verified)
 
-WS4 wired two engines into the **production lab renderer** (`planet-lod-lab.html` shader). What crosses CPU→GPU:
+WS4 wired two engines into the **production lab renderer** (`world-engine-lab.html` shader). What crosses CPU→GPU:
 - **E6 grain cube** (`uTectonicGrainCube`): a HalfFloat `samplerCube` whose `RG = world strike.xy`,
   `B = grainMag`, `A = regime`. Verified strike-only: `planet-lod-height.glsl.js:144` declares the cube as
   "baked strike-only cube (RG = world strike.xy)". The strike is `smoothStrikeAngle = atan2(|sZon|,|sMer|)`
@@ -145,7 +145,7 @@ the renderer**.
 - `runE6` (writes `substrate.height`) is called ONLY by `relief-slice.js` and test files — zero renderer/HTML
   callers.
 - `makeBaseStep` is called ONLY by `relief-slice.js`, the read-only `worldengine-fieldviz.html`, and tests —
-  never by `planet-lod-lab.html` or the game.
+  never by `world-engine-lab.html` or the game.
 - `writeGrainSphere` (the **orientation** half) is the ONLY world-engine producer wired into the renderer
   (`planet-lod-tectonic.js:86`).
 

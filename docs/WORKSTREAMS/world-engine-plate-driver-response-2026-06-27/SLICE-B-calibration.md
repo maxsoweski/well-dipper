@@ -47,7 +47,7 @@ Each transfer function is anchored so `f(D_EARTH.value) = 1.0` (multiplicative) 
 | `age` | `CONTINENTAL_FRACTION` (secondary) | age↑ → continental↑ | continental crust **volume grows** over geologic time; deliberately a *small* nudge, NOT erosion (erosion is E9 / a later increment — do not trespass) |
 
 **No double-count check (verified):** the carrier (plate) bake displacement is `baked.x *
-uReliefBakeStrength` (planet-lod-lab.html:350) — there is **NO gravity factor on the carrier path**.
+uReliefBakeStrength` (world-engine-lab.html:350) — there is **NO gravity factor on the carrier path**.
 `reliefGravityFactor` only scales the legacy *synth* uniforms (uMountainAmp…), which are default-OFF.
 So gravity→`UPLIFT_GAIN` in generation is the *only* gravity→relief coupling for the carrier — clean.
 
@@ -80,7 +80,7 @@ preset that omits `age` defaults to `age0` → `ageTerm = 0` → no age response
 ## Wiring + tests
 
 - **plates.js:** replace the `driversToTune` stub with the above; export. Pure, no RNG.
-- **planet-lod-lab.html:** add `age` to the 3 plate-path presets; build `bodyDrivers` + pass to `route()`;
+- **world-engine-lab.html:** add `age` to the 3 plate-path presets; build `bodyDrivers` + pass to `route()`;
   surface the applied tune in `plateProbe()` for AC6.
 - **tests:** AC3 (per-driver monotone + correct-sign, sweeping each with others at D_EARTH; replaces the
   SLICE-A transient invariant), AC4 (age surfaced + consumed + age-less guard). AC1/AC2/AC5 already green

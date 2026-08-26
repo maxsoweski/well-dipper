@@ -16,7 +16,7 @@
     {
       "id": "AC2",
       "result": "INSUFFICIENT",
-      "evidence": "Integration, live=true. STATIC GREEN: planet-lod-lab.html:344-354 branches the height body on uReliefBakeStrength (s=1 => pure sampled cube R channel; sampleBakedRelief in planet-lod-height.glsl.js:148-150; cube pointed at the real baked cube lab.html:3611); true if/else BRANCH (SPLIT-TRAP #4, never mix-to-0); else = VERBATIM pre-AC2 synth, no textureCube fetch; prod uniforms.js does not define the uniform => strength-0 byte-identical structurally intact. Headless 42/42. Live browser drive deferred to working-Claude on :9223 (see live-integration-evidence.md => PASS).",
+      "evidence": "Integration, live=true. STATIC GREEN: world-engine-lab.html:344-354 branches the height body on uReliefBakeStrength (s=1 => pure sampled cube R channel; sampleBakedRelief in planet-lod-height.glsl.js:148-150; cube pointed at the real baked cube lab.html:3611); true if/else BRANCH (SPLIT-TRAP #4, never mix-to-0); else = VERBATIM pre-AC2 synth, no textureCube fetch; prod uniforms.js does not define the uniform => strength-0 byte-identical structurally intact. Headless 42/42. Live browser drive deferred to working-Claude on :9223 (see live-integration-evidence.md => PASS).",
       "adversarialVotes": "0/3 sufficient (no live evidence in-workflow by design)"
     },
     {

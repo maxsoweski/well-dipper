@@ -7,7 +7,7 @@ F45 "Shattered / fractured crust" (F-exotic-natural table, planet-visual-feature
 
 ## 2. Current shader approach (HOW, as-built)
 
-Unbuilt (aspirational). No `shatter`/F45 entry exists in the FEATURES registry (/home/ax/projects/well-dipper/planet-archetypes.js:6-23) and no exotic archetype in ARCHETYPES (:27-33); nothing in planet-lod-lab.html references F45. Nearest existing machinery it should plug into: the F9 `chaosCombiner` (/home/ax/projects/well-dipper/planet-lod-lab.html:1171-1186) — a `voronoi3d` cell partition with per-cell constant raft height + per-cell CONSTANT tilt gradient and a recessed "refrozen matrix" between rafts, gated by a low-frequency region mask (`uChaosMaskScale`, uniforms :268-273, :1700-1704) — F45 is essentially that mechanism promoted from masked local patches to a global, two-scale block field; secondarily the F6 `tesseraCombiner` (:1022-1044, warped crosscutting lattice) for crack families, and the graben carve-down profile used by cryo chasma (:836-849). All would ADD IN to the unified relief accumulator (h/grad) at :1476-1509, behind a ≤0 early-out uniform per the registry convention.
+Unbuilt (aspirational). No `shatter`/F45 entry exists in the FEATURES registry (/home/ax/projects/well-dipper/planet-archetypes.js:6-23) and no exotic archetype in ARCHETYPES (:27-33); nothing in world-engine-lab.html references F45. Nearest existing machinery it should plug into: the F9 `chaosCombiner` (/home/ax/projects/well-dipper/world-engine-lab.html:1171-1186) — a `voronoi3d` cell partition with per-cell constant raft height + per-cell CONSTANT tilt gradient and a recessed "refrozen matrix" between rafts, gated by a low-frequency region mask (`uChaosMaskScale`, uniforms :268-273, :1700-1704) — F45 is essentially that mechanism promoted from masked local patches to a global, two-scale block field; secondarily the F6 `tesseraCombiner` (:1022-1044, warped crosscutting lattice) for crack families, and the graben carve-down profile used by cryo chasma (:836-849). All would ADD IN to the unified relief accumulator (h/grad) at :1476-1509, behind a ≤0 early-out uniform per the registry convention.
 
 ## 3. Reference images (real + art)
 
@@ -30,7 +30,7 @@ Academia models catastrophic crustal disruption via impact-fragmentation physics
 
 ## 5. Isolation recipe (:9223)
 
-Unbuilt — recommended recipe once built. Register in planet-archetypes.js FEATURES as `shatter: { label: 'Shattered crust (F45)', enableKey: 'shatterEnabled', archetypes: [<new 'exotic-shattered' archetype, or reuse 'icy-active'] }` so the lab's solo plumbing (planet-lod-lab.html:2539 setFeatureEnables / :2908 window._lab.solo) picks it up automatically. Then on the :9223 debug Chrome (chrome-devtools MCP, per well-dipper-testing-reference — NOT Playwright): open planet-lod-lab.html; `window._lab.setPreset('Frozen (airless)')` (best existing preset: airless, high bombardment, cold — closest to a disrupted body; add a dedicated 'Shattered (exotic)' DRIVER_PRESETS entry when the exotic types land); `window._lab.solo('shatter')`; judge at three distances via `window._lab.state.distance = 20` (full disc — global block patchwork), `= 8` (mid lodRamp — border crevasses resolving), `= 3` (LOD2 close — per-block tilt shading + sub-fracture lattice). Cross-check composition with F9: `window._lab.setPreset('Europa (icy moon)'); window._lab.solo('chaos')` shows the existing local-scale sibling. Restore with `window._lab.enableAllFeatures()`.
+Unbuilt — recommended recipe once built. Register in planet-archetypes.js FEATURES as `shatter: { label: 'Shattered crust (F45)', enableKey: 'shatterEnabled', archetypes: [<new 'exotic-shattered' archetype, or reuse 'icy-active'] }` so the lab's solo plumbing (world-engine-lab.html:2539 setFeatureEnables / :2908 window._lab.solo) picks it up automatically. Then on the :9223 debug Chrome (chrome-devtools MCP, per well-dipper-testing-reference — NOT Playwright): open world-engine-lab.html; `window._lab.setPreset('Frozen (airless)')` (best existing preset: airless, high bombardment, cold — closest to a disrupted body; add a dedicated 'Shattered (exotic)' DRIVER_PRESETS entry when the exotic types land); `window._lab.solo('shatter')`; judge at three distances via `window._lab.state.distance = 20` (full disc — global block patchwork), `= 8` (mid lodRamp — border crevasses resolving), `= 3` (LOD2 close — per-block tilt shading + sub-fracture lattice). Cross-check composition with F9: `window._lab.setPreset('Europa (icy moon)'); window._lab.solo('chaos')` shows the existing local-scale sibling. Restore with `window._lab.enableAllFeatures()`.
 
 ## 6. What to judge (UAT checklist)
 
@@ -46,7 +46,7 @@ Unbuilt — recommended recipe once built. Register in planet-archetypes.js FEAT
 ## 6.5 Build plan (HOW to build it)
 
 Strategy: §4's "most promising approach" verbatim — write `shatterCombiner` as a
-**globalized, two-octave generalization of the F9 `chaosCombiner`** (planet-lod-lab.html:2372).
+**globalized, two-octave generalization of the F9 `chaosCombiner`** (world-engine-lab.html:2372).
 chaosCombiner = voronoi3d mega-cells with per-cell hashed flat raft height + per-cell
 CONSTANT tilt gradient + recessed refrozen matrix, gated by a low-freq `uChaosMaskScale`
 region mask. F45 promotes that from a masked LOCAL patch (mask sweeps in only where
@@ -76,7 +76,7 @@ the traps (`fc`=gl_FragCoord; `sh` alone is too close to shadowing/`shadow` read
 is unambiguous and 4 chars). A reserved-word/identifier collision blacks out the WHOLE lab
 with a shader-compile error that no static check catches — keep every F45 local under `shat`.
 
-**EDIT ONLY** `planet-lod-lab.html`, `planet-archetypes.js`, `docs/FEATURES/**`. NEVER touch
+**EDIT ONLY** `world-engine-lab.html`, `planet-archetypes.js`, `docs/FEATURES/**`. NEVER touch
 `src/`, `docs/NOW.md`. Stage explicit paths only — never `git add -A` (a parallel warp
 session shares the tree).
 
@@ -190,7 +190,7 @@ Gating is internal (`uShatStrength<=0` early-out + region mask + provinceWeight)
 every other combiner. Sits in the analytic-relief branch with the other exotics.
 
 ### 7. PROV define (=41) / arm / debug row
-- GLSL define (planet-lod-lab.html, after PROV_HEXTESS=40 at :872):
+- GLSL define (world-engine-lab.html, after PROV_HEXTESS=40 at :872):
   `const int PROV_SHATTER     = 41;  // F45 — neutral (crustal disruption, not geology): the shatter tiles the WHOLE crust (catastrophic-stress/surface-history-driven, planet-global), never gated by rock provinces (FROST-row pattern, like hexTess F44)`
 - `provinceWeight` arm (after the PROV_HEXTESS arm at :930):
   `else if (fid == PROV_SHATTER)    { f = gProvince.z; fl = 1.00; }`
@@ -203,7 +203,7 @@ AND add the new archetype to `ARCHETYPES` (:131, after `exotic-geometric`):
 `'exotic-shattered':    { label: 'Exotic / shattered',     bodies: ['Miranda','Europa Conamara Chaos'], presets: ['Frozen (airless)'] },`
 (Per the archetype recommendation above — F45 reads DISTINCT from F44's ordered paving.)
 
-### 9. featureFolders entry (planet-lod-lab.html, the map at :6153)
+### 9. featureFolders entry (world-engine-lab.html, the map at :6153)
 Append to the `carbon: fCarbon, facets: fFacets, hexTess: fHex,` line: `shatter: fShat,`
 
 ### 10. GUI folder + sliders (in `fExoticGroup`, after the F44 `fHex` block ~:6083)
@@ -263,7 +263,7 @@ Live on :9223 (chrome-devtools GPU — NOT Playwright; memory/well-dipper-testin
   - UAT 7 (deterministic on re-approach) ✓ — far→re-solo→close cycle produced a PIXEL-IDENTICAL render. No temporal drift.
   - UAT 8 (compose w/ F2 craters) ✓ — craters sit ON the plates as bowl depressions while the fracture network still structures the surface; two distinct relief types coexist plausibly, craters do not float as an unrelated layer.
 - **Max's taste-call (the 🟡):** the d3 read leans toward "few big plates + fine cracks." Confirm the mega-block COUNT/size at the new sub-settings is the "violently reassembled patchwork" you want, vs. wanting MORE mega-provinces (bump `shatScale` from 1.6) or a stronger province-mismatch in albedo. The relief mechanism is sound; this is purely a density/look preference.
-- **Tweaks applied (defaults baked into `planet-lod-lab.html`):**
+- **Tweaks applied (defaults baked into `world-engine-lab.html`):**
   - `shatSubFreq` 3.5 → **5.0** (state init :4453, uniforms init :3853).
   - `shatSubAmt` 0.4 → **0.7** (state init :4454, uniforms init :3854).
   - GUI `shatSubFreq` slider max widened 6 → **7** (:6195) so the walked 5.0 sits mid-high, not at the edge (F44 range lesson). `shatSubAmt` slider range unchanged (0.7 sits comfortably in 0–1).

@@ -1,7 +1,7 @@
 # AC-LAB — live result (2026-07-13, working-Claude via chrome-devtools)
 
 **Setup:** Max-started dev server `:5175` + debug Chrome `:9223` (still up from the V2-3 UAT
-sweep); ONE isolated fresh tab `http://localhost:5175/well-dipper/planet-lod-lab.html`
+sweep); ONE isolated fresh tab `http://localhost:5175/well-dipper/world-engine-lab.html`
 (isolatedContext, Max's tabs untouched); code at `c24ea37` (V2-5s Slice A+B). Sliders driven
 through the REAL lil-gui inputs (`gravity (g)` / `tidal heat` / `surface temp (T_surf K)` — the
 free lever, no new plumbing), settle confirmed per change by polling `_lab.state._lastBodyDrivers`
@@ -36,7 +36,7 @@ identity. Observables from `_lab.shellProbe()` (std(U) computed in-page over the
 ## Gotcha recorded (lab behavior, pre-existing, not a defect)
 
 **Same-preset re-select does NOT reset overrides** — `resetDriverOverrides` runs only when
-`_presetChanged` (planet-lod-lab.html:3634). Re-selecting Europa after the A1 sweep left gravity
+`_presetChanged` (world-engine-lab.html:3634). Re-selecting Europa after the A1 sweep left gravity
 touched, so step 4's probe carried gravity+tidal together. Evidence unaffected (A1 proved gravity
 never moves linN), attribution stays clean per axis; a TRUE reset needs a real preset change
 (used for the Titan leg) or a page reload. Same family as the V2-2b-1 thermal-persist gotcha.

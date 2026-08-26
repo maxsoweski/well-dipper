@@ -8,7 +8,7 @@
       "id": "AC1",
       "statement": "The legacy set is named before anything is extracted: every world-engine feature the LOD lab no longer exercises is listed by name, with the evidence that it is unused, so it can be excluded from the extraction instead of carried into the shared pipeline as dead weight.",
       "verifyVia": {
-        "input": "Run the legacy-set scan over src/worldengine/** and planet-lod-lab.html's applyDrivers.",
+        "input": "Run the legacy-set scan over src/worldengine/** and world-engine-lab.html's applyDrivers.",
         "observable": "A committed list of unused features, each with its evidence (no lab call site / no reachable driver / master pinned inert). Every entry is reproducible by a command, not asserted. The list is non-empty or the scan proves the set is genuinely empty."
       },
       "layer": "unit"
@@ -17,7 +17,7 @@
       "id": "AC2",
       "statement": "applyDrivers's driver logic is converted into PACKS that both front-ends apply, and the lab's local applyDrivers shrinks to a thin caller over them \u2014 so the lab and the game run the same driver code. \u26d4 NOT a wholesale move of the 828 lines: that plan was killed on measured evidence (AC2-refutation.md). The destination is packs because packs are already the contracted thing both front-ends share.",
       "verifyVia": {
-        "input": "Resolve the lab's and the game's import closures, and count the driver logic still local to planet-lod-lab.html.",
+        "input": "Resolve the lab's and the game's import closures, and count the driver logic still local to world-engine-lab.html.",
         "observable": "Each converted block is a registered pack in the runtime PACKS array, imported by BOTH front-ends; the lab's applyDrivers no longer computes it locally. tests/one-pipeline-fence.test.js registration 2 shows the debt ledger SHRINKING, never growing."
       },
       "layer": "unit"
@@ -27,7 +27,7 @@
       "statement": "Each conversion changes no pixels AND breaks no gate. \u26d4 THE GATE LIST IS THE CORRECTION THE REFUTATION FORCED: the killed plan's acceptance was a state-value diff, which is structurally blind to the citation fence and to fences that pin literal lab bytes. A criterion that cannot fail is not a criterion.",
       "verifyVia": {
         "input": "At each conversion commit run: port-uniform-delta:check, port-uniform-delta:citations, the Instrument A membership diff, and the fence suites (radius-live-feed, vis-scale, src-boundary, lab-surface-ratchet, one-pipeline).",
-        "observable": "Instrument C ZERO delta exit 0 \u00b7 citations exit 0 with CHECKED not falling \u00b7 Instrument A shows no NEWLY RED \u00b7 all fence suites green. \u26a0 planet-lod-lab.html carries 175 line-anchored citations inside 1933-2760 and 500 at or past 1933, so ANY line movement there is a citation event, not a free edit."
+        "observable": "Instrument C ZERO delta exit 0 \u00b7 citations exit 0 with CHECKED not falling \u00b7 Instrument A shows no NEWLY RED \u00b7 all fence suites green. \u26a0 world-engine-lab.html carries 175 line-anchored citations inside 1933-2760 and 500 at or past 1933, so ANY line movement there is a citation event, not a free edit."
       },
       "layer": "integration"
     },
@@ -54,7 +54,7 @@
       "id": "AC6",
       "statement": "The lab still works. The extraction moves the lab's own driver path out from under it, so the lab authoring surface must behave exactly as before \u2014 this is the regression that would be easiest to miss and most expensive to discover later.",
       "verifyVia": {
-        "input": "Load planet-lod-lab.html, drive its controls, and re-run the Step-5 shrink-only ratchet.",
+        "input": "Load world-engine-lab.html, drive its controls, and re-run the Step-5 shrink-only ratchet.",
         "observable": "tests/lab-surface-ratchet.test.js green; the lab renders and its controls move the same uniforms they moved before."
       },
       "layer": "integration",
@@ -72,7 +72,7 @@
   ],
   "architecturalConnections": {
     "inputs": [
-      "planet-lod-lab.html:1933 `function applyDrivers()` \u2014 828 lines, 146 distinct state fields, the subject of the extraction",
+      "world-engine-lab.html:1933 `function applyDrivers()` \u2014 828 lines, 146 distinct state fields, the subject of the extraction",
       "src/worldengine/base/labCore.js \u2014 the lab's shared core, already imported by both front-ends",
       "src/worldengine/port/writePackUniforms.js \u2014 the pack contract the shared path must keep honouring",
       "src/worldengine/drivers/index.js \u2014 the runtime PACKS array and applyDriverPacks composition point",
@@ -86,15 +86,15 @@
       "The follow-on workstream (wiring the ~26 queue-(a)/(p) features) becomes cheap because there is one route"
     ],
     "mustStayWorking": [
-      "The lab authoring surface \u2014 planet-lod-lab.html renders and its controls drive the same uniforms (AC6)",
+      "The lab authoring surface \u2014 world-engine-lab.html renders and its controls drive the same uniforms (AC6)",
       "All 8 registered driver packs continue to apply on the same body populations \u2014 no body may change material",
       "Instrument C: ZERO delta on the 55 shipped shared uniforms",
       "Instrument A: the 31 red-by-design tests stay exactly 31; no NEWLY RED",
       "The citation fence: CHECKED must RISE, never fall (805 -> 813 at B6)",
       "B7's shipped flip \u2014 all swapped bodies keep rendering through the lab material",
-      "tests/lab-surface-ratchet.test.js \u2014 the Step-5 shrink-only ratchet over planet-lod-lab.html",
+      "tests/lab-surface-ratchet.test.js \u2014 the Step-5 shrink-only ratchet over world-engine-lab.html",
       "Sol's 39 bodies keep rendering on the legacy path \u2014 it is Sol's renderer, permanently, not a fallback",
-      "tests/radius-live-feed-fence.test.js \u2014 :676 and :681 pin literal lab byte-strings at planet-lod-lab.html:2283 and :2406, INSIDE the region this workstream edits",
+      "tests/radius-live-feed-fence.test.js \u2014 :676 and :681 pin literal lab byte-strings at world-engine-lab.html:2283 and :2406, INSIDE the region this workstream edits",
       "tests/vis-scale-fence.test.js \u2014 :215 requires >=15 sVis-keyed uniform writes to REMAIN in the lab; :270 pins `const _dispR = sVis;` present there",
       "tests/src-boundary-fence.test.js \u2014 :135 asserts the root-file allowlist is EXACTLY ONE entry; drawPresetConditions/drawPresetRadius come from the repo-root driver-presets.js",
       "src/worldengine/port/writePackUniforms.js \u2014 the existing contracted writer. No second writer may be authored; conversions go through it",

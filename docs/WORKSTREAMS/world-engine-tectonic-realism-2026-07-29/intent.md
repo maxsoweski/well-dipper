@@ -83,5 +83,5 @@ to fix this are computed at `plates.js:289-291` and discarded.
 Meanwhile the renderer already has the socket the plate system belongs in: `gProvince` gates ~48
 features' amplitude and albedo and its three fields are literally named *tectonic, volcanic, ancient*.
 They are FBM noise of position. The real province field is computed on every route and displayed only
-in a hidden debug overlay. `planet-lod-lab.html:1500` says so in source: "the V2-9 gProvince rewire is
+in a hidden debug overlay. `world-engine-lab.html:1500` says so in source: "the V2-9 gProvince rewire is
 a separate job." This is that job.

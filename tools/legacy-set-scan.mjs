@@ -13,7 +13,7 @@
 // the real finding under noise and the list would be ignored — which is how a legacy list dies.
 //
 // THE THREE FRONT-ENDS, all tracked, none of them optional:
-//   · planet-lod-lab.html      — the LOD lab, the authoring surface
+//   · world-engine-lab.html      — the LOD lab, the authoring surface
 //   · the game                 — every src/ file outside src/worldengine/ that reaches into it
 //   · worldengine-fieldviz.html — the field-visualiser harness. ⚠ NAMED EXPLICITLY because omitting
 //     it would falsely condemn `base/fieldViz.js`, which it is the only consumer of.
@@ -29,7 +29,7 @@ import { stripCommentsPreservingOffsets, jsFilesUnder } from '../tests/helpers/s
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ENGINE = 'src/worldengine';
-const FRONT_ENDS = ['planet-lod-lab.html', 'worldengine-fieldviz.html'];
+const FRONT_ENDS = ['world-engine-lab.html', 'worldengine-fieldviz.html'];
 
 const SPEC = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])([^'"]+)\1/g;
 // Only `export function|class` — a LAW. `export const` is excluded by construction; see the header.
@@ -66,7 +66,7 @@ const gameEntries = jsFilesUnder(ROOT, 'src')
 
 const reach = {
   game: closure(gameEntries),
-  lab: closure(['planet-lod-lab.html']),
+  lab: closure(['world-engine-lab.html']),
   fieldviz: closure(['worldengine-fieldviz.html']),
 };
 const liveSomewhere = (f) => reach.game.has(f) || reach.lab.has(f) || reach.fieldviz.has(f);

@@ -61,7 +61,7 @@ for Max: confirm this framing is the accepted AC9 fix.**
   more active corona population** — one stagnant world becomes a *different* stagnant world (fixes "every
   stagnant world is a re-rolled Venus"). *(Lab/UAT reachability, honesty note — finding 4: `V` (the
   existing **volatiles** slider) and `T_surf` (the NEW control, overriding nested `condition.T_eq`) are
-  lab-drivable; **`age` has NO lab slider** — "age descoped Inc.2", planet-lod-lab.html:2684 — so the
+  lab-drivable; **`age` has NO lab slider** — "age descoped Inc.2", world-engine-lab.html:2684 — so the
   **age half** of the tessera response is a **headless-only** assertion (AC-TUNE-RESPONSE synthetic
   vectors), and the **live/UAT** tessera variety rides on `V` dryness + `T_surf`. AC-LAB must confirm the
   V-alone/T_surf tessera response is visible enough to carry the live gate without age.)*
@@ -89,7 +89,7 @@ for Max: confirm this framing is the accepted AC9 fix.**
 | `VENUS_REF` exported `Object.freeze` = Venus's real preset read-slots `{volatileFraction:0.02, massGravity:0.815/0.95²≈0.90304709 (EXACT live-derive, NOT rounded 0.903), T_eq:737, age:4.5}` (driver-presets.js:47) | authored constant (the null point — analog of `MAGMA_REF` magmatism.js:93, but **ON** the real preset, not off it) | `AC-TUNE-NULL` / `AC-BYTE-VENUS`; the byte-identity anchor |
 | `carrier.height` REPLACE via the **UNCHANGED** `writeStagnantLidReliefSphere` writer through its existing `tune` seam (stagnantLid.js:175) — byte-identical at `VENUS_REF`, population-shaped elsewhere | `tune` = `stagnantDriversToTune(bodyDrivers)`; population knobs only, `BASE_*` floors + amplitudes untouched | the render + the diag arrays (`isTessera`, `coronaActive`, `resurfAge`, `foldAngle`) → `stagnantLidProbe` + the structure test's arm's-length predictors |
 | `stagnantDiag.appliedTune` (resolved tune, `null` at `VENUS_REF`) | dispatch edit (planet-lod-rivers.js:489-491, mirror the volcanic wiring :481-483) | `stagnantLidProbe` + `AC-LAB` objective sweep readout |
-| lab: a NEW `T_surf` control (overrides nested `condition.T_eq` — the read surface; NOT a flat key) + a `'Body drivers → stagnant relief (V2-2b-1)'` folder (mirror the #4-M `fMagmaDrivers` folder, planet-lod-lab.html:3833); the EXISTING `volatiles` slider (planet-lod-lab.html:3814) already drives `V` | `driverOv` / `_driverAbMode` plumbing (reused); T_surf overlay onto `condition.T_eq` in buildBodyDrivers | `AC-LAB` (agent-drivable) + `AC-UAT` (Max) — **no `age` slider** (headless-only) |
+| lab: a NEW `T_surf` control (overrides nested `condition.T_eq` — the read surface; NOT a flat key) + a `'Body drivers → stagnant relief (V2-2b-1)'` folder (mirror the #4-M `fMagmaDrivers` folder, world-engine-lab.html:3833); the EXISTING `volatiles` slider (world-engine-lab.html:3814) already drives `V` | `driverOv` / `_driverAbMode` plumbing (reused); T_surf overlay onto `condition.T_eq` in buildBodyDrivers | `AC-LAB` (agent-drivable) + `AC-UAT` (Max) — **no `age` slider** (headless-only) |
 
 **What it UNLOCKS:** **V2-2b-2** — the mixed-interior + falsification-world half **reuses the tested
 `stagnantDriversToTune` response** inside (a) the `mixed`-branch interior (the reserved `'lid:'` namespace

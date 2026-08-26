@@ -31,7 +31,7 @@ deliberate, documented chain — NOT accidental drift:
    ported. Verified by Max's VIZ UAT 2026-06-25.
 3. **`planet-lod-tectonic.js` (WS4)** — the **net-new glue/baker** that consumes #2's sphere
    path (`writeGrainSphere`, `stressAtLat`, `makeSphereField`) to bake a per-node **grain
-   ORIENTATION cube** for the production lab renderer (`planet-lod-lab.html` /
+   ORIENTATION cube** for the production lab renderer (`world-engine-lab.html` /
    `planet-lod-rivers.js`).
 
 **Canonical for the E6 *math*: `src/worldengine/base/tectonic.js`** — declared the source of
@@ -171,7 +171,7 @@ them. The integration test `tests/worldengine-base-tidal-integration.test.js` ex
 |---|---|---|---|
 | **A. Relief SLICE (root)** | `relief-substrate.js`, `relief-base-step.js`, `relief-e6-tectonic.js`, `relief-e9-hydrology.js`, `relief-divergence.js`, `relief-presets.js`, `relief-slice.js` | `world-engine-relief-lab.main.js` (the lab page) + `worldengine-fieldviz.html` imports `relief-presets.js` only | Max-UAT-PASSED reference pipeline (build+carve), FLAT DEM |
 | **B. `src/worldengine/base/*` (WS2)** | the 8 files in §1 | `worldengine-fieldviz.html` (`makeBaseStep`) + `planet-lod-tectonic.js` (sphere path) + 12 vitest files | Production PORT of A's BUILD side, + sphere carrier; canonical E6 math |
-| **C. `planet-lod-tectonic.js` (WS4)** | single file | `planet-lod-rivers.js:22` + `planet-lod-lab.html:159` + WS4 tests | Net-new baker; consumes B; bakes a grain ORIENTATION cube for the renderer |
+| **C. `planet-lod-tectonic.js` (WS4)** | single file | `planet-lod-rivers.js:22` + `world-engine-lab.html:159` + WS4 tests | Net-new baker; consumes B; bakes a grain ORIENTATION cube for the renderer |
 
 Key grep findings:
 - **A (slice) is self-contained.** Every `relief-*.js` imports only other `relief-*.js`. It is the
@@ -184,10 +184,10 @@ Key grep findings:
 - **B's BUILD half (`runE6`) and base step (`makeBaseStep`) are NEVER called by the renderer.**
   Grep for `runE6`/`makeBaseStep` outside `relief-*` and the module itself returns only test files
   and `worldengine-fieldviz.html`. The production planet renderer path
-  (`planet-lod-tectonic.js` → `planet-lod-rivers.js` → `planet-lod-lab.html`) calls ONLY
+  (`planet-lod-tectonic.js` → `planet-lod-rivers.js` → `world-engine-lab.html`) calls ONLY
   `writeGrainSphere`/`stressAtLat`/`makeSphereField` — the orientation/grain channels.
 - **C is wired into the production lab renderer.** `planet-lod-rivers.js:22` imports
-  `bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube`; `planet-lod-lab.html:159` imports
+  `bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube`; `world-engine-lab.html:159` imports
   `bakeTectonicGrain` as a re-readback probe.
 
 ### 4.2 What each is: duplicate / evolution / port-in-progress / dead?

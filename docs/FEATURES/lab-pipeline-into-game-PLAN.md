@@ -130,7 +130,7 @@ observability.**
 > judge → 3 adversarial lenses → synthesis) **corrected the diagnosis below in one load-bearing
 > way**: the lab and the game are NOT two separate routes to the world engine. Both import
 > `deriveConditionVector` from the same `body-condition-vector.js`
-> (`port/conditionFromPlanet.js:24`, `planet-lod-lab.html:174`). There is ONE condition engine.
+> (`port/conditionFromPlanet.js:24`, `world-engine-lab.html:174`). There is ONE condition engine.
 > What is duplicated is the two **ends** — the fp constructor upstream and the driver stage
 > downstream. That changes the ordering, so the §"What cheaper next time means" prescription below
 > is superseded by the new file's Steps 0-12. The measurements in this section stand.
@@ -154,7 +154,7 @@ Three findings:
    front doors.
 
 2. **`applyDrivers` — the function that turns conditions into uniforms — is trapped inside
-   `planet-lod-lab.html` (6 420 lines), and the game has NO counterpart.** The game is visibly
+   `world-engine-lab.html` (6 420 lines), and the game has NO counterpart.** The game is visibly
    working around its absence one feature at a time: see `src/objects/Planet.js:1405` and `:1623`,
    both of which say in so many words that the feature landed only because it "neither needed
    anything out of the un-extracted applyDrivers." That workaround tax is paid again by every
@@ -291,7 +291,7 @@ consumers that do not can carry on. That turns the failure mode from silent into
   nowhere in the file. Corrected work order, because the data does not exist yet:
   1. `habitability` — **the cheapest real win in this file.** One line; `PlanetGenerator.js:789`
      already computes `habitability: habScore`. Revives `uBioCoverage` **and** `uMachCoverage`,
-     `uCityMaturity`, `uEcuCoverage` (`planet-lod-lab.html:5266/5276/5283`), none of which this
+     `uCityMaturity`, `uEcuCoverage` (`world-engine-lab.html:5266/5276/5283`), none of which this
      file lists.
   2. `starMassEarth` / `orbitRadiusEarth` — **not on `planetData` at all.** `starMassSolar` and
      `orbitRadiusAU` are function-locals (`PlanetGenerator.js:326`, `:372`) that are never returned.
@@ -487,7 +487,7 @@ to 1.0 and the logdepth chunks compile to nothing without the define, so the lab
 constraint 2 is preserved. **Patching them game-side would create exactly the snapshot copy the
 program exists to avoid.**
 
-1. ⭐ **OBJECT-SPACE RADIUS COLLAPSE — the big one.** `planet-lod-lab.html:202` is `const R = 1.0`
+1. ⭐ **OBJECT-SPACE RADIUS COLLAPSE — the big one.** `world-engine-lab.html:202` is `const R = 1.0`
    and `planet-lod-shaders.glsl.js:41` is `vPos = position;` with no normalisation, feeding
    absolute-scale domains (`voronoi3d(vPos * uVoroScale)`, `fbmd(vPos, …)`, ~30 `*Combiner(vPos, …)`
    calls). The game builds `IcosahedronGeometry(radiusEarth × 0.0426)`. An Earth-sized body spans
@@ -518,14 +518,14 @@ program exists to avoid.**
    silhouette and **cannot** require re-tuning any relief amplitude.
    ⛔ **A per-body `uDispDomainScale` is not even a candidate** — stronger than this file used to
    say. It is **RETIRED dead code with no writer anywhere**, pinned at 1.0 forever
-   (`planet-lod-lab.html:4901-4904` "Slice C RETIRED … deliberately NO WRITE"; initializer
+   (`world-engine-lab.html:4901-4904` "Slice C RETIRED … deliberately NO WRITE"; initializer
    `planet-lod-uniforms.js:17`) and held there by a fence
    (`tests/vis-scale-fence.test.js:232`). Repurposing it fights a test as well as the three
    exclusions at `planet-lod-height.glsl.js:970/:2393/:2427`.
 2. **Light in the wrong space, and frozen.** `main.js` feeds the game's **world-space** `lightDir`
    into a uniform documented as *"object-space substellar direction"*. The surface spins and the
    parent carries axial tilt, so the terminator counter-rotates with the crust — one sweep per
-   planet day. The lab does the transform the game omits (`planet-lod-lab.html:4896`:
+   planet day. The lab does the transform the game omits (`world-engine-lab.html:4896`:
    `invQuat.copy(planet.quaternion).invert()`; `:4897` is the `applyQuaternion` that consumes it).
    Separately `LabPlanetMaterial.js:68` copies the
    vector by value, breaking the by-reference link the game material relies on, so it is also stale.
@@ -554,7 +554,7 @@ program exists to avoid.**
    + `vViewDir`), so it is a real divergence, not a shared convention.
    ⚠ **THE "THE LAB STAYS UNCHANGED" GUARANTEE DOES NOT COVER THIS ONE (2026-08-05).** It holds for
    items 1–3. Item 5 is different: **the lab carries the same origin-assumption latently**, masked
-   only because `spinSpeed` defaults to 0 (`planet-lod-lab.html:906`) and its planet is never
+   only because `spinSpeed` defaults to 0 (`world-engine-lab.html:906`) and its planet is never
    translated. Turn the lab's spin slider on (`:4830`, `:1551`) and the lab's own rim glow is already
    wrong. Fixing item 5 properly either changes the lab's spin-enabled look or requires deliberately
    preserving the bug behind a flag — **decide which before writing it, and byte-gate accordingly.**
@@ -571,7 +571,7 @@ program exists to avoid.**
 ⭐ **THE PLAN'S OLD LINE NUMBERS WERE 1293 LINES STALE** (they predated Step 2's own −1299-line
 extraction). Corrected and verified 2026-08-01:
 
-    planet-lod-lab.html            6411 lines   (NOT 7554)
+    world-engine-lab.html            6411 lines   (NOT 7554)
     applyDrivers()                 1933-2734
     ensureNetworkRouted()          2745-2904    (corrected 2026-08-05 — NOT 2745-2880; the 24
                                                  omitted lines 2882-2903 are where its six direct
@@ -579,12 +579,12 @@ extraction). Corrected and verified 2026-08-01:
     per-frame uniform writer       4899-5492    ← half of every uniform's value. See hazard F.
 
 ⛔ **PATH DRIFT — every grep this file hands a fresh session against these will silently return
-nothing** (this is how the 2026-08-05 recon started): `planet-lod-lab.html`,
+nothing** (this is how the 2026-08-05 recon started): `world-engine-lab.html`,
 `planet-lod-shaders.glsl.js`, `planet-lod-height.glsl.js`, `planet-lod-rivers.js`,
 `planet-lod-lab-core.js` and `planet-lod-uniforms.js` are all at the **REPO ROOT**, not under
 `src/worldengine/shaders/` (which holds only `craterRelief.glsl.js` and `heightNoise.glsl.js`).
 `LabPlanetMaterial.js` is at `src/rendering/`. ⚠ Also: `.claude/worktrees/` holds **8 stale copies**
-of `planet-lod-lab.html`, so a repo-wide grep returns 9 hits — **edit the wrong one and you get a
+of `world-engine-lab.html`, so a repo-wide grep returns 9 hits — **edit the wrong one and you get a
 silent no-op.**
 
 ⭐⭐ **THE BIG VISUAL UNIFORMS ARE NOT IN `applyDrivers`** — but the sentence that used to follow
@@ -732,7 +732,7 @@ global; `radiusEarth` feeds only the ribbon/valley WIDTH law. **The radius sweep
 prescribed was the wrong probe.** The real radius dependence is a **BRANCH**:
 `planet-lod-rivers.js:1528` gates the router's height source on `uReliefBakeStrength > 0`, and the
 lab rewrites that uniform every frame as `grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis)`
-(`planet-lod-lab.html:4941`) with `sVis = radiusEarth^0.5` — **exactly 0 for radiusEarth ≤ 0.25 or
+(`world-engine-lab.html:4941`) with `sVis = radiusEarth^0.5` — **exactly 0 for radiusEarth ≤ 0.25 or
 ≥ 4.0.** On that branch `route()` calls `sampler.read()`: a 200×200 RGBA-float RTT running the full
 9-octave height shader, then a 640 KB `readRenderTargetPixels` — **the one synchronous GPU stall in
 the whole function.** The game has no `bakeReliefCrossover`, so **the port must decide which branch
@@ -803,7 +803,7 @@ the two worst** — cheaply, permanently, and at write time.
 **PER LAW (near-free, runs forever).** Write the fence *before* the port lands. Three assertions:
 1. **Byte-identity** — extract BOTH the lab's expression and the game's *from source* and compare
    numerically over a sweep. **Max delta exactly 0.** (`tests/port-terminator-law.test.js` is the
-   worked example: it pulls `state.termWidth` out of `planet-lod-lab.html` and `termWidthFor` out of
+   worked example: it pulls `state.termWidth` out of `world-engine-lab.html` and `termWidthFor` out of
    `Planet.js` and evaluates them against each other.)
 2. ⭐ **Distinctness** — is the value constant across the population? *This program's characteristic
    failure mode is a correctly-wired law that is degenerate.* `uTermStrength` measured `[1,1]` on
@@ -849,7 +849,7 @@ real and verified: the lab imports `LAB_VERTEX_SHADER`/`LAB_FRAGMENT_SHADER` bac
 Remaining human port actions, exhaustively:
 1. `LAB_ATTRIBUTES` (`LabPlanetMaterial.js:32`) hand-lists the four attribute names — a fifth baked
    attribute in layer 4 needs a game-side edit, with no test and no runtime signal;
-2. `LAB_WORLD_LIGHT` (`:35`) hand-copies `planet-lod-lab.html:203`;
+2. `LAB_WORLD_LIGHT` (`:35`) hand-copies `world-engine-lab.html:203`;
 3. ⭐ **nothing asserts the import edge itself** — the lab could re-inline its shader and all six
    re-pointed fences would stay green over an orphaned module (reproduced in node);
 4. no per-frame uniform seam exists (layer 2, item 3);
@@ -932,7 +932,7 @@ building out the lab's own missing/underbaked features.** That backlog lives in
   port's only stated blocker for mountains+canyons. **Six** features ride the grain field, so one
   investigation either fixes or kills two of Max's complaints and unblocks the port. The port lane
   found this independently (`surface-variation-beyond-mvp.md:615/:625`) and nobody connected the two.
-  ⚠ Note the default disagrees across sides: lab runs grain **ON** (`planet-lod-lab.html:1442`
+  ⚠ Note the default disagrees across sides: lab runs grain **ON** (`world-engine-lab.html:1442`
   `grainStrength: 1.0`), production defaults **0**.
 - ⛔ **NOTHING on the lab backlog is superseded** by the 2026-07-31 "replace, not graft" turn. The
   STOP-DOING note kills the PORT lane's transcription rungs (plateaus, provinces, mountains/canyons
@@ -955,7 +955,7 @@ building out the lab's own missing/underbaked features.** That backlog lives in
   cloud-optics as unbuilt Phase-4c work — both shipped ~2026-06-15**, and F39 was then turned
   default-OFF by a Max taste-call (*"too hi-fidelity for the lo-fi aesthetic"* — decide delete vs
   restyle, don't leave dead code). Tracker line 24 marks Phase 6 pending; commit `e2cdac6` ran it.
-  `labs-inventory.md:17` says the lab is 7593 lines; it is **6411**. `planet-lod-lab.html:1238/1240`
+  `labs-inventory.md:17` says the lab is 7593 lines; it is **6411**. `world-engine-lab.html:1238/1240`
   calls `cryoActivity` a stub; it is derived live at `planet-lod-lab-core.js:881`.
 - The lab itself has not been edited since `6f9d3f4` (2026-07-30); every commit since is port work.
 
@@ -1025,7 +1025,7 @@ who "discovers" that the LOD system is unported has found the wrong thing.
 
 **What is genuinely absent is camera-localised detail INJECTION** — new information near the camera,
 not more octaves of the same field. The lab has two such mechanisms and neither is in the game:
-- the fine-tributary patch bake+blend (`planet-lod-lab.html:346`, "Option B river-LOD STEP 2") —
+- the fine-tributary patch bake+blend (`world-engine-lab.html:346`, "Option B river-LOD STEP 2") —
   note it is **default OFF even in the lab**, so the lab's own advantage here is partly unexercised
 - the baked-relief -> in-shader-synth crossfade
 

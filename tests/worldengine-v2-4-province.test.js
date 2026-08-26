@@ -219,7 +219,7 @@ describe('V2-4 AC-0 — taxonomy exemption (province debug viz is NOT a PROVINCE
     expect(PROV, 'no initProvinces').not.toMatch(/\binitProvinces\b/);
   });
   it('the lab binds the overlay toggle to a LOCAL object, NOT a state.<x>Enabled feature-card', () => {
-    const LAB = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.meta.url)), 'utf8');
+    const LAB = readFileSync(fileURLToPath(new URL('../world-engine-lab.html', import.meta.url)), 'utf8');
     // the toggle is `.add(provinceOverlayUI, 'show')` — never `.add(state, '...Enabled')`, so the
     // planet-archetypes panelEnableKeys regex cannot pick it up (drift guard stays green, unchanged).
     expect(LAB).toMatch(/\.add\(\s*provinceOverlayUI\s*,\s*'show'\s*\)/);

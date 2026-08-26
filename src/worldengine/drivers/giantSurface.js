@@ -63,7 +63,7 @@
 //
 // ⛔⛔ WHY THIS IS NOT INSIDE `giantDeckPack`, WHICH IS WHERE THE PLAN AIMED IT. Two measured
 // blockers, either one fatal:
-//  1. THE LAB CALLS `giantDeckPack` DIRECTLY — planet-lod-lab.html:1765 `      const _deck = giantDeckPack(_gcond, _dctx);` — with a ctx
+//  1. THE LAB CALLS `giantDeckPack` DIRECTLY — world-engine-lab.html:1765 `      const _deck = giantDeckPack(_gcond, _dctx);` — with a ctx
 //     that carries no offset triple. The offsets are REQUIRED-not-defaulted (see `offsetDriverBlock`),
 //     so adding them to that pack throws on every gas preset in the lab. A pack reached through
 //     `applyDriverPacks` is reached only by front-ends that built a full ctx.
@@ -378,18 +378,18 @@ export const GIANT_SURFACE_UNIFORMS = Object.freeze([
 // THE TWO FRONT-END HELPERS — the lab's import-back seam (workstream AC2/AC5, 2026-08-22)
 // ─────────────────────────────────────────────────────────────────────────────
 /**
- * Uniform name -> the FLAT `state` field planet-lod-lab.html's per-frame writer reads.
+ * Uniform name -> the FLAT `state` field world-engine-lab.html's per-frame writer reads.
  *
  * ⭐ SIX, NOT THIRTEEN, AND THE SHORTFALL IS THE POINT. `giantDeck` and `solidFeatures` mirror every
  * driver through a table like this one because the lab holds each of their values in a flat field.
  * This pack cannot: five of its thirteen are components of ONE lab object, `state.surfacePalette`
- * (planet-lod-lab.html:2820), and two more are the lab's own seed wire. Forcing all thirteen into a
+ * (world-engine-lab.html:2820), and two more are the lab's own seed wire. Forcing all thirteen into a
  * flat table would mean inventing five lab state fields that do not exist, which is authoring a lab
  * surface from inside a pack — the exact direction this program forbids.
  *
  * ⚠ `uCraterOffset` IS HERE AND ITS TWO SIBLINGS ARE NOT. It is a 🎲 transient the lab holds as
  * `state.craterOffset` and resets on preset change; the macro/detail pair are written straight to
- * the material by planet-lod-lab.html:1378 `    function updateSeedUniforms(){`. Same block in the pack, different
+ * the material by world-engine-lab.html:1378 `    function updateSeedUniforms(){`. Same block in the pack, different
  * owner in the lab, so they split here.
  */
 export const GIANT_SURFACE_LAB_BINDING = Object.freeze({
@@ -418,11 +418,11 @@ export const GIANT_SURFACE_PALETTE_MIRRORED = Object.freeze([
  * ⛔⛔ EVERY GATE ON, AND THAT IS THE LOAD-BEARING PART OF THIS SEAM.
  *
  * The lab re-applies its OWN ✓ checkbox at the per-frame writer —
- * planet-lod-lab.html:5044 `      uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate`
+ * world-engine-lab.html:5044 `      uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate`
  * — so the value this mirror puts into `state` must be the UNGATED one. A mirror that resolved the
  * gate too would apply the decision twice: a body whose band is enabled would still read zero the
  * moment the pack's gate map disagreed with the checkbox, and nothing would throw, because zero is
- * a legal value for this master. planet-lod-lab.html:1749 names this hazard for pack #1.
+ * a legal value for this master. world-engine-lab.html:1749 names this hazard for pack #1.
  */
 // ⛔ IT CARRIES THE GATE MAP AND NOTHING ELSE, AND THE OMISSIONS ARE DELIBERATE. `resolveDriver`
 // reads `ctx.displayRadiusEarth` ONLY for a km-shaped driver and `ctx.animRate` ONLY for an
@@ -464,7 +464,7 @@ export function giantSurfaceLabState(pack) {
  *
  * ⚠ TODAY IT IS `uMacroOffset` + `uDetailOffset`, AND THE LAB DOES NOT WRITE THEM EITHER. They are
  * forwarded verbatim off the caller's own ctx, so what comes back is what the lab put in, and
- * planet-lod-lab.html:1378 `    function updateSeedUniforms(){` already writes them to the material on every seed
+ * world-engine-lab.html:1378 `    function updateSeedUniforms(){` already writes them to the material on every seed
  * change. The complement is computed and asserted so the day a THIRD name joins it — one the lab
  * does not already own — the addition is loud instead of silent.
  */

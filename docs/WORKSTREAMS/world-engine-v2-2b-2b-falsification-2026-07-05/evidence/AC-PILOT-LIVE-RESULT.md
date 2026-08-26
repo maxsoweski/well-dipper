@@ -1,7 +1,7 @@
 # AC-PILOT-LIVE — live integration result (working-Claude, 2026-07-08)
 
 **Setup:** external Windows Chrome on `127.0.0.1:9223` (chrome-devtools MCP, real GPU); dev server
-`localhost:5175`, lab `planet-lod-lab.html`; driven at commit `03992a3` (fa9f0a5 + the cross-resolution
+`localhost:5175`, lab `world-engine-lab.html`; driven at commit `03992a3` (fa9f0a5 + the cross-resolution
 nesting fix found during THIS check). Fresh tab, closed after (window hygiene). All numbers below are
 verbatim `_lab.mixedProbe()` scalars.
 

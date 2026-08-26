@@ -45,7 +45,7 @@ export const LLOYD = 2;
 export const SEEDS = [1, 2, 3, 7, 42];
 
 // The lab's route() derives qualityTier from driverUI.qualityTier, which defaults to 1.0
-// (planet-lod-lab.html:2671). deriveUniforms(fp, 1.0) is the SAME derive the lab's neutral path sees.
+// (world-engine-lab.html:2671). deriveUniforms(fp, 1.0) is the SAME derive the lab's neutral path sees.
 export const QUALITY_TIER = 1.0;
 
 // The persistent carrier arrays the relief writers can mutate (BUILD-PLAN §3 step "Hash every persistent
@@ -53,7 +53,7 @@ export const QUALITY_TIER = 1.0;
 // by the router (downstream of writeBodyRelief), not by the writers, so they are out of scope here.
 export const HASHED_FIELDS = ['height', 'grainAngle', 'grainMag', 'regime', 'faultDensity'];
 
-// Reconstruct the exact bundle the lab's route() passes to writeBodyRelief (planet-lod-lab.html
+// Reconstruct the exact bundle the lab's route() passes to writeBodyRelief (world-engine-lab.html
 // :3623-3640 → planet-lod-rivers.js route() :1177-1199), sourced ONLY from the Slice-A modules so the
 // harness exercises the SAME neutral construction the lab's runtime buildBodyDrivers builds on.
 export function buildBundle(name, seed) {

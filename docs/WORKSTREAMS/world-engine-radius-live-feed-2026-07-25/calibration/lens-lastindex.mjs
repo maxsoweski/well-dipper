@@ -1,7 +1,7 @@
 // Verify the [note]: DENY is a module-level /g regex shared between .test() and String.matchAll,
 // and matchAll seeds its internal matcher from the source regex's lastIndex.
 import { readFileSync } from 'node:fs';
-const LAB = readFileSync(new URL('../../../../planet-lod-lab.html', import.meta.url), 'utf8');
+const LAB = readFileSync(new URL('../../../../world-engine-lab.html', import.meta.url), 'utf8');
 const DENY = /(?:\b_fp\b|DRIVER_PRESETS\s*\[[^\]]*\])\s*\??\.\s*radiusEarth/g;
 
 function scan(src) { return [...src.matchAll(DENY)].map((m) => m.index); }

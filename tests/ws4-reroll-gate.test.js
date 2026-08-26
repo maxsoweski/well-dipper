@@ -18,7 +18,7 @@
 // the offset-only rerolls, nor must the axis gate over-fire).
 //
 // WHY a source-scan (same rationale as the T5/T13 combiner-wire tests): the reroll handlers live in
-// planet-lod-lab.html PAGE scope (not an importable module), and the gate is a STRUCTURAL property of
+// world-engine-lab.html PAGE scope (not an importable module), and the gate is a STRUCTURAL property of
 // that handler body — when grain is ON the per-feature AXIS write must be guarded by
 // uTectonicGrainStrength, so the random axis is never installed. The live `_lab.grainProbe` assertion
 // (an orogeny/chasma/scarp/tessera reroll with grain ON leaves all six strikes correlated) needs the
@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const LAB = readFileSync(join(__dirname, '..', 'planet-lod-lab.html'), 'utf8');
+const LAB = readFileSync(join(__dirname, '..', 'world-engine-lab.html'), 'utf8');
 
 // Extract the body of a `<folder>.add({ roll(){ … } }, 'roll')` handler whose body contains `marker`.
 // We find the `.add({ roll(){` whose following body contains the marker, then brace-walk to the

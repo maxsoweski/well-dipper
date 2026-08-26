@@ -36,7 +36,7 @@ besides, by measuring rather than reasoning.
 ### 1. `uTermStrength` — NOT ASKED, ruled by precedent
 
 `terminatorOptics.js:95` `columnFraction * 0.15` (continuous, keyed on pressure) vs
-`planet-lod-lab.html:2497` `retained ? 0.15 : 0.0` (binary). ⭐ **This is the limb conflict again,
+`world-engine-lab.html:2497` `retained ? 0.15 : 0.0` (binary). ⭐ **This is the limb conflict again,
 character for character in shape** — a continuous shared law against a binary lab override. Max ruled
 that shape 2026-08-22 (shared law wins). Applying the precedent rather than re-asking.
 ⚠ Real divergence, measured: two bodies at ~0.105 bar resolve 0.1304 against the lab's flat 0.15.
@@ -47,7 +47,7 @@ that shape 2026-08-22 (shared law wins). Applying the precedent rather than re-a
 `storm-e.js:595` names a byte-identity control proving `resolvePolarVortex(a,b,c,d)` equals
 `resolveStormE(a,b,c,d).pole`. The only divergence is upstream: the pack passes
 `GAME_STORM_SEED = 0`, the lab passes its lil-gui slider default `1234`
-(`planet-lod-lab.html:998`, commented "not reset on preset change"). `stormIdentity` mixes it, so the
+(`world-engine-lab.html:998`, commented "not reset on preset change"). `stormIdentity` mixes it, so the
 two draw off different alea streams and every rng-drawn polar field differs.
 
 ⚠ **AND THE PACK ALREADY ARGUES ITS SIDE, DELIBERATELY** (`polarDeck.js:86-101`): it rejects copying
@@ -100,7 +100,7 @@ changed is that Max then ruled and the change landed 22 minutes later.
 
 **The ruling:** Max, 2026-08-22 — *"the important thing here is the game and lab end up working the
 same"*, recorded verbatim in `tests/port-terminator-law.test.js`. The lab now CALLS the shared law:
-`planet-lod-lab.html` `state.termStrength = terminatorOpticsOf(_atmoCond).termStrength;`, and its
+`world-engine-lab.html` `state.termStrength = terminatorOpticsOf(_atmoCond).termStrength;`, and its
 binary override is gone.
 
 **Both gates named below were re-blessed in that same commit**, which is why the revert did not

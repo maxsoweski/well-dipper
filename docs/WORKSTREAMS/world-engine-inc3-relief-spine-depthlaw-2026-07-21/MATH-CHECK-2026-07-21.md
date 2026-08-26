@@ -64,4 +64,4 @@ Add those two and the SAME large relief reads as a heavily-cratered small world 
 
 Max's hypothesis, adjusted: he's right that "the scales are off," but the axis is VERTICAL, not lateral. Lateral landform sizes (crater diameters, largest-basin fraction) are physically correct. The error is over-exaggerated vertical relief plus a missing fine-crater texture layer. The world isn't "too small-looking" — small bodies genuinely look small and lumpy; it's "too molten-looking," and that is a texture+d/D problem, not a landform-size problem.
 
-Key files: bombardment.js (craterAmplitude/craterProfile/craterSchedule — causes #2,#3), planet-lod-lab.html:5608 + planet-lod-lab-core.js:973/984 (reliefNorm — cause #1), surfaceMaterial.js:129 (regolithRoughness — cause #3 consumer for Inc 8).
+Key files: bombardment.js (craterAmplitude/craterProfile/craterSchedule — causes #2,#3), world-engine-lab.html:5608 + planet-lod-lab-core.js:973/984 (reliefNorm — cause #1), surfaceMaterial.js:129 (regolithRoughness — cause #3 consumer for Inc 8).

@@ -88,7 +88,7 @@
       "src/core/CameraInterpolator.js:91 `resync(camera)` — the module's documented announcement for a teleport discontinuity; collapses both snapshots so the next blend is a no-op.",
       "src/main.js `_lab.resolveBody` — NAME-keyed body resolution over the SIM tree. The single resolution path, deliberately: two index spaces are live at once and resolving through the scene walk instead frames body X while driving body Y, with both hooks reporting success.",
       "planet-lod-lab-core.js `lodRampOf` / `autoOctaves` — the shared LOD law, already imported by both `BodyRenderer.js:11` and `LabPlanetMaterial.js`. Predicted LOD state is computed from these, never re-derived.",
-      "planet-lod-lab.html state.distance / state.yaw / state.pitch — the lab's frame loop reads these every frame; `state.distance` is ALREADY expressed in planet radii (logical = state.distance / sVis)."
+      "world-engine-lab.html state.distance / state.yaw / state.pitch — the lab's frame loop reads these every frame; `state.distance` is ALREADY expressed in planet radii (logical = state.distance / sVis)."
     ],
     "outputs": [
       "`_lab.frameBody(subject, opts)` on BOTH front-ends — returns `{ok, achieved:{radii, units}, lod:{live:{octaves,ramp}, predicted:{octaves,ramp}}, body:{name,kind,p,m}}`.",

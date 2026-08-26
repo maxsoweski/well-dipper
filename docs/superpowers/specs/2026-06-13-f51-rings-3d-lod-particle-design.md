@@ -119,10 +119,10 @@ squares.
 Per `feedback_isolated-test-harnesses` + the handoff: build a standalone
 **`rings-lod-lab.html`** (planet + ring [impostor + cloud] + camera distance/pitch
 sliders, nothing else) and prove the mechanism in isolation before touching
-`planet-lod-lab.html`. If the LOD-emergence mechanism doesn't work isolated, the
+`world-engine-lab.html`. If the LOD-emergence mechanism doesn't work isolated, the
 production/lab integration can't save it. Only after the harness proves out (resolves up
 close, no pop on approach, clean shadow sweep, stable edge-on) does the cloud + ramp get
-ported into `planet-lod-lab.html` alongside the v1 impostor already there.
+ported into `world-engine-lab.html` alongside the v1 impostor already there.
 
 ## Verification
 

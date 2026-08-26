@@ -1,4 +1,4 @@
-# G2 — AC-CRATERBOOT: is `planet-lod-lab.html:5146` allowed to keep reading the canonical preset radius?
+# G2 — AC-CRATERBOOT: is `world-engine-lab.html:5146` allowed to keep reading the canonical preset radius?
 
 > ⚠ **SUPERSEDED IN PART (gravity-selfcompression-2026-07-28).** Passages below describing `g = g_c·(R/R_c)` record the CONSTANT-DENSITY law that was live when this document was written. Gravity is now `g = g_c·f(R)/f(R_c)` with `f` piecewise in absolute Earth radii (`R^(4/3)` below 1 R⊕, `R^1.70` above), applied to the **rocky class only**; gas, icy and carbon presets are unchanged. Byte-exactness at canonical is unchanged. Kept as written for audit trail — do not read it as current behaviour.
 
@@ -17,7 +17,7 @@ Settled by measurement, not by design opinion, per the contract's own instructio
 
 ## 1. What was actually claimed, and what was actually tested
 
-The site (`planet-lod-lab.html:5146`, inside `worldDefaultEnableSet`) computes the boot-time feature-enable
+The site (`world-engine-lab.html:5146`, inside `worldDefaultEnableSet`) computes the boot-time feature-enable
 set with
 
 ```js
@@ -86,7 +86,7 @@ things close that hole, in increasing strength:
 
    > **FLOOR CORRECTED 2026-07-25 (lens round).** This margin was originally stated as **2.26x below the
    > slider floor of 0.3** (`RADIUS_SLIDER_MIN`). That is the wrong floor. `state.planetRadiusEarth` is
-   > not floored at 0.3: the lab's own draw site (`planet-lod-lab.html:3010`) passes `{ labUnlock: true }`,
+   > not floored at 0.3: the lab's own draw site (`world-engine-lab.html:3010`) passes `{ labUnlock: true }`,
    > and `LAB_UNLOCKED_RANGES['Moon/Mercury (impact-airless)'] = [0.27, 0.38]` — **27.1% of radius seeds
    > (5422 / 20000, measured) put that preset below 0.3**, i.e. outside the originally swept domain.
    > The true reachable floor is **0.27**, so the headroom is **2.03x**, not 2.26x. **The conclusion is
@@ -182,7 +182,7 @@ POS-C confirms the bound empirically: bisection on the real predicate located th
 
 ## 7. Disposition
 
-- `planet-lod-lab.html:5146` **keeps `_fp.radiusEarth`**. It is not a defect.
+- `world-engine-lab.html:5146` **keeps `_fp.radiusEarth`**. It is not a defect.
 - It is not in the same class as the frozen `_fp = DRIVER_PRESETS[preset]` atmosphere feed (the "right law /
   broken feed" finding): there the drawn radius changes the answer and is being ignored. Here the drawn
   radius provably cannot change the answer anywhere the slider can go.

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `planet-lod-lab.html` reviewable — let Max pick a planet kind, see only that planet's features grouped with their associations (dependencies / modifiers / co-location), and isolate any one feature (alone OR in-context) to give per-feature feedback.
+**Goal:** Make `world-engine-lab.html` reviewable — let Max pick a planet kind, see only that planet's features grouped with their associations (dependencies / modifiers / co-location), and isolate any one feature (alone OR in-context) to give per-feature feedback.
 
 **Architecture:** Three layers, built in order. (1) An **association manifest** — a new data file that captures, per feature, the associations that today exist only in shader call-order and prose: domain, province co-location group, driver/feature dependencies, what it modifies downstream, the "isolation kit" needed to render it, and which presets it actually renders on. A vitest drift-guard pins it against the existing `FEATURES`/`PROVINCES` data so it can't silently rot. (2) **Isolation upgrades** on the existing lab — non-destructive solo (save/restore) plus an "in-context" mode that co-enables a feature's dependencies, with a toggle to bare. (3) A **new manifest-driven feature panel** (its own follow-on plan) that replaces the fragile two-root lil-gui with archetype-first navigation, auto-filtering to the current preset, and per-feature association chips.
 
@@ -33,7 +33,7 @@ The associations Max wants to navigate by **are not captured as data anywhere**.
 |---|---|---|
 | `planet-feature-associations.js` (repo root, sibling of `planet-archetypes.js`) | The manifest: `ASSOCIATIONS[featureKey] = {domain, provinceGroup, dependsOn, modifies, isolationKit, rendersOn}` + enums + helper accessors | **Create** |
 | `tests/feature-associations.test.js` | Drift-guard: every `FEATURES` key has an entry; enums valid; `provinceGroup` consistent with `PROVINCES` `{field,polarity}`; `dependsOn.features` / `modifies` / `isolationKit` reference real keys | **Create** |
-| `planet-lod-lab.html` | Isolation upgrades (Phase 2): non-destructive solo, in-context vs bare, `window._lab` API additions; `renderDeltaSweep()` live harness (Phase 2.5) | **Modify** |
+| `world-engine-lab.html` | Isolation upgrades (Phase 2): non-destructive solo, in-context vs bare, `window._lab` API additions; `renderDeltaSweep()` live harness (Phase 2.5) | **Modify** |
 | `tests/lab-isolation.test.js` | Unit-test the pure isolation helpers (extract the enable-set computation as a pure fn so it's testable headless) | **Create** |
 | `lab-render-audit.js` (repo root) | Pure auditor: `expectedMatrix(manifest, presets)` + `auditRenderMatrix(expected, actualDeltas)` → violations (`falseRenders`, `deadRenders`) | **Create** |
 | `tests/render-audit.test.js` | Unit-test the pure auditor against a synthetic delta matrix | **Create** |
@@ -294,12 +294,12 @@ git commit -m "test(lab): pin manifest provinceGroup to live PROVINCES affinitie
 
 ## Phase 2 — Isolation upgrades (current lab)
 
-Goal: make isolation reviewable and non-destructive *before* the panel rebuild, so Max can start reviewing immediately even against today's GUI. Reuses the existing `setFeatureEnables` (`planet-lod-lab.html` ~L6905) and `window._lab` (~L7621).
+Goal: make isolation reviewable and non-destructive *before* the panel rebuild, so Max can start reviewing immediately even against today's GUI. Reuses the existing `setFeatureEnables` (`world-engine-lab.html` ~L6905) and `window._lab` (~L7621).
 
 **Key idea — extract a pure function so it's unit-testable headless:**
 
 ```js
-// new pure helper (define near setFeatureEnables in planet-lod-lab.html, and
+// new pure helper (define near setFeatureEnables in world-engine-lab.html, and
 // mirror into a tiny importable module if the test needs it — see Task note):
 //   computeEnableSet(allKeys, { solo, mode, isolationKit }) -> Set<string>
 //     mode 'bare'      -> just [solo]
@@ -432,7 +432,7 @@ git commit -m "feat(lab): pure render-audit (false-render / dead-render detectio
 ### Task 8: Live sweep harness + generate the audit report
 
 **Files:**
-- Modify: `planet-lod-lab.html` (add `window._lab.renderDeltaSweep()`)
+- Modify: `world-engine-lab.html` (add `window._lab.renderDeltaSweep()`)
 - Create (generated): `docs/FEATURES/lab-render-audit.md`
 
 Task-level (expands to bite-sized steps at execution; needs GPU `:9223`, NOT Playwright — see `well-dipper-testing-reference`):

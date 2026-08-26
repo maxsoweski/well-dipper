@@ -5,7 +5,7 @@ import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 const TIER = 1.0;
 const GAS = Object.keys(DRIVER_PRESETS).filter((p) => DRIVER_PRESETS[p].atmosphere?.composition === 'h2-he');
 
-// exact transcription of planet-lod-lab.html:3283 / :3564-3568
+// exact transcription of world-engine-lab.html:3283 / :3564-3568
 function site(preset, R) {
   const _fp = DRIVER_PRESETS[preset];
   const u = deriveUniforms(_fp, TIER);

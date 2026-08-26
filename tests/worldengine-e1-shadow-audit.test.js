@@ -64,7 +64,7 @@ const WRITER_DISPATCH = [
   ...baseFiles.filter((f) => f !== 'e1Regime.js' && f !== 'lidResponse.js').map((f) => `${BASE_DIR}/${f}`),
 ];
 
-const LAB = read('planet-lod-lab.html');
+const LAB = read('world-engine-lab.html');
 
 describe('V2-1 AC1/AC7 (repurposed V2-3) — computeE1 is imported by NO base/ writer (writers stay E1-blind)', () => {
   for (const rel of WRITER_DISPATCH) {

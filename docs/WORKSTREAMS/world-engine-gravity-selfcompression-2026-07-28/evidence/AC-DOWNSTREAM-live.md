@@ -107,7 +107,7 @@ respond — so he is not sent hunting for something that cannot happen.
   DOES/UNLOCKS card, which wrongly listed giant-drivers as inheriting the new mass law.)
 - **`tectonic.js:137/:207`** — reads `DEFAULT_GRAIN_DRIVERS`, which carries no gravity key, so
   `reliefGravityFactor(1) === 1.0` exactly. Dormant.
-- **Gravity-slider override** (`planet-lod-lab.html:2812`) — ⚠ **SOURCE-VERIFIED ONLY, not driven
+- **Gravity-slider override** (`world-engine-lab.html:2812`) — ⚠ **SOURCE-VERIFIED ONLY, not driven
   live.** `driverOv` / `useOv` are module-scoped and not reachable from the page global, so I could
   not exercise it from an evaluate call. By source, `if (useOv('gravity')) _cond.surfaceGravity =
   driverOv.gravity;` assigns *after* `deriveConditionVector` returns, so an active override overwrites

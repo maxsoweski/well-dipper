@@ -18,7 +18,7 @@ That is `tests/lab-surface-ratchet.test.js`, and it is not complaining about you
 
 **The reason it exists.** The lab can draw about 52 planetary features; the game draws four of them through the world engine. Every feature that has ever crossed over crossed by an agent reading the lab, re-deriving the law, and re-typing it into `Planet.js` — and three laws have already silently drifted apart doing exactly that. The whole plan this ratchet belongs to replaces that with **driver packs**: small pure modules under `src/worldengine/drivers/` that both front-ends import. A pack costs one module and reaches both. A feature written inside `applyDrivers()` costs one module, one re-derivation, one drift, and it reaches one.
 
-Nothing else in the plan makes the pack the default. Every authoring affordance in the lab pulls the other way — the 470-line `state` literal opening at planet-lod-lab.html:891 `const state = {`, the 186 `.listen()` bindings that bind lil-gui controllers to its fields, `_driverTouched`. So the ratchet closes the old path and **this document opens the new one**, because a ratchet that blocks the wrong path without offering the right one gets deleted the first time it fires.
+Nothing else in the plan makes the pack the default. Every authoring affordance in the lab pulls the other way — the 470-line `state` literal opening at world-engine-lab.html:891 `const state = {`, the 186 `.listen()` bindings that bind lil-gui controllers to its fields, `_driverTouched`. So the ratchet closes the old path and **this document opens the new one**, because a ratchet that blocks the wrong path without offering the right one gets deleted the first time it fires.
 
 ---
 
@@ -28,18 +28,18 @@ Take gas bands, the feature Step 5's first pack replaces. Today it is spread acr
 
 **Hop 1 — derive, into `state`.** `applyDrivers()` computes a value and parks it on the shared `state` object:
 
-- planet-lod-lab.html:2233 `state.bandStrength = _gas ? 1.0 : 0.0;`
-- planet-lod-lab.html:2274 `state.bandContrast = 0.08 + 0.92 * _vigor;`
+- world-engine-lab.html:2233 `state.bandStrength = _gas ? 1.0 : 0.0;`
+- world-engine-lab.html:2274 `state.bandContrast = 0.08 + 0.92 * _vigor;`
 
 **Hop 2 — publish, into uniforms.** `frame()` reads `state` and writes the shader, applying the lab's own enable gate on the way through:
 
-- planet-lod-lab.html:5111 `uniforms.uBandStrength.value = state.bandsEnabled ? state.bandStrength : 0.0;   // ✓ enable gate`
-- planet-lod-lab.html:5112 `uniforms.uBandContrast.value = state.bandContrast;`
+- world-engine-lab.html:5111 `uniforms.uBandStrength.value = state.bandsEnabled ? state.bandStrength : 0.0;   // ✓ enable gate`
+- world-engine-lab.html:5112 `uniforms.uBandContrast.value = state.bandContrast;`
 
 **Hop 3 — display, into the GUI.** lil-gui binds a controller to the *same* `state` field with `.listen()`, so the slider tracks whatever `applyDrivers` derived instead of showing a stale authored default:
 
-- planet-lod-lab.html:3687 `fBands.add(state, 'bandStrength', 0, 1, 0.01).name('strength (driven)').listen();`
-- planet-lod-lab.html:3694 `fBands.add(state, 'bandsEnabled').name('✓ enabled');`
+- world-engine-lab.html:3687 `fBands.add(state, 'bandStrength', 0, 1, 0.01).name('strength (driven)').listen();`
+- world-engine-lab.html:3694 `fBands.add(state, 'bandsEnabled').name('✓ enabled');`
 
 Hop 3 is the constraint that makes this document necessary. **`state` is not an implementation detail of the lab — it is the lab's display surface.** 186 `.listen()` bindings read from it, and the name `strength (driven)` is a promise to whoever is turning the knob.
 
@@ -68,9 +68,9 @@ Three things break, and none of them throws:
 
 The lab already obeys this and it is worth seeing why, because a pack that gets it wrong produces a GUI that erases itself:
 
-- planet-lod-lab.html:5111 `uniforms.uBandStrength.value = state.bandsEnabled ? state.bandStrength : 0.0;   // ✓ enable gate`
-- planet-lod-lab.html:5126 `uniforms.uJetSpeed.value     = state.jetSpeed * _animRate;   // AC4 storm/band drift slower on a large giant (Jovian) than a small one (Neptune)`
-- planet-lod-lab.html:5174 `uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — zeros Mars leak (polar vortex authored for gas giants, not terrestrial)`
+- world-engine-lab.html:5111 `uniforms.uBandStrength.value = state.bandsEnabled ? state.bandStrength : 0.0;   // ✓ enable gate`
+- world-engine-lab.html:5126 `uniforms.uJetSpeed.value     = state.jetSpeed * _animRate;   // AC4 storm/band drift slower on a large giant (Jovian) than a small one (Neptune)`
+- world-engine-lab.html:5174 `uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — zeros Mars leak (polar vortex authored for gas giants, not terrestrial)`
 
 `state.bandStrength` is the **ungated** number. Untick "✓ enabled" and the shader goes to zero while the slider still shows 1.0 — which is correct, because the enable box is a *view* decision and the derived value has not changed. Tick it back and the feature returns.
 
@@ -108,7 +108,7 @@ condition ──► pack(condition, ctx) ──► { drivers, attributes }
 ### Before
 
 ```js
-// planet-lod-lab.html, inside applyDrivers()
+// world-engine-lab.html, inside applyDrivers()
 state.bandStrength = _gas ? 1.0 : 0.0;                 // :2233
 state.bandContrast = 0.08 + 0.92 * _vigor;             // :2274
 state.bandWarp     = 0.12 + 0.43 * _vigor;             // :2279
@@ -147,7 +147,7 @@ Note what moved into the *shape* rather than into code: the enable gate is `{ ga
 **2. `applyDrivers` calls the pack and mirrors into `state`:**
 
 ```js
-// planet-lod-lab.html, inside applyDrivers() — replaces the five lines above
+// world-engine-lab.html, inside applyDrivers() — replaces the five lines above
 const _pack = giantDeckPack(condition, labPackCtx());
 applyPackToState(state, _pack.drivers, GIANT_DECK_STATE_MAP);
 ```
@@ -164,9 +164,9 @@ const GIANT_DECK_STATE_MAP = {
 };
 ```
 
-**3. `frame()` is untouched.** planet-lod-lab.html:5111 still reads `state.bandsEnabled ? state.bandStrength : 0.0`; planet-lod-lab.html:5126 still multiplies `state.jetSpeed` by `_animRate`.
+**3. `frame()` is untouched.** world-engine-lab.html:5111 still reads `state.bandsEnabled ? state.bandStrength : 0.0`; world-engine-lab.html:5126 still multiplies `state.jetSpeed` by `_animRate`.
 
-**4. The GUI is untouched.** planet-lod-lab.html:3687 is still bound to `state.bandStrength` with `.listen()`, and it still says `strength (driven)` — which is now more true than it was, because the value arrives from a module the game runs too.
+**4. The GUI is untouched.** world-engine-lab.html:3687 is still bound to `state.bandStrength` with `.listen()`, and it still says `strength (driven)` — which is now more true than it was, because the value arrives from a module the game runs too.
 
 **5. The ratchet is green.** Set 1 lost `bandStrength`, `bandContrast`, `bandWarp`, `bandTint`, `jetSpeed`; set 2 and set 3 did not move. Removal is always allowed. The test prints what it shed:
 
@@ -184,13 +184,13 @@ The lab and the game hand the same pack two different contexts, and the differen
 
 | field | lab | game |
 |---|---|---|
-| `displayRadiusEarth` | its display pseudo-radius, planet-lod-lab.html:4895 `const _dispR = sVis;` | the real radius, via `gameDisplayRadiusEarth` |
+| `displayRadiusEarth` | its display pseudo-radius, world-engine-lab.html:4895 `const _dispR = sVis;` | the real radius, via `gameDisplayRadiusEarth` |
 | `macroSeed` | the lab's own macro seed, coerced to an integer (cited below the table) | the numeric `fnv1aString` form — ⚠ never the hex form, `'da81e221' \| 0 === 0` and every giant silently shares one band phase while every driver-algebra distinctness gate still passes |
 | `gates` | all-on for the mirror; the real checkboxes are applied by `frame()` | a named constant, and Max sees its consequence at Step 6 |
 | `relevance` | all-1.0 for the mirror; `state.featureRelevant` is applied by `frame()` | the game's own relevance source, named explicitly |
-| `animRate` | 1.0 for the mirror; planet-lod-lab.html:4971 `const _animRate = animationRateFactor(_RE);` is applied by `frame()` | the game's animation rate |
+| `animRate` | 1.0 for the mirror; world-engine-lab.html:4971 `const _animRate = animationRateFactor(_RE);` is applied by `frame()` | the game's animation rate |
 
-The lab's seed, kept out of the table because a `|` inside a cell splits it: planet-lod-lab.html:1941 `const _dp = drawPresetConditions(driverUI.preset, state.macroSeed | 0);`
+The lab's seed, kept out of the table because a `|` inside a cell splits it: world-engine-lab.html:1941 `const _dp = drawPresetConditions(driverUI.preset, state.macroSeed | 0);`
 
 **Read the lab column carefully.** All three of `gates`, `relevance` and `animRate` are *neutral* in the lab's pack context. That is not because the lab ignores them — it is because the lab applies them one hop later, at the seam that has always applied them, and applying them twice is the bug this table exists to prevent.
 
@@ -200,9 +200,9 @@ The lab's seed, kept out of the table because a `|` inside a cell splits it: pla
 
 The lab lets a user drag a slider and keep the dragged value until the preset changes. That machinery is on the `state` field, not on the derivation:
 
-- planet-lod-lab.html:1627 `const _driverTouched = new Set();   // field names the user has dragged (overrides) since last preset change`
-- planet-lod-lab.html:1670 `const useOv = (key) => (_driverAbMode === 'override' && _driverTouched.has(key));`
-- planet-lod-lab.html:1788 `if (!_driverTouched.has('bandRough')) state.bandRough = drawBandRoughness(regime, state.macroSeed | 0);`
+- world-engine-lab.html:1627 `const _driverTouched = new Set();   // field names the user has dragged (overrides) since last preset change`
+- world-engine-lab.html:1670 `const useOv = (key) => (_driverAbMode === 'override' && _driverTouched.has(key));`
+- world-engine-lab.html:1788 `if (!_driverTouched.has('bandRough')) state.bandRough = drawBandRoughness(regime, state.macroSeed | 0);`
 
 That last line is the pattern to copy: **guard the mirror write, not the pack call.** The pack always runs and always returns a value; `applyPackToState` declines to overwrite a field the user has touched. The pack stays pure and stays ignorant of the GUI, the override keeps working, and the A/B flip back to `preset` mode restores the derived value because it was never lost.
 
@@ -232,4 +232,4 @@ It does not make the game render anything. A pack that nobody composes is an orp
 
 ---
 
-*Citations in `line + symbol` form resolve against `planet-lod-lab.html` at commit `4e864bc`. Step 5c deletes a block out of `applyDrivers()`, which moves every line below it in that file: if a line and its symbol ever disagree, grep the symbol — the symbol is the reference and the integer is the convenience (PLAN §10).*
+*Citations in `line + symbol` form resolve against `world-engine-lab.html` at commit `4e864bc`. Step 5c deletes a block out of `applyDrivers()`, which moves every line below it in that file: if a line and its symbol ever disagree, grep the symbol — the symbol is the reference and the integer is the convenience (PLAN §10).*

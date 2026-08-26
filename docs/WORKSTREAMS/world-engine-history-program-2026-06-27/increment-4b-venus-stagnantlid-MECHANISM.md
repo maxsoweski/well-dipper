@@ -16,7 +16,7 @@ Head Venus stratigraphy; the Magellan tessera survey). Format/depth model:
 [`../world-engine-shell-relief-2026-06-27/SLICE-B-stress-math.md`](../world-engine-shell-relief-2026-06-27/SLICE-B-stress-math.md).
 Code ground-truth: `src/worldengine/base/plates.js` (writer template), `.../shellRelief.js` (sibling +
 the copy-verbatim `steeredNoise3`), `.../verify.js` (the `regime ∈ {0,1,2}` gate), `planet-lod-rivers.js`
-(the dispatch seam), `planet-lod-lab.html` (preset routing).
+(the dispatch seam), `world-engine-lab.html` (preset routing).
 
 **Status:** BUILD-READY IN ARCHITECTURE + MATH. Feeds `dev-collab-scope` → `intent.md` + `contract.json`
 → per-AC build verified with `verify-workstream`. This doc pins the mechanism, the analytic profiles,
@@ -28,7 +28,7 @@ and the ACs; scoping should carry the §"Sound-check corrections" table into the
 
 **North star (program):** *the COUNT of genuinely distinct, history-coherent worlds visible per
 minute* — not toggled shader effects on a historyless substrate. Today Venus (a `NAMED_BODY`,
-`archetype=null`, `locked:false` — verified `planet-lod-lab.html:2615`) falls through **every** relief
+`archetype=null`, `locked:false` — verified `world-engine-lab.html:2615`) falls through **every** relief
 gate to the despun `sin²(lat)` fallback: the single **most-recognizable non-Earth rocky world** reads
 as latitude bands. This increment gives Venus its own history-data relief field so the screensaver
 shows the instantly-Venus silhouette — **tessera crustal plateaus, corona rings, and a young basaltic
@@ -342,7 +342,7 @@ export function stagnantLidRegimeOf(archetype, locked = false) {
 > **Do NOT gate on `locked`.** Venus is a slow *retrograde* rotator, `locked:false` (`lab:2615`) — gating
 > on `locked` would MISS it (that is precisely the fall-through bug). Key-based match only.
 
-**(B) In `planet-lod-lab.html`** add ONE line to `PRESET_ARCHETYPE` (~line 1902):
+**(B) In `world-engine-lab.html`** add ONE line to `PRESET_ARCHETYPE` (~line 1902):
 ```js
 'Venus (sulfuric shroud)': 'stagnant-lid',
 ```
@@ -422,7 +422,7 @@ arm's-length):
 **arm's-length** and prove structure sits on the field — while the random-placement control (coronae/
 tessera ignoring the field) fails the same test, so it is not a tautology.
 
-**LIVE `stagnantLidProbe()`** — sibling of `plateProbe()`/`shellProbe()` in `planet-lod-lab.html`, reading
+**LIVE `stagnantLidProbe()`** — sibling of `plateProbe()`/`shellProbe()` in `world-engine-lab.html`, reading
 `riverOverlay.stagnantDiag`. Precondition: `reliefBakeStrength(>0)` + route on `Venus (sulfuric shroud)`,
 else `heightSource=='sampler'`. Rebuilds predictors ARM'S-LENGTH from the geometric labels:
 - `plumeProxPredictor[i]` — rebuilt from `plumeCenters` (nearest-center Gaussian), independent of `U`.

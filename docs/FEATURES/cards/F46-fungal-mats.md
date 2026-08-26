@@ -7,7 +7,7 @@ Bioluminescent / fungal mats — a living surface coating that emits its own lig
 
 ## 2. Current shader approach (HOW, as-built)
 
-Unbuilt (aspirational). The L2 table's "[current] (bioluminescent spots)" refers to a legacy main-game stand-in, NOT the lab — F46 has no implementation in planet-lod-lab.html. There is only a reserved owner-slot comment in the emissive composite-split (planet-lod-lab.html:1574: "city lights F48/49, bioluminescence F46, aurora Optical F37, sunglint Optical F36"). planet-archetypes.js FEATURES (lines 6-22) contains only geomorphic keys (craters…rivers) and no fungal/bio key, so the per-feature solo system can't target it. Nearest existing machinery it should plug into: the post-posterize EMISSIVE BYPASS channel (planet-lod-lab.html:1572-1597) — specifically the aurora night-side term (lines 1589-1595) is the ready-made template, since it already combines a spatial mask (ringMask), a night-visibility gate (nightMask = smoothstep(0.1,-0.1,diff), line 1592), animated noise, and a colored emissive added AFTER the quantizer (line 1597). F46 = swap the aurora's latitude ring for a biosphere coverage mask, keep the night gate and the bypass-add. Driving uniforms would mirror uAuroraIntensity (line 1618) / uEmissive (1611) / uEmissiveBypass (1614); GUI home is the Envelope folder (lines 2126-2134).
+Unbuilt (aspirational). The L2 table's "[current] (bioluminescent spots)" refers to a legacy main-game stand-in, NOT the lab — F46 has no implementation in world-engine-lab.html. There is only a reserved owner-slot comment in the emissive composite-split (world-engine-lab.html:1574: "city lights F48/49, bioluminescence F46, aurora Optical F37, sunglint Optical F36"). planet-archetypes.js FEATURES (lines 6-22) contains only geomorphic keys (craters…rivers) and no fungal/bio key, so the per-feature solo system can't target it. Nearest existing machinery it should plug into: the post-posterize EMISSIVE BYPASS channel (world-engine-lab.html:1572-1597) — specifically the aurora night-side term (lines 1589-1595) is the ready-made template, since it already combines a spatial mask (ringMask), a night-visibility gate (nightMask = smoothstep(0.1,-0.1,diff), line 1592), animated noise, and a colored emissive added AFTER the quantizer (line 1597). F46 = swap the aurora's latitude ring for a biosphere coverage mask, keep the night gate and the bypass-add. Driving uniforms would mirror uAuroraIntensity (line 1618) / uEmissive (1611) / uEmissiveBypass (1614); GUI home is the Envelope folder (lines 2126-2134).
 
 ## 3. Reference images (real + art)
 
@@ -26,11 +26,11 @@ Unbuilt (aspirational). The L2 table's "[current] (bioluminescent spots)" refers
 
 ## 4. Math / modeling notes (HOW, from the field)
 
-The field doesn't model bioluminescent mats as a landform — there's no geomorphology equation. It's modeled in two decoupled parts: (1) SPATIAL COVERAGE — a biological-distribution mask driven by biosphere maturity (P27, drivers D15/D16). Procedurally this is the same toolkit the research doc already uses elsewhere: a thresholded domain-warped FBM coverage field (research §3.2 warp; the ejecta patchMask at planet-lod-lab.html:760-785 is the in-repo precedent — "continuous near a center, breaking into patches outward"), optionally Worley/Voronoi F2−F1 (research line 103/75) to give discrete colony cells with crisp edges, and thresholded warped-noise contours for the reticulated mat veining (the "fake-Turing" workaround, research line 108, deterministic — avoid true reaction-diffusion since ping-pong breaks re-approach determinism). A single coverage scalar lerps sparse-patches → planet-spanning-mat. (2) EMISSION — model the glow as a Lambert-independent emissive term that BYPASSES the 6-level posterize, added after the quantizer exactly like the lava Worley-crack pulse (research line 103) and the aurora term (planet-lod-lab.html:1597). This is squarely research §2.C Option-C ("emissive + specular get their own channel that skips the clamp"; lines 54-57): albedo glow gets crushed by the Bayer-on-luminance posterize, crisp emissive glow survives. Gate it to the dark hemisphere with the existing nightMask = smoothstep(0.1,-0.1,diff) so the mats appear as the terminator sweeps, and optionally animate with a slow noised() pulse for a living shimmer. MOST PROMISING APPROACH: clone the aurora term — replace its latitude ringMask with a domain-warped-FBM coverage mask (one threshold = colony patches, raise it toward 1.0 for full-mat coverage), keep the nightMask gate and a colored emissive added post-posterize via the bypass path. Add Worley F2−F1 cell edges only if discrete colony rims read better than soft patches under the 4×4 dither. Zero new pipeline — it reuses the emissive-bypass split already wired for lava/aurora/city-lights.
+The field doesn't model bioluminescent mats as a landform — there's no geomorphology equation. It's modeled in two decoupled parts: (1) SPATIAL COVERAGE — a biological-distribution mask driven by biosphere maturity (P27, drivers D15/D16). Procedurally this is the same toolkit the research doc already uses elsewhere: a thresholded domain-warped FBM coverage field (research §3.2 warp; the ejecta patchMask at world-engine-lab.html:760-785 is the in-repo precedent — "continuous near a center, breaking into patches outward"), optionally Worley/Voronoi F2−F1 (research line 103/75) to give discrete colony cells with crisp edges, and thresholded warped-noise contours for the reticulated mat veining (the "fake-Turing" workaround, research line 108, deterministic — avoid true reaction-diffusion since ping-pong breaks re-approach determinism). A single coverage scalar lerps sparse-patches → planet-spanning-mat. (2) EMISSION — model the glow as a Lambert-independent emissive term that BYPASSES the 6-level posterize, added after the quantizer exactly like the lava Worley-crack pulse (research line 103) and the aurora term (world-engine-lab.html:1597). This is squarely research §2.C Option-C ("emissive + specular get their own channel that skips the clamp"; lines 54-57): albedo glow gets crushed by the Bayer-on-luminance posterize, crisp emissive glow survives. Gate it to the dark hemisphere with the existing nightMask = smoothstep(0.1,-0.1,diff) so the mats appear as the terminator sweeps, and optionally animate with a slow noised() pulse for a living shimmer. MOST PROMISING APPROACH: clone the aurora term — replace its latitude ringMask with a domain-warped-FBM coverage mask (one threshold = colony patches, raise it toward 1.0 for full-mat coverage), keep the nightMask gate and a colored emissive added post-posterize via the bypass path. Add Worley F2−F1 cell edges only if discrete colony rims read better than soft patches under the 4×4 dither. Zero new pipeline — it reuses the emissive-bypass split already wired for lava/aurora/city-lights.
 
 ## 5. Isolation recipe (:9223)
 
-Unbuilt — recipe to use once built. (1) Add a feature key to planet-archetypes.js FEATURES, e.g. `bioMats: { label:'Bioluminescent mats (F46)', enableKey:'bioMatsEnabled', archetypes:['tectonic-terrestrial'] }`, and register its folder in featureFolders (planet-lod-lab.html:2515) so the Body-filter per-feature solo (setFeatureEnables, line 2539) can isolate it. (2) Implement the term as an aurora-style emissive clone added at planet-lod-lab.html:1597, with a uBioCoverage uniform and a uBioMatsEnabled gate. (3) To solo: open the Body filter folder, choose solo → `bioMats` (or call setFeatureEnables('bioMats')); base preset = 'Ocean (temperate)' or 'Rocky (Earthlike)' (the habitable bases F46 overlays); turn the Envelope folder's "emissive bypass quantizer" ON. (4) Distances via window._lab.state.distance: ~3 radii to read patch DISTRIBUTION across the disk (sparse-vs-mat), then ~1.3 radii to inspect patch EDGES + glow crispness under the posterize. (5) Set state.spinSpeed > 0 to sweep the terminator and confirm the mats light up only on the night side, like the aurora. Sweep uBioCoverage 0→1 to walk the sparse-patches → planet-spanning-mat variant ladder.
+Unbuilt — recipe to use once built. (1) Add a feature key to planet-archetypes.js FEATURES, e.g. `bioMats: { label:'Bioluminescent mats (F46)', enableKey:'bioMatsEnabled', archetypes:['tectonic-terrestrial'] }`, and register its folder in featureFolders (world-engine-lab.html:2515) so the Body-filter per-feature solo (setFeatureEnables, line 2539) can isolate it. (2) Implement the term as an aurora-style emissive clone added at world-engine-lab.html:1597, with a uBioCoverage uniform and a uBioMatsEnabled gate. (3) To solo: open the Body filter folder, choose solo → `bioMats` (or call setFeatureEnables('bioMats')); base preset = 'Ocean (temperate)' or 'Rocky (Earthlike)' (the habitable bases F46 overlays); turn the Envelope folder's "emissive bypass quantizer" ON. (4) Distances via window._lab.state.distance: ~3 radii to read patch DISTRIBUTION across the disk (sparse-vs-mat), then ~1.3 radii to inspect patch EDGES + glow crispness under the posterize. (5) Set state.spinSpeed > 0 to sweep the terminator and confirm the mats light up only on the night side, like the aurora. Sweep uBioCoverage 0→1 to walk the sparse-patches → planet-spanning-mat variant ladder.
 
 ## 6. What to judge (UAT checklist)
 
@@ -45,7 +45,7 @@ Unbuilt — recipe to use once built. (1) Add a feature key to planet-archetypes
 ## 6.5 Build plan (HOW to build it)
 
 Strategy: §4's "most promising approach" verbatim — clone the **F37 aurora term**
-(planet-lod-lab.html:3746-3777, inside the `if (uAuroraIntensity > 0.0)` block ending at the
+(world-engine-lab.html:3746-3777, inside the `if (uAuroraIntensity > 0.0)` block ending at the
 final composite-add :3779), swap its latitude `ringMask` for a **domain-warped-FBM biosphere
 coverage mask**, keep the `nightMask` gate and the **post-posterize emissive-bypass add** (the
 canonical Option-C survivor — F8 lava cracks live at :3516, the exact insertion neighbour).
@@ -60,7 +60,7 @@ emissive-bypass channel already wired for lava/aurora/city-lights.
 with no GLSL reserved word and is clear of the traps. A reserved-word/identifier collision
 blacks out the WHOLE lab with a shader-compile error no static check catches.
 
-**EDIT ONLY** `planet-lod-lab.html`, `planet-archetypes.js`, `tests/planet-archetypes.test.js`,
+**EDIT ONLY** `world-engine-lab.html`, `planet-archetypes.js`, `tests/planet-archetypes.test.js`,
 this card. NEVER touch `src/`, `docs/NOW.md`. Stage explicit paths only — never `git add -A`
 (a parallel warp session shares the tree).
 
@@ -85,25 +85,25 @@ trap — skipping the PROV row fails 3 vitest assertions.
 | `uBioIntensity` | `float` | `0.7` | glow gain (the aurora `*0.8` analog). |
 Each touches THREE places: (a) GLSL `uniform` decl, (b) THREE `uniforms` object, (c) per-frame writer.
 
-### Edit sites (ordered; REAL line numbers, all in planet-lod-lab.html unless noted)
-1. **GLSL uniform decls** — `planet-lod-lab.html:185` (after the F37 `uMagAxis;` line :185, before
+### Edit sites (ordered; REAL line numbers, all in world-engine-lab.html unless noted)
+1. **GLSL uniform decls** — `world-engine-lab.html:185` (after the F37 `uMagAxis;` line :185, before
    `uTime`): add the 4 `uBio*` decls (`uniform float uBioCoverage;` `uniform vec3 uBioColor;`
    `uniform float uBioScale;` `uniform float uBioIntensity;`), commented `// F46 bioluminescent mats`.
-2. **PROV define** — `planet-lod-lab.html:895` (after `PROV_SHATTER = 41` :895):
+2. **PROV define** — `world-engine-lab.html:895` (after `PROV_SHATTER = 41` :895):
    `const int PROV_BIOMATS = 42; // F46 — neutral (biosphere coverage, not geology): the mat spreads over habitable terrain (life-/coverage-driven, planet-global), never gated by rock provinces (FROST-row pattern, like aurora F37)`
-3. **provinceWeight arm** — `planet-lod-lab.html:954` (after the `PROV_SHATTER` arm :954):
+3. **provinceWeight arm** — `world-engine-lab.html:954` (after the `PROV_SHATTER` arm :954):
    `else if (fid == PROV_BIOMATS)    { f = gProvince.z; fl = 1.00; }`
-4. **The bio emissive term** — `planet-lod-lab.html:3516` insertion point: add the `bioC` block
+4. **The bio emissive term** — `world-engine-lab.html:3516` insertion point: add the `bioC` block
    (GLSL below) immediately AFTER `emissive += lavaCrackEmissive(vPos) * (1.0 - mgSeaMask);` :3516
    (same post-posterize bypass region as lava cracks). Then add `bioC` to the final composite at
    **:3779**: change `... + cloudC + auroraC` → `... + cloudC + auroraC + bioC`.
-5. **THREE uniforms object** — `planet-lod-lab.html:3815` (after the F37 `uAuroraRingWidth` entry
+5. **THREE uniforms object** — `world-engine-lab.html:3815` (after the F37 `uAuroraRingWidth` entry
    :3815, alongside `uMagAxis` :3816): `uBioCoverage:{value:0.0}, uBioColor:{value:new THREE.Color(0.30,0.95,0.55)}, uBioScale:{value:2.4}, uBioIntensity:{value:0.7}` — comment each `// F46 inert behind uBioCoverage 0`.
-6. **State-init defaults** — `planet-lod-lab.html:4423` (after the F37 `magAxis` line :4423):
+6. **State-init defaults** — `world-engine-lab.html:4423` (after the F37 `magAxis` line :4423):
    `bioMatsEnabled: true,  // F46 enable gate — off zeroes uBioCoverage at the writer (bioC vec3(0) exactly)`
    `bioCoverage: 0.45,  bioColor: [0.30, 0.95, 0.55],  bioScale: 2.4,  bioIntensity: 0.7,`
    (STARTING guesses — walk live per Verify hooks before baking finals.)
-7. **Per-frame uniform writer** — `planet-lod-lab.html:6474` (after the F37 `uMagAxis` writer :6474,
+7. **Per-frame uniform writer** — `world-engine-lab.html:6474` (after the F37 `uMagAxis` writer :6474,
    before `uProvinceWeight` :6475):
    ```
    // F46 bioluminescent mats — bioMatsEnabled gates coverage→0 (the bio block is guarded on
@@ -113,7 +113,7 @@ Each touches THREE places: (a) GLSL `uniform` decl, (b) THREE `uniforms` object,
    uniforms.uBioIntensity.value = state.bioIntensity;
    uniforms.uBioColor.value.setRGB(state.bioColor[0], state.bioColor[1], state.bioColor[2]);
    ```
-8. **GUI bindings (Envelope folder = `fEnv`)** — `planet-lod-lab.html:4730` (after the
+8. **GUI bindings (Envelope folder = `fEnv`)** — `world-engine-lab.html:4730` (after the
    `emissiveBypass` toggle :4730, the last Envelope line). The Envelope folder is the GUI home
    per the card (NOT a new relief folder):
    ```
@@ -127,7 +127,7 @@ Each touches THREE places: (a) GLSL `uniform` decl, (b) THREE `uniforms` object,
    ```
    The literal `.add(state, 'bioMatsEnabled')` is REQUIRED — the test derives `panelEnableKeys`
    by regex `/\.add\(state, '(\w+Enabled)'\)/` (test :15-16); without it, FEATURES↔panel fails (:28-31).
-9. **featureFolders entry** — `planet-lod-lab.html:6267` (the map; append to the
+9. **featureFolders entry** — `world-engine-lab.html:6267` (the map; append to the
    `carbon: fCarbon, facets: fFacets, hexTess: fHex, shatter: fShat,` line :6267): add `bioMats: fEnv,`.
    This routes the per-feature solo + `relocateEnableToTitle` (:6275-6286) onto the Envelope folder.
    `setFeatureEnables` (:6288) needs NO new case — it iterates `FEATURES` generically, flipping
@@ -141,7 +141,7 @@ Each touches THREE places: (a) GLSL `uniform` decl, (b) THREE `uniforms` object,
 12. **GLSL_NAME test entry** — `tests/planet-archetypes.test.js:108` (after `shatter: 'PROV_SHATTER',` :108):
     `bioMats: 'PROV_BIOMATS',`  (the drift-guard cross-checks FEATURES/PROVINCES/GLSL.)
 
-### The bio emissive term GLSL (insert at planet-lod-lab.html:3516, after the lava-crack add)
+### The bio emissive term GLSL (insert at world-engine-lab.html:3516, after the lava-crack add)
 Clones the aurora term's structure (mask × nightMask × intensity × provinceWeight, added
 post-posterize). Coverage mask = thresholded domain-warped FBM (the ejecta patchMask idiom
 :1931 + lava-crack warp idiom :2296-2301), reticulated "fake-Turing" veining = a thresholded
@@ -238,7 +238,7 @@ tests/planet-archetypes.test.js` → must stay green.
 
 - Max's feedback: (pending — UAT)
 
-- **Tweaks applied: NONE.** All `state.*` defaults and GUI slider ranges shipped from the build plan verified correct at live-verify — no walk-up needed. Slider ranges (`bioCoverage 0–1`, `bioScale 0.8–6`, `bioIntensity 0–1.5`) all have the good value comfortably mid-range, not at an edge. Did NOT edit `planet-lod-lab.html`.
+- **Tweaks applied: NONE.** All `state.*` defaults and GUI slider ranges shipped from the build plan verified correct at live-verify — no walk-up needed. Slider ranges (`bioCoverage 0–1`, `bioScale 0.8–6`, `bioIntensity 0–1.5`) all have the good value comfortably mid-range, not at an edge. Did NOT edit `world-engine-lab.html`.
 
 - **Re-verify:** N/A (no tweaks to re-check). Confirmed the GUI bindings landed in the Envelope folder as designed (bio coverage / patch density / glow / color / ✓ bio mats enabled all present and editing live; the Envelope folder title did not break per the §6.5-step-9 watch-item). Restored lab to clean defaults (cov 0.45, enabled) after testing.
 

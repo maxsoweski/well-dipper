@@ -85,7 +85,7 @@ examples: both gained an assertion they never had — *that the lab actually rea
   imports were silently disabled. **Every headless gate stayed green** — vitest never executes the lab
   HTML — and the lab died at runtime on `terminatorOpticsOf is not defined`. Only loading the page found
   it. **Insert BEFORE the trailing comment.** This is the concrete argument for why AC6 is not optional.
-- ⭐⭐ **`planet-lod-lab.html` IS LOAD-BEARING AS A CITATION TARGET, NOT JUST AS CODE.** 500 line-anchored
+- ⭐⭐ **`world-engine-lab.html` IS LOAD-BEARING AS A CITATION TARGET, NOT JUST AS CODE.** 500 line-anchored
   refs sit at or past `:1933`; **175 inside 1933–2760**. Every edit must be **line-count-neutral**. Same
   for `Planet.js` (2304), `limbDeck.js` (199), `step6-parity-ledger.md`, `lab-surface-ratchet.test.js`.
   ⛔ **This is why the wholesale extraction was killed** — the obstacle was never the code.
@@ -113,7 +113,7 @@ examples: both gained an assertion they never had — *that the lab actually rea
 | Instrument A | **ZERO DRIFT** · 341 files, 5698 tests, **31 failing**, 15 non-collecting · ⭐⭐ MEMBERSHIP diff, **never a count** |
 | Instrument C | **exit 0, ZERO delta** on all 55 shipped shared uniforms |
 | Citations | **814 resolve, exit 0** · ⭐ CHECKED must **RISE** |
-| `Planet.js` | **2304 lines** · `planet-lod-lab.html` **6559** |
+| `Planet.js` | **2304 lines** · `world-engine-lab.html` **6559** |
 | Fence suites | 283/283 across 10 suites |
 | Instrument B | **RED, and red at HEAD too** — moon-formation window, another lane. ⛔ Do NOT re-record. |
 
@@ -162,7 +162,7 @@ known case first.** Do that before trusting any number, including your own.
   follow-on workstream, deliberately sequenced AFTER this one.
 - **The 8 features with NO DRIVER LAW** — Max: *"yes we need to author these."* Design work with his
   taste in it, not wiring. Its own workstream.
-- **`limbStrength`'s ×1.3 boost** (`planet-lod-lab.html:2479`) — a separate divergence, never analysed,
+- **`limbStrength`'s ×1.3 boost** (`world-engine-lab.html:2479`) — a separate divergence, never analysed,
   deliberately left standing.
 - **The 31 red-by-design tests** — moon-formation window, another lane.
 

@@ -274,7 +274,7 @@ contradiction** — they are a lineage, not rivals:
    work of the current branch `feature/world-engine-production-L1` — porting the UAT-passed slice
    mechanism toward production and onto the sphere. It is the slice's *forward* lineage.
 
-3. **WS4 lab-shader wiring (`world-engine-relief-wiring-2026-06-25/`, planet-lod-lab.html shader)** —
+3. **WS4 lab-shader wiring (`world-engine-relief-wiring-2026-06-25/`, world-engine-lab.html shader)** —
    a SEPARATE, EARLIER-ALTITUDE effort that wired only a thin E6 orientation grain + E9 stream-power
    carve INTO the production lab's *fragment shader*. Its procgen layer generated only a latitude-
    banded orientation grain + scalars; the relief was still synthesized in-shader, merely oriented.

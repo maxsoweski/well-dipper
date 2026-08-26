@@ -570,7 +570,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > **Plan of record: [`FEATURES/lab-pipeline-into-game-PLAN.md`](FEATURES/lab-pipeline-into-game-PLAN.md).**
 > Six steps, status updated in place. **Step 0 (async shader compile + swap-on-ready) is DONE** —
 > worst frame on system entry went **5 424 ms → 58.7 ms**, live-measured. **Next is Step 1: extract
-> `applyDrivers` out of `planet-lod-lab.html` into a shared module.**
+> `applyDrivers` out of `world-engine-lab.html` into a shared module.**
 >
 > Max's two standing constraints: the game's rendering **bends** to whatever the world engine needs;
 > and because the lab will keep developing, moving lab work into the game must stay **easy** — so
@@ -979,7 +979,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > drainage belonging to that relief, genuinely various across seeds — not latitude bands / eroded noise? (Lab
 > overlays all surface features; isolate via toggles / `reliefBakeStrength`.) UAT pass → Ship.
 > **▶ LAB UI "isolate plate relief" control — BUILT + LIVE-VERIFIED (2026-06-27); AC8 UAT now UNBLOCKED.**
-> New "Plate relief (UAT)" folder in `planet-lod-lab.html`: a one-click **"Isolate plate relief (AC8 view)"**
+> New "Plate relief (UAT)" folder in `world-engine-lab.html`: a one-click **"Isolate plate relief (AC8 view)"**
 > checkbox (strips CLASH/OBSCURE/CLUTTER feature buckets, keeps drainage, forces baked relief=1, re-routes →
 > plate field authors 100% of relief; OFF restores the exact prior enables via snapshot) + a **"Relief A/B:
 > plates ↔ flat ocean"** button, plus the "baked relief" slider **desync fix** (one `applyReliefBake()` sync
@@ -1115,7 +1115,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > `docs/WORKSTREAMS/world-engine-history-program-2026-06-27/UAT-RUBRICS.md` — one **5-field rubric card** per increment
 > (Ships-as-data / Expression-path / **Visually-testable?** / Basis-level-pass-criteria / Red-flags) for all 11
 > increments (1–9 + 4.5, 5.5), with #9 game port reframed as *expression-fidelity*, not basis. Grounded against live
-> code: `PRESET_ARCHETYPE` (`planet-lod-lab.html:1901`) + `SHELL_REGIMES`/`SHELL_EXCLUDE` (`shellRelief.js`) → a
+> code: `PRESET_ARCHETYPE` (`world-engine-lab.html:1901`) + `SHELL_REGIMES`/`SHELL_EXCLUDE` (`shellRelief.js`) → a
 > **"test the PRESET the user sees, not the canonical archetype"** caveat table. **The high-value finding (the ⭐
 > visually-testable column):** three increments can't be UAT'd as-is and need a proxy/probe/preset built BEFORE they're
 > contracted — **#5 bombardment** (no lab preset routes to it; the only `impact-airless` preset is `Frozen`→#1), **#5.5
@@ -1577,7 +1577,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > on the actual lab planet + retire F11) DONE + committed `c3f0e7b`** (2026-06-18). Extracted the proven
 > router/ribbon pipeline into a SHARED module `planet-lod-rivers.js` (AC1-style, no third verbatim copy) —
 > repointed the router lab at it as a zero-drift regression gate (stats reproduce: ocean 35%, orphan/uphill 0,
-> maxStrahler 5), then wired `createRiverOverlay` into `planet-lod-lab.html` bound to the lab's LIVE uniforms.
+> maxStrahler 5), then wired `createRiverOverlay` into `world-engine-lab.html` bound to the lab's LIVE uniforms.
 > Ribbon parented to `planet` (co-rotates), lazily mesh-built on enable (556ms), re-route reuses the cached
 > mesh (133ms — AC7 preview). New "Rivers — dendritic overlay (AC4)" GUI folder: enabling forces F11 off
 > (state.riversEnabled→0, the per-frame gate) and drives the planet sea to the histogram 35% so water + river
@@ -1600,7 +1600,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > network, no F11 worm-trail); (2) **valleys FILL with water (Max chose Option B)** — the carve now
 > lowers `h` BEFORE the F14 sea cut so the floor drops below sea level and floods via the same
 > level-set as the oceans (water albedo + glint + coast for free). Both gated by `uRiverCarveStrength`
-> (default-off ⇒ planet byte-identical). All shader-side in `planet-lod-lab.html` — `planet-lod-rivers.js`
+> (default-off ⇒ planet byte-identical). All shader-side in `world-engine-lab.html` — `planet-lod-rivers.js`
 > UNTOUCHED, so router-lab regression is structurally safe. 2 new live sliders (flood depth, edge
 > roughness). Live-verified on :9223 (before/after close-up basin); 282/282 planet tests green.
 > **▶ THEN Max reframed the whole feature → SCALE (2026-06-18, this session's pivot):** current rivers
@@ -1801,7 +1801,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > **All Bucket-A/B commits PUSHED to origin/master.**
 > (4) **Max's bigger ask = MENU/INFO OVERHAUL** (his goal #3), 4 phases. **Phase 1 (declutter)
 > SHIPPED 2026-06-15 — VERIFIED_PENDING_MAX `fc30eb1`** (3 commits `6214510`/`3424ef7`/`fc30eb1`,
-> GUI-only in planet-lod-lab.html, no shader/core change; full vitest delta = 0 new failures vs the
+> GUI-only in world-engine-lab.html, no shader/core change; full vitest delta = 0 new failures vs the
 > pre-existing 17-file baseline; live-verified on :9223). Three moves landed: (a) top-of-left **World**
 > folder consolidating the preset picker + derived archetype label + filter/solo (kills the
 > selector-vs-indicator dup); (b) dedicated **bioMats(F46)/cityLights(F48)** right-panel folders (sliders
@@ -2034,7 +2034,7 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 > ⚠ **(a) His hypothesis for the composite gap**, verbatim: _"i do suspect that many of these legacy shader systems are
 > not fully wired up into our proc gen model though, based on what you're saying about the band channel."_ Concrete
 > anchor already in the lab: the WE panel's provenance line reads **"relief: LEGACY synth (carrier off)"** whenever
-> `carrierOn` is false (`planet-lod-lab.html:4294` — needs `reliefBakeStrength > 0` AND `heightSource === 'carrier'`).
+> `carrierOn` is false (`world-engine-lab.html:4294` — needs `reliefBakeStrength > 0` AND `heightSource === 'carrier'`).
 > → routed to the **R2 scope** and the **38-finding triage** as a named question.
 > ⚠ **(b) Parking-lot item — tectonics turns to noise past a certain radius.** ROOT CAUSE FOUND FROM SOURCE (derived,
 > unmeasured): `bakeReliefCrossover(sVis) = 1 − smoothstep(0, 1.0, |log2 sVis|)` fades the **baked** relief to zero as

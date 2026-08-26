@@ -1,9 +1,9 @@
 import { HEIGHT_GLSL } from './height.glsl.js';
 
 /**
- * The lab's planet shaders, lifted verbatim out of planet-lod-lab.html so the GAME can import the
+ * The lab's planet shaders, lifted verbatim out of world-engine-lab.html so the GAME can import the
  * SAME SOURCE the lab renders. Nothing here was retyped: the two template bodies are the exact
- * lines that used to sit at planet-lod-lab.html:208-228 and :232-1502, and the lab now imports them
+ * lines that used to sit at world-engine-lab.html:208-228 and :232-1502, and the lab now imports them
  * back. Resolved output is byte-identical before and after the move, which is this program's
  * standing gate for an extraction (precedent: heightNoise.glsl.js, 265 920 bytes unchanged;
  * albedoTransfer.js, max delta exactly 0).
@@ -18,7 +18,7 @@ import { HEIGHT_GLSL } from './height.glsl.js';
  *
  * ⚠ Fences in tests/ search the lab's SOURCE TEXT for GLSL tokens (vis-scale-fence,
  * instrument-tap-fence, worldengine-atmo-deck-spiral-rhines, worldengine-base-band-flow,
- * radius-live-feed-fence). They now read planet-lod-lab.html AND this file as one corpus, because
+ * radius-live-feed-fence). They now read world-engine-lab.html AND this file as one corpus, because
  * together they are the lab's source. Keep the /* glsl *\/ markers below intact — one of those
  * fences counts them.
  */
@@ -31,7 +31,7 @@ export const LAB_VERTEX_SHADER = /* glsl */ `
       // a real and recurring bug: tests/warp-portal-logdepth.test.js exists because the project
       // already shipped it once, and the shader this material replaces —
       // src/objects/Planet.js SURFACE_VERTEX:1432 — carries exactly these two chunks.
-      // ⛔ THE LAB IS UNAFFECTED. planet-lod-lab.html:194 builds its renderer without the flag, so
+      // ⛔ THE LAB IS UNAFFECTED. world-engine-lab.html:194 builds its renderer without the flag, so
       //    USE_LOGDEPTHBUF is undefined and both chunks compile to nothing.
       // ⚠ \`<common>\` is required, not decorative: logdepthbuf_vertex calls isPerspectiveMatrix(),
       //    which three defines there. Planet.js includes it for the same reason.
@@ -47,7 +47,7 @@ export const LAB_VERTEX_SHADER = /* glsl */ `
       varying float vSubstellarAngle;
       uniform vec3 uLightDir;       // object-space substellar direction (same uniform the frag reads)
       // ── Object-space radius normalisation (LAYER 2 item 1, 2026-08-05) ──
-      // The lab's body is a UNIT SPHERE (planet-lod-lab.html:202 \`const R = 1.0\`), and every noise
+      // The lab's body is a UNIT SPHERE (world-engine-lab.html:202 \`const R = 1.0\`), and every noise
       // domain downstream is written against that ±1.0 extent: voronoi3d(vPos * uVoroScale),
       // fbmd(vPos, …), and 23 *Combiner(vPos, …) calls. The GAME builds IcosahedronGeometry at the
       // body's SCENE radius (radiusEarth × 0.0426), so an Earth-sized body spans ±0.0426 — the whole
@@ -501,7 +501,7 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         // disc as you orbited. The game's own shader has always done this correctly
         // (src/objects/Planet.js vWorldPos + vViewDir), so it was a real divergence.
         // ⛔ THE LAB HAD THE SAME BUG LATENT — masked only because spinSpeed defaults to 0
-        //    (planet-lod-lab.html:906) and its planet is never translated. Turn the spin slider on
+        //    (world-engine-lab.html:906) and its planet is never translated. Turn the spin slider on
         //    before this fix and the lab's own rim glow was already wrong. At the lab's defaults
         //    uCameraPosObj IS cameraPosition, so this is the exact identity and the authored look
         //    is unchanged; with spin on it now behaves instead of sliding.

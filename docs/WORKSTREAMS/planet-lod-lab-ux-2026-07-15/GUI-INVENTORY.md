@@ -1,6 +1,6 @@
 # Planet-LOD lab GUI — provenance inventory (2026-07-15)
 
-Honest provenance classification of every GUI folder + deviating control in `planet-lod-lab.html`, to
+Honest provenance classification of every GUI folder + deviating control in `world-engine-lab.html`, to
 ground the lab-UX IA reorg (Legacy quarantine, writer-driven badging, per-world-type defaults).
 
 Classes:

@@ -4,7 +4,7 @@
 
 **Goal:** Add an **"Audit this world"** button to the planet-LOD lab's World folder that runs the existing in-page `renderDeltaSweep()` for the CURRENT preset, classifies all 47 features via the existing pure auditor (`lab-render-audit.js`) + a new pure status module (`lab-render-status.js`), stores the result on `state.audit`, and surfaces it as per-feature title-bar glyph badges (`✅`/`🔴F`/`⚠️F`/`⚠️D`/`·`/`⬛`) + a World-folder summary that auto-stales on any user edit.
 
-**Architecture:** One **new pure module** (`lab-render-status.js`) owns the tier constants (`EPS`/`STRONG`) and the `statusOf(should, delta, degenerate)` glyph mapping — unit-tested headless, and imported by BOTH the lab (`planet-lod-lab.html`) and the offline report generator (`scripts/gen-render-audit.mjs`, which deletes its own local `EPS`/`STRONG`). The lab adds an audit *runner* (calls the already-exposed `renderDeltaSweep()`, runs `expectedMatrix`/`auditRenderMatrix` from `lab-render-audit.js`, derives a glyph per feature via `statusOf`, writes `state.audit`), a **plain-DOM badge** on each feature folder's title bar (mirroring the proven `relocateEnableToTitle()` injection), and **two global `gui.onChange` hooks** (one per top-level GUI) guarded by an `_auditing` boolean that auto-stale the audit on any user control change. **No `planet-lod-lab-core.js` (shader/uniform) change** — Ask 4 adds no GPU code, only a surface over the sweep that already exists, so no planet rendering can regress.
+**Architecture:** One **new pure module** (`lab-render-status.js`) owns the tier constants (`EPS`/`STRONG`) and the `statusOf(should, delta, degenerate)` glyph mapping — unit-tested headless, and imported by BOTH the lab (`world-engine-lab.html`) and the offline report generator (`scripts/gen-render-audit.mjs`, which deletes its own local `EPS`/`STRONG`). The lab adds an audit *runner* (calls the already-exposed `renderDeltaSweep()`, runs `expectedMatrix`/`auditRenderMatrix` from `lab-render-audit.js`, derives a glyph per feature via `statusOf`, writes `state.audit`), a **plain-DOM badge** on each feature folder's title bar (mirroring the proven `relocateEnableToTitle()` injection), and **two global `gui.onChange` hooks** (one per top-level GUI) guarded by an `_auditing` boolean that auto-stale the audit on any user control change. **No `planet-lod-lab-core.js` (shader/uniform) change** — Ask 4 adds no GPU code, only a surface over the sweep that already exists, so no planet rendering can regress.
 
 **Tech Stack:** ES modules (`node`/Vitest-importable pure module), Vitest (the `statusOf` unit test — the module is importable; the lab `<script>` is NOT), lil-gui (`addFolder`, controller `.domElement`/`.$title`, top-level `gui.onChange`), plain DOM for the badge, Vite dev server (`localhost:5173`), chrome-devtools MCP on GPU Chrome `:9223` for live GUI verification (NOT Playwright — Playwright is CPU and the sweep needs the GPU; NOT image recognition — `state`/DOM queries only), `node scripts/gen-render-audit.mjs` + `git diff --exit-code` for the byte-identical-report check.
 
@@ -26,7 +26,7 @@ If Asks 2/3 ship first and already define a `.title-info` CSS rule, Ask 4's badg
 
 ## Verification reality (read before any GUI step)
 
-The lab GUI is an **inline `<script>` in `planet-lod-lab.html`** — NOT importable by Vitest. The **one genuinely testable seam** is the new pure module `lab-render-status.js` (`statusOf` + `EPS`/`STRONG`), which IS a Node ES module → real Vitest unit test (Task 1). The **byte-identical report re-gen** after the shared-constant refactor is also offline-testable (`node scripts/gen-render-audit.mjs` + `git diff --exit-code`, Task 2). **Everything GUI** (the button, badges, summary, staleness, the `_auditing` guard) is verified **live on `:9223`** (GPU Chrome, NOT Playwright, NOT image recognition) via `window._lab.*` helpers + `evaluate_script` state/DOM queries. Reload `?fresh=1` before each check.
+The lab GUI is an **inline `<script>` in `world-engine-lab.html`** — NOT importable by Vitest. The **one genuinely testable seam** is the new pure module `lab-render-status.js` (`statusOf` + `EPS`/`STRONG`), which IS a Node ES module → real Vitest unit test (Task 1). The **byte-identical report re-gen** after the shared-constant refactor is also offline-testable (`node scripts/gen-render-audit.mjs` + `git diff --exit-code`, Task 2). **Everything GUI** (the button, badges, summary, staleness, the `_auditing` guard) is verified **live on `:9223`** (GPU Chrome, NOT Playwright, NOT image recognition) via `window._lab.*` helpers + `evaluate_script` state/DOM queries. Reload `?fresh=1` before each check.
 
 **Existing test contract that must stay green:**
 - `tests/render-audit.test.js` — the pure auditor (`expectedMatrix`/`auditRenderMatrix`). The shared-constant refactor (Task 2) changes only **where `gen-render-audit.mjs` sources `EPS`/`STRONG`**, NOT `lab-render-audit.js`'s logic — so this stays green untouched.
@@ -37,10 +37,10 @@ The lab GUI is an **inline `<script>` in `planet-lod-lab.html`** — NOT importa
 
 ## Standing cautions
 
-- **Line numbers are HINTS** — `grep -n` every edit site before editing (line drift in `planet-lod-lab.html` is a known hazard). Re-grep before each task: `renderDeltaSweep`, `relevantFeatureSet`, `relocateEnableToTitle`, `applyArchetypeFilter`, `fWorld`, the World-folder controller block (~7115-7121), `window._lab`, `guiLeft`/`guiRight`.
-- **Stage explicit paths only.** Allowed paths this plan touches: `lab-render-status.js`, `tests/render-status.test.js`, `scripts/gen-render-audit.mjs`, `planet-lod-lab.html`, `docs/NOW.md`. **NEVER `git add -A`** — the shared working tree has unrelated warp WIP, loose `.png`/`.webm`/`.html` litter, and a 0-byte `HEAD` file.
+- **Line numbers are HINTS** — `grep -n` every edit site before editing (line drift in `world-engine-lab.html` is a known hazard). Re-grep before each task: `renderDeltaSweep`, `relevantFeatureSet`, `relocateEnableToTitle`, `applyArchetypeFilter`, `fWorld`, the World-folder controller block (~7115-7121), `window._lab`, `guiLeft`/`guiRight`.
+- **Stage explicit paths only.** Allowed paths this plan touches: `lab-render-status.js`, `tests/render-status.test.js`, `scripts/gen-render-audit.mjs`, `world-engine-lab.html`, `docs/NOW.md`. **NEVER `git add -A`** — the shared working tree has unrelated warp WIP, loose `.png`/`.webm`/`.html` litter, and a 0-byte `HEAD` file.
 - **Do NOT run `git show HEAD`** (the 0-byte `HEAD` litter file collides with the ref).
-- Reload `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1` before each live verification (`:9223` may hold a stale session; `?fresh=1` opts out of the sessionStorage scenario-restore).
+- Reload `localhost:5173/well-dipper/world-engine-lab.html?fresh=1` before each live verification (`:9223` may hold a stale session; `?fresh=1` opts out of the sessionStorage scenario-restore).
 - **Do NOT probe localhost with Bash curl/wget** — the sandbox returns `000`/refused for `:5173`/`:9223` regardless of liveness; check via `mcp__chrome-devtools__list_pages`.
 - End every commit message with: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`
 
@@ -61,11 +61,11 @@ These are the spec's 5 LOCKED decisions, confirmed against the live source. Hono
 5. **Shared constants: BOTH consumers import `EPS`/`STRONG` from `lab-render-status.js`.** `gen-render-audit.mjs` deletes its local `const EPS = 1e-4` / `const STRONG = 5e-4` (verified at `scripts/gen-render-audit.mjs:14-15`) in favor of the import. **Pass `eps` EXPLICITLY to `auditRenderMatrix`** — its own default is `0.01` (verified `lab-render-audit.js:22`), two orders of magnitude coarser than `1e-4`; omitting it silently reclassifies faint renders as inert and makes the badge disagree with the report. (Spec §"Thresholds" + the footgun callout.)
 
 **Source facts confirmed (line numbers are HINTS):**
-- `renderDeltaSweep({ settleFrames, perPixelThresh } = {})` is `async`, returns `{ preset, deltas, degenerate }` for the **current** preset (`planet-lod-lab.html:7045-7080`). `deltas[key]` = a single frame-fraction number; `degenerate[key]` = `null` | `'black'` | `'blown'`. It freezes auto-spin (`_sweepFreeze`), drives `t`+`state.yaw` by hand, and restores clock/camera/enables/`syncDisplays()`/`_sweepFreeze` at the end (`:7075-7078`). JS-object return only — no file/localStorage write.
+- `renderDeltaSweep({ settleFrames, perPixelThresh } = {})` is `async`, returns `{ preset, deltas, degenerate }` for the **current** preset (`world-engine-lab.html:7045-7080`). `deltas[key]` = a single frame-fraction number; `degenerate[key]` = `null` | `'black'` | `'blown'`. It freezes auto-spin (`_sweepFreeze`), drives `t`+`state.yaw` by hand, and restores clock/camera/enables/`syncDisplays()`/`_sweepFreeze` at the end (`:7075-7078`). JS-object return only — no file/localStorage write.
 - `window._lab.renderDeltaSweep(opts)` is **already exposed** (`:7820`) — the runner can call `renderDeltaSweep()` directly (it's in module scope) and `:9223` verification can call `window._lab.renderDeltaSweep()`.
 - `relevantFeatureSet()` returns `{ set, archs }`; `set` is the preset's natural feature union — the sweep's baseline (`:7083-7088`).
 - `expectedMatrix(manifest, presets)` and `auditRenderMatrix(expected, actualDeltas, { eps = 0.01 })` are pure/DOM-free/importable (`lab-render-audit.js:8`, `:22-33`). `falseRender = !should && delta > eps`; `deadRender = should && delta <= eps`. Currently **NOT** imported in the lab (net-new import).
-- `ASSOCIATIONS` is imported at `planet-lod-lab.html:111`; `FEATURES`/`ARCHETYPES`/`featuresOf` at `:110`. `FEATURES` keys ≡ `ASSOCIATIONS` keys (47 each, gap-free join — verified by Asks 2/3).
+- `ASSOCIATIONS` is imported at `world-engine-lab.html:111`; `FEATURES`/`ARCHETYPES`/`featuresOf` at `:110`. `FEATURES` keys ≡ `ASSOCIATIONS` keys (47 each, gap-free join — verified by Asks 2/3).
 - `relocateEnableToTitle(folder, prop)` (`:6935-6943`) is the reference title-bar DOM-injection pattern: `appendChild` onto `folder.$title`, `stopPropagation` on the injected control. The relocation loop runs at `:6944-6946`.
 - World-folder controllers are created on `fWorld` (`= guiLeft.addFolder('World')`, `:5266`) at `:7115-7121` — preset picker (`:7115`), disabled `archetype` label (`:7116`), `filter to relevant` (`:7117`), solo mode (`:7119`), enable all (`:7120`), clear solo (`:7121`). The "Audit this world" button is added in this block.
 - `guiLeft = new GUI(...)` (`:5246`), `guiRight = new GUI(...)` (`:5249`). Neither has an `.onChange` yet (grep confirmed). Feature folders live on `guiRight` (`:6273` onward); World/Drivers/View on `guiLeft`.
@@ -81,7 +81,7 @@ These are the spec's 5 LOCKED decisions, confirmed against the live source. Hono
 | `lab-render-status.js` | Pure, DOM-free. Exports `EPS = 1e-4`, `STRONG = 5e-4`, and `statusOf(should, delta, degenerate)` → the report's exact glyph string. Single source of the tier logic + the ⬛-degenerate-wins precedence. Importable in Vitest AND the in-page `<script>`. | **Create** |
 | `tests/render-status.test.js` | Unit test: `statusOf` across all six tiers + the `eps`/`STRONG` boundary edges. | **Create** |
 | `scripts/gen-render-audit.mjs` | Delete local `EPS`/`STRONG` (`:14-15`); import them from `lab-render-status.js`. Behavior-preserving — verified by byte-identical report re-gen. | **Modify** |
-| `planet-lod-lab.html` | Import `expectedMatrix`/`auditRenderMatrix` + `statusOf`/`EPS`; add the audit runner (`runAudit()` → `state.audit`, `_auditing` guard); the "Audit this world" button + World summary + "Auditing…" state; per-feature title-bar badges reading `state.audit`; the two global `gui.onChange` staleness hooks; a small CSS block. | **Modify** (inline `<script>` + one CSS block) |
+| `world-engine-lab.html` | Import `expectedMatrix`/`auditRenderMatrix` + `statusOf`/`EPS`; add the audit runner (`runAudit()` → `state.audit`, `_auditing` guard); the "Audit this world" button + World summary + "Auditing…" state; per-feature title-bar badges reading `state.audit`; the two global `gui.onChange` staleness hooks; a small CSS block. | **Modify** (inline `<script>` + one CSS block) |
 | `docs/NOW.md` | Close-out: note Ask 4 landed `VERIFIED_PENDING_MAX <sha>`. | **Modify** |
 
 No generator (Ask 4 reads everything at runtime; the only authored artifact is the pure module + its test). No new generated data file.
@@ -104,7 +104,7 @@ Expected: `lab-render-status.js` absent; `glyph()` returns `✅` / `⚠️D` / `
 
 - [ ] **Step 0.2: Confirm the dev server + lab are reachable on `:9223`.**
 
-Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `localhost:5173/well-dipper/planet-lod-lab.html?fresh=1`.
+Run (chrome-devtools MCP): `list_pages`, then `navigate_page` reload `localhost:5173/well-dipper/world-engine-lab.html?fresh=1`.
 Expected: page loads, planet renders, left (Drivers/World) + right (Features) GUI panels visible.
 
 - [ ] **Step 0.3: Pick a known-violation preset from the offline report** (so later live checks have a concrete expected glyph).
@@ -196,7 +196,7 @@ Create `lab-render-status.js`:
 // lab-render-status.js
 // Pure, DOM-free status-mapping for the render-audit surface (Ask 4 of the lab
 // menu/info overhaul). The SINGLE source of the tier thresholds + the glyph map,
-// imported by BOTH the in-GUI badge (planet-lod-lab.html) and the offline report
+// imported by BOTH the in-GUI badge (world-engine-lab.html) and the offline report
 // generator (scripts/gen-render-audit.mjs) so the live surface and the report can
 // never drift apart. No GPU, no DOM — unit-tested headless.
 
@@ -311,11 +311,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Import the auditor + `statusOf`, and add `runAudit()` — the function that runs the sweep for the current preset, classifies every feature, and writes `state.audit`. No button/badge yet (Tasks 4-5).
 
 **Files:**
-- Modify: `planet-lod-lab.html` — imports (~L111-112); a new `runAudit()` defined after `relevantFeatureSet()` (~L7088, so `relevantFeatureSet`/`renderDeltaSweep` are in scope)
+- Modify: `world-engine-lab.html` — imports (~L111-112); a new `runAudit()` defined after `relevantFeatureSet()` (~L7088, so `relevantFeatureSet`/`renderDeltaSweep` are in scope)
 
 - [ ] **Step 3.1: Add the imports.**
 
-Re-grep `grep -n "from './planet-feature-associations.js'" planet-lod-lab.html` (~L111). Immediately after the `ASSOCIATIONS` import add:
+Re-grep `grep -n "from './planet-feature-associations.js'" world-engine-lab.html` (~L111). Immediately after the `ASSOCIATIONS` import add:
 ```js
     import { expectedMatrix, auditRenderMatrix } from './lab-render-audit.js';   // NEW: pure auditor (Ask 4)
     import { statusOf, EPS as AUDIT_EPS } from './lab-render-status.js';          // NEW: glyph map + shared eps (Ask 4)
@@ -324,7 +324,7 @@ Re-grep `grep -n "from './planet-feature-associations.js'" planet-lod-lab.html` 
 
 - [ ] **Step 3.2: Add the `runAudit()` runner + the `_auditing` flag.**
 
-Re-grep `grep -n "function relevantFeatureSet" planet-lod-lab.html` (~L7083); it ends with `return { set, archs }; }` (~L7088). **After** that closing brace add:
+Re-grep `grep -n "function relevantFeatureSet" world-engine-lab.html` (~L7083); it ends with `return { set, archs }; }` (~L7088). **After** that closing brace add:
 ```js
     // ── Live render-audit (Ask 4) ─────────────────────────────────────────────
     // Runs the existing in-page sweep for the CURRENT preset, classifies all 47
@@ -380,7 +380,7 @@ Re-grep `grep -n "function relevantFeatureSet" planet-lod-lab.html` (~L7083); it
 
 - [ ] **Step 3.3: Temporarily expose `runAudit` for verification (removed in Step 3.5).**
 
-Re-grep the `_lab` export object: `grep -n 'window._lab = {' planet-lod-lab.html` (~L7813). The object spans several lines and closes with `get sceneTarget(){ return sceneTarget; } };` (~L7826). Add `runAudit(){ return runAudit(); },` inside the object (e.g. right after the existing `renderDeltaSweep(opts){ ... },` line at ~L7820). You will REMOVE this probe line in Step 3.5.
+Re-grep the `_lab` export object: `grep -n 'window._lab = {' world-engine-lab.html` (~L7813). The object spans several lines and closes with `get sceneTarget(){ return sceneTarget; } };` (~L7826). Add `runAudit(){ return runAudit(); },` inside the object (e.g. right after the existing `renderDeltaSweep(opts){ ... },` line at ~L7820). You will REMOVE this probe line in Step 3.5.
 
 - [ ] **Step 3.4: Verify `runAudit()` produces a well-formed `state.audit` (live).**
 
@@ -408,12 +408,12 @@ Expected: `preset === 'Rocky (Earthlike)'`; `fresh === true`; `nFeatures === 47`
 
 - [ ] **Step 3.5: Remove the temporary probe.**
 
-Re-grep `grep -n 'runAudit(){ return runAudit(); }' planet-lod-lab.html` and delete that probe line from the `_lab` export. (The runner stays; only the debug export is removed — Task 4 calls it via the button.) Reload `?fresh=1`, confirm no console error: `list_console_messages` shows no new errors.
+Re-grep `grep -n 'runAudit(){ return runAudit(); }' world-engine-lab.html` and delete that probe line from the `_lab` export. (The runner stays; only the debug export is removed — Task 4 calls it via the button.) Reload `?fresh=1`, confirm no console error: `list_console_messages` shows no new errors.
 
 - [ ] **Step 3.6: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): live render-audit runner + _auditing guard (Ask 4)
 
 runAudit() runs the existing renderDeltaSweep() for the current preset, builds
@@ -433,11 +433,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Add the button to the World folder, plus a summary line that reads `state.audit`. Wire the button to `runAudit()` with a disabled/"Auditing…" working state.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — a CSS block (~L94-97); the World-folder controller block (~L7115-7121)
+- Modify: `world-engine-lab.html` — a CSS block (~L94-97); the World-folder controller block (~L7115-7121)
 
 - [ ] **Step 4.1: Add the CSS block.**
 
-Re-grep the existing title-toggle CSS: `grep -n 'title-has-toggle' planet-lod-lab.html` (~L94). After the `.lil-gui .title-toggle .lil-widget` rule (~L97), add:
+Re-grep the existing title-toggle CSS: `grep -n 'title-has-toggle' world-engine-lab.html` (~L94). After the `.lil-gui .title-toggle .lil-widget` rule (~L97), add:
 ```css
     /* Render-audit surface (Ask 4) — per-feature title-bar glyph + World summary. */
     .lil-gui .audit-badge { margin-left: 6px; font-size: 12px; line-height: 1; user-select: none; }
@@ -451,7 +451,7 @@ Re-grep the existing title-toggle CSS: `grep -n 'title-has-toggle' planet-lod-la
 
 - [ ] **Step 4.2: Add the "Audit this world" button + summary element after the World controllers.**
 
-Re-grep the World-folder block end: `grep -n "fWorld.add({ clearSolo" planet-lod-lab.html` (~L7121). **After** that line add:
+Re-grep the World-folder block end: `grep -n "fWorld.add({ clearSolo" world-engine-lab.html` (~L7121). **After** that line add:
 ```js
     // ── Audit this world (Ask 4) ──────────────────────────────────────────────
     // Runs renderDeltaSweep() for the CURRENT preset, classifies every feature,
@@ -547,7 +547,7 @@ Expected: `before === 'Audit: (not run)'`; `after` matches `Audit: N false · M 
 - [ ] **Step 4.5: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): 'Audit this world' button + World summary (Ask 4)
 
 Adds the World-folder button that runs runAudit() with a disabled 'Auditing…'
@@ -565,11 +565,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Inject a plain-DOM glyph `<span>` into each feature folder's title bar (after the relocated enable toggle) and a `renderAllAuditBadges()` that fills/dims them from `state.audit`.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — after the enable-relocation loop (~L6944-6946); replace the Task 4.3 shim with the real renderer
+- Modify: `world-engine-lab.html` — after the enable-relocation loop (~L6944-6946); replace the Task 4.3 shim with the real renderer
 
 - [ ] **Step 5.1: Inject a badge span per feature folder + define `renderAllAuditBadges()`.**
 
-Re-grep the enable-relocation loop: `grep -n "relocateEnableToTitle(folder, FEATURES\[key\].enableKey)" planet-lod-lab.html` (~L6945; loop ends ~L6946). **After** that loop closes add:
+Re-grep the enable-relocation loop: `grep -n "relocateEnableToTitle(folder, FEATURES\[key\].enableKey)" world-engine-lab.html` (~L6945; loop ends ~L6946). **After** that loop closes add:
 ```js
     // ── Render-audit badges (Ask 4) ───────────────────────────────────────────
     // A plain-DOM glyph on each feature folder's title bar, AFTER the relocated
@@ -601,7 +601,7 @@ Re-grep the enable-relocation loop: `grep -n "relocateEnableToTitle(folder, FEAT
 
 - [ ] **Step 5.2: Remove the Task 4.3 shim.**
 
-Re-grep `grep -n "TEMP shim (removed in Task 5)\|var renderAllAuditBadges = function" planet-lod-lab.html` and DELETE both shim lines. The real `function renderAllAuditBadges(){…}` from Step 5.1 (a hoisted declaration) now satisfies every call site (`runAuditFromButton` in Task 4, the staleness hooks in Task 6). Reload `?fresh=1` and confirm no `renderAllAuditBadges`-related console error: `list_console_messages` clean.
+Re-grep `grep -n "TEMP shim (removed in Task 5)\|var renderAllAuditBadges = function" world-engine-lab.html` and DELETE both shim lines. The real `function renderAllAuditBadges(){…}` from Step 5.1 (a hoisted declaration) now satisfies every call site (`runAuditFromButton` in Task 4, the staleness hooks in Task 6). Reload `?fresh=1` and confirm no `renderAllAuditBadges`-related console error: `list_console_messages` clean.
 
 - [ ] **Step 5.3: Verify badges render the correct glyphs after an audit (live, with cross-check).**
 
@@ -692,7 +692,7 @@ Expected: `mountainsBadge` is `🔴F` or `⚠️F` (a false-render — "this fea
 - [ ] **Step 5.7: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): per-feature title-bar audit badges (Ask 4)
 
 Each feature folder gets a plain-DOM glyph badge (after the relocated enable
@@ -711,11 +711,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Register one `onChange` per top-level GUI; each stales the audit on any user control change, early-returning while `_auditing` is set. Re-render badges + summary on stale.
 
 **Files:**
-- Modify: `planet-lod-lab.html` — after both GUIs and `state.audit`/`renderAll*` exist (place the hooks near the end of GUI build, after the World-folder block — re-grep for a safe insertion point after `renderAuditSummary();` from Task 4)
+- Modify: `world-engine-lab.html` — after both GUIs and `state.audit`/`renderAll*` exist (place the hooks near the end of GUI build, after the World-folder block — re-grep for a safe insertion point after `renderAuditSummary();` from Task 4)
 
 - [ ] **Step 6.1: Add a `staleAudit()` helper + the two global hooks.**
 
-Re-grep a safe insertion point after the audit button block and the badge renderer are both defined: `grep -n "renderAuditSummary();" planet-lod-lab.html` (the initial call at the end of Task 4's block, ~after L7121+). **After** that line add:
+Re-grep a safe insertion point after the audit button block and the badge renderer are both defined: `grep -n "renderAuditSummary();" world-engine-lab.html` (the initial call at the end of Task 4's block, ~after L7121+). **After** that line add:
 ```js
     // ── Auto-stale on any control change (Ask 4) ──────────────────────────────
     // lil-gui bubbles EVERY controller change to the parent GUI's onChange, so two
@@ -813,7 +813,7 @@ Expected: `auditedPreset === 'Rocky (Earthlike)'`; `nowPreset === 'Gas giant (Jo
 - [ ] **Step 6.5: Commit.**
 ```bash
 cd /home/ax/projects/well-dipper
-git add planet-lod-lab.html
+git add world-engine-lab.html
 git commit -m "feat(lod-lab): auto-stale-on-edit via guarded global gui.onChange (Ask 4)
 
 Two top-level hooks (guiLeft + guiRight) stale state.audit on ANY user control

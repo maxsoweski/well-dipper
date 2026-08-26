@@ -316,7 +316,7 @@ Abbreviated; the full reasons print with every run.
 `widthRadiusFactor` is not the only place radius reaches rivers. Reported because "do rivers answer
 radius" is a question about the **system**, not one function.
 
-**`deriveTributaryGridRes` (`planet-lod-lab.html:3815`)** sets the Fork B fine-lattice density
+**`deriveTributaryGridRes` (`world-engine-lab.html:3815`)** sets the Fork B fine-lattice density
 ∝ R, clamped `[56, 560]`. Extracted from the lab source and executed the same way:
 
 ```
@@ -327,7 +327,7 @@ radius" is a question about the **system**, not one function.
 
 **The tributary-patch density stops answering radius above ~1.26 RE — for roughly two-thirds of the
 slider.** Flagged, not fixed, and **dormant**: `patchStrength` defaults to `0.0`
-(`planet-lod-lab.html:1541`), so the patch is off unless deliberately enabled. Candidate for R2.
+(`world-engine-lab.html:1541`), so the patch is off unless deliberately enabled. Candidate for R2.
 
 *Audit self-correction, recorded rather than quietly retuned:* the first version of this check
 asserted a point saturation radius of `R(560)` and **FAILED** by 8 sample steps, because the

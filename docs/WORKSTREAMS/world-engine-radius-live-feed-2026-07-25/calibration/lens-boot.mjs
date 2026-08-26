@@ -1,7 +1,7 @@
 // Verify finding [1]/[4]: does the lab's default boot draw a NON-canonical radius?
 import { DRIVER_PRESETS, drawPresetRadius, NAMED_BODY, PRESET_ARCHETYPE } from '../../../../driver-presets.js';
 
-const SEED = 1;   // planet-lod-lab.html:2004  radiusSeed: 1
+const SEED = 1;   // world-engine-lab.html:2004  radiusSeed: 1
 const rows = [];
 for (const p of Object.keys(DRIVER_PRESETS)) {
   const canon = DRIVER_PRESETS[p].radiusEarth ?? 1;

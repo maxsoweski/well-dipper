@@ -121,12 +121,12 @@
 //   body's real radius — so wavelengths, crater diameters, drainage lengths and boundary lengths are
 //   genuinely in km. Trust them.
 //
-//   VERTICAL height is NOT. The lab's relief is SHADED, NOT DISPLACED (planet-lod-lab.html:1544): the
+//   VERTICAL height is NOT. The lab's relief is SHADED, NOT DISPLACED (world-engine-lab.html:1544): the
 //   height field drives a normal perturbation, it is never geometry. Its amplitudes are dimensionless
 //   artistic values — e.g. deriveUniforms sets mountainAmp = clamp01(mix(0.25, 0.6, 1-erosion)) *
 //   rockyCrust, which has no km in it anywhere. The km-named state knobs (mountainHeightKm = 9,
 //   craterDepthKm = 2) exist and were intended to feed reliefAmplitudeFromKm * K, but the live write
-//   at planet-lod-lab.html:6127 uses state.mountainAmp directly. On top of that the relief envelope
+//   at world-engine-lab.html:6127 uses state.mountainAmp directly. On top of that the relief envelope
 //   (uPerturb = perturb * reliefEnvelope(R, g)) is applied at SHADING time, downstream of the field
 //   this module samples.
 //

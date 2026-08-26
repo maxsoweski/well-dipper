@@ -6,7 +6,7 @@
 // PlanetGenerator's shared rng stream.
 //
 // ⭐ THE LAW IS THE LAB'S, WITH ONE FLOOR SWAPPED. The lab's route-time derivation
-// (planet-lod-lab.html, the inc3b S3-fix block; pinned by tests/worldengine-inc3b-synth-law.test.js)
+// (world-engine-lab.html, the inc3b S3-fix block; pinned by tests/worldengine-inc3b-synth-law.test.js)
 // renders only the SUB-FLOOR band of the size-frequency distribution — the craters too small for its
 // display MESH to stamp as real geometry — because the lab's big craters are a per-planet bake.
 //

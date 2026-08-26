@@ -3,7 +3,7 @@
 **Workstream:** `world-engine-radius-display-scale-2026-07-24` · **HEAD:** `21d3e4f` (back to `building`)
 **Planner, 2026-07-24.** Inputs read in full: `contract.json` statusNote, `intent.md`,
 `DIAGNOSIS-uat-fail.md`, `FORM-SIZE-MAP.md`, `BUILD-NOTES.md`, plus live source
-(`planet-lod-lab.html`, `planet-lod-height.glsl.js`, `planet-lod-lab-core.js`,
+(`world-engine-lab.html`, `planet-lod-height.glsl.js`, `planet-lod-lab-core.js`,
 `planet-lod-uniforms.js`, `tests/vis-scale-fence.test.js`, the inc3b pin suites).
 
 ## The bar (verbatim, the only thing that counts)
@@ -46,7 +46,7 @@ Re-scope from *"sVis touches no frequency anywhere"* to:
 > frequency-uniform writes (`uCraterScale`, the km-keyed `*Freq/*Scale` writes) — at the LIVE
 > frame/applyDrivers write, PROVIDED these surfaces stay sVis-free: `src/worldengine/**`; the
 > bombardment/relief-budget schedule derivations; **the lab route-time crater-derivation block
-> `planet-lod-lab.html:3689–3740`** (a lab derivation, NOT schedule code — named explicitly per
+> `world-engine-lab.html:3689–3740`** (a lab derivation, NOT schedule code — named explicitly per
 > lens #7); **`planet-lod-rivers.js`** (host of `route()`/`compositeMargins`/the cube bake — the
 > display factor arrives there as a neutral parameter defaulting to `1.0`, token never enters,
 > per lens #9); `run-golden.mjs`; and `canonical-scenario.js`. `sVis = 1` stays bit-identical,
@@ -73,7 +73,7 @@ Max prefers the realism read, flip P5 back in one line and re-gate.
 
 ### D3 — the baked macro body + the stamped-crater hard ceiling (architecture + physics limit)
 The live lab renders its macro relief from the **baked relief cube**
-(`reliefBakeStrength = 1.0`, `planet-lod-lab.html:2534` — "AC2 LAB live initial = ON"), NOT
+(`reliefBakeStrength = 1.0`, `world-engine-lab.html:2534` — "AC2 LAB live initial = ON"), NOT
 the live analytic FBM (which is the headless/golden path, default `0`). So:
 - The **continuous continent body** in the baked cube is what Max saw growing. It is
   re-bakeable at `sVis×` domain density across the whole 0.3–16 range (a 1/4-disc continent
@@ -108,7 +108,7 @@ in continent character). **D3 needs Max's nod on mechanism before Slice D.**
 ### Slice A — Slider ergonomics (independent; fixes the "does not reliably go up" half)
 No procgen, no fence interaction, no sVis. Lands and read-gates alone.
 - **Edit sites:**
-  - `planet-lod-lab.html:3902` — replace the linear
+  - `world-engine-lab.html:3902` — replace the linear
     `fDrivers.add(state, 'planetRadiusEarth', 0.3, 16, 0.01)…` with a **log-position proxy**:
     a `radiusProxy` object with `get t()/set t()` that exp-maps `[0,1] ↔ [0.3,16]`
     (`state.planetRadiusEarth = 0.3 · (16/0.3)^t`), added as
@@ -131,7 +131,7 @@ No procgen, no fence interaction, no sVis. Lands and read-gates alone.
 The smallest content-touch that is visible at the live `bake=1` default (these combiners
 render on top of the baked body regardless of bake strength). Carries the D1 fence re-scope.
 - **Edit sites:**
-  - **P4 synth craters** — `planet-lod-lab.html:6059`:
+  - **P4 synth craters** — `world-engine-lab.html:6059`:
     `uniforms.uCraterScale.value = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER) * sVis;`
     (multiply the DISPLAY uniform by `sVis` at the write; `lab-core`'s `featureFrequencyFromKm`
     and `state.craterSizeKm`/`D_char` stay real-R — the inc3b physics pin is invisible to
@@ -170,7 +170,7 @@ render on top of the baked body regardless of bake strength). Carries the D1 fen
     `uNoiseScale` (so Slice C misses them — Slice C's only combiner sites `:971/:2147/:2178`
     are all `uNoiseScale*0.3`; there are exactly 9 `uNoiseScale` refs total). Every one is
     angular-fixed (`pos*uX` / `field*uX` in the GLSL) and runs LIVE in `main()` at
-    `planet-lod-lab.html:399–419` on top of the baked `hd`, **UNCONDITIONALLY at `bake=1`** —
+    `world-engine-lab.html:399–419` on top of the baked `hd`, **UNCONDITIONALLY at `bake=1`** —
     the bake `if/else` ends at `:386`; the combiner calls are NOT inside any bake guard
     (verified). Concrete walk, mountains R0.5→R8: `uMountainScale=1.6` fixed
     (GLSL `:1477` `fbmdRidged(pos*uMountainScale,…)`) ⇒ θ const ⇒ `S = θ·sVis`; `sVis`
@@ -204,7 +204,7 @@ lever. Visible at `bake=0` (proved by the isolated read-gate); Slice D wires it 
 - **Edit sites:**
   - **New uniform** `uDispDomainScale` in `planet-lod-uniforms.js` (after `uNoiseScale:{value:4.0}`,
     `:10`), **default `1.0`** — so the headless/golden path (which never sets it) is identity.
-  - **`planet-lod-lab.html` frame loop** (~`:5698`, beside the other per-frame uniform
+  - **`world-engine-lab.html` frame loop** (~`:5698`, beside the other per-frame uniform
     writes): `uniforms.uDispDomainScale.value = sVis;` — the ONLY write, lab-side, display-only.
   - **`planet-lod-height.glsl.js`** — thread `uDispDomainScale` into the macro/province
     sample domain so all their frequencies scale together:
@@ -238,7 +238,7 @@ Makes the Slice-C fix reach the eyes at the live `bake=1` default. **Largest/ris
 gated on D3.**
 - **CORRECT edit target (re-grounded — folded from lens #8): the PRODUCTION bake lives in
   `planet-lod-rivers.js` `route()`, NOT the lab-side AC2 probe.** The prior draft cited
-  `planet-lod-lab.html` `makeSphereField :6921` / `writeHeightSphere :6923` — those are inside
+  `world-engine-lab.html` `makeSphereField :6921` / `writeHeightSphere :6923` — those are inside
   `_bakedReliefAt(dir)`, the **AC2 parity PROBE** (a nearest-node height lookup for the
   strength-1 parity check), which never feeds the cube Max sees. The continuous body that
   reaches the eyes is built in `planet-lod-rivers.js` `route()` (`:1297`):
@@ -475,7 +475,7 @@ an additional pass, not a replacement.)
   `worldengine-v2-6-craters.test.js`. **Constraint for the builder: the `·sVis`/`displayRadius`
   factor lives ONLY at the HTML uniform write (`uCraterScale` `:6059`, `uCraterAmp` `:6060`) —
   never in `lab-core`'s `featureFrequencyFromKm`, never in the `bombardment.js` schedule, AND
-  never in the lab route-time crater-derivation block `planet-lod-lab.html:3689–3740` (lens #7:
+  never in the lab route-time crater-derivation block `world-engine-lab.html:3689–3740` (lens #7:
   this block is a lab derivation the "schedule derivations" phrase does NOT cover, and the
   synth-law source-regex `:143` is blind to a `/sVis` appended at `:3726`) — or these pins
   break / silently pass a physics corruption.**
@@ -511,7 +511,7 @@ an additional pass, not a replacement.)
   law, `D_FLOOR_KM`, `D_char`, `MESH_FLOOR_RAD`) — **unchanged**; only display km→angular
   conversion added.
 - [ ] **Barred derivation sites (lens #7):** the lab route-time crater block
-  `planet-lod-lab.html:3689–3740` (`state.craterSizeKm`/`craterAmp`/`craterDensity`/
+  `world-engine-lab.html:3689–3740` (`state.craterSizeKm`/`craterAmp`/`craterDensity`/
   `craterRelaxation`) and the amp derivation at `:3726` are **byte-untouched**; any `uCraterAmp`
   display factor lives ONLY at the write `:6060`, and `uCraterScale·sVis` only at `:6059`.
 - [ ] **`carrier.verts[i]` (shared unit dirs) never scaled (lens #2)** — the Slice-D display

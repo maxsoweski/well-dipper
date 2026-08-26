@@ -4,7 +4,7 @@
 //   node tools/giant-surface-seam-probe.mjs
 //
 // ⭐ WHAT IT ANSWERS, in the order solidFeatures needed them answered:
-//   Q1. WHICH CONDITION does planet-lod-lab.html hand `giantSurfacePack`? The lab holds TWO on any
+//   Q1. WHICH CONDITION does world-engine-lab.html hand `giantSurfacePack`? The lab holds TWO on any
 //       body — the FROZEN-preset one (`buildBodyDrivers`:1674 and `rebakeE5Bands`:1726) and the
 //       PER-SEED one (`applyDrivers`:2464 `_atmoCond`). For `solidFeatures` that choice decided
 //       everything and the wrong arm failed silently, so it is MEASURED here rather than assumed.
@@ -31,7 +31,7 @@ import { applyAlbedoTransfer } from '../src/worldengine/display/albedoTransfer.j
 
 const SEEDS = [1, 7, 42, 1337, 90210, 424242];
 // ⛔ THE TERMINATOR GATE IS OPEN. The lab re-applies its own ✓ checkbox at the per-frame writer
-// (planet-lod-lab.html:5044), so a mirror resolving the gate too would apply the decision twice.
+// (world-engine-lab.html:5044), so a mirror resolving the gate too would apply the decision twice.
 const CTX = {
   displayRadiusEarth: 1, gates: { terminator: true },
   macroOffset: [1, 2, 3], detailOffset: [4, 5, 6], craterOffset: [7, 8, 9],
@@ -49,8 +49,8 @@ const show = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) =
 // ⛔ A CLAIM THIS FILE MADE AND GOT WRONG, CORRECTED IN PLACE 2026-08-22. The first version said the
 // palette, iceness and biosphere read a FROZEN condition, reasoning from `buildBodyDrivers`:1674's
 // `deriveConditionVector(fp, ...)`. That is the PARAMETER name. Its live caller is
-// planet-lod-lab.html:2783 `      const _bodyDrivers = buildBodyDrivers(_u, _fp);` inside `ensureNetworkRouted`, and that
-// function's `_fp` is planet-lod-lab.html:2776 `      const _fp = drawPresetConditions(_preset, state.macroSeed | 0);` — the PER-SEED DRAW. So all ten read
+// world-engine-lab.html:2783 `      const _bodyDrivers = buildBodyDrivers(_u, _fp);` inside `ensureNetworkRouted`, and that
+// function's `_fp` is world-engine-lab.html:2776 `      const _fp = drawPresetConditions(_preset, state.macroSeed | 0);` — the PER-SEED DRAW. So all ten read
 // a per-seed condition and the lab is CONSISTENT here; there was no inconsistency to report. The
 // numbers below never moved, because on this pack's gas-only domain the two arms are identical
 // either way — which is precisely how a wrong reading survived producing right numbers.

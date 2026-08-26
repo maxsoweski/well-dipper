@@ -38,7 +38,7 @@ import {
 } from '../planet-lod-rivers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), 'utf8');
+const labSrc = readFileSync(path.resolve(__dirname, '../world-engine-lab.html'), 'utf8');
 
 // ── shared harness (mirrors ws4-carve-subtractive / ws4-epoch: hydrate + synthetic field + ocean mask) ──
 function hydrateMesh(mesh) {
@@ -154,7 +154,7 @@ describe('WS4 T12 (A) — the epoch-carve composition is a REAL numeric height d
 // ws4-lab-probes.test.js) so per-method assertions don't bleed into neighbouring methods.
 function bodyAfter(src, marker) {
   const start = src.indexOf(marker);
-  expect(start, `"${marker}" must be present in planet-lod-lab.html`).toBeGreaterThanOrEqual(0);
+  expect(start, `"${marker}" must be present in world-engine-lab.html`).toBeGreaterThanOrEqual(0);
   const open = src.indexOf('{', start);
   let depth = 0, i = open;
   for (; i < src.length; i++) {

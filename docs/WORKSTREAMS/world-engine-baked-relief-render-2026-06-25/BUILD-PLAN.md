@@ -1,6 +1,6 @@
 # BUILD PLAN — world-engine-baked-relief-render-2026-06-25 (increment 1 of 2)
 
-**Status:** ready to build. **Renderer:** LAB only (`planet-lod-lab.html`); game `Planet.js` OUT.
+**Status:** ready to build. **Renderer:** LAB only (`world-engine-lab.html`); game `Planet.js` OUT.
 **Direction LOCKED** — this plan does not re-open A/B/C. It turns the 4 exploration maps + the
 contract's 5 ACs into ordered, executable phases.
 
@@ -421,9 +421,9 @@ And a sampler helper next to `sampleGrainStrike` (~line 160):
 vec4 sampleBakedRelief(vec3 dir){ return textureCube(uReliefBakeCube, normalize(dir)); } // .x=height, .yzw=grad
 ```
 
-### C.2 Edit point — branch-guarded height source in the host fragment `main()` (`planet-lod-lab.html`)
+### C.2 Edit point — branch-guarded height source in the host fragment `main()` (`world-engine-lab.html`)
 
-**The exact swap site:** `planet-lod-lab.html:340-342`:
+**The exact swap site:** `world-engine-lab.html:340-342`:
 ```glsl
 vec4 hd = fbmd(vPos, uOctaves, fwBase);
 float h = hd.x;
@@ -472,7 +472,7 @@ strength-1 case = pure baked so the AC2 "displacement tracks the sampled height"
 > lab meaning of "displace" and is what the AC2 probe reads. (True vertex displacement is a larger,
 > out-of-scope change.)
 
-### C.4 Edit points — bind the cube + GUI slider + `window._lab` probes (`planet-lod-lab.html`)
+### C.4 Edit points — bind the cube + GUI slider + `window._lab` probes (`world-engine-lab.html`)
 
 1. **Init dummy + bind** (mirror grain, lab.html:1374-1386): add
    `uniforms.uReliefBakeCube = { value: makeDummyCubeTexture() };` and
@@ -654,7 +654,7 @@ the cube interpolates. Builds on B.6(2-3) but is the dedicated AC4 gate.)
 
 ### E.2 Live orbit audit on :9223 (chrome-devtools, GPU)
 
-1. **Planet lab (`planet-lod-lab.html`):** `reliefBakeStrength(1)`, `setSeed(1234)`. Orbit the body
+1. **Planet lab (`world-engine-lab.html`):** `reliefBakeStrength(1)`, `setSeed(1234)`. Orbit the body
    across each cube-face boundary and over BOTH poles (use `window._lab` camera helpers). Screenshot at
    each seam + pole. Assert: no visible seam line / ridge at cube edges, no pole pinch/artifact. (Per the
    chrome-devtools screenshot-scaling memory: use 127.0.0.1, verify innerWidth/dpr before capture.)
@@ -697,7 +697,7 @@ router are reading different height sources at strength>0, the split is back and
 | `planet-lod-rivers.js` | B, D | B: wire bake into `ensureMesh`/`route()`, add `reliefTexture`/`reliefBakeCount` getters. D: re-point height source at line 1001 (gated). |
 | `tests/relief-height-cube.test.js` | B | NEW — cube geometry + seam-data + wiring source-scan |
 | `planet-lod-height.glsl.js` | C | + `uReliefBakeStrength`/`uReliefBakeCube` uniforms + `sampleBakedRelief` helper |
-| `planet-lod-lab.html` | C | branch-guard height source (line 340), bind cube, GUI slider, `window._lab` probes |
+| `world-engine-lab.html` | C | branch-guard height source (line 340), bind cube, GUI slider, `window._lab` probes |
 | `tests/relief-router-baked-drainage.test.js` | D | NEW — drainage descends the baked field, 0 uphill/orphan |
 | `tests/ws4-router-zero-drift.test.js` (or new `relief-router-repoint.test.js`) | D | re-point wiring source-scan |
 | `tests/relief-seam-pole-continuity.test.js` | E | NEW — AC4 headless seam/pole continuity |

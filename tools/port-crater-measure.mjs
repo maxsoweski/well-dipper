@@ -3,7 +3,7 @@
 //
 // Run: node tools/port-crater-measure.mjs
 //
-// WHY THIS EXISTS. The lab's in-shader crater synth (planet-lod-lab.html, the inc3b S3-fix block,
+// WHY THIS EXISTS. The lab's in-shader crater synth (world-engine-lab.html, the inc3b S3-fix block,
 // pinned by tests/worldengine-inc3b-synth-law.test.js) deliberately renders ONLY the SUB-FLOOR band
 // of the size-frequency distribution — every crater too small for the lab's display mesh to stamp
 // as real geometry. The lab's big craters are not shader work at all; they are a per-planet BAKE.

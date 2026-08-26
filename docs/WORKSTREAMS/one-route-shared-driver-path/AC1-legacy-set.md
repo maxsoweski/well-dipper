@@ -41,7 +41,7 @@ wants it.
 
 | module | evidence |
 |---|---|
-| `base/lidDisruption.js` | 2 test files import it; no front-end does. ⭐ **AND THE REASON IS NOT NEGLECT — IT IS A LOSING PARALLEL IMPLEMENTATION.** The lab DOES do lid / corona / tessera work; it routes it through `stagnantLid.js` (`stagnantLidProbe`, planet-lod-lab.html:6013). So this is a SECOND expression of the same concept that nothing calls. ⛔ **Wiring it would author exactly the two-laws-for-one-thing disease this workstream exists to cure.** Deprecate. |
+| `base/lidDisruption.js` | 2 test files import it; no front-end does. ⭐ **AND THE REASON IS NOT NEGLECT — IT IS A LOSING PARALLEL IMPLEMENTATION.** The lab DOES do lid / corona / tessera work; it routes it through `stagnantLid.js` (`stagnantLidProbe`, world-engine-lab.html:6013). So this is a SECOND expression of the same concept that nothing calls. ⛔ **Wiring it would author exactly the two-laws-for-one-thing disease this workstream exists to cure.** Deprecate. |
 | `base/verify.js` | 1 test file. A dev utility, not a feature — different nature, same disuse. |
 | `instrument/laws.js` | 1 test file, plus `scratchpad/` copies which are untracked throwaways. |
 
@@ -55,7 +55,7 @@ false positive. The scan names all three front-ends explicitly for this reason.
   ⛔ **CORRECTED 2026-08-22. This was first written as "the strongest 'developed, never connected'
   case in the set" and that OVERSTATED it.** The module's core law is LIVE: `PlanetGenerator.js:4`
   imports `emissiveBlackbody` from it. What is unreached is the per-vertex SPHERE/BAKE path, which
-  the current whole-globe `uEmissive` uniform supersedes (planet-lod-lab.html:2453 records the
+  the current whole-globe `uEmissive` uniform supersedes (world-engine-lab.html:2453 records the
   thermal pair replacing that stand-in). So this is a latent FIDELITY UPGRADE sitting behind a
   working simpler path — not an unwired feature. ⚠ The symbol-level scan cannot see this distinction
   and never could: it reports unreached SYMBOLS, and a module can be live through one export while

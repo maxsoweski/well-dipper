@@ -11,13 +11,13 @@
 //     giantRegimeOf  ->  drawGiantConditions  ->  deriveGiantDrivers  ->  bakeClimateE5Attributes
 //
 // and it is the ONLY definition of the F24/F25 driver law. The block that used to derive it inside
-// `applyDrivers` + `rebakeE5Bands` in planet-lod-lab.html is deleted; the lab imports this instead.
+// `applyDrivers` + `rebakeE5Bands` in world-engine-lab.html is deleted; the lab imports this instead.
 //
 // ⛔⛔ WHAT IS DELIBERATELY NOT HERE — read this before adding a uniform.
 // ---------------------------------------------------------------------------------------------
 //  · THE POLAR FAMILY IS NOT IN THIS PACK, and it is not an oversight. Ledger C19, measured: every
-//    F29 polar field is written by `applyStormState` (planet-lod-lab.html:1811 `function applyStormState(){`,
-//    which closes before planet-lod-lab.html:1933 `function applyDrivers(){`), and PLAN §7 fences
+//    F29 polar field is written by `applyStormState` (world-engine-lab.html:1811 `function applyStormState(){`,
+//    which closes before world-engine-lab.html:1933 `function applyDrivers(){`), and PLAN §7 fences
 //    `applyStormState` out of pack #1 by name. `applyDrivers` writes NO polar field at all. A pack
 //    that named `uPolarStrength` would be naming a uniform whose producer is out of scope.
 //  · `uStormCount` and the whole `uStorm*` family are out for the same reason, and `aStorm` stays

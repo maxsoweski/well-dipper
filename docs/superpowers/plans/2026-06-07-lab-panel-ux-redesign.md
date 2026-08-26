@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Restructure `planet-lod-lab.html`'s single vertical lil-gui panel so selecting a body archetype (via the Drivers preset) filters the panel to that archetype's relevant feature folders, and each feature folder gets a SOLO button that isolates it (zeroes the other 13 enables in one click).
+**Goal:** Restructure `world-engine-lab.html`'s single vertical lil-gui panel so selecting a body archetype (via the Drivers preset) filters the panel to that archetype's relevant feature folders, and each feature folder gets a SOLO button that isolates it (zeroes the other 13 enables in one click).
 
 **Architecture:** Author the archetype→feature taxonomy ONCE as a standalone ES module `planet-archetypes.js` (FEATURES + ARCHETYPES + `featuresOf()`), shaped so a future Stage-D provinces system can read it (data-only, no Stage-D code now). The lab imports it: captures its 14 existing feature-folder refs into a `featureFolders` map, appends a shared `solo` button to each, and adds a top "Body filter" folder (archetype label + filter toggle + enable-all/clear-solo) wired into the existing `applyDrivers` preset path. Minimum change — each feature folder's existing control block stays exactly as-is.
 
@@ -13,11 +13,11 @@
 ## File Structure
 
 - **Create:** `planet-archetypes.js` (repo root, beside `planet-lod-lab-core.js`) — the shared taxonomy: `FEATURES`, `ARCHETYPES`, `featuresOf()`. Pure ESM, no DOM deps (so Vitest can import it directly).
-- **Create:** `tests/planet-archetypes.test.js` — data-integrity drift guards. Imports the module; ALSO reads `planet-lod-lab.html` as text to cross-check that FEATURES enable-keys match the panel's actual `*Enabled` bindings and ARCHETYPES presets match the panel's `DRIVER_PRESETS`.
-- **Modify:** `planet-lod-lab.html` — (1) add the import; (2) add a top "Body filter" folder placeholder right after the GUI is constructed; (3) after the 14 feature folders are built, add the `featureFolders` map + `solo`/filter helpers + per-folder solo buttons + header controls; (4) call the filter from `applyDrivers`; (5) extend `window._lab` with test hooks.
+- **Create:** `tests/planet-archetypes.test.js` — data-integrity drift guards. Imports the module; ALSO reads `world-engine-lab.html` as text to cross-check that FEATURES enable-keys match the panel's actual `*Enabled` bindings and ARCHETYPES presets match the panel's `DRIVER_PRESETS`.
+- **Modify:** `world-engine-lab.html` — (1) add the import; (2) add a top "Body filter" folder placeholder right after the GUI is constructed; (3) after the 14 feature folders are built, add the `featureFolders` map + `solo`/filter helpers + per-folder solo buttons + header controls; (4) call the filter from `applyDrivers`; (5) extend `window._lab` with test hooks.
 
 ### Confirmed code anchors (from this session's recon — exact, no re-grep needed)
-- Import block: `planet-lod-lab.html:10-12` (`import GUI from 'lil-gui';` at line 11, core module import at 12).
+- Import block: `world-engine-lab.html:10-12` (`import GUI from 'lil-gui';` at line 11, core module import at 12).
 - `const gui = new GUI(...)` at **line 1977**.
 - `applyDrivers` function body ends at **line 2140-2141** (`gui.controllersRecursive().forEach(c => c.updateDisplay());` then `}`). `const fDrivers` at 2142, preset dropdown at 2143.
 - 14 feature folder refs, in build order (lines ~2151–2348): `fCraters` `fEjecta` `fMountains` `fCanyons` `fScarps` `fPlateaus` `fTessera` `fEdifices` `fLava` `fChaos` `fCryoRidge` `fFrost` `fSub` `fGlacial`. Last one (`fGlacial`) finishes at **line 2348**.
@@ -40,7 +40,7 @@ Create `tests/planet-archetypes.test.js`:
 ```js
 // Data-integrity drift guards for planet-archetypes.js — the shared archetype
 // taxonomy the lab panel (and a future Stage-D provinces system) reads. These
-// tests cross-check the taxonomy against the LIVE panel source (planet-lod-lab.html)
+// tests cross-check the taxonomy against the LIVE panel source (world-engine-lab.html)
 // so a feature added/renamed in the lab can't silently drift from this map.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -49,7 +49,7 @@ import path from 'node:path';
 import { FEATURES, ARCHETYPES, featuresOf } from '../planet-archetypes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), 'utf8');
+const labSrc = readFileSync(path.resolve(__dirname, '../world-engine-lab.html'), 'utf8');
 
 // The enable-keys the panel actually binds, e.g. `.add(state, 'cratersEnabled')`.
 const panelEnableKeys = new Set(
@@ -197,17 +197,17 @@ EOF
 ## Task 2: Wire the panel — filter + solo (no shader/generator change)
 
 **Files:**
-- Modify: `planet-lod-lab.html:12` (add import)
-- Modify: `planet-lod-lab.html:1977` (top "Body filter" folder placeholder)
-- Modify: `planet-lod-lab.html:2140` (call filter from `applyDrivers`)
-- Modify: `planet-lod-lab.html:2348` (wiring block after the feature folders)
-- Modify: `planet-lod-lab.html:2673` (`window._lab` test hooks)
+- Modify: `world-engine-lab.html:12` (add import)
+- Modify: `world-engine-lab.html:1977` (top "Body filter" folder placeholder)
+- Modify: `world-engine-lab.html:2140` (call filter from `applyDrivers`)
+- Modify: `world-engine-lab.html:2348` (wiring block after the feature folders)
+- Modify: `world-engine-lab.html:2673` (`window._lab` test hooks)
 
 > No Vitest unit covers this (the `state` object lives in the HTML, not importable). Correctness is verified by the existing 205 tests staying green (Step 6) + chrome-devtools behaviour (Task 3). The data-integrity test from Task 1 already guards the map this wiring depends on.
 
 - [ ] **Step 1: Add the import**
 
-After `planet-lod-lab.html:12` (`import { ... deriveUniforms } from './planet-lod-lab-core.js';`), add:
+After `world-engine-lab.html:12` (`import { ... deriveUniforms } from './planet-lod-lab-core.js';`), add:
 
 ```js
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
@@ -308,17 +308,17 @@ In `window._lab = { ... }` (lines 2673-2677), add these members (e.g. after `set
 - [ ] **Step 6: Run the existing lab tests — must stay green**
 
 Run: `npx vitest run tests/planet-lod-*.test.js tests/planet-archetypes.test.js`
-Expected: PASS — the 205 existing lab tests unchanged (no shader/generator touched) + the new data-integrity suite. Note the new suite reads `planet-lod-lab.html`, so if a typo broke an enable-key binding, it fails here.
+Expected: PASS — the 205 existing lab tests unchanged (no shader/generator touched) + the new data-integrity suite. Note the new suite reads `world-engine-lab.html`, so if a typo broke an enable-key binding, it fails here.
 
 - [ ] **Step 7: Backtick parity sanity check (shader region untouched, but cheap to confirm)**
 
-Run: `grep -o '`' planet-lod-lab.html | wc -l`
+Run: `grep -o '`' world-engine-lab.html | wc -l`
 Expected: `30` (even — unchanged; this task adds no shader-string backticks).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add planet-lod-lab.html && git commit -m "$(cat <<'EOF'
+git add world-engine-lab.html && git commit -m "$(cat <<'EOF'
 feat(lab): archetype-filtered panel + per-feature solo buttons
 
 Selecting a Drivers preset now filters the feature folders to that
@@ -337,7 +337,7 @@ EOF
 
 ## Task 3: Behaviour verification on :9223 GPU Chrome
 
-**Files:** none (verification only). Per the testing-harness gotcha, do FULL setup in ONE `evaluate_script` immediately before each screenshot; park the tab on `about:blank` when done. Lab at `http://localhost:5173/well-dipper/planet-lod-lab.html`. Max runs Vite — do NOT start a server. Confirm `:9223` liveness with `mcp__chrome-devtools__list_pages` (NOT Bash curl → 000 in sandbox). See `memory/well-dipper-testing-reference.md` + `chrome-devtools-9223-launch.md` first.
+**Files:** none (verification only). Per the testing-harness gotcha, do FULL setup in ONE `evaluate_script` immediately before each screenshot; park the tab on `about:blank` when done. Lab at `http://localhost:5173/well-dipper/world-engine-lab.html`. Max runs Vite — do NOT start a server. Confirm `:9223` liveness with `mcp__chrome-devtools__list_pages` (NOT Bash curl → 000 in sandbox). See `memory/well-dipper-testing-reference.md` + `chrome-devtools-9223-launch.md` first.
 
 - [ ] **Step 1: Confirm :9223 is live and load the lab**
 

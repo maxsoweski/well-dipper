@@ -61,13 +61,13 @@ Zeng+2016: `R/R⊕ = (1.07 − 0.21·CMF)·(M/M⊕)^(1/3.7)` ⇒ `M ∝ R^3.7` �
 ### 3.1 The structural finding first: the visible relief amplitude does NOT read this field
 
 ```
-planet-lod-lab.html:2999   const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
-planet-lod-lab.html:3016   state.surfaceGravity = u.surfaceGravity;
-planet-lod-lab.html:5903   const _RE = state.planetRadiusEarth, _gNow = state.surfaceGravity ?? 1.0;
-planet-lod-lab.html:5908   uniforms.uPerturb.value = state.perturb * reliefEnvelope(_RE, _gNow);
+world-engine-lab.html:2999   const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
+world-engine-lab.html:3016   state.surfaceGravity = u.surfaceGravity;
+world-engine-lab.html:5903   const _RE = state.planetRadiusEarth, _gNow = state.surfaceGravity ?? 1.0;
+world-engine-lab.html:5908   uniforms.uPerturb.value = state.perturb * reliefEnvelope(_RE, _gNow);
 ```
 
-`grep -n "state\.surfaceGravity" planet-lod-lab.html` returns exactly three hits: `:3016` (sole writer), `:4261` (disabled GUI readout), `:5903` (this read). And `deriveUniforms` computes gravity from the **canonical** radius:
+`grep -n "state\.surfaceGravity" world-engine-lab.html` returns exactly three hits: `:3016` (sole writer), `:4261` (disabled GUI readout), `:5903` (this read). And `deriveUniforms` computes gravity from the **canonical** radius:
 
 ```
 planet-lod-lab-core.js:609-611
@@ -117,15 +117,15 @@ Also affected (not re-measured here, but same channel): `iceRelaxation.tauGa ∝
 
 | site | why inert |
 |---|---|
-| `planet-lod-lab.html:5908` `uPerturb` | reads `state.surfaceGravity` = canonical g_c, not the condition vector (§3.1) |
+| `world-engine-lab.html:5908` `uPerturb` | reads `state.surfaceGravity` = canonical g_c, not the condition vector (§3.1) |
 | `giant-drivers.js:176` → E5 bands/storms | `drawGiantConditions` **overwrites** gravity by back-solving from the pinned M0: `giant-drivers.js:234 const surfaceGravity = drawnMass / (R * R);` (spread `...b` comes first, so the back-solve wins). Both lab call sites (`:2853`, `:2939`) go through it. Incoming g is discarded. |
 | `tectonic.js:137, :207` `reliefGravityFactor(drivers.surfaceGravity ?? 1)` | `drivers` is `grainDrivers` = `DEFAULT_GRAIN_DRIVERS` (`planet-lod-rivers.js:113` — `{despinAmp, radialStrainSign, radialStrainMag}`, no gravity key) ⇒ `reliefGravityFactor(1) === 1.0` exactly. Dormant. |
 | `instrument/laws.js:130` `relief-envelope-vs-gravity` | sweeps a synthetic `baselineCondition()` literal, never calls `deriveConditionVector` |
 | `magmatism.js:118`, `stagnantLid.js:95` | read the **flat** `massGravity` D-slot, not the nested condition vector |
 | all 5 h2-he presets on the relief route | `planet-lod-rivers.js:569 if (cls === 'gas' \|\| cls === 'carbon') return despun();` fires before any gravity branch; `isImpactSurface` is false for all giants (P = 1000 bar ≥ `P_SURF_MAX` = 200), so bombardment/craterSchedule/reliefBudget all self-gate off |
-| `planet-lod-lab.html:2812` | `if (useOv('gravity')) _cond.surfaceGravity = driverOv.gravity;` — the gravity slider in override mode bypasses the exponent entirely |
+| `world-engine-lab.html:2812` | `if (useOv('gravity')) _cond.surfaceGravity = driverOv.gravity;` — the gravity slider in override mode bypasses the exponent entirely |
 
-**Correction to a lens claim:** `deriveSurfaceMaterial` does **not** self-gate off for giants — `surfaceMaterial.js:125-131` computes `iceness` unconditionally and it *is* a live giant render channel (`planet-lod-lab.html:3796` → `uIcenessMix`). It carries no gravity only because `icenessOf` reads density/volatileFraction/T_eq, never g.
+**Correction to a lens claim:** `deriveSurfaceMaterial` does **not** self-gate off for giants — `surfaceMaterial.js:125-131` computes `iceness` unconditionally and it *is* a live giant render channel (`world-engine-lab.html:3796` → `uIcenessMix`). It carries no gravity only because `icenessOf` reads density/volatileFraction/T_eq, never g.
 
 ---
 
@@ -259,7 +259,7 @@ Deny pattern, verbatim (`:28`):
 const DENY = /visScaleOf|\bsVis\b|VIS_SCALE_EXP/;
 ```
 
-Applied to **raw file text, comments included** (`read()` is a bare `readFileSync(..., 'utf8')`, no stripping). Scope: every `.js` under `src/worldengine/` recursively (35 files today, 0 offenders), plus 5 named procgen surfaces (`planet-lod-height.glsl.js`, `planet-lod-river-amplifier.glsl.js`, `planet-lod-rivers.js`, `tests/golden-trajectories/run-golden.mjs`, `canonical-scenario.js`), plus every `/* glsl */` template body in `planet-lod-lab.html`.
+Applied to **raw file text, comments included** (`read()` is a bare `readFileSync(..., 'utf8')`, no stripping). Scope: every `.js` under `src/worldengine/` recursively (35 files today, 0 offenders), plus 5 named procgen surfaces (`planet-lod-height.glsl.js`, `planet-lod-river-amplifier.glsl.js`, `planet-lod-rivers.js`, `tests/golden-trajectories/run-golden.mjs`, `canonical-scenario.js`), plus every `/* glsl */` template body in `world-engine-lab.html`.
 
 **`body-condition-vector.js` is at repo root and is NOT scanned.** The edit itself cannot trip this fence.
 
@@ -279,7 +279,7 @@ The most natural sentence to write in a gravity fix — "this is the *physical* 
 
 ### 7.2 `tests/radius-live-feed-fence.test.js` — lab-only, comment-inclusive
 
-Scope is `planet-lod-lab.html` only (`:30-31`). Deny (`:50`):
+Scope is `world-engine-lab.html` only (`:30-31`). Deny (`:50`):
 
 ```js
 const DENY_SRC = String.raw`(?:\b_fp\b|\bfp\b|DRIVER_PRESETS\s*\[[^\]]*\])\s*\??\.\s*radiusEarth`;
@@ -344,7 +344,7 @@ All of these cite `g = g_c·(R/R_c)` by name and become wrong:
 
 - `body-condition-vector.js:32-36` — **the justifying comment; most damaging, it becomes an in-source assertion of the wrong law**
 - `planet-lod-lab-core.js:1088-1099` — doubly wrong (the exponent, and the `uPerturb` wiring gap)
-- `planet-lod-lab.html:2863`, `:3602`
+- `world-engine-lab.html:2863`, `:3602`
 - `tests/radius-live-feed.test.js:826`
 - `docs/WORKSTREAMS/world-engine-radius-live-feed-2026-07-25/BUILD-NOTES.md:666`
 - `docs/WORKSTREAMS/world-engine-inc3b-relief-budget-2026-07-21/BUILD-PLAN.md:144`
@@ -374,10 +374,10 @@ An adversarial verifier attacked every lens finding. Where it won, I took the ve
 | wrong | right |
 |---|---|
 | `src/worldengine/base/body-condition-vector.js:37` (in `research/superearth-relief-law-2026-07-28.md:64`, and repeated by three lenses) | **`/home/ax/projects/well-dipper/body-condition-vector.js:37`** — repo root. `ls src/worldengine/base/` has 29 files, none of them this. Line number is correct. |
-| `planet-lod-lab.html:3005` (`u = deriveUniforms(...)`) | **`:2999`**. `:3005` is a comment. |
-| `planet-lod-lab.html:2830` (bodyDrivers `condition:` attachment) | **`:2826`**. `:2830` is a comment. |
-| `planet-lod-lab.html:2854` / `:2940` (`drawGiantConditions` call sites) | **`:2853`** / **`:2939`**. |
-| `planet-lod-lab.html:5907` (`uPerturb` write) | **`:5908`**. |
+| `world-engine-lab.html:3005` (`u = deriveUniforms(...)`) | **`:2999`**. `:3005` is a comment. |
+| `world-engine-lab.html:2830` (bodyDrivers `condition:` attachment) | **`:2826`**. `:2830` is a comment. |
+| `world-engine-lab.html:2854` / `:2940` (`drawGiantConditions` call sites) | **`:2853`** / **`:2939`**. |
+| `world-engine-lab.html:5907` (`uPerturb` write) | **`:5908`**. |
 | `tests/radius-live-feed.test.js:836` / `:826-835` (the span assertion) | **`:834`**. `:836` is `});`. |
 | `e1Regime.js:70` (`compositionClass` h2-he terminal) | **`:67`**. |
 | `e1Regime.js:107` (`inSeededBand`) | **`:115-118`**. `:107` is the `centerCount` comment. |
@@ -389,7 +389,7 @@ An adversarial verifier attacked every lens finding. Where it won, I took the ve
 
 **(a) "~97% of the reachable domain is extrapolation" — WRONG NUMBER.** No metric yields 97%. Measured: **4.79% valid linear-in-radius** over [0.27, 16] ⇒ 95.2% extrapolation; **13.77% valid in slider travel** ⇒ 86.2% extrapolation. Slider travel is the design-native metric (`radiusFromT(t) = MIN·(MAX/MIN)^t`, `planet-lod-lab-core.js:94`). *Verifier taken — I recomputed and got the same.*
 
-**(b) Reachable floor is 0.27 R⊕, not 0.30.** `driver-presets.js:254 'Moon/Mercury (impact-airless)': [0.27, 0.38]` in `LAB_UNLOCKED_RANGES`, reached via `{ labUnlock: true }` at the lab draw site. Documented in-repo at `planet-lod-lab.html:5268-5271` ("27.1% of seeds land below 0.3"). *Verifier taken.*
+**(b) Reachable floor is 0.27 R⊕, not 0.30.** `driver-presets.js:254 'Moon/Mercury (impact-airless)': [0.27, 0.38]` in `LAB_UNLOCKED_RANGES`, reached via `{ labUnlock: true }` at the lab draw site. Documented in-repo at `world-engine-lab.html:5268-5271` ("27.1% of seeds land below 0.3"). *Verifier taken.*
 
 **(c) "The change adds exactly 2 test failures" — WRONG COUNT. It adds 3.** I settled this by running the mutation myself: `Tests 3 failed | 2198 passed (2201)`. The missed one is `tests/worldengine-v2-6-gcohere.test.js:96`, the `massEarthOf` round-trip — the physically load-bearing assertion, since it encodes the mass law `M ∝ R³ → R^3.7`. *Byte-identity verifier taken over consumers lens, and independently confirmed by execution.*
 
@@ -403,7 +403,7 @@ An adversarial verifier attacked every lens finding. Where it won, I took the ve
 
 **(h) "There are THREE distinct surface gravities live simultaneously" — at most TWO.** The three *channels* are real (`state.surfaceGravity` → uPerturb; flat `massGravity` D-slot → plates/magmatism/stagnantLid/shellRelief; nested `condition.surfaceGravity` → e1Regime/bombardment), but `useOv('gravity')` gates the latter two together, so: slider untouched ⇒ `{g_c, g_c·(R/R_c)}`; slider dragged ⇒ `{g_c, g_ov}`. On the six canonical-locked NAMED_BODY presets there is exactly **one**. Also: `DRIVER_PRESETS` is not `Object.freeze`d — say "unmutated", not "frozen". *Verifier taken.*
 
-**(i) "For all five h2-he presets, line-37 gravity reaches no visible render channel" — conclusion holds, mechanism partly wrong.** `deriveSurfaceMaterial` does **not** self-gate (`surfaceMaterial.js:125-131` computes `iceness` unconditionally; iceness = 0.250 on Jovian/Saturnian/Neptunian and *is* a live render channel via `planet-lod-lab.html:3796` → `uIcenessMix`). It carries no gravity only because `icenessOf` reads density/volatileFraction/T_eq. And there are **two** live consumers of line-37 gravity on the giant path, not one: `computeE1` (runs at `planet-lod-rivers.js:508`, before the `:569` gas terminal; L/Φ move with g but the outputs are render-inert) plus `deriveFigureDescriptor`. *Verifier taken.*
+**(i) "For all five h2-he presets, line-37 gravity reaches no visible render channel" — conclusion holds, mechanism partly wrong.** `deriveSurfaceMaterial` does **not** self-gate (`surfaceMaterial.js:125-131` computes `iceness` unconditionally; iceness = 0.250 on Jovian/Saturnian/Neptunian and *is* a live render channel via `world-engine-lab.html:3796` → `uIcenessMix`). It carries no gravity only because `icenessOf` reads density/volatileFraction/T_eq. And there are **two** live consumers of line-37 gravity on the giant path, not one: `computeE1` (runs at `planet-lod-rivers.js:508`, before the `:569` gas terminal; L/Φ move with g but the outputs are render-inert) plus `deriveFigureDescriptor`. *Verifier taken.*
 
 **(j) "constant to 3 decimals over R = 1.0–2.0" (`research/superearth-relief-law-2026-07-28.md:58`) — the hedge is not wrong, but the window is.** Within Zeng's pure power law the exponent is exactly 1.7 at all R and all CMF; the hedge is merely weak. The real defect on that line is that **R = 2.0 implies M = 12.9 M⊕, above Zeng's own stated 8 M⊕ ceiling** — the window over-extrapolates the fit it cites. A second defect: the brief omits Zeng's CMF bound (0.0–0.4). *Verifier taken; one lens's "wrong in both directions" framing was itself overstated, because it asserted an unretrieved claim about local slope variation inside the fit.*
 

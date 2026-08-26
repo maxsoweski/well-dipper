@@ -20,7 +20,7 @@ porting now (respects the charter's "don't wire yet").
 
 All relief on BOTH renderers is **fragment-shader normal-bending**, never vertex displacement:
 - **Lab:** `SphereGeometry(1.0, 256, 256)` + ShaderMaterial, pass-through vertex shader
-  (`planet-lod-lab.html:1386`, `:189`).
+  (`world-engine-lab.html:1386`, `:189`).
 - **Game:** `IcosahedronGeometry(d.radius, 5)` + ShaderMaterial, pass-through vertex
   (`src/objects/Planet.js:1029`, `:1088`).
 

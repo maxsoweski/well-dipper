@@ -54,8 +54,8 @@ import { scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContr
 // Both mirror a real lab checkbox, and both are placed on the ONE uniform the lab's own per-frame
 // writer gates, never on the whole family — because the lab writes the shape/hue every frame
 // regardless of its checkbox and lets the magnitude do all the switching:
-//   planet-lod-lab.html:5044 `      uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate`
-//   planet-lod-lab.html:5053 `      uniforms.uAuroraIntensity.value = state.auroraEnabled ? state.auroraIntensity : 0.0;   // ✓ enable gate`
+//   world-engine-lab.html:5044 `      uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate`
+//   world-engine-lab.html:5053 `      uniforms.uAuroraIntensity.value = state.auroraEnabled ? state.auroraIntensity : 0.0;   // ✓ enable gate`
 // Gating the siblings too would apply the decision twice and would leave a gated-off body carrying
 // the previous body's ring width behind a zero — invisible until something reads them off-gate.
 export const TERMINATOR_GATE = 'terminator';

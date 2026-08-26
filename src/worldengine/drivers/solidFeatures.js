@@ -20,8 +20,8 @@
 //
 // ⭐ NOT ONE LAW IS EXPRESSED HERE. Every value is a named field off ONE `deriveUniforms(condition)`
 // bundle, which is the same call the lab's own driver step makes at
-// planet-lod-lab.html:1943 `      const u = deriveUniforms(_dp, driverUI.qualityTier);` before forwarding the identical fields into
-// `state` (planet-lod-lab.html:2074-2113). There is exactly one expression of these six laws in the
+// world-engine-lab.html:1943 `      const u = deriveUniforms(_dp, driverUI.qualityTier);` before forwarding the identical fields into
+// `state` (world-engine-lab.html:2074-2113). There is exactly one expression of these six laws in the
 // repository — src/worldengine/base/labCore.js — and both front-ends read it. That is the property
 // B3 leg 1 had to pay for twice (three copies of the terminator law) and it is cheap to keep here
 // because the extraction was already done: the masters live in `src/`, not in the lab HTML.
@@ -57,14 +57,14 @@
 //
 //   2. `uChaosCellScale` HAS A SECOND, DIFFERENT LAB ANSWER, which is the stronger reason it is not
 //      in (1)'s list by accident. The lab's frame writer does NOT use labCore's 5.0 — it resolves a
-//      km slider: planet-lod-lab.html:5436 `      uniforms.uChaosCellScale.value   = featureFrequencyFromKm(_dispR, state.chaosSizeKm, C_CHAOS);`
-//      against planet-lod-lab.html:1242 `      chaosSizeKm: 1274,    // real-units scale: representative chaos-raft width in km (6371/5.0; fuzzy — modeling choice, not rigorous)`.
+//      km slider: world-engine-lab.html:5436 `      uniforms.uChaosCellScale.value   = featureFrequencyFromKm(_dispR, state.chaosSizeKm, C_CHAOS);`
+//      against world-engine-lab.html:1242 `      chaosSizeKm: 1274,    // real-units scale: representative chaos-raft width in km (6371/5.0; fuzzy — modeling choice, not rigorous)`.
 //      Choosing between the bundle's frequency and the slider's km form is a display-policy ruling
 //      of exactly the kind src/worldengine/drivers/craterDeck.js's DECISION 1 had to make for
 //      `uCraterScale`, and a wiring commit does not make it silently.
 //
 //   3. THE DISPLAY-SCALED FREQUENCIES. `uDoubleRidgeFreq` and `uGroovedBandFreq` are written by the
-//      lab as the state value TIMES its per-frame disc multiplier (planet-lod-lab.html:5440 and
+//      lab as the state value TIMES its per-frame disc multiplier (world-engine-lab.html:5440 and
 //      :5443 — the multiplier is the lab's own display token, identity at 1). That multiply is the
 //      FRONT-END's, the game has no counterpart for it, and this module may not spell the token at
 //      all: tests/vis-scale-fence.test.js scans every `src/worldengine/**/*.js` for it and reds on a
@@ -113,12 +113,12 @@ import { scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContr
 // ── The four declared gate names ─────────────────────────────────────────────────────────────────
 // ⭐ FOUR, NOT ONE, because the lab has four independent checkboxes over these six families and they
 // do not switch together. One spelling each, mirroring the lab's own writer:
-//   planet-lod-lab.html:5398 `      uniforms.uVolcanismStrength.value = state.edificesEnabled ? state.volcanismStrength : 0.0;   // ✓ enable gate`
-//   planet-lod-lab.html:5437 `      uniforms.uChaosRaftJitter.value  = state.chaosEnabled ? state.chaosRaftJitter : 0.0;   // ✓ enable gate`
-//   planet-lod-lab.html:5449 `      uniforms.uFrostMaxCoverage.value   = state.frostEnabled ? state.frostMaxCoverage : 0.0;   // ✓ enable gate`
-//   planet-lod-lab.html:5488 `      uniforms.uGlacialStrength.value    = state.glacialEnabled ? state.glacialStrength : 0.0;   // ✓ enable gate`
+//   world-engine-lab.html:5398 `      uniforms.uVolcanismStrength.value = state.edificesEnabled ? state.volcanismStrength : 0.0;   // ✓ enable gate`
+//   world-engine-lab.html:5437 `      uniforms.uChaosRaftJitter.value  = state.chaosEnabled ? state.chaosRaftJitter : 0.0;   // ✓ enable gate`
+//   world-engine-lab.html:5449 `      uniforms.uFrostMaxCoverage.value   = state.frostEnabled ? state.frostMaxCoverage : 0.0;   // ✓ enable gate`
+//   world-engine-lab.html:5488 `      uniforms.uGlacialStrength.value    = state.glacialEnabled ? state.glacialStrength : 0.0;   // ✓ enable gate`
 // ⭐ F22's PLD RIDES F23's GATE AND THAT IS THE LAB'S OWN COUPLING, NOT A SIMPLIFICATION HERE:
-//   planet-lod-lab.html:5474 `      uniforms.uPldStrength.value        = state.frostEnabled ? state.pldStrength : 0.0;   // F22 PLD rides the ✓ enable gate`
+//   world-engine-lab.html:5474 `      uniforms.uPldStrength.value        = state.frostEnabled ? state.pldStrength : 0.0;   // F22 PLD rides the ✓ enable gate`
 // Giving F22 a gate name of its own would invent a rendering decision the lab does not have, and
 // src/worldengine/drivers/index.js's `gatesFor` would then answer ALL_ON for a name nobody ruled on.
 export const EDIFICE_GATE = 'edifices';
@@ -136,7 +136,7 @@ export const GLACIAL_GATE = 'glacial';
  * and a different STATE, and would leave a gated-off body carrying the previous body's condensation
  * temperature behind a zero — invisible until something read them off-gate.
  * ⚠ `uChaosRaftJitter` IS THE EXCEPTION AND IT IS THE LAB'S. F9's master is the SHARED
- * `uCryoActivity`, which the lab writes UNGATED (planet-lod-lab.html:5435), putting the ✓ chaos
+ * `uCryoActivity`, which the lab writes UNGATED (world-engine-lab.html:5435), putting the ✓ chaos
  * checkbox on the two morphology terms instead. This file follows the lab; it does not correct it.
  *
  * @param {object} condition  a body condition vector (deriveConditionVector / conditionFromBody).
@@ -268,10 +268,10 @@ export const SOLID_FEATURES_UNIFORMS = Object.freeze([
 // THE TWO FRONT-END HELPERS — the lab's import-back seam (workstream AC5, 2026-08-22)
 // ─────────────────────────────────────────────────────────────────────────────
 /**
- * Uniform name -> the `state` field planet-lod-lab.html's per-frame writer reads.
+ * Uniform name -> the `state` field world-engine-lab.html's per-frame writer reads.
  *
  * ⭐ WHY A MIRROR AND NOT A DIRECT WRITE, read off the only import-back that has ever worked
- * (`giantDeck`, planet-lod-lab.html:188): every field below is a live lil-gui slider, bound with
+ * (`giantDeck`, world-engine-lab.html:188): every field below is a live lil-gui slider, bound with
  * `.listen()`. Writing pack output straight to the material would take the lab's authoring surface
  * out of its own loop, which is the lab's entire reason to exist. So the pack result is mirrored
  * into `state` and the lab's frame loop keeps writing the uniforms exactly as it always has.
@@ -305,7 +305,7 @@ export const SOLID_FEATURES_LAB_BINDING = Object.freeze({
  * the value this mirror puts into `state` must be the UNGATED one. A mirror that resolved the gate
  * too would apply the decision twice: a body whose feature is enabled would still read zero the
  * moment the pack's gate map disagreed with the checkbox, and nothing would throw, because zero is
- * a legal value for every one of these masters. planet-lod-lab.html:1749 names this hazard for
+ * a legal value for every one of these masters. world-engine-lab.html:1749 names this hazard for
  * pack #1 and it is the same hazard here.
  */
 const LAB_MIRROR_CTX = Object.freeze({

@@ -122,7 +122,7 @@
       "carrier sphere field (sphereField.js makeSphereField): height/grainAngle/faultDensity Float32Arrays, regime Uint8Array, verts/adj/N, tangentFrameAt(i)->{east,north} unit vectors, latDegOf(i)",
       "macroSeed (integer) coerced via seed=(macroSeed|0)",
       "regime tag (icy-active|volatile-cold|eyeball-despun) resolved by shellRegimeOf(archetype, locked)",
-      "lab dispatch passing archetype: PRESET_ARCHETYPE[_preset]||null and locked (planet-lod-lab.html:3655-3656)",
+      "lab dispatch passing archetype: PRESET_ARCHETYPE[_preset]||null and locked (world-engine-lab.html:3655-3656)",
       "external three-free deps: alea, simplex-noise createNoise3D; mathutil.js clamp(lo,hi,x)/clamp01/mix/smoothstep",
       "COPIED VERBATIM into shellRelief.js (no imports): plates.js vec3 helpers dot/cross/norm/randDir/falloffAng + meanEdgeAngle; tectonic.js steeredNoise3 (module-private, REGIME branch inlined as ridged=regime!==0)"
     ],
@@ -145,7 +145,7 @@
     "NEW src/worldengine/base/shellRelief.js",
     "NEW tests/worldengine-base-shell-structure.test.js",
     "EDIT planet-lod-rivers.js (import + isShellReliefPath export; 3-way writeBodyRelief ~417; thread shellDiag through route ~1129-1130; add get shellDiag() ~1189)",
-    "EDIT planet-lod-lab.html (PRESET_ARCHETYPE additions ~1901; shellProbe() on _lab ~5825)",
+    "EDIT world-engine-lab.html (PRESET_ARCHETYPE additions ~1901; shellProbe() on _lab ~5825)",
     "DOC record-build-intent note"
   ],
   "mustFix": [

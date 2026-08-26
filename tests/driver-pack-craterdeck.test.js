@@ -233,7 +233,7 @@ describe('C — every driver is a forward of the shared producer, and the block 
 
   it('no calibration constant is typed here — the numeric-literal set is pinned', () => {
     // Same anti-transcription fence rockySurface carries, inherited with the block. `C_CRATER` is a
-    // NAMED FORWARD of the lab's own declaration (planet-lod-lab.html:821), not a chosen number.
+    // NAMED FORWARD of the lab's own declaration (world-engine-lab.html:821), not a chosen number.
     const literals = [...PACK_CODE_STRINGS.matchAll(/(?<![\w.])\d+(?:\.\d+)?/g)].map((m) => m[0]);
     expect([...new Set(literals)].sort()).toEqual(['0', '1.0']);
     expect(C_CRATER).toBe(1.0);

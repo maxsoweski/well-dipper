@@ -30,7 +30,7 @@ processes / 53 feature entries). The foundational research is
 - **Stage A — Finish foundational research + lock base architecture** ← *this spec*.
 - **Stage B — Per-feature research, by domain** (8 domains; parallel-subagent fan-out; begins
   once the foundation lands).
-- **Stage C — Implement per-domain in the lab** (`planet-lod-lab.html`), harness-first, verified
+- **Stage C — Implement per-domain in the lab** (`world-engine-lab.html`), harness-first, verified
   via chrome-devtools :9223.
 
 ---
@@ -107,7 +107,7 @@ processes / 53 feature entries). The foundational research is
 
 ## 3. Part 2 — Lab structure (the experimentation surface)
 
-`planet-lod-lab.html` is the Stage-C harness AND the surface on which Max settles every taste
+`world-engine-lab.html` is the Stage-C harness AND the surface on which Max settles every taste
 decision. Currently ~711 lines, single file, **flat hand-rolled `<div class="row">` controls**
 (pixelScale, octaves, posterize-lv [already 2–16], perturb, type, normal-mode, macro/detail seed
 steppers, copy-settings, pointer/wheel camera). Flat rows do not scale to 8 feature domains.
@@ -212,7 +212,7 @@ This is the parallel-subagent fan-out; the foundation is not.
   `RingRenderer.js` dead. Gas `storms.spots`/`polarStorm` generated `(:649, 693)` but unwired.
 - `Moon.js` has PARTIAL LOD2 (branches `lodLevel >= 2` at 355/441/459) but only `moonType 0|1`.
 - PhysicsEngine exports 31 driver functions.
-- `planet-lod-lab.html` (untracked) — Stage-C harness, API `window._lab`.
+- `world-engine-lab.html` (untracked) — Stage-C harness, API `window._lab`.
 
 ## 8. Working discipline (carry-forward)
 - Don't start dev servers — Max runs Vite; connect via chrome-devtools :9223

@@ -6,7 +6,7 @@
 // address it" — and the answer needed a number, not a comment. 88.0% of 466 non-gas bodies
 // disagree; the lab shows a MEDIAN 0.47x the game's crater density.
 //
-// ⛔ THE LAB SIDE IS TRANSCRIBED (planet-lod-lab.html:2853-2854), which is a third copy of a law
+// ⛔ THE LAB SIDE IS TRANSCRIBED (world-engine-lab.html:2853-2854), which is a third copy of a law
 // and is acceptable ONLY because this file measures rather than renders. Verified chain:
 // lab:2854 writes state.craterDensity -> lab:5354 writes uCraterDensity, and BOTH front-ends
 // multiply by craterRelevance, so the comparison below is apples-to-apples on the pre-relevance term.
@@ -22,7 +22,7 @@ import { craterSchedule } from '../src/worldengine/base/bombardment.js';
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
-const LAB_CELL = Math.PI * (0.18*0.18 + 0.18*0.37 + 0.37*0.37/3);   // planet-lod-lab.html:2853, transcribed for MEASUREMENT only
+const LAB_CELL = Math.PI * (0.18*0.18 + 0.18*0.37 + 0.37*0.37/3);   // world-engine-lab.html:2853, transcribed for MEASUREMENT only
 
 let n = 0, both0 = 0, disagree = 0, labZeroPackNot = 0, packZeroLabNot = 0;
 const ratios = [];

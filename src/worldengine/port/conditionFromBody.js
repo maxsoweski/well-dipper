@@ -254,7 +254,7 @@ export function axialTiltDegreesOf(gameAxialTiltRadians) {
 // P22 seasonal volatile cycling, P23 aerosol lofting). If the fold lived in the reader, each of
 // those five would have to remember it independently, a miss would be finite-and-plausible, and the
 // LAB route would never catch it — every lab preset is already inside [0,90] (`driver-presets.js:109`
-// = 25, `storm-e.js:68 URANIAN_OBLIQUITY: 80`, `planet-lod-lab.html:516` = 0), so a missing fold is
+// = 25, `storm-e.js:68 URANIAN_OBLIQUITY: 80`, `world-engine-lab.html:516` = 0), so a missing fold is
 // invisible on the frontend where laws get developed. Folding at the producer is also what makes the
 // two frontends AGREE on the key's domain, which is this program's whole thesis.
 //
@@ -833,7 +833,7 @@ export function conditionFromBody(planetData) {
     //
     // ⛔ AND NOTHING ON SCREEN MOVES TODAY, WHICH IS A SCOPE STATEMENT AND NOT A SAFETY CLAIM.
     // `deriveGiantDrivers` has NO game-side caller: `giantDeckPack` is imported by
-    // `planet-lod-lab.html` and by nothing under `src/objects/`, and every lab preset carries
+    // `world-engine-lab.html` and by nothing under `src/objects/`, and every lab preset carries
     // `metallicity: undefined` (0/18), so the lab route is byte-inert too. Instrument C accordingly
     // reports ZERO delta on all 55 shipped uniforms — ⚠ that zero means "this channel is not wired
     // to a uniform yet", NOT "this change is small". It becomes visible the step the pack is wired

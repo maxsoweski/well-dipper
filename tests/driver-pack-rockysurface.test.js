@@ -29,7 +29,7 @@
 //     picture (Max's 2026-08-09 ruling, carried from the limb suite). Appearance is the world
 //     engine's law to improve, in bombardment.js / surfaceMaterial.js, not here.
 //  2. It does not assert byte-identity of `uCraterScale` against the LAB. That is structurally
-//     impossible: planet-lod-lab.html:5358 resolves the frequency at the REAL radius and then
+//     impossible: world-engine-lab.html:5358 resolves the frequency at the REAL radius and then
 //     applies a further display multiply, while every other km-keyed lab uniform resolves at the
 //     display pseudo-radius alone. §E asserts a stated POLICY DIFFERENCE instead and says which
 //     number is being kept.
@@ -341,7 +341,7 @@ describe('A — the predicate admits exactly the non-gas class', () => {
 describe('B — two declared gate names that the ALL_ON policy resolves', () => {
   it('FAMILY 4 · both names are declared, `gatesFor` resolves both, and an unknown policy throws', () => {
     // TWO gates rather than one because the lab carries two independent toggles over this family
-    // (planet-lod-lab.html:5354 state.cratersEnabled, :5361 state.ejectaEnabled). Ejecta-off with
+    // (world-engine-lab.html:5354 state.cratersEnabled, :5361 state.ejectaEnabled). Ejecta-off with
     // craters-on is a real lab state; one gate would delete a rendering decision rather than express it.
     expect(ROCKY_SURFACE_ENTRY.gates).toEqual([CRATER_GATE, EJECTA_GATE]);
     expect(Object.isFrozen(ROCKY_SURFACE_ENTRY.gates)).toBe(true);
@@ -530,7 +530,7 @@ describe('C — every driver is a forward of a shared producer', () => {
   it('FAMILY 7c · ⚠ THE RELEVANCE FOLD IS UNREACHABLE TODAY, and the emptiness is asserted LOUDLY', () => {
     // ⛔ THE ONE GATE IN THIS FILE THAT CANNOT SEE ITS OWN SUBJECT, said out loud rather than left
     // for someone to discover. The pack multiplies `craterRelevanceOf(condition)` into the two
-    // gated values CPU-side, reproducing planet-lod-lab.html:5354/:5361. MEASURED 2026-08-19:
+    // gated values CPU-side, reproducing world-engine-lab.html:5354/:5361. MEASURED 2026-08-19:
     // deleting that multiply changes NOT ONE number, because no body exists on which
     // `craterUniformsFrom` returns a non-zero density AND `craterRelevanceOf` returns 0 —
     // 0 of 1183 real bodies over 200 systems, and 0 of a 1680-point synthetic sweep of
@@ -695,7 +695,7 @@ describe('C — every driver is a forward of a shared producer', () => {
 
   it('FAMILY 10 · [CONTROL] a transcribed constant REDS the equality gate on the real population', () => {
     // The mutant is the declared non-port, by number: the lab pins `craterComplexD` at
-    // `_HASH_TAIL_MAX / 0.6` (planet-lod-lab.html:2841, :2870) to force morphology ≡ 0, because
+    // `_HASH_TAIL_MAX / 0.6` (world-engine-lab.html:2841, :2870) to force morphology ≡ 0, because
     // every crater IT draws is a sub-floor simple bowl. Porting that number would flatten every
     // complex crater in the game while every other gate in this file stayed green — which is
     // exactly why craterUniforms.js:153-156 refuses it in its own words.
@@ -769,7 +769,7 @@ describe('C — every driver is a forward of a shared producer', () => {
     //     guard moved to src/worldengine/drivers/craterDeck.js with the drivers they belong to, and
     //     `1.0` and `0` both survive here for OTHER reasons (below) — so this assertion would have
     //     stayed green through the move while its explanation rotted. RE-MEASURED after the move.
-    //   · 1.0: the lab's surfaceGravity fallback (planet-lod-lab.html:4996 — NOT
+    //   · 1.0: the lab's surfaceGravity fallback (world-engine-lab.html:4996 — NOT
     //     craterUniforms.js:157's 0.5, which would raise the relief envelope ~1.5x on any body
     //     missing the field and look exactly like a working wire). ⛔ It used to be TWO occurrences,
     //     the second being C_CRATER; that one is now pinned by `craterDeck.js`'s own literal fence
@@ -1192,7 +1192,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
       if (R !== 1) expect(g).not.toBe(l);
     }
     // ⛔ AND THE BYTE-IDENTITY ARM AGAINST THE LAB IS NOT ATTEMPTED, because it is structurally
-    //    impossible: planet-lod-lab.html:5358 resolves at the REAL radius and then applies a
+    //    impossible: world-engine-lab.html:5358 resolves at the REAL radius and then applies a
     //    further display multiply (R^1.5), while every other km-keyed lab uniform resolves at the
     //    display pseudo-radius alone (R^0.5). The pack may not carry that trailing multiply — it is
     //    the front-end's — so what is gated here is the stated POLICY DIFFERENCE, and the number
@@ -1288,7 +1288,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
   });
 
   it('FAMILY 28 · [CONTROL] uPerturb is NOT the factory default — the coincidence that fools instruments', () => {
-    // ⚠ THE TRAP, NAMED. `state.perturb` is the lab GUI default 0.55 (planet-lod-lab.html:902) and
+    // ⚠ THE TRAP, NAMED. `state.perturb` is the lab GUI default 0.55 (world-engine-lab.html:902) and
     // the material factory default is ALSO 0.55 (src/worldengine/shaders/uniforms.js:33). So on a
     // body at g = 1 the relief envelope is ~1 and the product is the default again — a two-frame
     // before/after comparison CANNOT distinguish "the pack wrote the relief envelope" from "the

@@ -49,7 +49,7 @@
 // the list. Both gaps it found are now cases, and the claim is re-measured branch by branch below.
 //
 // ── THE MUTANT TABLE, MEASURED 2026-08-08 ────────────────────────────────────────────────────────
-// Run against a proven scratch mirror (tests/ and planet-lod-lab.html are REAL COPIES, verified with
+// Run against a proven scratch mirror (tests/ and world-engine-lab.html are REAL COPIES, verified with
 // `realpathSync` before trusting a single number), one mutation at a time, each run being
 // `npx vitest run tests/source-scan-helper.test.js`. (Both spans deliberately unwrapped: a backticked
 // span broken across two source lines gives each line an ODD tick count, which is how a citation
@@ -130,7 +130,7 @@ import { dirname, join } from 'node:path';
 import { stripCommentsPreservingOffsets as strip, jsFilesUnder, lineOf } from './helpers/source-scan.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const LAB = readFileSync(join(ROOT, 'planet-lod-lab.html'), 'utf8');
+const LAB = readFileSync(join(ROOT, 'world-engine-lab.html'), 'utf8');
 const SP = (n) => ' '.repeat(n);
 
 describe('stripCommentsPreservingOffsets — the offset contract', () => {
@@ -399,7 +399,7 @@ describe('stripCommentsPreservingOffsets — the real lab is the oracle', () => 
   const S = strip(LAB);
 
   it('removes the lab\'s own verbatim-code comments (the shadow habit, measured at 7 instances)', () => {
-    // planet-lod-lab.html:6160-6161 quotes two executable statements inside a `//` comment. That habit
+    // world-engine-lab.html:6160-6161 quotes two executable statements inside a `//` comment. That habit
     // is exactly what makes the shadow reachable, so prove the stripper actually sees it.
     expect(LAB, 'the habit still exists in the source').toContain('_lab.setCarveEpoch(false);');
     expect(S, 'and the stripper removes it').not.toContain('_lab.setCarveEpoch(false);');
@@ -499,7 +499,7 @@ describe('stripCommentsPreservingOffsets — blankLiteralText', () => {
     // retired law could be parked and read as the only live match. The matching pass leaves none.
     //
     // ⚠ THE 21 IS NOT PINNED, AND THAT IS A ROUND-2 REPAIR. This assertion used to read `.toBe(21)`,
-    // which imports an integer counted off planet-lod-lab.html into the gate on the SCANNER: any lab
+    // which imports an integer counted off world-engine-lab.html into the gate on the SCANNER: any lab
     // edit adding or removing a `//` inside a glsl template reds this test with a message that names
     // the scanner and says nothing about the lab edit that caused it. Measured: a parity mutant that
     // differed only in carrying two ordinary `//` lines inside a parked template failed here with

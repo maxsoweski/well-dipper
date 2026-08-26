@@ -7,7 +7,7 @@
 // — must resolve to a HIGHER base frequency (a SMALLER on-disk footprint) at the
 // reference radius (RE = 1) than their pre-change baseline.
 //
-// The calibration lives in planet-lod-lab.html as (cFeature, featureSizeKm) pairs
+// The calibration lives in world-engine-lab.html as (cFeature, featureSizeKm) pairs
 // fed to featureFrequencyFromKm. That file is not vitest-importable, so the
 // calibrated inputs are mirrored here as documented constants and the SAME
 // single-source helper is exercised. If anyone retunes the crater/river size_km
@@ -17,15 +17,15 @@ import { featureFrequencyFromKm, R_EARTH_KM } from '../src/worldengine/base/labC
 
 const REFERENCE_RADIUS_EARTH = 1; // RE = 1 (Earth) — the calibration reference radius.
 
-// ── Post-change calibrated inputs (mirrored from planet-lod-lab.html) ──
-//   crater: C_CRATER = 1.0, craterSizeKm = 530   (planet-lod-lab.html:4910 / :5223)
-//   river : C_FLUVIAL = 1.0, fluvialSizeKm = 1385 (planet-lod-lab.html:4916 / :5388)
+// ── Post-change calibrated inputs (mirrored from world-engine-lab.html) ──
+//   crater: C_CRATER = 1.0, craterSizeKm = 530   (world-engine-lab.html:4910 / :5223)
+//   river : C_FLUVIAL = 1.0, fluvialSizeKm = 1385 (world-engine-lab.html:4916 / :5388)
 const C_CRATER = 1.0, CRATER_SIZE_KM = 530;
 const C_FLUVIAL = 1.0, FLUVIAL_SIZE_KM = 1385;
 
 // ── Documented pre-change base frequencies (the old hand-set uniform defaults) ──
-//   crater: uCraterScale default 6.0 (planet-lod-lab.html:4227, pre-change)
-//   river : uFluvialFreq  default 2.3 (planet-lod-lab.html:4359, pre-change)
+//   crater: uCraterScale default 6.0 (world-engine-lab.html:4227, pre-change)
+//   river : uFluvialFreq  default 2.3 (world-engine-lab.html:4359, pre-change)
 const CRATER_FREQ_PRE = 6.0;
 const RIVER_FREQ_PRE = 2.3;
 

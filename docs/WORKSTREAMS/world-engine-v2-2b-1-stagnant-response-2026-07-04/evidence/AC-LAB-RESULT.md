@@ -4,7 +4,7 @@
 working-Claude driving the running lab; **this is NOT Max's UAT gate** (AC-UAT stays
 deferred-to-max).
 
-**Env:** dev server `localhost:5173/well-dipper/planet-lod-lab.html`, real Windows Chrome via
+**Env:** dev server `localhost:5173/well-dipper/world-engine-lab.html`, real Windows Chrome via
 WSL interop on `127.0.0.1:9223` (real GPU — WebGL renders; the Linux `google-chrome` path is
 WebGL2-blocklisted and must NOT be used). HEAD `1995dbb`.
 

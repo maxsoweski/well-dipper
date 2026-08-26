@@ -60,7 +60,7 @@ label / archetype / regime / `rendersOn` read, and introduces **no new `*Enabled
 ```
 state.planetRadiusEarth
    └─ visScaleOf(planetRadiusEarth)        [planet-lod-lab-core.js — pure export, DISPLAY-ONLY]
-        └─ sVis                            [planet-lod-lab.html frame loop, module-scope let]
+        └─ sVis                            [world-engine-lab.html frame loop, module-scope let]
              ├─ planet.scale.setScalar(sVis)                      (the disc grows)
              ├─ hazeShell / ring / ringCloud .scale.setScalar(sVis)   (scene-space shells track)
              │     └─ ringCloud uDResolve/uDCull = state.ring* · sVis  (near-tier LOD tracks apparent size)
@@ -109,7 +109,7 @@ distance at non-1 radius. Candidate for a one-line HUD tweak in a later polish p
 | File | Change |
 |------|--------|
 | `planet-lod-lab-core.js` | **Slice A.** Added `VIS_SCALE_EXP`, `visScaleOf`, `CAMERA_CLEARANCE`, `minCameraDistance` (pure exports, after `lodHysteresis`). Existing functions untouched → goldens/headless unaffected. |
-| `planet-lod-lab.html` | **Slice B.** Import extension (`:151`); module-scope `let sVis = 1.0` (`~:5637`); frame-loop block — `sVis` compute, `planet`/`hazeShell`/`ring`/`ringCloud` scale, ring-cloud `uDResolve`/`uDCull` threshold scaling, min-distance guard (`~:5655–5671`); `logicalDist` keying of `lodRampOf`/`lodHysteresis` (`~:5688`); wheel clamp (`~:5590`); sweep coverage pin `SWEEP_DISTANCE * sVis` (`:5216`); `_lab` probe additions (`~:6284`). |
+| `world-engine-lab.html` | **Slice B.** Import extension (`:151`); module-scope `let sVis = 1.0` (`~:5637`); frame-loop block — `sVis` compute, `planet`/`hazeShell`/`ring`/`ringCloud` scale, ring-cloud `uDResolve`/`uDCull` threshold scaling, min-distance guard (`~:5655–5671`); `logicalDist` keying of `lodRampOf`/`lodHysteresis` (`~:5688`); wheel clamp (`~:5590`); sweep coverage pin `SWEEP_DISTANCE * sVis` (`:5216`); `_lab` probe additions (`~:6284`). |
 | `tests/planet-vis-scale.test.js` | **NEW.** AC-VIS-MONO (identity, worked points, 200-pt monotonicity), AC-CLAMP unit (margin at radius extremes), AC-LOD-KEY keying identity. 9 tests. |
 | `tests/vis-scale-fence.test.js` | **NEW.** AC-ZERO-CLOBBER denylist (procgen surfaces + worldengine tree + lab GLSL regions + featureFrequencyFromKm + planet uniform bundle), AC-LOD-KEY source pins, AC-0 single-input pin. 14 tests. |
 | `docs/WORKSTREAMS/.../BUILD-NOTES.md` | **Slice C.** This file. |
@@ -154,7 +154,7 @@ the file shifts.
    actual golden harness (`tests/golden-trajectories/run-golden.mjs`) validates **one**
    canonical scenario (`canonical-scenario-v1`, 1200 samples, hash `40c18aad`), not 83
    goldens. I verified the golden harness has **zero import dependency** on
-   `planet-lod-lab-core.js` or `planet-lod-lab.html` (it imports only `canonical-scenario.js`
+   `planet-lod-lab-core.js` or `world-engine-lab.html` (it imports only `canonical-scenario.js`
    + the motion-test-kit), so my edits cannot affect it — byte-identity holds regardless of
    the count. Treating this as a naming discrepancy in the contract, not a functional gap.
    The gate ran clean (same hash, no `--record`).
@@ -186,7 +186,7 @@ the file shifts.
 
 **Builder subagent, per `FIX-PLAN.md` Slice B ("Fence re-scope + combiner-feature display
 keying, P4 + P5"), post-lens.** Built on top of this run's Slice A (log-position radius
-slider + debounced re-derive). NOT committed. Files touched: `planet-lod-lab.html`,
+slider + debounced re-derive). NOT committed. Files touched: `world-engine-lab.html`,
 `tests/vis-scale-fence.test.js`. (`planet-lod-lab-core.js` NOT touched by Slice B —
 `featureFrequencyFromKm`/`visScaleOf` already existed.)
 
@@ -309,7 +309,7 @@ Every `uniforms.u*(Scale|Freq)*.value =` write classified as P4 / P5 / P5b / non
 **Builder subagent, per `FIX-PLAN.md` Slice C ("Analytic macro body + provinces honor the
 display domain-scale, P1 + P3"), post-lens.** Built on top of this run's Slice A (log slider)
 and Slice B (P4/P5/P5b combiner-feature keying + fence re-scope). NOT committed. Files touched:
-`planet-lod-uniforms.js`, `planet-lod-height.glsl.js`, `planet-lod-lab.html`,
+`planet-lod-uniforms.js`, `planet-lod-height.glsl.js`, `world-engine-lab.html`,
 `tests/vis-scale-fence.test.js`.
 
 ## What Slice C does (plain language — `record-build-intent`)
@@ -328,7 +328,7 @@ never radius-keyed), so they GROW with the disc. Slice C fixes that with a domai
   **default `1.0`**. The default is load-bearing: the headless/golden bake path is CPU
   `writeHeightSphere` (worldengine), which never writes this uniform → it renders at 1.0 →
   identity → carrier goldens byte-identical.
-- **Frame-loop write** (`planet-lod-lab.html`, in the per-frame uniform block right after
+- **Frame-loop write** (`world-engine-lab.html`, in the per-frame uniform block right after
   `uOctaves`/`uLodRamp`): `uniforms.uDispDomainScale.value = sVis;` — the **ONLY** writer,
   display-only, identity at `sVis=1`.
 - **GLSL threading** (`planet-lod-height.glsl.js`) — the height field samples the display-scaled
@@ -436,7 +436,7 @@ At `uDispDomainScale = 1.0` every expression above is its pre-increment self, by
 **Builder subagent, per `FIX-PLAN.md` Slice D ("Baked macro body honors the display scale —
 procgen-forced; D3 — + residue"), post-lens.** Built on top of this run's Slice A (log slider),
 Slice B (P4/P5/P5b combiner keying + fence re-scope), and Slice C (`uDispDomainScale` analytic
-lever). NOT committed. Files touched: `planet-lod-lab-core.js`, `planet-lod-lab.html`,
+lever). NOT committed. Files touched: `planet-lod-lab-core.js`, `world-engine-lab.html`,
 `tests/vis-scale-fence.test.js`. **No `src/worldengine/**` / `planet-lod-rivers.js` /
 `planet-lod-height.glsl.js` edit** (byte-safe by construction — see the mechanism below).
 
@@ -450,7 +450,7 @@ affects the *synth* (`fbmd`) residual, which is weighted `(1 - s)` = 0 at `s = 1
 invisible at the default profile. Slice D fixes that with a **bake→synth crossover**:
 
 - **Effective bake strength = `base · bakeReliefCrossover(sVis)`**, written once per frame at the
-  live uniform (`planet-lod-lab.html`, right after the Slice-C `uDispDomainScale` write). As the
+  live uniform (`world-engine-lab.html`, right after the Slice-C `uDispDomainScale` write). As the
   disc departs `sVis = 1`, the baked cube fades OUT and the Slice-C domain-scaled analytic body
   (`fbmd · uDispDomainScale`, which IS constant-on-screen) fades IN.
 - **`bakeReliefCrossover(sVis)`** (new pure export in `planet-lod-lab-core.js`): a smoothstep of
@@ -529,7 +529,7 @@ Two residues, both to be carried into the UAT recipe so Max signs them knowingly
 | File | Change |
 |------|--------|
 | `planet-lod-lab-core.js` | **Slice D.** Added pure exports `BAKE_CROSS_SPAN` (=1.0) + `bakeReliefCrossover(sVis)` (smoothstep of `|log2 sVis|`; `===1` exactly at `sVis=1`). After the radius-slider section; existing functions untouched → goldens/headless unaffected. |
-| `planet-lod-lab.html` | **Slice D.** Import extension (`:151`, add `bakeReliefCrossover`); frame-loop write right after the Slice-C `uDispDomainScale` write (`~:5737`): `uniforms.uReliefBakeStrength.value = grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis);`. Identity at `sVis=1`. No other lab change. |
+| `world-engine-lab.html` | **Slice D.** Import extension (`:151`, add `bakeReliefCrossover`); frame-loop write right after the Slice-C `uDispDomainScale` write (`~:5737`): `uniforms.uReliefBakeStrength.value = grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis);`. Identity at `sVis=1`. No other lab change. |
 | `tests/vis-scale-fence.test.js` | **Slice D.** Added `uReliefBakeStrength` to the display-scale ALLOW set (display-BLEND term); added `planet-lod-rivers.js` to the sVis-free walk (plan lens #9); new "Slice D — bake→synth crossover" describe (6 pins: identity at 1, symmetric fade + clamp-to-0 past span, `[0,1]` over the radius span, frame-loop re-weight pin, worldengine-untouched pin). Fence grew 21 → 27. |
 
 **Untouched (per HARD RULES):** `src/auto/CameraChoreographer.js`, `src/debug/LabMode.js`

@@ -60,7 +60,7 @@ only the 4 pre-existing known failures, not grown). Both adversarial lenses retu
 
 Built the three Slice C pieces + drove the live AC-THARSIS. Faithful to BUILD-PLAN §A(Slice C)/§B/§C/§D/§E
 and GROUNDING §10. Files touched (matches the (E) file-fence exactly): `lidResponse.js` (interpen forward),
-`planet-lod-rivers.js` (route() hook), `planet-lod-lab.html` (folder + `_lab` API + probe),
+`planet-lod-rivers.js` (route() hook), `world-engine-lab.html` (folder + `_lab` API + probe),
 `tests/worldengine-lid-router-audit.test.js` (reconciled), BUILD-NOTES. **Staged EXPLICITLY** (no `git add -A`);
 the not-ours `CameraChoreographer.js`/`LabMode.js` + the untracked screenshot pile left out.
 

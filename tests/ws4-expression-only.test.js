@@ -32,7 +32,7 @@ import { HEIGHT_GLSL } from '../src/worldengine/shaders/height.glsl.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LAB_CORE = readFileSync(join(__dirname, '..', 'src/worldengine/base/labCore.js'), 'utf8');
-const LAB_HTML = readFileSync(join(__dirname, '..', 'planet-lod-lab.html'), 'utf8');
+const LAB_HTML = readFileSync(join(__dirname, '..', 'world-engine-lab.html'), 'utf8');
 
 // Pull one function body by name (brace-matched) so an assertion can't bleed across combiners.
 function fnBody(src, decl) {

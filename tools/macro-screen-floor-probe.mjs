@@ -83,7 +83,7 @@ console.log('\n' + '='.repeat(94));
 console.log('C — ⭐ THE INSTRUMENT UNDERSTATES THE DEFECT. LAB vs GAME AT THE SAME FRAMING (1.2 radii)');
 console.log('='.repeat(94));
 console.log('Two independent reasons, both MEASURED LIVE in the lab on 2026-08-26:');
-console.log('  1. the lab writes `physical * sVis` (planet-lod-lab.html:5359) and sVis < 1 on small bodies;');
+console.log('  1. the lab writes `physical * sVis` (world-engine-lab.html:5359) and sVis < 1 on small bodies;');
 console.log('  2. the lab renders at full canvas resolution; the game divides by pixelScale 3.\n');
 console.log('  preset          physical   lab written   lab oct-0 px   game oct-0 px   the lab is this much kinder');
 for (const [nm, phys, written] of [['Lava', 250.717, 141.575], ['Europa', 219.002, 154.857], ['Magma', 251.005, 307.417]]) {

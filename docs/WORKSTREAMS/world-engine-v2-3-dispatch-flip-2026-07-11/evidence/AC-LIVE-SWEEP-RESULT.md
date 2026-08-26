@@ -1,7 +1,7 @@
 # AC-LIVE-SWEEP — live result (2026-07-13, working-Claude via chrome-devtools)
 
 **Setup:** Max-started dev server `:5175` + debug Chrome `:9223`; fresh tab
-`http://localhost:5175/well-dipper/planet-lod-lab.html`; page macroSeed 1; route settle
+`http://localhost:5175/well-dipper/world-engine-lab.html`; page macroSeed 1; route settle
 confirmed per preset by polling `state._lastBodyDrivers` identity (all settled ~1.1–1.5 s).
 Route inferred per the verify-run instruction: the active writer's family probe carries
 populated family fields (plateCount / shell regime / plumeCount / coronaCount); despun = all

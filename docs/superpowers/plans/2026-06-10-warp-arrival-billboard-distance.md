@@ -9,7 +9,7 @@
 **Tech Stack:** three.js, Vitest. Spec: `docs/superpowers/specs/2026-06-10-warp-arrival-billboard-distance-design.md`.
 
 **Constraints for all workers (carried from session handoff):**
-- **Scoped `git add` only** — name exact paths. A parallel session has dirty files (`planet-lod-lab.html`, `planet-archetypes.js`, `docs/FEATURES/cards/F*`, `tests/planet-*`, F-prefix PNGs, `.mcp.json`). NEVER `git add -A` / `git add .`.
+- **Scoped `git add` only** — name exact paths. A parallel session has dirty files (`world-engine-lab.html`, `planet-archetypes.js`, `docs/FEATURES/cards/F*`, `tests/planet-*`, F-prefix PNGs, `.mcp.json`). NEVER `git add -A` / `git add .`.
 - Do NOT start dev servers (`npm run dev`, `vite`, etc.).
 - Run tests with `npx vitest run <file>` (full suite: `npx vitest run`).
 

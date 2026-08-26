@@ -29,7 +29,7 @@
 //     RNG in any output (the sub-texel phase is swept on a FIXED grid), NO
 //     timestamps / wall-clock in any written field. Re-runs reproduce EXACTLY.
 //
-// ANCHORS (grep-verified this session at HEAD 4269689 in planet-lod-lab.html):
+// ANCHORS (grep-verified this session at HEAD 4269689 in world-engine-lab.html):
 //   - posterize band count `levels` = 6           → :1996  `levels: 6`
 //                                                  → :5597  `uniforms.uLevels.value = state.levels`
 //   - posterize fn (dither+quantize):              → :1792-1796
@@ -61,15 +61,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Posterize band count actually in use (NOT guessed — grepped :1996 / :5597).
 // A single posterize band spans 1/LEVELS in luminance (fn :1792-1796:
 // floor(x*levels+0.5)/levels ⇒ adjacent output steps are 1/levels apart).
-const LEVELS = 6;                       // planet-lod-lab.html:1996 `levels: 6`
+const LEVELS = 6;                       // world-engine-lab.html:1996 `levels: 6`
 const BAND_LUM = 1 / LEVELS;            // = 0.166667 luminance per posterize band
 
 // Cube-map bake resolution (brief R6: "256²/face cube").
 const FACE_TEXELS = 256;                // texels per cube-map face edge
 
 // Staged oblique-light incidence (from vertical), from the lab light defaults.
-// incidence = 90° − elevation = 90 − 20.79 = 69.21°  (planet-lod-lab.html:2007)
-const LIGHT_ELEV_DEG = 20.79;           // planet-lod-lab.html:2007 lightElevationDeg
+// incidence = 90° − elevation = 90 − 20.79 = 69.21°  (world-engine-lab.html:2007)
+const LIGHT_ELEV_DEG = 20.79;           // world-engine-lab.html:2007 lightElevationDeg
 const INCIDENCE_DEG = 90 - LIGHT_ELEV_DEG;   // 69.21°
 
 const DEG = 180 / Math.PI;
@@ -385,8 +385,8 @@ const model = {
     bandLuminance: BAND_LUM,
     faceTexels: FACE_TEXELS,
     incidenceDeg: INCIDENCE_DEG,
-    lightAzimuthDeg: 40.6,                          // planet-lod-lab.html:2006
-    lightElevationDeg: LIGHT_ELEV_DEG,             // planet-lod-lab.html:2007
+    lightAzimuthDeg: 40.6,                          // world-engine-lab.html:2006
+    lightElevationDeg: LIGHT_ELEV_DEG,             // world-engine-lab.html:2007
   },
   // --- R6 measured-edge vs naive-edge discrepancy, documented ---
   edgeUnits: {

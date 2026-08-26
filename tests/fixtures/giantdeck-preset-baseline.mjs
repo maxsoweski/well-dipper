@@ -5,13 +5,13 @@
 //
 // ⭐ HOW IT WAS CAPTURED, so the number below is re-derivable rather than asserted. The capture script
 // does NOT re-type the lab's law. It slices the two live regions out of a PINNED git blob of
-// planet-lod-lab.html — the F24/F25 derivation block (`const _gas = …` through
+// world-engine-lab.html — the F24/F25 derivation block (`const _gas = …` through
 // `state.jetFestoon = 0.45 * _vigor;`) and the whole body of `function rebakeE5Bands(){` — and runs
 // them with `new Function` against the real modules. So this is the lab's own output.
 //
 //   node scratchpad/capture-giantdeck-baseline.mjs 4e864bc > tests/fixtures/giantdeck-preset-baseline.mjs
 //
-// captured from: planet-lod-lab.html @ 4e864bc604f6b521b1238e06add086c3ad2d16d2
+// captured from: world-engine-lab.html @ 4e864bc604f6b521b1238e06add086c3ad2d16d2
 //
 // ⚠ ROWS ARE KEYED BY CONDITION, NOT BY PRESET NAME. Every row records the exact (preset, macroSeed,
 // radiusEarth, rotationHours) it was produced from, and the test rebuilds the SAME condition vector
@@ -1792,7 +1792,7 @@ export const BASELINE = [
 // // Capture the PRE-CHANGE lab gas-deck law, straight out of the lab's own source text.
 // //
 // // It does NOT re-type the law: it slices the two live regions out of a pinned git blob of
-// // planet-lod-lab.html and runs them, so the fixture is the LAB's output, not a transcription of it.
+// // world-engine-lab.html and runs them, so the fixture is the LAB's output, not a transcription of it.
 // //
 // //   node scratchpad/capture-giantdeck-baseline.mjs <git-sha>  > tests/fixtures/giantdeck-preset-baseline.mjs
 // //
@@ -1802,7 +1802,7 @@ export const BASELINE = [
 //
 // const ROOT = '/home/ax/projects/well-dipper';
 // const SHA = process.argv[2] || 'HEAD';
-// const LAB = execFileSync('git', ['-C', ROOT, 'show', `${SHA}:planet-lod-lab.html`], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+// const LAB = execFileSync('git', ['-C', ROOT, 'show', `${SHA}:world-engine-lab.html`], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 // const SHA_FULL = execFileSync('git', ['-C', ROOT, 'rev-parse', SHA], { encoding: 'utf8' }).trim();
 //
 // const { DRIVER_PRESETS } = await import(join(ROOT, 'driver-presets.js'));
@@ -1950,13 +1950,13 @@ export const BASELINE = [
 // //
 // // ⭐ HOW IT WAS CAPTURED, so the number below is re-derivable rather than asserted. The capture script
 // // does NOT re-type the lab's law. It slices the two live regions out of a PINNED git blob of
-// // planet-lod-lab.html — the F24/F25 derivation block (\`const _gas = …\` through
+// // world-engine-lab.html — the F24/F25 derivation block (\`const _gas = …\` through
 // // \`state.jetFestoon = 0.45 * _vigor;\`) and the whole body of \`function rebakeE5Bands(){\` — and runs
 // // them with \`new Function\` against the real modules. So this is the lab's own output.
 // //
 // //   node scratchpad/capture-giantdeck-baseline.mjs ${SHA_FULL.slice(0, 7)} > tests/fixtures/giantdeck-preset-baseline.mjs
 // //
-// // captured from: planet-lod-lab.html @ ${SHA_FULL}
+// // captured from: world-engine-lab.html @ ${SHA_FULL}
 // //
 // // ⚠ ROWS ARE KEYED BY CONDITION, NOT BY PRESET NAME. Every row records the exact (preset, macroSeed,
 // // radiusEarth, rotationHours) it was produced from, and the test rebuilds the SAME condition vector

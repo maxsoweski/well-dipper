@@ -5,7 +5,7 @@
 // holds, and there is NO regime-dispatch substring — incl. in comments — so the blind-writer scan passes
 // by construction). It never reads a preset name, archetype, regime or PRESET_ARCHETYPE.
 //
-// WHAT IT REPLACES: two hand-authored name-keyed lookup tables in planet-lod-lab.html —
+// WHAT IT REPLACES: two hand-authored name-keyed lookup tables in world-engine-lab.html —
 // LIMB_COLOR_BY_PRESET and TERM_COLOR_BY_PRESET — which were the last name-keyed entries in the colour
 // path. A body absent from those tables fell back to a stale previous-preset uWeatheredColor read (limb) or a
 // flat warm orange (terminator); a NEW body could not get an atmosphere hue at all without a code edit.

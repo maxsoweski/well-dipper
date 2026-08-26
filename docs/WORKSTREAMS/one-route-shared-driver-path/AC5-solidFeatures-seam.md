@@ -13,7 +13,7 @@ to decide."** It is the only one of the seven with no law dispute in it, so it i
 
 ## 2. The mechanism, read off the one precedent that worked
 
-`giantDeck` is the only pack the lab imports back (`planet-lod-lab.html:188`), and it is a TWO-PART
+`giantDeck` is the only pack the lab imports back (`world-engine-lab.html:188`), and it is a TWO-PART
 split, not a single call:
 
 | part | what it does |
@@ -24,7 +24,7 @@ split, not a single call:
 ⭐ **The mirror is what makes AC6 survivable.** Writing pack output straight to uniforms would take
 the lab's authoring sliders out of the loop, which is the lab's entire purpose. ⚠ And the mirror must
 carry the **UNGATED** value: the lab re-applies its own ✓ checkbox at the per-frame writer, so a
-gated mirror applies the decision twice (`planet-lod-lab.html:1749` names this hazard).
+gated mirror applies the decision twice (`world-engine-lab.html:1749` names this hazard).
 
 ✅ `solidFeatures.js` now exports both. Authoring `solidFeaturesLabState` +
 `solidFeaturesDirectDrivers` is the mechanical half of this AC. All fourteen uniforms mirror into
@@ -38,10 +38,10 @@ and it fails silently.**
 
 | | built from | what it is |
 |---|---|---|
-| `_gcond` (`planet-lod-lab.html:1726`) | `_fp = DRIVER_PRESETS[preset]` — the **FROZEN** preset | radius-aware, seed-**deaf** |
+| `_gcond` (`world-engine-lab.html:1726`) | `_fp = DRIVER_PRESETS[preset]` — the **FROZEN** preset | radius-aware, seed-**deaf** |
 | the lab's own 14 | `_dp = drawPresetConditions(preset, macroSeed)` — the **PER-SEED** draw | seed-aware, radius-**deaf** |
 
-The lab's own comment at `planet-lod-lab.html:1935` says why `_dp` exists: *"a macro seed produces a
+The lab's own comment at `world-engine-lab.html:1935` says why `_dp` exists: *"a macro seed produces a
 genuinely different WORLD (iron, volatiles, age, temperature) rather than the same physics with a
 re-rolled noise field."* Handing the pack `_gcond` throws that away — every seed would render the
 same volcanism, frost and temperature. **Nothing would be red.**
@@ -75,7 +75,7 @@ All three survivors derive from `surfaceGravity`, and from nothing else:
 **radius-AWARE** g. So the pack's three values differ from the lab's by exactly that.
 
 ⭐⭐ **THE LAB HAS ALREADY MADE THIS EXACT CONVERSION ONCE, AND SAID SO.**
-`planet-lod-lab.html:1964` reads `state.surfaceGravity = deriveConditionVector(_dp, u, state.planetRadiusEarth).surfaceGravity;`
+`world-engine-lab.html:1964` reads `state.surfaceGravity = deriveConditionVector(_dp, u, state.planetRadiusEarth).surfaceGravity;`
 under the comment *"The radius-aware condition gravity, NOT deriveUniforms' canonical radius-blind g
 … read by the uPerturb envelope (:5937) and the AC7 'surface gravity' readout (:4283); **both were
 radius-deaf until this line changed**."*
@@ -115,7 +115,7 @@ The instrument below stays in the file — it is how the ruling is re-checkable,
 
 ### The instrument he was handed
 
-The [G] key A/B is in the lab (handler `planet-lod-lab.html:5566`, arm readout in the `#abBadge`
+The [G] key A/B is in the lab (handler `world-engine-lab.html:5566`, arm readout in the `#abBadge`
 element at `:147`). It flips the three ∝1/g terms between the adopted pack arm and the old lab arm
 and touches nothing else — verified live: the other eleven read byte-identical across a flip.
 

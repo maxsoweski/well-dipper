@@ -11,7 +11,7 @@ partial). Confirmed in code:
 - `emissiveBlackbody(tempK)` — GLSL `planet-lod-height.glsl.js:734` + CPU twin `planet-lod-lab-core.js:127`
   ("ONE curve, two consumers"; also feeds shipped F41 magma).
 - East-advected hotspot: `uThermalDir` = light dir rotated east about spin by `hotspotOffset`
-  (0.26 rad ≈ 15°, calibrated between WASP-43b 7.75° and HD-189733b 30°); per-frame at `planet-lod-lab.html:5677`.
+  (0.26 rad ≈ 15°, calibrated between WASP-43b 7.75° and HD-189733b 30°); per-frame at `world-engine-lab.html:5677`.
 - `uDayTempK = T_eq×1.15`, `uNightTempK` ≈ 1100 K ("Keating universal" floor), gated on `uThermalStrength` (line 5684).
 - **The "hot giant renders cold" bug** = `daysideThermalEnabled`/`nightsideThermalEnabled` default **false**
   (2096-97); the Hot-Jupiter derivation (3467-75) sets `thermalStrength=1`/`dayTempK`/`nightTempK` but
@@ -50,7 +50,7 @@ self-contained (no repo-root import), DUPLICATE the stops in `emission-e.js` and
 them equal; else import the CPU `emissiveBlackbody`. Either way the parity test is mandatory.
 
 ### Slice 2 — lab wiring (in-browser) — AC4/AC5/AC6/AC7-setup
-Four edits to `planet-lod-lab.html` (re-read exact anchors before editing — line numbers approximate):
+Four edits to `world-engine-lab.html` (re-read exact anchors before editing — line numbers approximate):
 1. State (~2090-97): add `thermalTempEq: 280.0,` (live sweep source, decoupled from the `.listen()`
    `dayTempK` display) + `emissionEnabled: true,` (master register gate).
 2. Hot-Jupiter derivation (~3467-75): add `state.daysideThermalEnabled = _hotJup;

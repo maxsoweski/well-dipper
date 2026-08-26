@@ -73,7 +73,7 @@ All three live in `planet-lod-height.glsl.js`.
 `grep -rn "uBandCount"` over the whole repo (excluding `node_modules`) returns exactly
 five code hits: the uniform declaration `planet-lod-height.glsl.js:352`, the three above,
 the JS default `planet-lod-uniforms.js:350`, and the per-frame feed
-`planet-lod-lab.html:5904`. There are no others.
+`world-engine-lab.html:5904`. There are no others.
 
 ---
 
@@ -86,20 +86,20 @@ the JS default `planet-lod-uniforms.js:350`, and the per-frame feed
 |---|---|---|
 | `jetU` | `planet-lod-height.glsl.js:1550`, `:1851` | `jetsDisp`, `zonalBandCol` |
 | `jetShearGate` | `planet-lod-height.glsl.js:1564` | `jetsDisp` |
-| `jetsDisp` | `planet-lod-height.glsl.js:1869`, **`planet-lod-lab.html:680`** | `zonalBandCol`, **fragment `main()`** |
-| `zonalBandCol` | **`planet-lod-lab.html:668`** | **fragment `main()`** |
+| `jetsDisp` | `planet-lod-height.glsl.js:1869`, **`world-engine-lab.html:680`** | `zonalBandCol`, **fragment `main()`** |
+| `zonalBandCol` | **`world-engine-lab.html:668`** | **fragment `main()`** |
 
 The two roots are both inside the live planet material's fragment `main()`:
 
-* `planet-lod-lab.html:228` — `const fragmentShader = /* glsl */ \`` … `:229` — `${HEIGHT_GLSL}`
-* `planet-lod-lab.html:291` — `void main(){`
-* `planet-lod-lab.html:1463` — `const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });`
+* `world-engine-lab.html:228` — `const fragmentShader = /* glsl */ \`` … `:229` — `${HEIGHT_GLSL}`
+* `world-engine-lab.html:291` — `void main(){`
+* `world-engine-lab.html:1463` — `const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });`
 
 `main()` is opened at `:291` at six-space indent and no line in `291..760` matches
 `^      \}` — i.e. `main()` is still open at `:668`/`:680`. (Verified with
-`awk 'NR>=291 && NR<=760 && /^      \}/' planet-lod-lab.html` → **no output**.)
+`awk 'NR>=291 && NR<=760 && /^      \}/' world-engine-lab.html` → **no output**.)
 
-### Root A — the full gas deck (`planet-lod-lab.html:653-669`)
+### Root A — the full gas deck (`world-engine-lab.html:653-669`)
 
 ```glsl
         float bandMask = uBandStrength * provinceWeight(PROV_BANDS);   // :653
@@ -128,7 +128,7 @@ Inside `zonalBandCol`, both `uBandCount` paths are re-gated on jets:
 `bandVal` then drives `zone = smoothstep(0.34, 0.66, ...)` (`:1892`) and the zone/belt
 colour mix (`:1899-1900`) — i.e. it lands on pixels.
 
-### Root B — the jets **solo** path (`planet-lod-lab.html:676-681`)
+### Root B — the jets **solo** path (`world-engine-lab.html:676-681`)
 
 ```glsl
         float jetSoloMask = uJetStrength * provinceWeight(PROV_JETS) * (1.0 - bandMask);   // :676
@@ -149,19 +149,19 @@ This root reaches `uBandCount` **even with the F24 bands feature switched OFF**
 **No — not the only gate, and not the binding one.** `state.bandStrength` gates
 `uBandStrength` → `bandMask` → Root A. Root B deliberately bypasses `bandMask`. The gate
 that binds *all three* `uBandCount` consumers is `uJetStrength`, fed at
-`planet-lod-lab.html:5915`:
+`world-engine-lab.html:5915`:
 
 ```js
       uniforms.uJetStrength.value  = state.jetsEnabled ? state.jetStrength : 0.0;   // ✓ enable gate
 ```
 
-with `state.jetStrength = _gas ? 1.0 : 0.0;` (`planet-lod-lab.html:3296`) — the same
+with `state.jetStrength = _gas ? 1.0 : 0.0;` (`world-engine-lab.html:3296`) — the same
 `_gas` h2-he test used for `bandStrength` at `:3272`, so *in practice* gas-only, but via a
 different uniform. `state.jetsEnabled` defaults to `false` (`:2095`); it is an
 operator/registry checkbox (`planet-archetypes.js:37`,
 `jets: { enableKey: 'jetsEnabled', archetypes: ['gas-giant','hot-jupiter'] }`) and is
 also force-cleared by the "Isolate plate relief" UAT view
-(`planet-lod-lab.html:2591`, `clutter` list).
+(`world-engine-lab.html:2591`, `clutter` list).
 
 ---
 
@@ -180,7 +180,7 @@ The claim is scoped to **the band VALUE**, and it is accurate about that one con
 `0.25 * latC * uBandCount`. The *visible stripe count* now comes from the writer —
 `src/worldengine/base/climate-e5.js:218` counts zero-crossings of `u(lat)` and returns it
 as `bandCount` (`:293`, `:349`), surfaced to the lab as `state.e5BandCount`
-(`planet-lod-lab.html:2864`).
+(`world-engine-lab.html:2864`).
 
 **It removed one of four consumers.** The three in §1 were introduced by the *earlier*
 F25 jets increment and were left untouched — by design, per their own comment at `:1513`:
@@ -234,7 +234,7 @@ Hot Jupiter (locked giant)   uBandCount frozen = 3   range -> [3, 3]   all delta
 The three `flat` rows are flat **because the radius draw cannot move the count off the
 clamp floor of 3**, not because the consumers are dead there. Control run (same
 instrument, `uBandCount` 3 vs an arbitrary manual 8, which the `bandCount` GUI slider at
-`planet-lod-lab.html:4572` allows — range 2..20):
+`world-engine-lab.html:4572` allows — range 2..20):
 
 ```
    max|d jetU| = 1.9831e+0
@@ -251,7 +251,7 @@ differs.
 `jetRotY(pos, u * uJetSpeed * (ph - 0.5))`, `|ph - 0.5| <= 0.5`. On Jovian that is a
 **0.711 rad (40.7°)** difference in how far the noise domain is spun.
 `bandWarpField` (`:1539-1541`) samples `fbmd(p, 4.0, 0.0)` at base frequency 1 in object
-space with `R = 1.0` (`planet-lod-lab.html:198`), so the finest (4th) octave has
+space with `R = 1.0` (`world-engine-lab.html:198`), so the finest (4th) octave has
 wavelength `2π/8 ≈ 0.785` arc units. A 0.711 rad rotation moves the sample point
 **0.91× the finest-octave wavelength** — the sampled field decorrelates essentially
 completely. This is a visible-scale change, not a numerical tickle.
@@ -280,7 +280,7 @@ Break → check fails. Restore → check passes. The instrument has caught a kno
 
 ---
 
-## 5. The feed under scrutiny (`planet-lod-lab.html:3271-3278`)
+## 5. The feed under scrutiny (`world-engine-lab.html:3271-3278`)
 
 ```js
       const _gas = (_fp.atmosphere?.composition === 'h2-he');
@@ -319,7 +319,7 @@ a rewire at `:3278` **will** re-derive when the radius moves. No extra plumbing 
    there. **Pick Jovian or Saturnian for the A/B.**
 4. **Coherence hazard — flag before rewiring.** The visible band count now comes from
    `climate-e5.js`'s Rhines wavenumber, whose radius input is *also* frozen:
-   `planet-lod-lab.html:2856` — `radius: (_fp.radiusEarth ?? 1) / 11.2` (same frozen `_fp`
+   `world-engine-lab.html:2856` — `radius: (_fp.radiusEarth ?? 1) / 11.2` (same frozen `_fp`
    from `:2843`). Today both ladders are frozen, so they are at least *stably* mismatched.
    Making `uBandCount` live while `rebakeE5Bands`'s `drivers.radius` stays frozen means
    the jets would peak at latitudes the visible bands no longer sit at, and the mismatch
@@ -353,9 +353,9 @@ a rewire at `:3278` **will** re-derive when the radius moves. No extra plumbing 
   `w = 1` and the two rotated phases collapse so the `jetU`-driven rotation contributes
   nothing (`:1852-1857`). `jetShearGate` (`:1530`) and the festoon flank (`:1570`) carry
   no `uTime` and stay live at every instant, so `uBandCount` never fully drops out.
-  `uTime` is fed from the real clock at `planet-lod-lab.html:6112`.
+  `uTime` is fed from the real clock at `world-engine-lab.html:6112`.
 * **Not checked: the game.** `HEIGHT_GLSL` has no importer under `src/` — only
-  `planet-lod-lab.html:162`, `planet-lod-rivers.js:16` (which builds
+  `world-engine-lab.html:162`, `planet-lod-rivers.js:16` (which builds
   `HEIGHT_FRAG = HEIGHT_GLSL + ROUTER_MAIN` and never calls `zonalBandCol`/`jetsDisp`),
   and `rivers-terrain-lab.html`. So this is a lab-only finding, consistent with the
   planet-lod charter's lab≠game split. The game's own gas banding is the unrelated
@@ -363,7 +363,7 @@ a rewire at `:3278` **will** re-derive when the radius moves. No extra plumbing 
 * **Not checked: whether any *default* lab session has Jets on.** `state.jetsEnabled`
   defaults to `false` (`:2088`/`:2095`) and I found no code path that flips it true from a
   preset selection — the registry `archetypes` list at `planet-archetypes.js:36-37` drives
-  panel *filtering*, and `planet-lod-lab.html:2586` states outright "there is NO setPreset
+  panel *filtering*, and `world-engine-lab.html:2586` states outright "there is NO setPreset
   that re-applies `*Enabled`". If the operator never ticks Jets, `uBandCount` is inert in
   practice even on a Jovian. I could not rule out a URL-parameter or console
   (`window._lab`) path that enables it; I did not exhaustively audit those.
@@ -376,6 +376,6 @@ a rewire at `:3278` **will** re-derive when the radius moves. No extra plumbing 
 cd /home/ax/projects/well-dipper
 grep -rn "uBandCount" --include=*.js --include=*.html --include=*.glsl . | grep -v node_modules
 grep -rn "jetsDisp\|jetU(\|jetShearGate\|zonalBandCol" --include=*.js --include=*.html . | grep -v node_modules
-awk 'NR>=291 && NR<=760 && /^      \}/ {print NR": "$0}' planet-lod-lab.html   # empty => main() still open at :680
+awk 'NR>=291 && NR<=760 && /^      \}/ {print NR": "$0}' world-engine-lab.html   # empty => main() still open at :680
 node /tmp/claude-1000/-home-ax/e817996c-8971-4b9d-b54c-2e1af9b1e76b/scratchpad/g1-ubandcount-sensitivity.mjs
 ```

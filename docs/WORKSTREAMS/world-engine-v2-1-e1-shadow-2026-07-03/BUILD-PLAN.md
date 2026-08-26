@@ -26,7 +26,7 @@ via the exported predicates `isEarthlikePlatePath` :410, `isShellReliefPath` :42
 `shellRelief.js:48`), `isVolcanicPath` :435 (`VOLCANIC_ARCHETYPES={'lava','volcanic'}` :434), `isStagnantLidPath`
 :444 (→ `stagnantLidRegimeOf`, `stagnantLid.js:78`) — the AC3 oracle's `writerUnder(PRESET_ARCHETYPE)` composes
 these four **verbatim** (extract-don't-reimplement); the condition vector already threads inside `bodyDrivers`
-(:448-452 comment, unconsumed = shadow); `planet-lod-lab.html` — imports :164-166; `buildBodyDrivers` :2702-2719
+(:448-452 comment, unconsumed = shadow); `world-engine-lab.html` — imports :164-166; `buildBodyDrivers` :2702-2719
 attaches `condition:` :2717; the route seam `ensureNetworkRouted` sets `state._lastBodyDrivers` :3627 then calls
 `riverOverlay.route({archetype:PRESET_ARCHETYPE[_preset]||null … macroSeed:state.macroSeed})` :3628-3645;
 `_driverAbMode` :2685 + `_onDriverDrag` :3799 = the lab-only-override precedent; `magmaProbe` :6036-6092 /
@@ -130,7 +130,7 @@ Depends on B (`computeE1`) + A (widened vector). NEW `tests/worldengine-e1-confo
 
 **Slice D — Lab shadow wiring + AC7 live probe + AC-0 close. LAST.**
 Depends on B (`computeE1`). Data-only in the lab; zero rendered-byte change.
-- **Edit `planet-lod-lab.html`:** import `computeE1` (import block :164-166); in `ensureNetworkRouted` right after
+- **Edit `world-engine-lab.html`:** import `computeE1` (import block :164-166); in `ensureNetworkRouted` right after
   `state._lastBodyDrivers = _bodyDrivers;` (:3627), add `state._lastE1 = computeE1(_bodyDrivers.condition, state.macroSeed);`
   — computed from the vector + seed, **not passed to `route()`** (no routing influence; `archetype` at :3637 stays
   `PRESET_ARCHETYPE[_preset]`). Add a `_lab.e1Probe()` in the `_lab` object (~:6036, sibling of `magmaProbe`) that
@@ -326,7 +326,7 @@ few-shields"). `effectiveL` is emitted ONLY on the stagnant pick (AC2 conditiona
 emitted always. Confidence MEDIUM (UAT taste on how "wet" it reads — Max's gate, §5.4 #1 stays OPEN until his UAT).
 
 ### 4.6 `computeE1` attach point (lab data flow) + the `writerUnder` extraction shape
-- **Attach:** `planet-lod-lab.html:3627`, immediately after `state._lastBodyDrivers = _bodyDrivers;`, inside
+- **Attach:** `world-engine-lab.html:3627`, immediately after `state._lastBodyDrivers = _bodyDrivers;`, inside
   `ensureNetworkRouted` — `state._lastE1 = computeE1(_bodyDrivers.condition, state.macroSeed);`. This is the exact seam
   where the vector + seed are both live and where `route()` is called next (:3628) — but E1's result is NOT threaded
   into the `route()` args (data-only; `archetype:` at :3637 stays `PRESET_ARCHETYPE[_preset]`).

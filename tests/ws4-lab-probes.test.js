@@ -18,7 +18,7 @@
 //       (each runs its own pre-WS4 axis) — distinguishing "all read the cube" from "all happen to
 //       point similar directions".
 //
-// WHY a SOURCE-SCAN, not a runtime call: the probes are page-scoped JS inside planet-lod-lab.html;
+// WHY a SOURCE-SCAN, not a runtime call: the probes are page-scoped JS inside world-engine-lab.html;
 // they cannot be imported/executed headless (no DOM, no WebGL renderer, no live overlay). So this
 // vitest gate asserts the probe functions EXIST on the _lab surface with the documented shape +
 // wiring (re-derive via the pure bakeTectonicGrain, blend like the shader, nearest-node lookup). The
@@ -33,13 +33,13 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), 'utf8');
+const labSrc = readFileSync(path.resolve(__dirname, '../world-engine-lab.html'), 'utf8');
 
 // Pull a single JS function/method body out of the lab source by walking matched braces from the
 // first `{` after `marker`, so per-probe assertions don't bleed into neighbouring methods.
 function bodyAfter(src, marker) {
   const start = src.indexOf(marker);
-  expect(start, `"${marker}" must be present in planet-lod-lab.html`).toBeGreaterThanOrEqual(0);
+  expect(start, `"${marker}" must be present in world-engine-lab.html`).toBeGreaterThanOrEqual(0);
   const open = src.indexOf('{', start);
   let depth = 0, i = open;
   for (; i < src.length; i++) {

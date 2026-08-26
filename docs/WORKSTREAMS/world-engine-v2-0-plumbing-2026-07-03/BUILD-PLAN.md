@@ -73,7 +73,7 @@ export function buildNeutralBodyDrivers(u, fp) {
 ```
 **[FIXED: AC1 headless harness depends on two lab-trapped artifacts (… neutral buildBodyDrivers)]**
 
-**CHANGED `planet-lod-lab.html`**:
+**CHANGED `world-engine-lab.html`**:
 - Add `import { DRIVER_PRESETS, PRESET_ARCHETYPE } from './driver-presets.js';` and `import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';` to the module-import block (`:145`/`:160` already show ES imports).
 - Delete the inline `DRIVER_PRESETS` literal `:2641-2795`, the inline `PRESET_ARCHETYPE` `:1923-1939`, and the inline `presetDriverDefaults` `:2858-2866`.
 - `buildBodyDrivers` (`:2878-2890`) now calls the shared neutral builder as its base, then overlays slider overrides (lab-only state `_driverAbMode`/`_driverTouched`/`driverOv`) — keeping the exact same output for untouched fields:
@@ -149,7 +149,7 @@ export function deriveConditionVector(fp, derived, radiusEarth) { return {
 ```
 **[FIXED: deriveConditionVector sketch calls bodyRawTidal without importing it]** — `bodyRawTidal` is now in the import list alongside `bodyShellThickness` (the object body's `rawTidalIoRatio` fallback references it; the original sketch imported only `bodyShellThickness` → ReferenceError as written).
 
-**CHANGED `planet-lod-lab.html`** — in `buildBodyDrivers` (now shared-neutral-based, above), attach the vector as a **nested `condition` sub-object** (NOT flat keys):
+**CHANGED `world-engine-lab.html`** — in `buildBodyDrivers` (now shared-neutral-based, above), attach the vector as a **nested `condition` sub-object** (NOT flat keys):
 ```js
 return { massGravity:…, volatileFraction:…, tidalHeating:…, thermalState:…,   // 4 fields via shared builder + overrides
          condition: deriveConditionVector(fp, u, state.planetRadiusEarth) };  // NEW, nested

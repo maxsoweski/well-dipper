@@ -4,7 +4,7 @@ import { StarFlare } from './objects/StarFlare.js';
 import { RealStarCatalog } from './generation/RealStarCatalog.js';
 import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
 import { HashGridStarfield } from './generation/HashGridStarfield.js';
-import { realStarSeed } from './generation/realStarSeed.js'; import { assertLabSubject, labSubjectIsAddressed } from './util/lab-subject.js';   // ⛔ APPENDED TO THIS LINE, never inserted below it: this file carries symbol-anchored citations down past :12000 and a new import line shifts every one of them, reding them as some other block's failure. The same discipline planet-lod-lab.html:188 keeps.
+import { realStarSeed } from './generation/realStarSeed.js'; import { assertLabSubject, labSubjectIsAddressed } from './util/lab-subject.js';   // ⛔ APPENDED TO THIS LINE, never inserted below it: this file carries symbol-anchored citations down past :12000 and a new import line shifts every one of them, reding them as some other block's failure. The same discipline world-engine-lab.html:188 keeps.
 import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';

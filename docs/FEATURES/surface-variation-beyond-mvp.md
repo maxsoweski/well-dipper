@@ -248,7 +248,7 @@ Done before writing any slice-3 code. **Slice 3 is a MULTI-SESSION port, not a o
 - `HEIGHT_GLSL` declares **343 uniforms**. `makeUniforms()` supplies **340 of them.** The only five
   missing are the bake handles and their gates: `uReliefBakeCube`, `uReliefBakeStrength`,
   `uCraterBakeCube`, `uCraterBakeRestore`, `uProvinceCube`. Those are lab-local
-  (`makeDummyCubeTexture()`, `planet-lod-lab.html` ~1506-1535).
+  (`makeDummyCubeTexture()`, `world-engine-lab.html` ~1506-1535).
 - **The game's planet material currently binds ZERO textures**, so the texture-unit budget the register
   warned about is a non-issue. The real cost was never units, it is the per-planet BAKE.
 - ⭐ **The bakes are OPTIONAL and the shader says so.** At `uReliefBakeStrength = 0` the renderer
@@ -266,9 +266,9 @@ Done before writing any slice-3 code. **Slice 3 is a MULTI-SESSION port, not a o
 > progress and buy nothing. The real height source is **`fbmd(vPos, uOctaves, fwBase)`** (line 777, an
 > analytic-derivative FBM, up to 12 octaves with trailing-octave fade — self-contained, needs only
 > `noised()` plus uniforms `makeUniforms` already provides) **plus the long combiner chain composed in
-> the LAB'S `main()`**, roughly `planet-lod-lab.html:350-700`, ~40 feature stages each with its own
+> the LAB'S `main()`**, roughly `world-engine-lab.html:350-700`, ~40 feature stages each with its own
 > drivers. That chain is the actual slice-3 payload and it is what "still lab-only is the fragment body
-> inside planet-lod-lab.html" means.
+> inside world-engine-lab.html" means.
 
 **Suggested first increment (bounded, verifiable the same way slices 1-2 were):** swap the game's base
 `snoise` for `fbmd` INSIDE the existing per-type `getSurfacePattern` branches, and use fbmd's returned
@@ -281,7 +281,7 @@ them would be a large uncommanded visual regression. Watch `uOctaves`: the lab d
 ⛔ **LANE COLLISION — check before starting.** `planet-lod-height.glsl.js` is also being edited by
 `feature/world-engine-atmo-3b` (`~/projects/well-dipper-atmo`, lab on `:5178`), which has added ~320
 lines to it. Measured 2026-07-30 via read-only `git merge-tree`: that file and `planet-lod-uniforms.js`
-**auto-merge clean**; `planet-lod-lab.html` **conflicts**. Importing these modules from the game
+**auto-merge clean**; `world-engine-lab.html` **conflicts**. Importing these modules from the game
 without editing them adds ZERO new conflict surface — which is the reason to do slice 3 that way.
 
 ### ✅ SLICE 3, FIRST INCREMENT — SHIPPED (2026-07-30). The land path's base noise is now `fbmd`.
@@ -938,7 +938,7 @@ the game page to find the real blockers in one go instead of discovering them on
 #### What the spike established
 
     the lab's shader is fully extractable from the game               ✅
-      Vite's html-proxy module (planet-lod-lab.html?html-proxy&index=0.js), 3.33 M chars;
+      Vite's html-proxy module (world-engine-lab.html?html-proxy&index=0.js), 3.33 M chars;
       vertexShader 1 661 chars, fragmentShader 101 284 chars, ONE interpolation (${HEIGHT_GLSL}).
       Resolved: 355.1 KB, 349 uniforms — matches the register's wholesale figure exactly.
     it COMPILES AND LINKS CLEANLY inside the game page                ✅  LINK_STATUS true, empty log
@@ -1131,7 +1131,7 @@ port step.
 **The test suite structurally cannot catch lab breakage.** During this work a stray backtick inside
 the fragment-shader template literal terminated the string and broke the entire page with a bare
 `SyntaxError` — and the full suite passed clean, 20684 tests, because **nothing in `tests/` loads
-`planet-lod-lab.html`**. Only booting the page found it.
+`world-engine-lab.html`**. Only booting the page found it.
 
 Any GLSL or lab-wiring change is currently verified only by a human (or an agent) opening the page.
 A minimal smoke test that boots the lab headlessly and asserts `window._lab` exists plus a clean

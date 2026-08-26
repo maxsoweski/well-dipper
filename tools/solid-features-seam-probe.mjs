@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 // tools/solid-features-seam-probe.mjs — AC5's measurement, reproducible by command.
 //
-// THE QUESTION: if planet-lod-lab.html imports `solidFeaturesPack` back instead of deriving its
+// THE QUESTION: if world-engine-lab.html imports `solidFeaturesPack` back instead of deriving its
 // fourteen F7/F9/F17/F22/F23 masters inline, do the numbers change?
 //
 // ⛔ THE ANSWER DEPENDS ENTIRELY ON WHICH CONDITION VECTOR THE PACK IS HANDED, and that is the
 // finding — no prior document in this workstream names it:
 //   · ROUTE B feeds the pack a condition built from `_dp` = drawPresetConditions(preset, macroSeed),
-//     the PER-SEED draw the lab's own comment (planet-lod-lab.html:1941) says is the whole point of
+//     the PER-SEED draw the lab's own comment (world-engine-lab.html:1941) says is the whole point of
 //     `_dp`: "a macro seed produces a genuinely different WORLD".
 //   · ROUTE C feeds it `_gcond`, built from the FROZEN preset `_fp` — which is what the giantDeck
-//     call site at planet-lod-lab.html:1726 uses, so it is the obvious thing to copy AND IT IS WRONG
+//     call site at world-engine-lab.html:1726 uses, so it is the obvious thing to copy AND IT IS WRONG
 //     HERE. It is measured deliberately as the known-bad arm, because an instrument that has not
 //     been shown to fail on a known case is not evidence (this workstream broke four instruments
 //     before the things they measured; see AC2-refutation.md).
@@ -36,7 +36,7 @@ const U2S = {
 };
 // ⚠ ALL GATES OPEN ON PURPOSE. The lab gates these at its per-frame writer with its own ✓ checkboxes,
 // so the mirror must carry the UNGATED value into `state` or the decision is applied twice — the
-// double-gating hazard giantDeck's call site names at planet-lod-lab.html:1749.
+// double-gating hazard giantDeck's call site names at world-engine-lab.html:1749.
 const CTX = { displayRadiusEarth: 1, gates: { edifices: true, chaos: true, frost: true, glacial: true } };
 const SEEDS = [1, 2, 3, 7, 42, 1234];
 

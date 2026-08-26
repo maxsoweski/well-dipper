@@ -16,7 +16,7 @@
   "distance": 3.06,
   "cratersEnabled": false,
   "craterDensity": 0.85222421875,
-  "rerolledVia": "lil-gui '🌍 new planet (re-roll all)' -> newPlanet() (planet-lod-lab.html:3871); second re-roll from reroll1.",
+  "rerolledVia": "lil-gui '🌍 new planet (re-roll all)' -> newPlanet() (world-engine-lab.html:3871); second re-roll from reroll1.",
   "canvas": { "cssW": 1970, "cssH": 848, "pxW": 2462, "pxH": 1060, "dpr": 1.25 },
   "camera": {
     "type": "PerspectiveCamera",

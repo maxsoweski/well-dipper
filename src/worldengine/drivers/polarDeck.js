@@ -13,14 +13,14 @@
 // src/worldengine/base/storm-e.js:462 `function resolvePole(regime, stormsOn, vigor, rng) {`, which
 // has been shared, pure and ported since the #3b merge and was merely UN-EXPORTED — reachable only
 // by going through `resolveStormE`, i.e. only by paying for the whole storm slice. This pack does
-// not extract a law out of planet-lod-lab.html; it opens a door onto one that was already inside
-// `src/worldengine/`. The lab's planet-lod-lab.html:1916 `const _pd = polarDeckPack(_scond, {` is a
+// not extract a law out of world-engine-lab.html; it opens a door onto one that was already inside
+// `src/worldengine/`. The lab's world-engine-lab.html:1916 `const _pd = polarDeckPack(_scond, {` is a
 // CONSUMER of that producer, not the producer.
 //
 // ⛔ SO THE "THE LAB MUST IMPORT IT BACK" ACCEPTANCE TEST IS SATISFIED ALREADY, AND SAYING WHY IS
 // PART OF THE MEASUREMENT. The heightNoise.glsl.js pattern exists to stop an extraction forking into
 // a lab copy and a game copy. Here there is exactly one copy of `resolvePole` and the lab reaches it
-// through planet-lod-lab.html:186 `import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)`.
+// through world-engine-lab.html:186 `import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)`.
 // The single-source property is therefore not something a lab edit would establish — it is a
 // property `resolvePolarVortex` either preserves or breaks, which is why the acceptance evidence is
 // the BYTE-IDENTITY control in tests/driver-pack-polardeck.test.js (`resolvePolarVortex(a,b,c,d)`
@@ -39,7 +39,7 @@
 //
 // ⛔ WHAT THIS PACK DELIBERATELY DOES NOT DO — read before adding a uniform.
 // ---------------------------------------------------------------------------------------------
-//  · THE STORM SLICE STAYS FENCED. PLAN §7 fences the lab function planet-lod-lab.html:1811 `function applyStormState(){`
+//  · THE STORM SLICE STAYS FENCED. PLAN §7 fences the lab function world-engine-lab.html:1811 `function applyStormState(){`
 //    by name, along with the F27/F28 `uStorm*` family, and leaves `aStorm`
 //    zero-filled. This module imports `resolvePolarVortex` and NOTHING else from storm-e.js: it
 //    never names `resolveStormE`, `writeStormESphere` or `bakeStormEAttributes`, emits no `uStorm*`
@@ -54,7 +54,7 @@
 //    source for. Measured rather than assumed: the pack test asserts table default == lab slider
 //    default for both, so "unwritten" is provably equal to the lab and not merely unwritten.
 //  · NO PER-FEATURE RELEVANCE KEY, and this one is FORCED, not chosen. The lab folds a relevance
-//    hard-gate in at planet-lod-lab.html:5174 `uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — zeros Mars leak (polar vortex authored for gas giants, not terrestrial)`,
+//    hard-gate in at world-engine-lab.html:5174 `uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — zeros Mars leak (polar vortex authored for gas giants, not terrestrial)`,
 //    whose signal is preset membership in `ASSOCIATIONS.polarVortex.rendersOn`. The game's
 //    src/objects/Planet.js:2209 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
 //    is empty, and a driver keying an absent relevance name THROWS. ⭐ MEASURED, over all 18 driver
@@ -86,7 +86,7 @@ import {
 // ── THE ONE GENUINELY NEW LAW IN THIS PACK, DECLARED RATHER THAN DEFAULTED ───────────────────────
 // `resolvePolarVortex` takes a (macroSeed, stormSeed) PAIR. The game supplies `macroSeed` per body
 // already (src/objects/Planet.js:2255 `macroSeed: labMacroSeed(d),`) but has no storm UI and so has
-// never had a `stormSeed`. The lab's is a lil-gui default, planet-lod-lab.html:998 `stormSeed: 1234,      // F27 storm-placement seed — SEED IDENTITY: not reset on preset change; the folder 🎲 rerolls it`
+// never had a `stormSeed`. The lab's is a lil-gui default, world-engine-lab.html:998 `stormSeed: 1234,      // F27 storm-placement seed — SEED IDENTITY: not reset on preset change; the folder 🎲 rerolls it`
 // — and copying 1234 would import a GUI artifact into the game's world law, where nothing would
 // ever explain the number. 0 is chosen because `macroSeed` is ALREADY per-body, so the identity pair
 // is already unique across the galaxy without a second varying term.
@@ -103,7 +103,7 @@ export const GAME_STORM_SEED = 0;
 
 // ── The cool shift that turns the deck tint into the cap tint ────────────────────────────────────
 // Ported verbatim from the lab's inline cap-tint expression, which was RETIRED 2026-08-25 when the
-// lab began reading this law back instead of holding a second copy: planet-lod-lab.html:1920 `Object.assign(state, polarDeckLabState(_pd));`
+// lab began reading this law back instead of holding a second copy: world-engine-lab.html:1920 `Object.assign(state, polarDeckLabState(_pd));`
 // — the Cassini gold-haze-outside / blue-core two-tone. Its input `_bt` is `state.bandTint`, which
 // pack #1 sources from `condition.atmosphere.color`, so feeding this the SAME condition field makes
 // the two front-ends' cap tints identical by construction rather than by coincidence.
@@ -202,7 +202,7 @@ export function polarDeckPack(condition, ctx = {}) {
 
   // ⛔ ORDER — CLASSIFY THE UN-DRAWN CONDITION. The same call pack #1 makes at giantDeck.js:269 `const regime = giantRegimeOf(condition);`,
   // and the lab records the specific damage of getting it wrong at exactly THIS derivation:
-  // planet-lod-lab.html:1852 `which moves the polar bank this function writes (state.polarSides / state.polarR0) on 52/52 (preset, seed) pairs tried`
+  // world-engine-lab.html:1852 `which moves the polar bank this function writes (state.polarSides / state.polarR0) on 52/52 (preset, seed) pairs tried`
   // — the polar bank moves on 52/52 pairs while `polarStrength` and the storm count stay 0, i.e. the
   // mistake is invisible to every gate that keys on the master strength.
   const regime = giantRegimeOf(condition);
@@ -233,7 +233,7 @@ export function polarDeckPack(condition, ctx = {}) {
 
   // ── The eight driven uniforms ────────────────────────────────────────────────────────────────
   // ⭐ ONLY `uPolarStrength` CARRIES THE GATE, and that reproduces the lab exactly rather than being
-  // a simplification: planet-lod-lab.html:5196 `      // F29 polar vortex — polarVortexEnabled gates strength→0 ONLY (the GLSL call`
+  // a simplification: world-engine-lab.html:5196 `      // F29 polar vortex — polarVortexEnabled gates strength→0 ONLY (the GLSL call`
   // says the enable gate zeroes strength ALONE, because the GLSL call site keys on `uPolarStrength`
   // — planet-lod-height.glsl.js:2167 `        if (uPolarStrength > 0.0) col = polarVortexCol(N, col);` — so one gate kills the whole
   // combiner and restores byte-identical F28 output, while the other seven keep their derived values.
@@ -296,13 +296,13 @@ export const POLAR_DECK_ENTRY = Object.freeze({
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 // THE LAB SEAM — the mirror the lab imports back, and the reason it lives HERE and not in the lab.
 //
-// ⭐ THE MAPPING IS THE THING THAT MUST NOT BE WRITTEN TWICE. planet-lod-lab.html wrote these eight
+// ⭐ THE MAPPING IS THE THING THAT MUST NOT BE WRITTEN TWICE. world-engine-lab.html wrote these eight
 // assignments by hand off `resolveStormE(...).pole`; the game reaches the same values through
 // `applyDriverPacks`. Two hand-written spellings of one uniform→field map is exactly the two-routes
 // disease this pack was extracted to end, so the map lives in the pack and both front-ends read it.
 //
 // ⚠ THE PAIR THE LAB KEEPS IS ABSENT ON PURPOSE. `POLAR_LAB_KNOBS` (`uPolarAmp`, `uPolarW`) are the
-// lab's authoring sliders, planet-lod-lab.html:1017 `polarAmp: 0.12,` and :1021 `polarW: 0.025,`,
+// lab's authoring sliders, world-engine-lab.html:1017 `polarAmp: 0.12,` and :1021 `polarW: 0.025,`,
 // and this pack never emits them. A mirror that invented them would hand the lab back its own knobs.
 export const POLAR_LAB_BINDING = Object.freeze({
   uPolarStrength: 'polarStrength',
@@ -318,7 +318,7 @@ export const POLAR_LAB_BINDING = Object.freeze({
 /**
  * ⛔⛔ EVERY GATE ON, for the reason solidFeatures.js:301 gives and one this pack makes sharper.
  *
- * The lab re-applies its OWN ✓ checkbox at the per-frame writer, planet-lod-lab.html:5200
+ * The lab re-applies its OWN ✓ checkbox at the per-frame writer, world-engine-lab.html:5200
  * `uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;`
  * — so the value this mirror puts into `state.polarStrength` must be the UNGATED one, or the
  * decision is applied twice.
