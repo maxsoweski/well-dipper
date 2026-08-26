@@ -195,6 +195,15 @@ describe('AC-ZERO-CLOBBER — the lab GLSL regions are sVis-free (breach only al
       'uReliefBakeStrength',
       // P4 — synth sub-floor craters (·sVis on the real-R value)
       'uCraterScale',
+      // ⭐ ADDED 2026-08-25 — the [N] bare-key A/B's arm B, and it is the SAME shape as uCraterScale
+      // one line up: the physics is resolved at the REAL radius and the display multiply is applied
+      // at the write. ⛔ IT IS ON THIS LIST BECAUSE OF THAT SHAPE, NOT BECAUSE IT NEEDED TO PASS.
+      // The first cut resolved the wavelength at the lab's INFLATED display radius and applied no
+      // multiply at all — which is the arrangement this whole fence exists to forbid, and it was
+      // wrong by exactly 1/R, so it vanished at Earth size and reached 3.1x on Lava. That version
+      // would not have tripped this assertion, because it carried no sVis token to catch. Landing on
+      // the allowlist is what being RIGHT looks like here; the wrong version was invisible to it.
+      'uNoiseScale',
       // P5b — fixed-uniform relief combiners + their warp-domain partners
       'uMountainScale', 'uScarpFreq', 'uScarpWarpFreq', 'uPlateauScale',
       'uTesseraFreq', 'uTesseraWarpFreq', 'uWrinkleFreq', 'uDoubleRidgeFreq',
