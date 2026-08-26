@@ -26,7 +26,7 @@
 // declare them itself because it injects only the function bodies.
 //   uNoiseScale       per-planet base feature frequency (the game mirrors its own noiseScale)
 //   uDispDomainScale  global domain multiplier; 1.0 = identity, which is what the game uses
-//   uFwClamp          1 = fade sub-pixel octaves to their mean (anti-shimmer)
+//   uFwClamp          0 = octave clamp off · 1 = anti-shimmer bar (ships) · 2 = the 4 render px bar
 //   uMacroOffset      seed offset for the big-feature octaves (0..2)
 //   uDetailOffset     seed offset for the remaining octaves
 export const HEIGHT_NOISE_UNIFORMS_GLSL = /* glsl */ `
@@ -84,6 +84,33 @@ export const HASH3_NOISED_GLSL = /* glsl */ `vec3 hash3(vec3 p){
 // ── fbmd — variable-octave analytic FBM. Returns vec4(height, gradient.xyz). ──
 // octaves = mix(4,9,lodRamp); fractional trailing-octave weight = pop-free ramp;
 // fwidth clamp fades sub-pixel octaves to their mean (kills dither shimmer).
+//
+// ⭐⭐ uFwClamp IS TRI-STATE AS OF 2026-08-26, AND THE TWO NON-ZERO ARMS ARE DIFFERENT RULES.
+// The clamp's anchor is read in CYCLES PER RENDER PIXEL, so 0.25 means "one cycle per 4 render px".
+//
+//   1  ANTI-SHIMMER (0.40, 0.80) = 2.50 -> 1.25 px per cycle. The historical, shipped value. It is
+//      an ALIASING bar: it drops an octave only once that octave is past Nyquist and would crawl.
+//      An octave at 3 px per cycle passes it at FULL weight.
+//   2  LEGIBILITY   (0.125, 0.25) = 8.00 -> 4.00 px per cycle. The SAME 2x-wide ramp re-anchored on
+//      the rule src/worldengine/port/craterUniforms.js already states for craters: a feature must
+//      span at least 4 RENDER px to READ as one, "2x Nyquist, because a crater has to show bowl AND
+//      rim to read as one, not merely be detected".
+//
+// ⛔ WHY THE GAP IS NOT COSMETIC. The two bars disagree by 2x, so 2.50..4.00 px per cycle was gated
+// by NOTHING — kept at full weight while below the engine's own legibility bar. MEASURED at the
+// game's framing, at the top of the macro-wavelength range, HALF the surface normal came from that
+// band; from 12 down to 6 body radii it was ALL of it.
+// ⚠ AND THE GRADIENT IS WHY THIS MATTERS MORE THAN THE HEIGHT WEIGHTS SUGGEST: grad accumulates
+// amp*w*freq while amp halves and freq doubles, so amp*freq is CONSTANT — every surviving octave
+// shades exactly as hard as octave 0 however small its height weight. A 1/256-amplitude octave is
+// not a whisper in the lighting; it is an equal partner.
+// ⛔ AND THE SCENE IS RENDERED NATIVELY SMALL, NOT SUPERSAMPLED DOWN (RetroRenderer's scene target
+// is width/pixelScale with NearestFilter and antialias off), so a sub-pixel octave has nothing to
+// average into. It does not become texture. It becomes crawl.
+// ⛔ ALL FOUR fbm VARIANTS MUST TEST != 0, NOT == 1 — fbmdRidged/fbmdHetero/fbmdDamped in
+// height.glsl.js share this uniform, and an == 1 guard turns their clamp OFF at arm 2, which would
+// make mountains, plateaus and glacial ice shimmer and read as a false result for this A/B.
+// Derivation + the live sweep: docs/FEATURES/macro-frequency-rootcause-2026-08-26.md.
 export const FBMD_GLSL = /* glsl */ `vec4 fbmd(vec3 pos, float octaves, float fwBase){
         float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale
         float amp  = 0.5;
@@ -92,9 +119,9 @@ export const FBMD_GLSL = /* glsl */ `vec4 fbmd(vec3 pos, float octaves, float fw
         for (int i = 0; i < 12; i++){
           if (float(i) >= octaves) break;
           float w = clamp(octaves - float(i), 0.0, 1.0);    // trailing-octave fade
-          if (uFwClamp == 1){
-            float screenF = fwBase * freq;                  // per-octave screen-space freq
-            w *= 1.0 - smoothstep(0.4, 0.8, screenF);
+          if (uFwClamp != 0){
+            float screenF = fwBase * freq;                  // per-octave screen freq, CYCLES PER RENDER PIXEL
+            w *= 1.0 - smoothstep((uFwClamp == 2) ? 0.125 : 0.4, (uFwClamp == 2) ? 0.25 : 0.8, screenF);
           }
           // macro seed drives the big-feature octaves (0..2), detail seed the rest.
           // A constant offset leaves the analytic gradient untouched (chain rule).

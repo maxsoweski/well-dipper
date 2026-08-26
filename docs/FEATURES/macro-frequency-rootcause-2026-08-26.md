@@ -18,7 +18,7 @@ Reproduce everything here with `node tools/macro-screen-floor-probe.mjs`.
 | | rule | in render px per cycle | source |
 |---|---|---|---|
 | craters | must **read** as a feature | `>= 4.00` | `src/worldengine/port/craterUniforms.js:65-71` |
-| noise stack | must not **shimmer** | full weight to `2.50`, zero at `1.25` | `src/worldengine/shaders/heightNoise.glsl.js:95-98` |
+| noise stack | must not **shimmer** | full weight to `2.50`, zero at `1.25` | `src/worldengine/shaders/heightNoise.glsl.js:122-124` |
 
 The crater rule states its reasoning: *">= 4 RENDER px ... 2x Nyquist, because a crater has to show
 bowl AND rim to read as one, not merely be detected."* The noise stack's fade states a different
@@ -137,3 +137,81 @@ already 17 % of the normal on a cold one).
    field. At 1.3 radii it renders perfectly smooth regardless of the wavelength law.
 3. ⚠ `setPreset('lava')` (lower case) silently draws a COLD body — `_abNoiseScaleGame` 2.87 rather
    than 250.7. Use the GUI's exact names, e.g. `'Lava (hot airless)'`.
+
+---
+
+## 8. THE INSTRUMENT — `[K]`, a bare key, built 2026-08-26
+
+**Max's outcome, in his words:** *"a pixel scale roughly equivalent to the PS1/N64 era of videogames.
+We don't want to draw too much more detail than that, since our downstream processing will remove the
+detail anyhow."* — with the caveat that *"a higher fidelity render that goes through a post-process
+transforming it into that retro scale might look just how I want."*
+
+⛔ **THAT SECOND ARCHITECTURE DOES NOT EXIST IN THIS GAME, and the distinction decides the fix.**
+`RetroRenderer` builds `sceneTarget` at `ceil(w / pixelScale) x ceil(h / pixelScale)` with
+`NearestFilter` on both axes and `antialias: false`, then MAGNIFIES it. There is no downsample and
+no supersample anywhere in the pipeline. So the fragment shader runs **once per retro pixel** and a
+sub-pixel octave has nothing to average into — it is point-sampled. It does not become texture; it
+becomes **crawl**. Under a supersample-then-downsample architecture the same octave would resolve
+into the low-res image as tone, and the trade would be completely different.
+
+**Where the target sits:** `pixelScale 3` at 1600x999 is a **534x333** render target — between PS1
+(320x240) and N64 hi-res (640x480), slightly on the fine side of the era. Moving toward the stated
+aesthetic means COARSER, which strengthens the floor argument and rules out "render at higher
+resolution" as a route.
+
+| pixelScale | render target | vs the era | oct-0 px at the law's ceiling |
+|---|---|---|---|
+| 2 | 800x500 | finer than N64 hi-res | 7.16 — clears |
+| **3 (today)** | **534x333** | between PS1 and N64 hi-res | **4.77 — just clears** |
+| 4 | 400x250 | PS1 / N64 native | 3.58 — ⛔ under the bar |
+| 5 | 320x200 | PS1 / N64 native | 2.86 — ⛔ under the bar |
+
+⭐⭐ **At true PS1/N64 native the law's hot end has NO renderable content as SHAPE at all** — not
+merely unrenderable harmonics. That is the coupling §5 warns about, made concrete.
+
+### What was built
+
+⭐ **`uFwClamp` is now TRI-STATE rather than a boolean, and NO NEW UNIFORM WAS ADDED.**
+`0` = clamp off (unchanged; `fieldSampler` pins this) · `1` = the shipped anti-shimmer bar
+(0.40, 0.80) · `2` = the same 2x-wide ramp re-anchored on the 4-render-px legibility bar
+(0.125, 0.25). **Arm 1 is byte-identical to what shipped**, so the change is inert until the key is
+pressed.
+
+⛔ **THE FIRST CUT ADDED A `uOctaveFade` UNIFORM AND WAS WRONG TWICE — kept as the thing corrected.**
+(1) `tests/lab-surface-ratchet.test.js`, `material-parity-list` and `swap-ledger` are **uniform
+inventory ratchets**; all 152 assertions passed at HEAD and 6 failed with the new uniform. The repo
+has an explicit "no set may grow" ratchet and adding a uniform trips it by design — the fix is to
+not add one, not to re-bless three baselines. (2) More seriously, `fbmdRidged`, `fbmdHetero`,
+`fbmdDamped` and the F-ECU border term **share `uFwClamp` and guarded on `== 1`**, so any third
+state would have silently turned their clamp OFF, making mountains, plateaus and glacial ice shimmer
+and reporting a false A/B result. **All five sites now test `!= 0`.**
+
+### How to fly it
+
+`[K]` on the badge at top-centre. **A is the unpressed page-load arm** (`2.5px SHIMMER (ships)`);
+**B is `4px LEGIBILITY`**. Best seen on a tidally-hot preset — Lava, Europa, Magma — where the
+wavelength law is at its ceiling; the cold presets sit at 2.87 and barely move.
+⚠ Fly `[N]` to arm B as well, or the base field is the lab's factory 4.0 and `[K]` has almost
+nothing to act on.
+
+**Measured live, Europa arm B at 4 body radii:** arm A renders dense crosshatch moiré across the
+whole disc; arm B renders larger, readable blotches. That visual difference is also the liveness
+proof — nothing else differs between the arms, so the shader demonstrably consumes the new state.
+
+### ⛔ 9. AN INSTRUMENT HAD BEEN DEAD SINCE 2026-08-25 — found in passing, repaired
+
+`npm run port-uniform-delta:check` (Instrument C) **threw on every run** since `6f52330` (the game
+adopting the lab's province gating, Max's 2026-08-25 ruling): that commit put `uProvinceWeight` on
+the shipped material and never added it to `TIER_BY_NAME`, and the tool hard-throws on an
+unclassified name-matched uniform. **A thrown instrument reads exactly like a passing one from the
+outside**, so every "verified against the instruments" claim made on 2026-08-25 was missing this
+one. Classified `gate` (it is a literal `1.0` at `src/objects/Planet.js:1703`, the same shape as
+`uFwClamp`). It now runs, and reports `added (+1): uProvinceWeight` with **0 of 55 uniforms moved
+across 232 bodies** — i.e. the tri-state change is value-neutral, and the only basis change is the
+one that had been hidden.
+
+⚠ **Instrument B (`test:body-identity`) fails 3 assertions — VERIFIED PRE-EXISTING.** Stashing this
+work and re-running at HEAD reproduces the same three failures with the same numbers (moon
+population 821 vs a baseline of 794, draw profile moved on 28 seeds). That is the other lane's
+binary-companion generation change, already recorded in the 2026-08-25 handoff.

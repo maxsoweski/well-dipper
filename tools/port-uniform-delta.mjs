@@ -700,8 +700,8 @@ const TIER_BY_NAME = {
   uEjectaAmp: 'condition',
   uEjectaLump: 'condition',
   uDispDomainScale: 'gate',   // RELIEF_DOMAIN_SCALE      — Planet.js:1381 `const RELIEF_DOMAIN_SCALE`
-  uFwClamp: 'gate',           // literal 1                — Planet.js:1683 `uFwClamp`
-  uVoroCells: 'gate',         // CRATER_VORO_CELLS        — Planet.js:1395 `const CRATER_VORO_CELLS`
+  uFwClamp: 'gate',           // literal 1                — Planet.js:1683 `uFwClamp`. ⭐ TRI-STATE since 2026-08-26 (0 off / 1 anti-shimmer, ships / 2 the 4px legibility bar) — still a literal, still 'gate'; the shipped value is unchanged at 1.
+  uVoroCells: 'gate',   uProvinceWeight: 'gate',   // CRATER_VORO_CELLS        — Planet.js:1395 `const CRATER_VORO_CELLS`. ⛔ uProvinceWeight ADDED HERE 2026-08-26 AS A REPAIR, NOT AS NEW WORK: it landed on the shipped material at 6f52330 (the game adopting the lab's province gating, Max's 2026-08-25 ruling) and was never classified, so THIS WHOLE INSTRUMENT HAS THROWN ON EVERY RUN SINCE — a dead instrument reads exactly like a passing one from the outside. It is a literal 1.0 on Planet.js:1703, i.e. the same shape as uFwClamp above, hence 'gate'.
   uNoiseScale: 'record',      // d.noiseScale             — Planet.js:1681 `uNoiseScale`
   uMacroOffset: 'record',     // reliefOffsets(d).macro   — Planet.js:1293 `function reliefOffsets`,
                               // hashed from 8 drawn record fields

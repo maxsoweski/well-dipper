@@ -815,7 +815,7 @@ Carried forward honestly. Several of these are load-bearing.
 7. **Corrections to lane findings, carried forward:**
    - The engine lane's headline **chord-sag arithmetic is wrong by 3.33×**. It took base frequency =
      `uNoiseScale` = 4; the actual base is `uNoiseScale * 0.3 * uDispDomainScale`
-     (`heightNoise.glsl.js:89`). Recomputed: game sag ≈ **16.4%** of the finest feature, lab ≈ **2.3%** —
+     (`heightNoise.glsl.js:116`). Recomputed: game sag ≈ **16.4%** of the finest feature, lab ≈ **2.3%** —
      not 55% and 7.7%. The 7.1× *ratio* survives; "the game's domain wobbles by half a feature width"
      does not. Worse, the two halves came from different front-ends — the legacy game path sets
      `RELIEF_DOMAIN_SCALE = 1.0/0.3` (`Planet.js:1381` `[SOURCE-VERIFIED-ME]`), which cancels the 0.3.

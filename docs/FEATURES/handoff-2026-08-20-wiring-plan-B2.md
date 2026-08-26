@@ -91,7 +91,7 @@ colours**; uLevels 64 → **804** (23.6×). Removing the retro pixel grid instea
   `labCore` reaches no pixel. Every "unblocks N features" figure is a forward price.
 - ⭐ **`giantDeck` is missing the noise-offset writer.** All 103 swapped gas bodies draw their base
   height field from the SAME three offsets (`uniforms.js:158` answers literally `(0,0,0)`), read with
-  no composition gate before the pixel (`heightNoise.glsl.js:101`). **This is "they all look
+  no composition gate before the pixel (`heightNoise.glsl.js:128`). **This is "they all look
   identical" on the gas half**, invisible to every algebraic gate. Ledger **P-13**, `blocking`,
   denominator 103 of 266. A small, high-value fix nobody has scheduled.
 - ⭐ **`encodeValue` compares a `THREE.Vector3` against a `THREE.Color` and they never match**, however

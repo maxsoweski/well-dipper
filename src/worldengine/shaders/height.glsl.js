@@ -25,7 +25,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float uLevels;        // posterize levels
       uniform float uPerturb;       // relief strength
       uniform int   uNormalMode;    // 0 = analytic, 1 = finite-diff (production)
-      uniform int   uFwClamp;       // 1 = fwidth octave clamp on
+      uniform int   uFwClamp;       // 0 = octave clamp off · 1 = anti-shimmer bar (ships) · 2 = the >= 4 render px legibility bar
       uniform int   uDitherMode;    // 0 = Bayer, 1 = IGN
       uniform float uEmissive;      // emissive glow strength
       uniform float uSpecStrength;  // F36 sunglint strength (driven: liquid master gate, species + Cox-Munk dim folded at the per-frame writer)
@@ -983,7 +983,7 @@ export const HEIGHT_GLSL = /* glsl */ `
           // doc §5.3 risk #3) — fading sub-pixel octaves to their mean is mandatory,
           // not optional, for ridged terrain. fwBase is the SCALED input's footprint.
           float fade = clamp(octaves - float(i), 0.0, 1.0);
-          if (uFwClamp == 1) fade *= 1.0 - smoothstep(0.4, 0.8, fwBase * freq);
+          if (uFwClamp != 0) fade *= 1.0 - smoothstep((uFwClamp == 2) ? 0.125 : 0.4, (uFwClamp == 2) ? 0.25 : 0.8, fwBase * freq);   // tri-state 2026-08-26: arm 2 is the 4 render px legibility bar. MUST be != 0, not == 1 — an == 1 guard silently turns this clamp OFF at arm 2. See heightNoise.glsl.js.
           vec4 n = noised(q * freq + uMacroOffset + uMountainDomainOffset); // share macro seed (+🎲 offset)
           float signal = uRidgeOffset - abs(n.x);                 // fold
           float sq = signal * signal;                             // sharpen
@@ -2437,7 +2437,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         for (int i = 1; i < 12; i++){
           if (float(i) >= octaves) break;
           float w = clamp(octaves - float(i), 0.0, 1.0);
-          if (uFwClamp == 1) w *= 1.0 - smoothstep(0.4, 0.8, fwBase * freq);
+          if (uFwClamp != 0) w *= 1.0 - smoothstep((uFwClamp == 2) ? 0.125 : 0.4, (uFwClamp == 2) ? 0.25 : 0.8, fwBase * freq);   // tri-state 2026-08-26, arm 2 = the 4 render px legibility bar (see heightNoise.glsl.js). != 0 is load-bearing.
           vec3 off = (i < 3) ? uMacroOffset : uDetailOffset;
           vec4 n = noised(pos * freq + off + uPlateauDomainOffset);
           float cw = clamp(weight, 0.0, 1.0);                     // locally-const stratification weight
@@ -2468,7 +2468,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         for (int i = 0; i < 12; i++){
           if (float(i) >= octaves) break;
           float w = clamp(octaves - float(i), 0.0, 1.0);          // trailing-octave fade
-          if (uFwClamp == 1) w *= 1.0 - smoothstep(0.4, 0.8, fwBase * freq);
+          if (uFwClamp != 0) w *= 1.0 - smoothstep((uFwClamp == 2) ? 0.125 : 0.4, (uFwClamp == 2) ? 0.25 : 0.8, fwBase * freq);   // tri-state 2026-08-26, arm 2 = the 4 render px legibility bar (see heightNoise.glsl.js). != 0 is load-bearing.
           float dampW = 1.0 / (1.0 + damp * dot(grad, grad));      // slope-damping (locally-const this octave)
           vec3 off = (i < 3) ? uMacroOffset : uDetailOffset;
           vec4 n = noised(pos * freq + off + uGlacialOffset);
@@ -3070,7 +3070,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         vec3 ecuCellId, ecuVGrad;
         vec2 ecuR = voronoi3d(ecuWp * bFreq, 27, ecuCellId, ecuVGrad);   // ecuR.x=F1, ecuR.y=F2
         float ecuBorder = 1.0 - smoothstep(0.0, uEcuSeamWidth, ecuR.y - ecuR.x); // 1 in street canyon, 0 inside block
-        if (uFwClamp == 1) ecuBorder *= 1.0 - smoothstep(0.4, 0.8, fwB * bFreq);  // kill sub-pixel moiré vs Bayer
+        if (uFwClamp != 0) ecuBorder *= 1.0 - smoothstep((uFwClamp == 2) ? 0.125 : 0.4, (uFwClamp == 2) ? 0.25 : 0.8, fwB * bFreq);  // kill sub-pixel moiré vs Bayer. Tri-state 2026-08-26; != 0 so arm 2 does not disable it.
         grad += -uEcuCanyonDepth * ecuBorder * ecuVGrad * cov;          // carve canyons DOWN; perturbAnalytic lights walls
       }
 

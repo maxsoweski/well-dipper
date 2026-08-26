@@ -259,7 +259,7 @@ ceiling was imposed on it, and the measured reason is in §7.
 
 **`uNoiseScale` is NOT added to `giantDeck`.** On a gas body the lab spends the same spelling as a
 **band-warp frequency**, reached through `fbmd` at
-src/worldengine/shaders/heightNoise.glsl.js:88 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;`
+src/worldengine/shaders/heightNoise.glsl.js:115 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;`
 — not as a terrain wavelength. None of the eight reference bodies above is a gas giant, and the
 process term's anchor is Io, a solid body. Same spelling, two quantities: the shape the parity ledger
 already rules at P-15.

@@ -74,7 +74,7 @@ export const K_MACRO_R = 1.16;
 // so the octave-0 frequency is `uNoiseScale * 0.3` and "λ km per cycle" means
 // `uNoiseScale * 0.3 == R_km / λ_km`. Putting that through `featureFrequencyFromKm` requires exactly
 // `cFeature = 1 / 0.3`. The same 0.3 is the multiplier the lab loses at ledger P-15
-// (src/worldengine/shaders/heightNoise.glsl.js:88 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale`),
+// (src/worldengine/shaders/heightNoise.glsl.js:115 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale`),
 // which is why it is spelled as that number's reciprocal rather than as 3.3333: a decimal would be a
 // second, independently-driftable copy of a constant that already exists in the GLSL.
 export const C_MACRO = 1 / 0.3;
@@ -157,7 +157,7 @@ export function macroWavelengthKm(condition) {
 // ⛔ `uNoiseScale` IS NOT ADDED TO `giantDeck`, AND THE REFUSAL IS RULED HERE RATHER THAN LEFT TO
 // LOOK LIKE AN OVERSIGHT. On a gas body the same uniform is a BAND-WARP frequency, not a terrain
 // wavelength: `bandWarpField` and `jetsDisp` reach it through `fbmd`, whose octave 0 is
-// src/worldengine/shaders/heightNoise.glsl.js:88 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale`,
+// src/worldengine/shaders/heightNoise.glsl.js:115 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale`,
 // and a zonal-flow warp has no macro-relief structure to calibrate against — none of the eight
 // reference bodies in §1 is a gas giant, and the process term's Io anchor is a solid-body anchor.
 // Writing this name into the gas deck would give the SAME SPELLING TWO QUANTITIES, which is ledger

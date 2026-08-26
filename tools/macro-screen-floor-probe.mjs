@@ -35,7 +35,7 @@ const labDiscPx = (d) => LAB_PX_PER_TAN * Math.tan(Math.asin(Math.min(0.9999, 1 
 // one vPos unit spans the disc radius in px and fwBase = 1/discPx at the disc centre, face-on —
 // the same convention craterUniforms.js states for its own floor.
 const DOMAIN = 1.0;   // uDispDomainScale on the lab-surface material, BOTH front-ends
-const octFreq = (uNS, n) => uNS * 0.3 * DOMAIN * Math.pow(2, n);   // heightNoise.glsl.js:88+104
+const octFreq = (uNS, n) => uNS * 0.3 * DOMAIN * Math.pow(2, n);   // heightNoise.glsl.js:115+104
 
 // ── THE TWO BARS, both already stated in this repo, both in RENDER px per cycle.
 const BAR_FEATURE = 4.0;   // craterUniforms.js:65-71 — ">= 4 RENDER px ... 2x Nyquist, because a
@@ -50,7 +50,7 @@ console.log('='.repeat(94));
 console.log('A — THE TWO RULES, AND THE UNGATED BAND BETWEEN THEM');
 console.log('='.repeat(94));
 console.log(`craters      an octave must span >= ${BAR_FEATURE.toFixed(2)} px/cycle to READ as a feature   craterUniforms.js:65-71`);
-console.log(`noise stack  full weight until ${FADE_START_PX.toFixed(2)} px/cycle, zero at ${FADE_DONE_PX.toFixed(2)} px/cycle       heightNoise.glsl.js:95-98`);
+console.log(`noise stack  full weight until ${FADE_START_PX.toFixed(2)} px/cycle, zero at ${FADE_DONE_PX.toFixed(2)} px/cycle       heightNoise.glsl.js:122-124`);
 console.log(`\n⭐ ${FADE_START_PX.toFixed(2)} .. ${BAR_FEATURE.toFixed(2)} px/cycle is kept at ~FULL weight and is below the repo's own`);
 console.log('   legibility bar. NOTHING in the engine gates it. The noise stack\'s only screen-awareness');
 console.log('   is an ANTI-SHIMMER fade set at Nyquist — its own comment says "kills dither shimmer".');
@@ -105,3 +105,35 @@ console.log(`\ntoday's law ceiling MACRO_FREQ_CEIL = ${MACRO_FREQ_CEIL.toFixed(3
 console.log('\n⛔ NOT A RECOMMENDATION. Which of these rows is right depends on how many octaves the');
 console.log('   field is meant to show, which is a LOOK decision and is Max\'s. Recorded so the number');
 console.log('   is derived from a stated rule rather than picked by eye.');
+
+console.log('\n' + '='.repeat(94));
+console.log('E — ⭐ MAX\'S TARGET: "a pixel scale roughly equivalent to the PS1/N64 era" (2026-08-26)');
+console.log('='.repeat(94));
+console.log('⛔ THE GAME RENDERS NATIVELY SMALL — it is NOT a high-fidelity render post-processed down.');
+console.log('   src/rendering/RetroRenderer.js:826 builds sceneTarget at ceil(w/pixelScale) x ceil(h/pixelScale),');
+console.log('   NearestFilter both ways, antialias:false (:48), then magnifies. There is no downsample and');
+console.log('   no supersample anywhere. So the fragment shader runs ONCE PER RETRO PIXEL and sub-pixel');
+console.log('   octaves cannot average into anything — they are point-sampled, i.e. pure aliasing that');
+console.log('   CRAWLS as the camera moves. That is what the fwidth fade exists to suppress.\n');
+console.log('Reference native resolutions: PS1 320x240 (some 512x240) · N64 320x240, 640x480 hi-res mode.\n');
+console.log('  pixelScale   render target @1600x999   vs PS1/N64        disc px @1.2R   oct-0 px at the law ceiling');
+for (const ps of [1, 2, 3, 4, 5, 6]) {
+  const rw = Math.ceil(1600 / ps), rh = Math.ceil(999 / ps);
+  const disc = 1078.23 / ps;
+  const px0 = disc / octFreq(MACRO_FREQ_CEIL, 0);
+  const era = rw >= 1200 ? 'far finer than the era' : rw >= 700 ? 'finer than N64 hi-res'
+            : rw >= 480 ? 'between PS1 and N64 hi-res' : rw >= 300 ? '⭐ PS1 / N64 NATIVE' : 'coarser than the era';
+  const verdict = px0 >= BAR_FEATURE ? 'clears the 4px bar' : px0 >= BAR_NYQUIST ? '⛔ UNDER THE BAR' : '⛔⛔ PAST NYQUIST';
+  console.log(`  ${String(ps).padStart(10)}   ${(rw+'x'+rh).padStart(21)}   ${era.padEnd(27)}   ${disc.toFixed(1).padStart(13)}   ${px0.toFixed(2).padStart(6)} px  ${verdict}`);
+}
+console.log('\n⭐⭐ THE CONSEQUENCE FOR THE LAW. Today (pixelScale 3) the hottest bodies clear the 4px bar at');
+console.log('    their FUNDAMENTAL by a hair. Move toward true PS1/N64 native and even the fundamental');
+console.log('    stops clearing — so at the target aesthetic the law\'s hot end has NO renderable content');
+console.log('    as SHAPE at all, not merely unrenderable harmonics.');
+console.log('\n    The ceiling the 4px rule implies, per pixelScale, keeping N octaves legible:');
+console.log('      pixelScale   1 oct     2 oct     3 oct');
+for (const ps of [3, 4, 5]) {
+  const disc = 1078.23 / ps;
+  const c = (n) => (disc / BAR_FEATURE / 0.3 / Math.pow(2, n - 1)).toFixed(1);
+  console.log(`      ${String(ps).padStart(10)}   ${c(1).padStart(6)}   ${c(2).padStart(7)}   ${c(3).padStart(7)}      (today's law ceiling ${MACRO_FREQ_CEIL.toFixed(1)})`);
+}
