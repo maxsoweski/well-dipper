@@ -313,6 +313,21 @@ export const FRAME_UNIFORMS = [
   'uniforms::uCraterDensity',
   'uniforms::uCraterOffset',
   'uniforms::uCraterRelaxation',
+  // ⭐ ADDED 2026-08-25, AND IT IS A GROWTH RATHER THAN A SHRINK, WHICH THIS FIXTURE TREATS AS A
+  // DELIBERATE ACT. `uNoiseScale` had NO writer anywhere in planet-lod-lab.html — the material's
+  // declaration (src/worldengine/shaders/uniforms.js:10) is a factory 4.0 and nothing ever touched it,
+  // so every lab world rendered its base field at one shared frequency. frame() now writes it for the
+  // [N] bare-key A/B: arm A restates that factory 4.0, arm B is the shared physical wavelength law
+  // resolved at this front-end's display policy.
+  // ⚠ THE RATCHET'S OWN OBJECTION IS ANSWERED RATHER THAN OVERRIDDEN. Its message says a new frame()
+  // uniform means a feature was authored inside frame() instead of in a pack. The VALUE here is NOT
+  // authored in the lab: it comes from `rockySurfacePack`'s one ungated km-shaped driver, resolved
+  // through `resolveDriver`. What frame() authors is the CHOICE between two arms, which is an
+  // instrument for Max, not a law — and `uNoiseScale` is exclusion 5 in ROCKY_SURFACE_LAB_BINDING
+  // (src/worldengine/drivers/rockySurface.js:441) precisely because the lab has no state field to
+  // mirror it into. If Max adopts arm B, the honest end state is a lab state field and a normal
+  // mirror entry, and this line goes back to being ordinary.
+  'uniforms::uNoiseScale',
   'uniforms::uCraterScale',
   'uniforms::uCratonColor',
   'uniforms::uCryoActivity',

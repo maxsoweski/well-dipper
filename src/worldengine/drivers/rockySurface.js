@@ -539,7 +539,7 @@ export const ROCKY_SURFACE_LAB_OWNED = Object.freeze(['uPerturb', 'uCraterScale'
  *
  * The lab re-applies its OWN ✓ checkboxes at the per-frame writer, both of them:
  *   planet-lod-lab.html:5354 `uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
- *   planet-lod-lab.html:5361 `uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.craterRelevance : 0.0;`
+ *   planet-lod-lab.html:5361 `uniforms.uEjectaStrength.value   = state.ejectaEnabled ?` (⚠ FRAGMENT SINCE 2026-08-25 — that line now carries the [E] bare-key A/B and its middle swaps between the lab's own value and this pack's amplitude family; the relevance re-multiply is the unchanged tail)
  * — one per gate name this pack's ENTRY declares (`CRATER_GATE`, `EJECTA_GATE`), and they are
  * INDEPENDENT toggles: ejecta off with craters on is a real lab state. So the value this mirror puts
  * into `state.craterDensity` and `state.ejectaStrength` must be the UNGATED one. A mirror that

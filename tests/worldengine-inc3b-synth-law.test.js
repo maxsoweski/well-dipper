@@ -163,6 +163,20 @@ describe('Inc-3b S3-fix — the SHIPPED lab source carries the derivation (not j
   });
   it('the frame gate reads state.craterRelevance (NOT featureRelevant.craters) on the crater + ejecta paths', () => {
     expect(lab).toMatch(/uCraterDensity\.value\s*=\s*state\.cratersEnabled\s*\?\s*state\.craterDensity\s*\*\s*state\.craterRelevance/);
-    expect(lab).toMatch(/uEjectaStrength\.value\s*=\s*state\.ejectaEnabled\s*\?\s*state\.ejectaStrength\s*\*\s*state\.craterRelevance/);
+    // ⭐ THE EJECTA ARM WAS LOOSENED 2026-08-25, AND ONLY IN ITS MIDDLE. That line now carries the [E]
+    // bare-key A/B, so what sits between the enable gate and the relevance multiply swaps between the
+    // lab's own `state.ejectaStrength` and the port's amplitude family. ⛔ THE TWO ENDS ARE STILL
+    // PINNED EXACTLY, because they are what this test is about: the ENABLE GATE is still
+    // `state.ejectaEnabled` and the relevance factor is still `state.craterRelevance`. A regression to
+    // `featureRelevant.craters` — the thing this test exists to catch — still fails it, and the
+    // control below proves that rather than asserting it.
+    expect(lab).toMatch(/uEjectaStrength\.value\s*=\s*state\.ejectaEnabled\s*\?[^;]*state\.craterRelevance/);
+    // ⛔ CONTROL: a loosened regex is worthless unless the loosening is shown not to admit the very
+    // thing being excluded. Swap the relevance term for the barred `featureRelevant.craters` spelling
+    // and the pattern must stop matching.
+    const barred = lab.replace(/(uEjectaStrength\.value\s*=\s*state\.ejectaEnabled\s*\?[^;]*)state\.craterRelevance/,
+                               '$1featureRelevant.craters');
+    expect(barred, 'the mutation must actually have applied, or this control is vacuous').not.toBe(lab);
+    expect(barred).not.toMatch(/uEjectaStrength\.value\s*=\s*state\.ejectaEnabled\s*\?[^;]*state\.craterRelevance/);
   });
 });

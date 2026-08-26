@@ -57,7 +57,7 @@ import { sizeKm, scalar, assertDisplayPolicy, assertPackResult, resolveDriver, P
 // ⭐ NAMES, NOT HARDCODED 1.0s, and TWO of them rather than one, because the lab has two independent
 // toggles over this family and they do not switch together:
 //   planet-lod-lab.html:5354 `= state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
-//   planet-lod-lab.html:5361 `= state.ejectaEnabled ? state.ejectaStrength * state.craterRelevance : 0.0;`
+//   planet-lod-lab.html:5361 `* state.craterRelevance : 0.0;`
 // Ejecta off with craters on is a real lab state; collapsing the two into one gate would delete a
 // rendering decision rather than express it. One spelling each, shared by the driver and BOTH
 // entries — src/worldengine/drivers/rockySurface.js re-exports them so neither pack can declare a
@@ -377,7 +377,7 @@ export const CRATER_DECK_LAB_BINDING = Object.freeze({
  * ⛔⛔ EVERY GATE ON, AND ON THIS FAMILY THERE ARE TWO OF THEM. The lab re-applies its OWN ✓
  * checkboxes at the per-frame writer, once per gate:
  *   planet-lod-lab.html:5354 `uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
- *   planet-lod-lab.html:5361 `uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.craterRelevance : 0.0;`
+ *   planet-lod-lab.html:5361 `uniforms.uEjectaStrength.value   = state.ejectaEnabled ?` (⚠ QUOTED AS A FRAGMENT SINCE 2026-08-25: that line now carries the [E] bare-key A/B, so its middle swaps between the lab's `state.ejectaStrength` and this pack's amplitude family. The relevance re-multiply this note is about is the tail, and it is unchanged.)
  * so the values this mirror puts into `state.craterDensity` and `state.ejectaStrength` must be the
  * UNGATED ones. A mirror that resolved the gate too would apply each decision TWICE: a body whose
  * feature is enabled would still read zero the moment this pack's gate map disagreed with the
