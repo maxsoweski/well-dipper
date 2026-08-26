@@ -23,8 +23,19 @@ cross pixel boundaries. Same underlying cause, opposite remedy, different work. 
 | Planet/moon base field | `heightNoise.glsl.js`, `height.glsl.js` | ✅ gated (`uFwClamp`, key `[K]`), footprint now anisotropic | done pending Max's verdict |
 | Craters | `port/craterUniforms.js` | ✅ km-based physical floor | done |
 | **Everything else on the planet — 68 uniforms** | `height.glsl.js` | ⛔ **no gate at all** | see below |
-| **Rings** | `RingRenderer.js`, `ringConic.js`, `OrbitRingSDF.js` | ⛔ unmeasured | ⭐ **highest suspected risk after terrain** — a ring is a thin annulus whose radial banding goes sub-pixel long before the planet does, and it is edge-on for most of its life |
+| **Rings** | ⭐ `Planet.js` `_createRing()` **:1764** — ⛔ **NOT** the three files this row first named; see below | ✅ **MEASURED 2026-08-26**, ⛔ not built | ⭐ **confirmed: bands fail the 4px bar over ~74% of the sky on the median body.** Wants the fbm-style screen fade — `fwidth(t)` against the band cycle count. Record: `ring-resolvability-measurement-2026-08-26.md` |
 | **Asteroid belts** | `AsteroidBelt.js` | ⛔ unmeasured | many small bodies, most of them sub-pixel most of the time |
+
+⛔ **THIS ROW ORIGINALLY NAMED `RingRenderer.js`, `ringConic.js` AND `OrbitRingSDF.js`, AND ALL
+THREE WERE WRONG** — corrected 2026-08-26 after measurement. `RingRenderer.js` is dead code,
+instantiated nowhere in `src/` (also recorded in `FEATURE_AUDIT_LEGACY §2.4` and `JOURNEY.md:48`).
+`ringConic.js` and `OrbitRingSDF.js` draw **orbit** rings, which already measure their band in render
+pixels and are OUT of scope by this document's own boundary two paragraphs up. The live planetary
+ring is the legacy `sin(t*30.0)` path in `Planet.js`, in every case — its physics branch is inert
+(`PlanetGenerator.js:561` passes `moons: []`, and `rings.physics` is read nowhere in rendering).
+⛔ **And so the world-engine lab CANNOT judge the game's ring**: `world-engine-lab.html:489`
+deliberately swaps in the dead physics path. The lab/game parity that is load-bearing for terrain
+does not extend to rings.
 
 **The 68, by family** — cities/districts (incl. `uMachWindowDensity`, the smallest thing we
 deliberately draw), fluvial/outflow/karst, scarps/tessera/wrinkles/ridges/lineations,
