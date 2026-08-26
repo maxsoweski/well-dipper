@@ -1,6 +1,6 @@
 # Stage-B Research — Clouds & Haze (the F31 cloud/haze family)
 
-**Date:** 2026-06-06 · **Domain:** Clouds & Haze (one driver, six looks) · **Stage:** B (per-domain render+generation research) · **Implements into:** `planet-lod-lab.html` (Stage C)
+**Date:** 2026-06-06 · **Domain:** Clouds & Haze (one driver, six looks) · **Stage:** B (per-domain render+generation research) · **Implements into:** `world-engine-lab.html` (Stage C)
 
 > **Frame (do not re-litigate).** This is a ground-up NEW planet renderer building UP from the
 > 1-LOD retro/dithered foundation. **No parity-with-old goal. No `planetType` branch** — derive
@@ -11,7 +11,7 @@
 > **Stage A already converted clouds onto the analytic base.** The lab has `uCloudCoverage`,
 > `uAuroraIntensity`, `uTime`, and a cloud term:
 > ```glsl
-> // planet-lod-lab.html:379-382
+> // world-engine-lab.html:379-382
 > vec4 cw = fbmd(vPos * 1.7 + vec3(uTime * 0.02, 0.0, 0.0), 5.0, 0.0);
 > float cloud = smoothstep(0.15, 0.5, cw.x) * uCloudCoverage * (diff + 0.05);
 > vec3 cloudC = vec3(cloud);
@@ -457,7 +457,7 @@ driver bundle, so the lab and production tell one story — wire the dropdown to
   §3.2 (clouds-as-relief, cloud-shell vs in-shader, terminator cloud shadowing, fresnel atmosphere).
 - **Existing production cloud paths (ported, not reinvented)** — `src/objects/Planet.js:379-388`
   (gas/eyeball), `:584-636` (terrestrial latBias / Venus / rocky dust), `:951+` (exotic). Lab term:
-  `planet-lod-lab.html:377-392`. CPU derivation: `planet-lod-lab-core.js:51-71`.
+  `world-engine-lab.html:377-392`. CPU derivation: `planet-lod-lab-core.js:51-71`.
 
 > **Integrity note:** Sudarsky class table and the Wikipedia fetch are first-hand verified. Venus
 > UV-absorber, Titan haze altitude, GJ 1214 b flat-spectrum, and tholin-chromophore claims are from

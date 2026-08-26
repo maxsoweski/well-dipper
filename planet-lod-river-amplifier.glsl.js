@@ -49,7 +49,7 @@ export const AMP = Object.freeze({
 
 // ───────────────────────── GLSL primitive (faithful transcription of the JS port) ─────────────
 // Interpolates the AMP constants so the GLSL literally shares the JS numbers. The function
-// signature is shaped to drop into sampleCarve (planet-lod-lab.html:209-221): it takes the
+// signature is shaped to drop into sampleCarve (world-engine-lab.html:209-221): it takes the
 // object-space surface dir, a local tangent-plane (uv) coordinate, the control fields decoded
 // from the carve cube, and the lodRamp gate; returns vec2(signedDist, incisionWeight) and writes
 // the local flow direction (tangent-plane) for carveGrad bending.
@@ -64,7 +64,7 @@ const AMP_HASH_GLSL3 = /* glsl */ `
   }`;
 
 // GLSL1 (WebGL1) FALLBACK hash — sin-fract, used ONLY when the amplifier is inlined into a GLSL1
-// shader (production sampleCarve, planet-lod-lab.html, is GLSL1: textureCube + no glslVersion:GLSL3).
+// shader (production sampleCarve, world-engine-lab.html, is GLSL1: textureCube + no glslVersion:GLSL3).
 // IMPORTANT: this is NOT bit-identical to ampHash/AMP_HASH_GLSL3 — sin-fract and the uint bit-mix
 // produce different jitter. Determinism (no flicker) still holds: it is a pure function of the same
 // (cell, lvl, seed). The headless tests lock the GLSL3/JS path; the GLSL1 path is proven by the
@@ -201,7 +201,7 @@ ${hashSrc}
 //   used by the isolated harness (rivers-viewdependent-lab.html, glslVersion:THREE.GLSL3) and the
 //   eventual GLSL3 promotion of the production shader.
 // RIVER_AMPLIFIER_GLSL1 — GLSL ES 1.00 (WebGL1) fallback for inlining into the CURRENT GLSL1
-//   sampleCarve (planet-lod-lab.html). Same math; sin-fract hash (see AMP_HASH_GLSL1 caveat).
+//   sampleCarve (world-engine-lab.html). Same math; sin-fract hash (see AMP_HASH_GLSL1 caveat).
 // RIVER_AMPLIFIER_REQUIRES_GLSL3 — true: the default export is the GLSL3 variant; callers targeting
 //   a GLSL1 shader MUST inline RIVER_AMPLIFIER_GLSL1 instead (do NOT inline both).
 export const RIVER_AMPLIFIER_GLSL = ampBody(AMP_HASH_GLSL3, MINSLOPES_INIT_GLSL3);

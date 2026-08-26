@@ -1,7 +1,7 @@
 // lab-render-status.js
 // Pure, DOM-free status-mapping for the render-audit surface (Ask 4 of the lab
 // menu/info overhaul). The SINGLE source of the tier thresholds + the glyph map,
-// imported by BOTH the in-GUI badge (planet-lod-lab.html) and the offline report
+// imported by BOTH the in-GUI badge (world-engine-lab.html) and the offline report
 // generator (scripts/gen-render-audit.mjs) so the live surface and the report can
 // never drift apart. No GPU, no DOM — unit-tested headless.
 

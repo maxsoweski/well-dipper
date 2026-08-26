@@ -166,12 +166,12 @@ export default {
   cleanTempDir: true,
 
   // ⚠ THE SANDBOX IS A REAL COPY, AND THAT IS THE WHOLE BALLGAME. All three suites derive their ROOT
-  // from `import.meta.url` and then read planet-lod-lab.html and src/worldengine/** off disk. Node
+  // from `import.meta.url` and then read world-engine-lab.html and src/worldengine/** off disk. Node
   // resolves symlinks BEFORE computing import.meta.url, so a mirror that SYMLINKS tests/ reads the
   // REAL repo and every mutant returns the original's number. Stryker copies source files (it
   // symlinks only node_modules), so its sandbox is sound by construction — VERIFIED, not assumed:
   //   node -e "console.log(require('fs').realpathSync('.stryker-tmp/sandbox-XXXX/tests/radius-live-feed.test.js'))"
-  // printed a path inside the sandbox for tests/, tests/helpers/source-scan.mjs, planet-lod-lab.html
+  // printed a path inside the sandbox for tests/, tests/helpers/source-scan.mjs, world-engine-lab.html
   // and tools/vitest.mutation.config.mjs. Re-run that check if you ever change `ignorePatterns`.
   //
   // ⚠ THE LIST BELOW EXISTS ONLY BECAUSE THIS REPO IS 6.1G AND STRYKER COPIES IT PER RUN. Most

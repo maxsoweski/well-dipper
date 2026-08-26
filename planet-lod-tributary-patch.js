@@ -12,7 +12,7 @@
 // This module imports THREE (it does GPU work). The pure primitives stay PURE in
 // planet-lod-tributaries.js so their headless STEP-1 tests are untouched. projectToPatch (below) is a
 // pure no-THREE port of the shader's gnomonic-tangent inverse projection, exported so the UV
-// transform is unit-testable AND kept byte-aligned with the GLSL in planet-lod-lab.html.
+// transform is unit-testable AND kept byte-aligned with the GLSL in world-engine-lab.html.
 
 import * as THREE from 'three';
 import {

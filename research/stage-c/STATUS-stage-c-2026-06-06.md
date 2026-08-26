@@ -29,7 +29,7 @@ against is locked. Next: **step 2** (generation-side surfacings, index §2) then
 The shared 3D cellular primitive three domains route through (relief craters F2, cryo pits/polygons, exotic hex/crystal/shatter). Built ONCE per index §1 — **do not fork parallel primitives.**
 
 - **CPU oracle** `planet-lod-lab-core.js` → `voronoi3d(p, cells)` returns `{f1, f2, cellId, toCenter, grad}`. `grad = ∂F1/∂p = normalize(p − center)` — the relief-normal contribution.
-- **GLSL** `planet-lod-lab.html` → `voronoi3d(vec3 p, int cells, out vec3 cellId, out vec3 grad)` + `hash33` (transcribed from the oracle, same hash constants). Behind a temporary `▸ Debug — voronoi3d spike` lil-gui folder (modes: F1 / F2−F1 borders / cell-id color / lit relief).
+- **GLSL** `world-engine-lab.html` → `voronoi3d(vec3 p, int cells, out vec3 cellId, out vec3 grad)` + `hash33` (transcribed from the oracle, same hash constants). Behind a temporary `▸ Debug — voronoi3d spike` lil-gui folder (modes: F1 / F2−F1 borders / cell-id color / lit relief).
 - **Tests** `tests/planet-lod-voronoi.test.js` — 8, TDD'd (RED→GREEN). Analytic gradient pinned vs central finite-difference (the relief-doc §5.4 silent-bug guard); F2≥F1; determinism; the 27-vs-9 cost/quality invariant.
 - **Live-verified on `:9223`** (screenshots `voronoi-spike-01..06`): **27-cell is seam-free at the pole, across all meridians, with correct analytic-normal lighting and a clean F2−F1 border network.** 3D-domain (sampled on `vPos`) is seam-free by construction — the reason to pay for 27 cells. Debug OFF → Stage-A render unchanged (no regression).
 
@@ -632,7 +632,7 @@ The icy-resurfacing activity gate F9/F10 read, now DERIVED (was an option-A lab-
   no ice shell). Reuses the already-computed `tidalProxy`/`volatileGate`/`T`.
 - **6 TDD tests** (`tests/planet-lod-generation.test.js`, RED→GREEN): Europa>0 · circular-orbit=0 ·
   volatile-poor=0 · warm=0 · monotonic-in-tidal · [0,1]+finite+empty=0. **211 lab tests green** (+6).
-- **Wired** `applyDrivers` (`planet-lod-lab.html`): preset→`state.cryoActivity`→`uCryoActivity` like every
+- **Wired** `applyDrivers` (`world-engine-lab.html`): preset→`state.cryoActivity`→`uCryoActivity` like every
   driven field; the ◀ ICY ACTIVITY slider is now a **manual override** (option-A stub note retired).
 - **New "Europa (icy moon)" preset** exercises it (eccentric close orbit + vf 0.5 + T_eq 110 K → cryoActivity 1).
 - **Registry `uCryoActivity` flipped RESERVED→LIVE.**
@@ -867,7 +867,7 @@ BEFORE the domain fan-out — cheap insurance, Max's call on timing). A ~30-min 
 ### Province contract hook — ✅ RESERVED 2026-06-07 (the one time-sensitive sub-decision)
 Max chose: reserve the hook before the fan-out. Landed:
 - `uProvinceWeight` no-op multiplier (default **1.0**, NOT a 0.0 gate) added to the central `uniforms`
-  object + a GLSL `uniform float uProvinceWeight;` decl, both in `planet-lod-lab.html`, in the
+  object + a GLSL `uniform float uProvinceWeight;` decl, both in `world-engine-lab.html`, in the
   RESERVED-names block beside `uCryoActivity`.
 - Registry row added (`REGISTRY-canonical-uniforms.md`): RESERVED, owner Stage-D provinces, consumers = ALL combiners.
 - Convention spelled out in **integration-index §8** ("What does NOT wait"): every fan-out combiner multiplies

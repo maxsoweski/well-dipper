@@ -193,7 +193,7 @@ L.push('---');
 L.push('');
 L.push('*Raw deltas: `docs/FEATURES/.sweep-raw.json`. Auditor: `lab-render-audit.js` '
      + '(`tests/render-audit.test.js`). Sweep harness: `window._lab.renderDeltaSweep()` '
-     + 'in `planet-lod-lab.html`.*');
+     + 'in `world-engine-lab.html`.*');
 
 writeFileSync(new URL('../docs/FEATURES/lab-render-audit.md', import.meta.url), L.join('\n') + '\n');
 console.log(`Wrote docs/FEATURES/lab-render-audit.md`);

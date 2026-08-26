@@ -108,7 +108,7 @@ export function bakeRingCloud(physics, opts = {}) {
  *
  * The cloud is centered on the planet (add it as a child of / sibling tilted with the
  * planet), so `position` is already relative to the planet center → the shadow test
- * mirrors the impostor's (planet-lod-lab.html:4676-4682).
+ * mirrors the impostor's (world-engine-lab.html:4676-4682).
  *
  * @param {object} baked - output of bakeRingCloud
  * @param {object} opts - { pointScale, dResolve, dCull, planetRadius, lightDir:[x,y,z], sizeClamp }
@@ -170,7 +170,7 @@ export function makeRingCloudPoints(baked, opts = {}) {
         gl_PointSize = clamp(sz, 0.0, uSizeClamp);
 
         // Per-particle analytic planet-shadow (object space; position is relative to
-        // planet center). Mirrors impostor planet-lod-lab.html:4676-4682.
+        // planet center). Mirrors impostor world-engine-lab.html:4676-4682.
         float shadowDist = length(cross(position, uLightDir));
         float behind = step(dot(position, uLightDir), 0.0);
         float inShadow = behind * (1.0 - smoothstep(uPlanetRadius * 0.9, uPlanetRadius * 1.1, shadowDist));

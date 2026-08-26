@@ -1,6 +1,6 @@
 // rivers-terrain-lab.main.js — RIVER ROUTER LAB (real-terrain coupling).
 // AC2/AC3 reference harness. As of AC4 the routing/ribbon pipeline lives in the SHARED module
-// planet-lod-rivers.js (createRiverOverlay) — the SAME module planet-lod-lab.html consumes, so
+// planet-lod-rivers.js (createRiverOverlay) — the SAME module world-engine-lab.html consumes, so
 // there is one source of the router/ribbon pipeline (no more two drifting copies, the AC1
 // rationale applied to the pipeline). This file keeps ONLY the lab glue: the base-sphere viz
 // shaded by the real h+grad, the HUD, and the window._rivers console handles. The overlay binds
@@ -12,7 +12,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { makeUniforms } from './src/worldengine/shaders/uniforms.js';
 import { createRiverOverlay } from './planet-lod-rivers.js';
 
-const WORLD_LIGHT = new THREE.Vector3(0.6, 0.35, 0.7).normalize();   // lab static light dir (planet-lod-lab.html:172)
+const WORLD_LIGHT = new THREE.Vector3(0.6, 0.35, 0.7).normalize();   // lab static light dir (world-engine-lab.html:172)
 
 // ───────────────────── Renderer / scene ───────────────────
 const canvas = document.getElementById('canvas');

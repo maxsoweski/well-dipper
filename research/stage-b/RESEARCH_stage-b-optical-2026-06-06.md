@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-06 · **Domain:** Optical / Atmosphere · **Stage:** B (per-domain HOW + generation-path)
 **Project:** `~/projects/well-dipper` · three.js r183.1 / WebGL2 · desktop-primary, graceful mobile
-**Feeds:** Stage-C implementation in `planet-lod-lab.html` (`▸ Optical / Atmosphere` folder)
+**Feeds:** Stage-C implementation in `world-engine-lab.html` (`▸ Optical / Atmosphere` folder)
 **Frame docs:** `docs/superpowers/specs/2026-06-06-planet-rendering-foundation-design.md` (§2.D/§2.E),
 `research/RESEARCH_high-lod-planet-shaders-2026-06-05.md`, `docs/FEATURES/planet-visual-features.md`
 
@@ -48,7 +48,7 @@
 | **P21 three-way split** (tidally-locked worlds) | **This domain owns the limb/terminator OPTICS** above a locked world's atmosphere. **BANDS/STORMS owns thermal emission (F32/F33).** **CLOUDS/HAZE owns the substellar "pupil" cloud (F31f).** | We read the locked-world atmosphere `density`/`composition` uniforms; we do NOT compute the dayside hotspot or the standing cloud. Our terminator gradient must *composite over* their cloud term without double-darkening. |
 | **F36 sunglint ← FLUVIAL liquid mask** | FLUVIAL produces a `uLiquidMask` (0..1, + a `uLiquidType` enum water/methane). We consume it to gate the specular spot. | **We must NOT invent our own liquid mask.** If FLUVIAL's mask isn't ready, sunglint ships behind a lab toggle reading a placeholder analytic mask, flagged as stub. |
 | **F41 magma-ocean (EXOTIC)** | EXOTIC owns the molten dayside **emissive** + magma shoreline. **We own the atmospheric scattering *above* it** (a thin silicate-vapor atmosphere still has a limb). | Our limb term reads `uLimbStrength`; EXOTIC's emissive is a *separate* composite term (`uEmissive`, already split). No overlap if both stay additive. |
-| **Aurora curtain noise ← base `noised()`** | RELIEF/foundation owns the analytic `noised()` core. We sample it for curtain rays (Q7: convert aurora off plain `snoise`). | Already done in the lab (`noised(N*8.0…)` at `planet-lod-lab.html:388`). Keep it; do not re-introduce `snoise`. |
+| **Aurora curtain noise ← base `noised()`** | RELIEF/foundation owns the analytic `noised()` core. We sample it for curtain rays (Q7: convert aurora off plain `snoise`). | Already done in the lab (`noised(N*8.0…)` at `world-engine-lab.html:388`). Keep it; do not re-introduce `snoise`. |
 
 ---
 
@@ -57,7 +57,7 @@
 > Notation: **(a) Render HOW**, **(b) Generation path** (D#→P#→semantic-uniform),
 > **(c) Envelope interaction** (posterize bypass / keep-stylize-drop), **(d) Quality-scalar
 > fallback**. Everything is anchored to the aurora precedent (`Planet.js:178-200, 391-407`;
-> `PlanetGenerator.js:435-485`; lab `planet-lod-lab.html:372-392`, `planet-lod-lab-core.js:46-71`).
+> `PlanetGenerator.js:435-485`; lab `world-engine-lab.html:372-392`, `planet-lod-lab-core.js:46-71`).
 
 ---
 
@@ -155,7 +155,7 @@ The fork is the *same* `uLimbModel` switch — no separate quality control neede
 ### F36 — Sunglint off liquid (sharp specular spot — water vs methane)  `[aspirational]`
 
 **(a) Render HOW.** A tight analytic specular highlight gated by a **liquid mask**, building on
-the Blinn-Phong spec term already split out in the lab (`planet-lod-lab.html:366-370`).
+the Blinn-Phong spec term already split out in the lab (`world-engine-lab.html:366-370`).
 
 - **Baseline (Blinn-Phong spot).** Already present:
   `pow(max(dot(N,H),0.0), 48.0) * uSpecStrength`. Raise the exponent (~200–400) for a *sharp star*
@@ -370,7 +370,7 @@ A/B/C surface, cross-cutting). lil-gui structure:
 Bypass toggles (`uLimbBypass`/`uSpecBypass`, + new `uTermBypass`/`uAirglowBypass`) **stay in
 `▸ Envelope`** — they're the cross-cutting A/B/C decision surface, not optical-specific.
 
-**Preset hooks:** the Drivers presets (`planet-lod-lab.html:556-558`) should set these folder
+**Preset hooks:** the Drivers presets (`world-engine-lab.html:556-558`) should set these folder
 values — e.g. "Ocean (temperate)" → water glint + blue limb + warm terminator; "Lava (hot
 airless)" → no limb (airless), no glint, no aurora (locked → field×0.2, likely below 0.05 gate).
 
@@ -461,7 +461,7 @@ airless)" → no limb (airless), no glint, no aurora (locked → field×0.2, lik
 - `src/objects/Planet.js:178-200, 391-407` (applyAurora + fresnel limb)
 - `src/generation/PlanetGenerator.js:435-485` (aurora derivation + composition color dict)
 - `src/generation/PhysicsEngine.js:168-172` (D13 fieldStrength, inline)
-- `planet-lod-lab.html:366-392` + `planet-lod-lab-core.js:46-71` (envelope split + deriveUniforms)
+- `world-engine-lab.html:366-392` + `planet-lod-lab-core.js:46-71` (envelope split + deriveUniforms)
 - `research/RESEARCH_high-lod-planet-shaders-2026-06-05.md` §3.2 (fresnel vs Lague rows, verified)
 
 **Integrity flags:** (1) Lague Shadertoy `ssXSWs` body is unverified (403) — confirm constants

@@ -393,7 +393,7 @@ Real, consulted this session. URLs verified live except where noted.
 - `research/RESEARCH_high-lod-planet-shaders-2026-06-05.md` — analytic-derivative noise, ridged multifractal, slope-damped FBM, Voronoi craters, domain warp, emissive bypass. (The HOW vocabulary this doc extends.)
 - `docs/FEATURES/planet-visual-features.md` — D#/P#/F# catalogue, Appendix A/B.
 - `docs/superpowers/specs/2026-06-06-planet-rendering-foundation-design.md` — Stage-A architecture.
-- `planet-lod-lab.html` / `planet-lod-lab-core.js` — `noised()`, `fbmd()`, `perturbAnalytic()`, `deriveUniforms()`, composite-split envelope, lil-gui folders.
+- `world-engine-lab.html` / `planet-lod-lab-core.js` — `noised()`, `fbmd()`, `perturbAnalytic()`, `deriveUniforms()`, composite-split envelope, lil-gui folders.
 - `src/generation/PhysicsEngine.js` — `computeSurfaceHistory` (`:733`), `deriveComposition` (`:341`), `tidalHeating` (`:295`), `estimateMassEarth`/`escapeVelocity` (`:61`/`:81`).
 - `src/generation/PlanetGenerator.js` — `planetData` returned fields (`:679-707`).
 - `src/objects/Planet.js` — aurora/atmosphere semantic-uniform precedent (`:1051, 1059-1066`), dead `lodLevel` (`:1077`).

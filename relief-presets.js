@@ -1,4 +1,4 @@
-// relief-presets.js — test bodies, fields transcribed from planet-lod-lab.html DRIVER_PRESETS.
+// relief-presets.js — test bodies, fields transcribed from world-engine-lab.html DRIVER_PRESETS.
 // Shape = the driver bundle relief-base-step consumes (mirrors deriveUniforms' reads).
 // Numbers copied verbatim: rocky←'Rocky (Earthlike)' (:2477), lava←'Lava (hot airless)' (:2478),
 // magma←'Magma (K2-141b)' (:2583), europa←'Europa (icy moon)' (:2487). `age` is absent from

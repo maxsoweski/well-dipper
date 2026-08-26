@@ -214,7 +214,7 @@ Add one lil-gui folder (collapsed by default), every control a semantic uniform 
   showChannelField  toggle            // visualize the channel distance field
 ```
 
-Driver presets that exercise this folder (add to `DRIVER_PRESETS` in `planet-lod-lab.html`): **"Earthlike (rivers+seas)"**, **"Titan (methane seas)"** (`liquidSpecies=methane`, cold, thick atmo), **"Mars-relict (dry channels)"** (`riverRelict=1`, `liquidStability=0` now but channels carved), **"Airless rock"** (`liquidStability=0`, folder fully bypassed — proves the gate).
+Driver presets that exercise this folder (add to `DRIVER_PRESETS` in `world-engine-lab.html`): **"Earthlike (rivers+seas)"**, **"Titan (methane seas)"** (`liquidSpecies=methane`, cold, thick atmo), **"Mars-relict (dry channels)"** (`riverRelict=1`, `liquidStability=0` now but channels carved), **"Airless rock"** (`liquidStability=0`, folder fully bypassed — proves the gate).
 
 ---
 

@@ -1,7 +1,7 @@
 // planet-lod-rivers.js — SHARED river router + ribbon-overlay pipeline (AC4).
 // Extracted from rivers-terrain-lab.main.js (the C3 Max-eye-approved router lab) so there is
 // ONE source of the routing/ribbon pipeline, consumed by BOTH the router lab and the planet
-// LOD lab (planet-lod-lab.html). Same rationale as AC1's shared height GLSL: the coupling
+// LOD lab (world-engine-lab.html). Same rationale as AC1's shared height GLSL: the coupling
 // spike's verbatim copies are untenable as two drifting copies. This module imports the
 // SHARED height GLSL (planet-lod-height.glsl.js) and the histogram sea-level solver
 // (planet-lod-sealevel.js), so all three consumers agree on h(pos) and on the sea level-set.
@@ -228,7 +228,7 @@ const EPSILON_VCF = 1.1814295123540973e-8;
 // Slice D-fix (2026-07-28): OPTIONAL third arg `craterOut` — a caller-supplied Float32Array that
 // receives the EXACT crater term this composite added (cf on the identity/fallback paths, w_i·cf
 // in-domain). It exists so the display crossover can restore the crater channel it fades out
-// (planet-lod-lab.html uCraterBakeRestore) WITHOUT a second implementation of the w_i solve — the
+// (world-engine-lab.html uCraterBakeRestore) WITHOUT a second implementation of the w_i solve — the
 // weight is applied in exactly one place, here. Writing it never touches `out[i]`, so every
 // existing 1- and 2-arg caller stays byte-identical BY INSPECTION (the arithmetic is untouched).
 export function compositeMargins(carrier, budget = IDENTITY_BUDGET, craterOut = null) {

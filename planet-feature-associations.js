@@ -225,7 +225,7 @@ export const ASSOCIATIONS = {
   massWasting: {
     domain: 'gradational', provinceGroup: 'tectonic-highlands',
     // F19 reads gradIn − gradBase: EVERY combiner above the massWastCombiner line
-    // (planet-lod-lab.html L3117–3136) feeds it — all 20 grad-writers, in call order.
+    // (world-engine-lab.html L3117–3136) feeds it — all 20 grad-writers, in call order.
     processes: ['P12'],
     dependsOn: { features: ['mountains','craters','ejecta','canyons','rivers','outflow','karst','scarps','plateaus','tessera','edifices','chaos','facets','hexTess','shatter','machine','ecumenopolis','cryoRidge','sublimation','glacial'] },
     isolationKit: ['mountains','canyons'],

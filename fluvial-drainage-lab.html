@@ -4,7 +4,7 @@
   =============================================================================
   Purpose (spec 2026-06-07-f11-fluvial-river-networks-design.md §Risks #1):
     Prove the drainage primitive reads as BRANCHING RIVERS on a simple sphere toy
-    BEFORE porting it into the big planet-lod-lab.html shader (memory rule
+    BEFORE porting it into the big world-engine-lab.html shader (memory rule
     feedback_isolated-test-harnesses.md + 3-cycle cap). If it can't read here, it
     can't read inside the 6-level posterize.
 
@@ -13,7 +13,7 @@
     (b) meanders read — raising `meander` visibly bends the channels
     (c) gradient lights walls — viewMode=1 shows lit/shadow channel-wall edges
 
-  noised()/hash3() copied VERBATIM from planet-lod-lab.html (:428, :434) so the
+  noised()/hash3() copied VERBATIM from world-engine-lab.html (:428, :434) so the
   primitive is byte-identical to what gets ported.
 
   ── FINAL TUNED DEFAULTS (proven 2026-06-07, 2 cycles, on :9223) ──
@@ -87,7 +87,7 @@
       uniform int   uViewMode;
       uniform vec3  uLightDir;
 
-      // ── hash3 / noised — VERBATIM from planet-lod-lab.html (:428 / :434) ──
+      // ── hash3 / noised — VERBATIM from world-engine-lab.html (:428 / :434) ──
       vec3 hash3(vec3 p){
         p = vec3( dot(p, vec3(127.1, 311.7,  74.7)),
                   dot(p, vec3(269.5, 183.3, 246.1)),

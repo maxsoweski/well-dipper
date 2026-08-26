@@ -53,7 +53,7 @@ export function smoothStrikeAngle(sMer, sZon) {
 // inside this module over the EXISTING 2-arg writer.
 //
 // Entropy = the INTEGER macroSeed only, hashed with the SAME sin-hash recipe the GLSL seedOffset
-// uses (planet-lod-lab.html:2376: x = sin(n)*43758.5453; frac(x)) so the JS offset and the shader's
+// uses (world-engine-lab.html:2376: x = sin(n)*43758.5453; frac(x)) so the JS offset and the shader's
 // uMacroOffset derive from one shared transform of the same seed (plan §D6/D9 — not one transform
 // apart). NO Math.random / Date.now: pure function of the seed. Range ±45° keeps every band reachable
 // while guaranteeing distinct fields across seeds.

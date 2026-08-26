@@ -1,5 +1,5 @@
 // driver-presets.js — the lab's body driver-preset vectors + archetype map, extracted
-// verbatim from planet-lod-lab.html (World Engine V2-0 Slice A). Single source of truth so
+// verbatim from world-engine-lab.html (World Engine V2-0 Slice A). Single source of truth so
 // the lab GUI, the headless AC1 byte-identity harness, tests/planet-archetypes.test.js, and
 // the V2-1 conformance oracle all read the SAME data (no scrape, no drift).
 //
@@ -13,7 +13,7 @@
 // tests/v2-0-slice-a-byte-safety.test.js deep-equal guard pins them to the pre-change snapshot.
 //
 // V2-6 slice-5 (draw-law extraction, Lens L21): NAMED_BODY + drawPresetRadius() are lifted OUT of
-// planet-lod-lab.html to here so the lab GUI and calibration/population-sweep.mjs draw radii from ONE
+// world-engine-lab.html to here so the lab GUI and calibration/population-sweep.mjs draw radii from ONE
 // shared law (no scrape, no drift). Both the range lookup and the seeded draw live here; the lab
 // imports drawPresetRadius and the harness will too. New draws use alea (mulberry32 retired) — see §1H.
 
@@ -119,7 +119,7 @@ export const DRIVER_PRESETS = {
   // resurfacing). UNLOCKED — else dispatch rule (3b) would route eyeball-despun, not dead-lid. atmosphere
   // null + volatileFraction 0.02 (bone-dry) ⇒ isImpactSurface (airless+dead+cold) fires ⇒ the bombardment
   // writer populates craterField. surfaceHistory (battered old surface) is legacy-knob consistency; the
-  // crater writer reads condition.age (4.5), not these fields. NAMED_BODY (planet-lod-lab.html) locks its
+  // crater writer reads condition.age (4.5), not these fields. NAMED_BODY (world-engine-lab.html) locks its
   // canonical 0.38 R⊕ so drawPresetRadius never seeds a random radius ⇒ deterministic surfaceGravity.
   'Moon/Mercury (impact-airless)': {
     radiusEarth: 0.38, massEarth: 0.04, eccentricity: 0.05,
@@ -232,7 +232,7 @@ export const PRESET_ARCHETYPE = {
   'Crystal (faceted)': 'crystal'
 };
 
-// ── V2-6 slice-5: shared preset-radius draw law (extracted from planet-lod-lab.html, Lens L21) ──
+// ── V2-6 slice-5: shared preset-radius draw law (extracted from world-engine-lab.html, Lens L21) ──
 // NAMED_BODY worlds are the canonical-radius lock (no seeded draw ⇒ deterministic surfaceGravity):
 // the AC-REROLL named-body clause. Every other archetype preset draws its radius from its
 // RADIUS_RANGES_EARTH band. Single source of truth so the lab GUI and calibration/population-sweep.mjs

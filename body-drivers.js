@@ -1,10 +1,10 @@
 // body-drivers.js — the lab's NEUTRAL (no-slider-override) body-driver construction, extracted
-// verbatim from planet-lod-lab.html (World Engine V2-0 Slice A). Shared by the lab's runtime
+// verbatim from world-engine-lab.html (World Engine V2-0 Slice A). Shared by the lab's runtime
 // buildBodyDrivers (which overlays slider overrides on top of this base) and the headless AC1
 // byte-identity harness, so both exercise the SAME neutral path (no duplication, no drift).
 import { magmaThermal } from './src/worldengine/base/magmatism.js'; // exact import path per lab (:163)
 
-// presetDriverDefaults(u, fp) — verbatim relocation of planet-lod-lab.html:2858-2866.
+// presetDriverDefaults(u, fp) — verbatim relocation of world-engine-lab.html:2858-2866.
 // { gravity, volatiles, tidal, thermal } derived from the already-derived uniforms (u) + raw preset (fp).
 export function presetDriverDefaults(u, fp){
   return {

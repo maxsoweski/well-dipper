@@ -190,7 +190,7 @@ export const featuresOf = (archKey) =>
 
 // ── Stage-D geologic provinces (LIVE 2026-06-10, workstream stage-d-provinces-2026-06-10) ──
 // The per-feature affinity data the shader's provinceWeight() accessor MIRRORS (GLSL if-chain
-// in planet-lod-lab.html — edit BOTH; the vitest drift-guard parses the GLSL and cross-checks
+// in world-engine-lab.html — edit BOTH; the vitest drift-guard parses the GLSL and cross-checks
 // it against this table). Three decorrelated low-frequency fields partition the sphere; each
 // feature declares the field it clusters into (polarity +1) or avoids (-1), plus a floor that
 // keeps it faintly present outside its province (feature-POOR provinces, not feature-absent).

@@ -269,7 +269,7 @@ Two consequences worth naming:
 
 #### Defect B — "vanishing below ~0.04"
 
-**Root cause: `bakeReliefCrossover`.** At `planet-lod-lab.html:5904`:
+**Root cause: `bakeReliefCrossover`.** At `world-engine-lab.html:5904`:
 
 ```js
 uniforms.uReliefBakeStrength.value = grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis);
@@ -382,7 +382,7 @@ Plus one line: make `bakedOn` (`planet-lod-rivers.js:1370`) read `grainCarveUI.r
 - `regolithRoughness` and `state.craterDensity` re-derive.
 - **Tests go red:** `worldengine-v2-6-craters.test.js` (AC-RADIUS-LAW), `radius-live-feed.test.js` (its `craterRelevanceOf` reduction is valid *only because* `D_FLOOR_KM > L` everywhere — exactly the condition the fix removes), `worldengine-inc3b-crater-relevance.test.js`, the `EPSILON_VCF` clamp.
 
-**The hard constraint that must be faced, not designed around:** at fixed km, a big planet's craters fall **below the mesh floor**. `MESH_FLOOR_RAD = 0.055` rad at `TARGET_N = 40000`; `RELIEF_CUBE_SIZE = 256`. A 500 km crater is 4.5° on Earth and 0.28° on a 16 R⊕ world — under a node spacing of ~1°. **A correct size law requires the sub-floor population to render**, which means the `_Dchar` derivation (`planet-lod-lab.html:3813-3823`) must stop anchoring both ends to `D_FLOOR_KM` and carry real km through `featureFrequencyFromKm`.
+**The hard constraint that must be faced, not designed around:** at fixed km, a big planet's craters fall **below the mesh floor**. `MESH_FLOOR_RAD = 0.055` rad at `TARGET_N = 40000`; `RELIEF_CUBE_SIZE = 256`. A 500 km crater is 4.5° on Earth and 0.28° on a 16 R⊕ world — under a node spacing of ~1°. **A correct size law requires the sub-floor population to render**, which means the `_Dchar` derivation (`world-engine-lab.html:3813-3823`) must stop anchoring both ends to `D_FLOOR_KM` and carry real km through `featureFrequencyFromKm`.
 
 **A product decision, not a code fix.** The `* sVis` term at `:6264`, `visScaleOf`'s `VIS_SCALE_EXP = 0.5`, and `bakeReliefCrossover` all exist to **hold apparent size constant on a growing disc**. The whole "hold apparent size" program and "craters should read physically smaller on a big world" are in **direct opposition**. One of them has to yield. **That is yours to decide, and it is the gate on Tier 1.**
 
