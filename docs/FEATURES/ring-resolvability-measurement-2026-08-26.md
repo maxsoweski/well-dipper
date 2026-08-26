@@ -101,7 +101,7 @@ A 4×4 ordered dither has 16 thresholds, so coverage = the share of the cell who
 | < 0.300 | 85% | ≤ 0.150 | ≤ 2 / 16 |
 | 0.781 (max) | 3% | 0.390 | 6 / 16 |
 
-⭐ **The floor is not a bug** — `PhysicsEngine.js:936` sets `density = 0.2 + 0.6·exp(−age/lifetime)`,
+⭐ **The floor is not a bug** — `PhysicsEngine.js:937` sets `density = 0.2 + 0.6·exp(−age/lifetime)`,
 and most generated rings are old, so most rings are *meant* to be tenuous remnants. **Whether a
 13%-coverage ring reads right is Max's eyes, and it is not claimed here as a defect.**
 
@@ -120,7 +120,7 @@ worst: low elevation, long range.
   only when a moon orbits inside the annulus. Width 0.154–0.399 body radii → 12 px at 90°, 6 px at
   30°, 2 px at 10°. A broad low-frequency feature that fails only where the whole ring already
   fails. **No separate remedy needed.**
-- **The Cassini gap** (`:1857`): plateau is 5% of the annulus, smoothstep edges 3% each → 2.6 px /
+- **The Cassini gap** (`:1860`): plateau is 5% of the annulus, smoothstep edges 3% each → 2.6 px /
   1.6 px at 90°, 0.45 px / 0.27 px at 10°. Below the bar at every elevation, but it is one feature
   rather than a repeating frequency, so it wants a *minimum size*, not a fade. Different remedy.
 

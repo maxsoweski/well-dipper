@@ -136,7 +136,7 @@ for (const k of [1.5, 3, 8]) {
 }
 console.log(`   -> the 64-gon is NOT the defect at any framing that shows a ring.`);
 // Cassini gap edge
-console.log(`Cassini gap (Planet.js:1857): plateau t=0.43..0.48 = 5% of the annulus; smoothstep edges 3% each.`);
+console.log(`Cassini gap (Planet.js:1860): plateau t=0.43..0.48 = 5% of the annulus; smoothstep edges 3% each.`);
 for (const elevDeg of [90, 30, 10]) {
   const extent = (RENDER_H / 2) * medFrac * Math.sin((elevDeg * Math.PI) / 180);
   console.log(`   at elev ${String(elevDeg).padStart(2)}°: plateau ${(0.05*extent).toFixed(2)} px, edge ${(0.03*extent).toFixed(2)} px  ${0.05*extent >= BAR_PX ? '✓' : '✗ below the bar'}`);
