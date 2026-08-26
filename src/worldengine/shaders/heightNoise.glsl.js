@@ -113,7 +113,7 @@ export const HASH3_NOISED_GLSL = /* glsl */ `vec3 hash3(vec3 p){
 // Derivation + the live sweep: docs/FEATURES/macro-frequency-rootcause-2026-08-26.md.
 export const FBMD_GLSL = /* glsl */ `vec4 fbmd(vec3 pos, float octaves, float fwBase){
         float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale
-        float amp  = 0.5;
+        float amp  = 0.5 * 1.159;   // ⭐⭐ FBM GAIN 0.42, NOT 0.5, 2026-08-26 — Max: the fine grain "seems to delete any sense of scale", and separately approved making "each finer layer push on the lighting less than the one above it". AT GAIN 0.5 WITH LACUNARITY 2 THE AMPLITUDE HALVES WHILE THE FREQUENCY DOUBLES, SO amp*freq IS CONSTANT — and since grad accumulates amp*w*freq, EVERY octave shaded exactly as hard as octave 0 however small its bumps. New detail did not refine the landform, it COMPETED with it, which is what "unrelated grain" was. At gain 0.42 each octave contributes 0.84x the previous, so the ninth contributes 0.84^8 = 0.25x the first instead of 1.0x. ⭐ THE 1.159 IS A DERIVED COMPENSATION, NOT A TASTE KNOB: the height sum over 9 octaves is 0.5*(1-0.5^9)/0.5 = 0.998 at gain 0.5 and 0.5*(1-0.42^9)/(1-0.42) = 0.861 at gain 0.42, and 0.998/0.861 = 1.159. It restores TOTAL HEIGHT so landform amplitude is unchanged and the ONLY thing that moves is how the relief is DISTRIBUTED across scales — which is the variable being tested. Scaling the starting amplitude keeps h and grad in step, so the analytic normal stays exact.
         float h = 0.0;
         vec3 grad = vec3(0.0);
         for (int i = 0; i < 12; i++){
@@ -129,7 +129,7 @@ export const FBMD_GLSL = /* glsl */ `vec4 fbmd(vec3 pos, float octaves, float fw
           vec4 n = noised(pos * freq + off);
           h    += amp * w * n.x;
           grad += amp * w * freq * n.yzw;                   // chain rule for d/dpos
-          amp  *= 0.5;
+          amp  *= 0.42;   // gain — see the starting amplitude above for why 0.42 and where the 1.159 comes from. ⛔ Change one without the other and total relief moves, which confounds the distribution question with a strength question.
           freq *= 2.0;
         }
         return vec4(h, grad);

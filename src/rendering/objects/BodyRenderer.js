@@ -385,8 +385,16 @@ export class BodyRenderer {
       tex.wrapS = THREE.RepeatWrapping;
       tex.wrapT = THREE.ClampToEdgeWrapping;
       // NearestFilter preserves retro pixel aesthetic even with real photos
+      // ⭐⭐ RETRO WHERE THE PIXELS ARE BIG, FILTERED WHERE THEY ARE SMALL — 2026-08-26, Max's ruling that the resolution rule applies across surface rendering. magFilter STAYS NearestFilter: that is the retro look and it is
+      // the correct half. minFilter was ALSO NearestFilter, which is not an aesthetic — it point-samples a texture
+      // being SHRUNK, taking one texel per pixel with no averaging, so it SPARKLES under motion. These are real NASA
+      // photographs and the scene renders into a w/pixelScale target, so a distant body is a few dozen render pixels
+      // across and the minification is severe. Anisotropy is the same fix the terrain footprint got the same day: a
+      // sphere is grazing over most of its disc, and an isotropic choice throws away detail that is still resolvable.
       tex.magFilter = THREE.NearestFilter;
-      tex.minFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.generateMipmaps = true;
+      tex.anisotropy = 8;
       this._texturedMaterial.uniforms.diffuseMap.value = tex;
       this._texturedMaterial.uniforms.hasTextures.value = 1.0;
       // Always-textured: swap immediately regardless of LOD tier
@@ -401,8 +409,13 @@ export class BodyRenderer {
       loader.load(profile.textures.heightmap, (tex) => {
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.ClampToEdgeWrapping;
+        // Same treatment as the diffuse above. Averaging a HEIGHTMAP under minification is meaningful —
+        // the mean of a patch of heights is that patch's height — so a mipmap is the correct reduction here,
+        // and point-sampling one produces relief that flickers between neighbouring texels as the camera moves.
         tex.magFilter = THREE.NearestFilter;
-        tex.minFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.generateMipmaps = true;
+        tex.anisotropy = 8;
         this._texturedMaterial.uniforms.heightMap.value = tex;
         this._texturedMaterial.uniforms.hasHeightMap.value = 1.0;
       });
