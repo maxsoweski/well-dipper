@@ -72,7 +72,7 @@ execution at completed work.
 
 **F-3. ⭐⭐ NOTHING UNDER `src/` CALLS `deriveUniforms`. This is the most load-bearing fact in the plan
 and the earlier draft got its consequence backwards.**
-src/worldengine/base/labCore.js:622 `export function deriveUniforms(drivers, qualityTier = 1.0) {`
+src/worldengine/base/labCore.js:641 `export function deriveUniforms(drivers, qualityTier = 1.0) {`
 has **39 call sites: 36 in `tests/`, one in `world-engine-lab.html`, and ZERO in `src/`.** Six `src/`
 files import `labCore` and none imports `deriveUniforms`:
 src/worldengine/drivers/rockySurface.js:122 `import { reliefEnvelope } from '../base/labCore.js';` ·
@@ -103,8 +103,8 @@ moons** (`condition.eccentricity === 0`). Sol excluded by construction.
 | `deriveUniforms().cryoActivity` | **1 distinct / 0 nonzero** | 32 distinct / 40 nonzero |
 | counterfactual `clamp01(rawTidalIoRatio)` | **77 distinct / 81 nonzero** | 85 distinct / 93 nonzero |
 
-*Layer 1 — the law.* src/worldengine/base/labCore.js:801 `const tidalProxy = clamp01(tidalHeat);`
-reads a `tidalHeat` that src/worldengine/base/labCore.js:649 `const ecc = d.eccentricity ?? 0;`
+*Layer 1 — the law.* src/worldengine/base/labCore.js:820 `const tidalProxy = clamp01(tidalHeat);`
+reads a `tidalHeat` that src/worldengine/base/labCore.js:668 `const ecc = d.eccentricity ?? 0;`
 recomputes from a planet-around-star formula fed an eccentricity that is exactly zero on every plain
 moon. The already-forwarded `rawTidalIoRatio` is real and per-body, and
 src/worldengine/base/baseStep.js:29 `const rawTidalIoRatio = (d.tidalHeat != null)   // D12 raw Io-ratio, PRE-calibrateTidal`
@@ -319,7 +319,7 @@ re-measurement.
 
 **GATE** · **Instrument C** shipped-uniform delta **byte-identical on all four packs** — a gate that CAN
 be met, because of F-3: `deriveUniforms` is not on the game's path, and the only `labCore` export that
-reaches a pack is `reliefEnvelope` (src/worldengine/base/labCore.js:1205 `export function reliefEnvelope(radiusEarth, surfaceGravity) {`,
+reaches a pack is `reliefEnvelope` (src/worldengine/base/labCore.js:1224 `export function reliefEnvelope(radiusEarth, surfaceGravity) {`,
 a pure function of two arguments) at `src/worldengine/drivers/rockySurface.js:122`. ⛔ If it goes red the
 change leaked out of the seam and must be split; never loosen the gate · **Instrument A** the 32
 red-by-design set unchanged, everything else green · **Instrument B** body-identity fence green ·
@@ -342,10 +342,10 @@ which is why they are ONE block with ONE delta table rather than four blocks wit
 
 | # | Seam fix | Evidence | Measured effect (`lab-procedural-0…24`: 110 planets + 81 plain moons) |
 |---|---|---|---|
-| 1 | **erosion** | src/worldengine/base/labCore.js:627 `const erosion` read a key `PhysicsEngine.js:822` never emits — pre-fix text `d.surfaceHistory?.erosion ?? 0`; `erosionLevel` is the one present. ⭐ **REPAIRED BY B1, 2026-08-20**: both spellings resolve, lab wins a tie. | undefined 191/191. On 81 plain moons: `rayBrightness` 1→23, `scarpStrength` 21→42, `mountainAmp` 11→30. On 110 planets: `orogenyStrength` 13→60, `chasmaDepth` 63→95, `plateauStrength` 63→95, `tesseraStrength` 45→62. ⭐ RE-MEASURED over the full 1517: `reliefAmplitude` 1517, `chasmaDepth` 1517, `plateauStrength` 1517, `scarpStrength` 1263, `mountainAmp` 1179, `orogenyStrength` 885, `rayBrightness` 632, `tesseraStrength` 606 |
+| 1 | **erosion** | src/worldengine/base/labCore.js:646 `const erosion` read a key `PhysicsEngine.js:822` never emits — pre-fix text `d.surfaceHistory?.erosion ?? 0`; `erosionLevel` is the one present. ⭐ **REPAIRED BY B1, 2026-08-20**: both spellings resolve, lab wins a tie. | undefined 191/191. On 81 plain moons: `rayBrightness` 1→23, `scarpStrength` 21→42, `mountainAmp` 11→30. On 110 planets: `orogenyStrength` 13→60, `chasmaDepth` 63→95, `plateauStrength` 63→95, `tesseraStrength` 45→62. ⭐ RE-MEASURED over the full 1517: `reliefAmplitude` 1517, `chasmaDepth` 1517, `plateauStrength` 1517, `scarpStrength` 1263, `mountainAmp` 1179, `orogenyStrength` 885, `rayBrightness` 632, `tesseraStrength` 606 |
 | 2 | **tidal precedence** | `labCore.js:772` read a `tidalHeat` that `labCore.js:620` recomputed from a zero eccentricity; `baseStep.js:29` already had the correct shape. ⭐ **REPAIRED BY B1, 2026-08-20** — `labCore.js:624` now prefers `d.tidalHeat ?? d.rawTidalIoRatio`, the second being the name a CONDITION uses. | **`lavaActivity` 1 distinct / 0 nonzero → 77 / 81 on 81/81 plain moons.** Same for `cryoActivity`. ⭐ RE-MEASURED over the full 1517: `tidalHeat` moved on 1414, `lavaActivity` 1006, `channelDensity` 1006, `volcanismStrength` 899, `cryoActivity` 596 |
 | 3 | **ageNorm** | `baseStep.js:40` got raw Gyr because `conditionVector.js:112` emits `age`, not `ageNorm`; `(1 - ageNorm)` ran negative above 1 Gyr, which is 88.3% of bodies. ⭐ **REPAIRED BY B1, 2026-08-20** — it now normalises through `clamp01(d.age / AGE_NORM_DIVISOR)`. | undefined 191/191. Saturates four interior scalars. ⭐ RE-MEASURED over the full 1517: `ageNorm` 1517, `shellThickness` 1517, `loveK2` 1517, `thermalState` 1503, `despinAmp` 1501, `radialStrainMag` 1501 — the four saturated interiors, named |
-| 4 | **surfaceGravity** | src/worldengine/base/labCore.js:639 `const massEarth = d.massEarth ?? 1.0;` fed a g recompute instead of reading `condition.surfaceGravity`. ⭐ **REPAIRED BY B1, 2026-08-20** at `labCore.js:611`, which now prefers `d.surfaceGravity`. | ⚠ **Book as CORRECTNESS, not differentiation.** The 48-doc measures the "correct" substitution making the edifice clamp rail *worse* (834→904 of 1517, `lab-procedural-0…199`). ⭐ **REPRODUCED EXACTLY** by B1's own probe — and the SHAPE is new: the FLOOR rail empties 586→0 while the CEIL absorbs 248→904, so it is one rail replacing two on 59.6%, not the same flatness moved around. Whoever wires the edifice consumer inherits a re-ranging job |
+| 4 | **surfaceGravity** | src/worldengine/base/labCore.js:658 `const massEarth = d.massEarth ?? 1.0;` fed a g recompute instead of reading `condition.surfaceGravity`. ⭐ **REPAIRED BY B1, 2026-08-20** at `labCore.js:611`, which now prefers `d.surfaceGravity`. | ⚠ **Book as CORRECTNESS, not differentiation.** The 48-doc measures the "correct" substitution making the edifice clamp rail *worse* (834→904 of 1517, `lab-procedural-0…199`). ⭐ **REPRODUCED EXACTLY** by B1's own probe — and the SHAPE is new: the FLOOR rail empties 586→0 while the CEIL absorbs 248→904, so it is one rail replacing two on 59.6%, not the same flatness moved around. Whoever wires the edifice consumer inherits a re-ranging job |
 
 ⛔ **THE SEED FIX IS NOT IN THIS BLOCK.** The earlier draft's fix #5 told an agent to route
 `ctx.macroSeed` pack-side while simultaneously gating the block on pack byte-identity — two requirements
@@ -781,10 +781,10 @@ province-partition architecture works in the game today. `uProvinceCube` drives 
 correctly guarded. The partition-generator work is not blocked on a bake.
 
 **The (c) world-gen four — and one of them is a B1-class fix that must be scheduled the same way.**
-src/worldengine/base/labCore.js:674 `const volatileGate = smoothstep(0.05, 0.2, volatileFraction);             // D2 — bone-dry floor at 0.05`
+src/worldengine/base/labCore.js:693 `const volatileGate = smoothstep(0.05, 0.2, volatileFraction);             // D2 — bone-dry floor at 0.05`
 gates F14 lakes, F11 rivers, F36 sunglint, and **14 of the 52 couplings** (G01, G02, G03, G10, G11, G12,
 G13, G20, G25, G26, G32, G33, G34, G38). R-06 measured
-src/worldengine/base/labCore.js:687 `const liquidStability = clamp01(retentionGate * volatileGate * tempWindow);`
+src/worldengine/base/labCore.js:706 `const liquidStability = clamp01(retentionGate * volatileGate * tempWindow);`
 clearing 0.01 on **0 of 6** ocean worlds because `volatileFraction` runs 0.0276–0.0579 against that floor.
 ⛔ **Its own step, its own delta table, a deliberately-NOT-byte-identity gate — the Step-2 precedent
 exactly.** A physics-authoring call that moves numbers must never sit inside a wiring commit. ⭐ Max

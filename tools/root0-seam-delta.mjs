@@ -144,7 +144,7 @@ const SECTIONS = [
 
 // ⭐ THE COST PROBE FOR FIX 4, because a section that reported only MOVEMENT would read as all-upside
 // and the plan says this one is not. `edificeMaxHeight` is `min(2.0, max(0.2, 1/max(g,0.05)))`
-// (labCore.js:863 `  const edificeMaxHeight = Math.min(2.0, Math.max(0.2, 1.0 / Math.max(surfaceGravity, 0.05)));`),
+// (labCore.js:882 `  const edificeMaxHeight = Math.min(2.0, Math.max(0.2, 1.0 / Math.max(surfaceGravity, 0.05)));`),
 // so it is a DIRECT read of g against two clamp rails, and counting how many bodies sit ON a rail is
 // the differentiation question asked of the repaired law rather than of the movement it caused.
 function edificeRailProbe(bodies) {

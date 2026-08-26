@@ -25,7 +25,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float uLevels;        // posterize levels
       uniform float uPerturb;       // relief strength
       uniform int   uNormalMode;    // 0 = analytic, 1 = finite-diff (production)
-      uniform int   uFwClamp;       // 0 = octave clamp off · 1 = anti-shimmer bar (ships) · 2 = the >= 4 render px legibility bar
+      uniform int   uFwClamp;  uniform float uCoarseCut;       // 0 = octave clamp off · 1 = anti-shimmer bar (ships) · 2 = the >= 4 render px legibility bar
       uniform int   uDitherMode;    // 0 = Bayer, 1 = IGN
       uniform float uEmissive;      // emissive glow strength
       uniform float uSpecStrength;  // F36 sunglint strength (driven: liquid master gate, species + Cox-Munk dim folded at the per-frame writer)

@@ -34,7 +34,7 @@
 // 0.0017 ms/body, and it runs once per material build rather than once per frame.
 //
 // ⛔ `qualityTier` IS LEFT AT ITS DEFAULT AND THAT IS A CHECKED CLAIM, NOT AN OMISSION. The
-// parameter reaches exactly one place — src/worldengine/base/labCore.js:1086 `    ...qualityKnobs(qualityTier),`
+// parameter reaches exactly one place — src/worldengine/base/labCore.js:1105 `    ...qualityKnobs(qualityTier),`
 // — whose three outputs are `craterCells`, `atmosphereModel` and `maxOctaves`. None of the fourteen
 // fields below is one of them and none is computed from them, so a tier the game has no opinion
 // about cannot reach a value this pack emits.
@@ -74,7 +74,7 @@
 //   4. ⛔ `uCryoRidgeAxis0` / `uCryoRidgeAxis1` — F10's TWO SEEDED ORIENTATIONS, AND THE ONLY
 //      OMISSION THAT COSTS A REAL VALUE. src/worldengine/base/labCore.js:985 derives them as
 //      `[seededUnitVec3(seed + 13), seededUnitVec3(seed + 14)]` from
-//      src/worldengine/base/labCore.js:785 `  const seed = d.seed ?? 0;` — and A CONDITION VECTOR CARRIES NO `seed`.
+//      src/worldengine/base/labCore.js:804 `  const seed = d.seed ?? 0;` — and A CONDITION VECTOR CARRIES NO `seed`.
 //      MEASURED: `condition.seed` is `undefined` on 1484/1484 bodies of this corpus, so forwarding
 //      the bundle's answer would put every body in the galaxy on the seed-0 pair — 1484 identical
 //      rift orientations, wired, green, and indistinguishable from the "these are all identical"

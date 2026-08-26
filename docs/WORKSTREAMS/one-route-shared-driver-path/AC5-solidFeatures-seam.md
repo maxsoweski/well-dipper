@@ -67,7 +67,7 @@ uniforms to three.** Eleven of fourteen round-trip through the condition vector 
 
 All three survivors derive from `surfaceGravity`, and from nothing else:
 
-- `labCore.js:863` `edificeMaxHeight = min(2.0, max(0.2, 1.0 / max(surfaceGravity, 0.05)))`
+- `labCore.js:882` `edificeMaxHeight = min(2.0, max(0.2, 1.0 / max(surfaceGravity, 0.05)))`
 - `labCore.js:996` `glacialFlowVigor = clamp01(mix(0.4, 0.9, 1.0 - clamp01(surfaceGravity)))`
 - `labCore.js:1009` `chaosRaftJitter  = mix(0.3, 0.8, 1.0 - clamp01(surfaceGravity))`
 

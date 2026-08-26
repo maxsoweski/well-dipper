@@ -37,7 +37,7 @@
 //
 //  · P-13, THE THREE OFFSETS — PIXEL-LIVE, and the strongest of the three. They feed the HEIGHT
 //    field, which is geometry and runs before any albedo:
-//    src/worldengine/shaders/heightNoise.glsl.js:128 `            vec3 off = (i < 3) ? uMacroOffset : uDetailOffset;`
+//    src/worldengine/shaders/heightNoise.glsl.js:143 `            vec3 off = (i < 3) ? uMacroOffset : uDetailOffset;`
 //    reads them with no composition gate between the default and the pixel. Unwritten, all 343
 //    gas-class bodies draw their base relief from the SAME domain — the 5d hex-collapse the row
 //    names, alive on the most prominent third of the population. `zonalBandCol` reads the perturbed

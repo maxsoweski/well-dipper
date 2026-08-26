@@ -1094,7 +1094,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     expect(r.attributes).toEqual({});
     expect(r.attributes).not.toBeUndefined();
     expect(Object.keys(r.drivers).sort()).toEqual([...ROCKY_SURFACE_UNIFORMS].sort());
-    expect(ROCKY_SURFACE_UNIFORMS.length).toBe(22);   // 18 + the three domain offsets (P-13) + `uNoiseScale` (B2 leg 3, ledger P-10/M-09). ⛔ A COUNT IS NOT THE GATE HERE and never was — the line above pins the SET by membership, and this one only catches a driver added to the object and forgotten in the frozen list.
+    expect(ROCKY_SURFACE_UNIFORMS.length).toBe(23);   // 18 + the three domain offsets (P-13) + `uNoiseScale` (B2 leg 3, ledger P-10/M-09). ⛔ A COUNT IS NOT THE GATE HERE and never was — the line above pins the SET by membership, and this one only catches a driver added to the object and forgotten in the frozen list.   // +1 2026-08-26: uCoarseCut, the tidal process term moved off the FREQUENCY and onto the AMPLITUDE (rockySurface pack; src/worldengine/base/macroWavelength.js coarseReliefCut). A DECLARED addition, not drift.
     expect(Object.isFrozen(ROCKY_SURFACE_UNIFORMS)).toBe(true);
     // `meta` is the pack's own report and the only place a test can read WHY a body came out zero.
     expect(r.meta.compositionClass).toBe(compositionClass(FIRED_MOONS[0].cond));

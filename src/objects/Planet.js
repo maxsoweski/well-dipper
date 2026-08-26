@@ -1680,7 +1680,7 @@ export class Planet {
         // uDispDomainScale is the lab's global domain multiplier; the game is identity.
         uNoiseScale: { value: d.noiseScale },
         uDispDomainScale: { value: RELIEF_DOMAIN_SCALE },
-        uFwClamp: { value: 1 },
+        uFwClamp: { value: 1 },   uCoarseCut: { value: 0.0 },
         uMacroOffset: { value: reliefSeed.macro },
         uDetailOffset: { value: reliefSeed.detail },
         // ── Impact record. uCraterDensity is the gate AND the negative control: at 0.0 the shader

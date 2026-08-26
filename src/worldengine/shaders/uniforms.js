@@ -32,7 +32,7 @@ export function makeUniforms(WORLD_LIGHT) {
       uLevels:     { value: 6.0 },
       uPerturb:    { value: 0.55 },
       uNormalMode: { value: 0 },
-      uFwClamp:    { value: 1 },   // ⭐ TRI-STATE since 2026-08-26: 0 = clamp off · 1 = ANTI-SHIMMER, the shipped bar, fades an octave out between 2.50 and 1.25 render px per cycle · 2 = LEGIBILITY, the same 2x ramp re-anchored on the >= 4 render px bar src/worldengine/port/craterUniforms.js already states for craters. 1 is unchanged behaviour.
+      uFwClamp:    { value: 1 },   uCoarseCut: { value: 0.0 },   // ⭐ TRI-STATE since 2026-08-26: 0 = clamp off · 1 = ANTI-SHIMMER, the shipped bar, fades an octave out between 2.50 and 1.25 render px per cycle · 2 = LEGIBILITY, the same 2x ramp re-anchored on the >= 4 render px bar src/worldengine/port/craterUniforms.js already states for craters. 1 is unchanged behaviour.
       // ── Envelope composite-split (spec §2.C) — the A/B/C tunable surface ──
       uDitherMode:     { value: 0 },     // 0 = Bayer, 1 = IGN/triangular
       uEmissive:       { value: 0.0 },   // emissive glow strength (lava/hot bodies)

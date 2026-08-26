@@ -185,13 +185,13 @@ Io-grade tidal drive  →  k = 0.068   →  uNoiseScale 49.019608
 
 src/worldengine/base/macroWavelength.js:90 `export const K_MACRO_R_IO = 0.068;`, interpolated by the
 engine's own bounded Io-anchored dial at
-src/worldengine/base/macroWavelength.js:126 `export function macroShortening(rawIoRatio) {` and
+src/worldengine/base/macroWavelength.js:139 `export function macroShortening(rawIoRatio) {` and
 resolved per body at
-src/worldengine/base/macroWavelength.js:148 `export function macroWavelengthKm(condition) {`.
+src/worldengine/base/macroWavelength.js:184 `export function macroWavelengthKm(condition) {`.
 
 **Measured on this tree: `macroShortening(0) = 1` exactly, `macroShortening(1) = 0.0586…` (the Io
 anchor), and the law is bounded at
-src/worldengine/base/macroWavelength.js:136 `export const MACRO_FREQ_CEIL = C_MACRO / (K_MACRO_R * macroShortening(Infinity));`
+src/worldengine/base/macroWavelength.js:149 `export const MACRO_FREQ_CEIL = C_MACRO / K_MACRO_R;` — ⚠ THE QUOTED EXPRESSION CHANGED ON 2026-08-26 and the citation is repaired to what the line reads NOW. It was `C_MACRO / (K_MACRO_R * macroShortening(Infinity))` when this calibration was written; the tidal term moved off the frequency and onto amplitude, so the ceiling is a constant. The MEASUREMENT in this document is a record of that date and is not restated
 = 251.030934.** The corpus reaches 245.175, i.e. inside the ceiling and not at it.
 
 ⚠ **THE HONEST HEADLINE, STATED BEFORE THE COUNTS.** The reference bodies put the macro wavelength at
@@ -259,7 +259,7 @@ ceiling was imposed on it, and the measured reason is in §7.
 
 **`uNoiseScale` is NOT added to `giantDeck`.** On a gas body the lab spends the same spelling as a
 **band-warp frequency**, reached through `fbmd` at
-src/worldengine/shaders/heightNoise.glsl.js:115 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;`
+src/worldengine/shaders/heightNoise.glsl.js:129 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;`
 — not as a terrain wavelength. None of the eight reference bodies above is a gas giant, and the
 process term's anchor is Io, a solid body. Same spelling, two quantities: the shape the parity ledger
 already rules at P-15.

@@ -35,7 +35,7 @@ const labDiscPx = (d) => LAB_PX_PER_TAN * Math.tan(Math.asin(Math.min(0.9999, 1 
 // one vPos unit spans the disc radius in px and fwBase = 1/discPx at the disc centre, face-on —
 // the same convention craterUniforms.js states for its own floor.
 const DOMAIN = 1.0;   // uDispDomainScale on the lab-surface material, BOTH front-ends
-const octFreq = (uNS, n) => uNS * 0.3 * DOMAIN * Math.pow(2, n);   // heightNoise.glsl.js:115+104
+const octFreq = (uNS, n) => uNS * 0.3 * DOMAIN * Math.pow(2, n);   // heightNoise.glsl.js:129+104
 
 // ── THE TWO BARS, both already stated in this repo, both in RENDER px per cycle.
 const BAR_FEATURE = 4.0;   // craterUniforms.js:65-71 — ">= 4 RENDER px ... 2x Nyquist, because a

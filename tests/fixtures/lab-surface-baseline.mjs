@@ -403,6 +403,7 @@ export const FRAME_UNIFORMS = [
   'uniforms::uFrostNoiseScale',
   'uniforms::uFrostOffset',
   'uniforms::uFwClamp',
+  'uniforms::uCoarseCut',   // ⭐ ADDED 2026-08-26 IN THE SAME COMMIT THAT WRITES IT, per this file's own rule. The tidal process term moved off the FREQUENCY (macroShortening, retired) and onto the AMPLITUDE: how many octaves of LARGE-SCALE relief resurfacing has erased. Ledger row P-19; law in src/worldengine/base/macroWavelength.js coarseReliefCut.
   'uniforms::uGlacialAmp',
   'uniforms::uGlacialBasinThresh',
   'uniforms::uGlacialColdGate',

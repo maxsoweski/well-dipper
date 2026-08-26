@@ -17,13 +17,32 @@ export function smoothstep(e0, e1, x) {
 
 // lodRamp: 0 (far) -> 1 (closest). e0 > e1 (descending) — detail RISES as distance shrinks.
 export function lodRampOf(distanceRadii) {
-  return smoothstep(20.0, 6.0, distanceRadii);
+  return smoothstep(LOD_RAMP_FAR, LOD_RAMP_NEAR, distanceRadii);
 }
+// ⭐⭐ THE ART-DIRECTION CONTROL, 2026-08-26, AND IT IS FINALLY IN THE UNITS MAX SPEAKS IN.
+// Max: "We don't need to see this until we're quite close." Before this it was UNREACHABLE as a
+// control: MEASURED at every distance from 20 radii to 1.3, the octave BUDGET allowed 4-9 octaves
+// while the fwidth fade permitted 0-4, so the fade always decided and the budget was decorative.
+// That made "how fine is the detail" and "when does it appear" THE SAME KNOB — both were screen
+// frequency — which is why coarsening the wavelength for sense-of-scale also made detail arrive
+// FURTHER OUT. He caught that in one flight.
+// ⛔ THE BUDGET COULD ONLY BECOME BINDING ONCE THE LAW STOPPED EATING THE HEADROOM. With the tidal
+// term moved off the frequency, every non-gas body carries lambda = K*R and the stack has 6 usable
+// octaves at 4 radii against 1 before, so there is finally room for a budget to sit INSIDE the fade.
+// ⭐ 20..6 -> 8..1.5 AND A FLOOR OF 4 -> 1. The floor is the half that matters: a floor of 4 meant a
+// body at 20 radii still drew four octaves, and with any fine base that is already grain. One octave
+// at distance is the LANDFORM ALONE, which is what reads as a big object.
+// ⚠ THE DIVISION OF LABOUR THIS CREATES, and it is the point: the BUDGET binds FAR (detail must not
+// arrive early) and the FADE binds NEAR (nothing may alias). Neither is asked to do the other's job.
+export const LOD_RAMP_FAR = 8.0;
+export const LOD_RAMP_NEAR = 1.5;
+export const LOD_OCTAVES_FAR = 1.0;
+export const LOD_OCTAVES_NEAR = 9.0;
 
 // Octave budget ramps with lodRamp: mix(4,9,lodRamp), then trimmed by qualityTier (0..1).
 export function autoOctaves(lodRamp, qualityTier = 1.0) {
-  const full = mix(4.0, 9.0, lodRamp);
-  return mix(4.0, full, qualityTier); // qualityTier<1 trims the LOD2 octaves on weak GPUs
+  const full = mix(LOD_OCTAVES_FAR, LOD_OCTAVES_NEAR, lodRamp);
+  return mix(LOD_OCTAVES_FAR, full, qualityTier); // qualityTier<1 trims toward the far-end budget on weak GPUs
 }
 
 // Hysteresis on the discrete "is this body LOD2-active" flag.

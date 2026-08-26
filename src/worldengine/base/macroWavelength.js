@@ -74,7 +74,7 @@ export const K_MACRO_R = 1.16;
 // so the octave-0 frequency is `uNoiseScale * 0.3` and "λ km per cycle" means
 // `uNoiseScale * 0.3 == R_km / λ_km`. Putting that through `featureFrequencyFromKm` requires exactly
 // `cFeature = 1 / 0.3`. The same 0.3 is the multiplier the lab loses at ledger P-15
-// (src/worldengine/shaders/heightNoise.glsl.js:115 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale`),
+// (src/worldengine/shaders/heightNoise.glsl.js:129 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale`),
 // which is why it is spelled as that number's reciprocal rather than as 3.3333: a decimal would be a
 // second, independently-driftable copy of a constant that already exists in the GLSL.
 export const C_MACRO = 1 / 0.3;
@@ -123,6 +123,19 @@ const U_IO = calibrateTidal(1);   export const MAX_FINER_THAN_IO = 1.5;   const 
 // removing (its own delta: 465 of 485 bodies sharing one `uCraterScale`). Above Io this law IS
 // extrapolation. It is bounded, it is monotone, and it is declared here rather than hidden.
 // ⚠ THERE IS A HARD FLOOR AT THE COLD END AND IT IS ARITHMETIC, NOT DESIGN: `log10(1 + t)` underflows to exactly 0 in float64 below t = 1.1102e-16, so every body colder than that lands on the base WAVELENGTH bit-for-bit rather than merely near it. MEASURED on `lab-procedural-0…199`: 179 of the 1160 non-gas bodies (173 planets, 5 planet-class, 1 moon), and the moon count is the load-bearing half of that — only 1 of the 632. ⚠ BIT-FOR-BIT IS TRUE OF λ AND FALSE OF THE FREQUENCY THE WRITER DERIVES FROM IT: the radius cancels algebraically but not in float64, so MEASURED those 179 bodies present as FOUR distinct written `uNoiseScale` doubles (2.8735632183908044 … 2.8735632183908058), which is why every distinct-value count in §5 names its precision. It is recorded because a reader who assumes strict monotonicity everywhere would write a test this map cannot pass, and because it is the reason the planet half of the population differentiates less than the moon half.
+// ⛔⛔ RETIRED AS A FREQUENCY TERM, 2026-08-26, AND KEPT ONLY SO THE ARGUMENT LIVES WHERE THE MISTAKE WAS.
+// This function used to shorten the WAVELENGTH on tidally-driven bodies. MEASURED consequence at its hot end:
+// lambda/R = 0.0133, i.e. SEVENTY-FIVE macro structures across a body radius and 5.1x finer than Io — the finest
+// body in this file's OWN table. On a 2032 km world the LARGEST terrain feature was 27 km. Max, flying it: the
+// terrain "seems to delete any sense of scale because it's so fine".
+// ⭐ THE MODELLING ERROR, PLAINLY: SS1's rows for Io read "a mountain, ~157 km" and "a patera, ~41 km". Those are
+// FEATURES ON Io. What they record is that Io has little LARGE-SCALE RELIEF, because it resurfaces faster than big
+// topography can build. That is a statement about AMPLITUDE, and it was encoded as FREQUENCY — which collapses the
+// entire octave stack onto one scale and leaves the renderer no LOD headroom at all (0-1 usable octaves against
+// Earth's 6; docs/FEATURES/lod-architecture-rootcause-2026-08-26.md). Tidal resurfacing ERASES BIG TOPOGRAPHY; it
+// does not shrink a planet's characteristic length. `coarseReliefCut` below is the same evidence, encoded honestly.
+// ⚠ STILL EXPORTED because tests/macro-wavelength-law.test.js pins its old shape and that pin is the record of what
+// changed. NOTHING IN THE RENDER PATH CALLS IT ANY MORE.
 export function macroShortening(rawIoRatio) {
   const u = calibrateTidal(Math.max(0, rawIoRatio || 0)) / U_IO;
   return SHORT_FLOOR + (1 - SHORT_FLOOR) / (1 + SHORT_C * u);   // was 1 / (1 + (K_MACRO_R/K_MACRO_R_IO - 1) * u), which tends to 0 and so had no lambda/R floor. See U_IO's line.
@@ -133,7 +146,7 @@ export function macroShortening(rawIoRatio) {
 // trust this comment. MEASURED 251.031, against a corpus maximum of 245.175 over the 1160 non-gas
 // bodies this pack claims. ⛔ AN EARLIER DRAFT OF THIS LINE CALLED THE NEW RANGE A SUBSET OF WHAT THE
 // LEGACY MATERIAL SPENDS. IT IS NOT ONE — the measured comparison is in §5 and it is not a subset.
-export const MACRO_FREQ_CEIL = C_MACRO / (K_MACRO_R * macroShortening(Infinity));
+export const MACRO_FREQ_CEIL = C_MACRO / K_MACRO_R;   // ⭐ NOW A CONSTANT (2.8736) BECAUSE THERE IS NO SHORTENING LEFT: every non-gas body resolves the SAME uNoiseScale under the game policy, since lambda = K*R makes the radius cancel. It is kept as a DERIVED export rather than a literal so a test still gates the bound rather than trusting this comment.
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 3. THE READER
@@ -145,10 +158,33 @@ export const MACRO_FREQ_CEIL = C_MACRO / (K_MACRO_R * macroShortening(Infinity))
 // unknown size — finite, plausible and invisible, which is the failure mode the pack contract's header
 // exists to refuse. The tidal term DOES fall back, to 0, because "this condition carries no tidal
 // record" and "this body is not tidally driven" are the same rendering answer.
+// ═════════════════════════════════════════════════════════════════════════════
+// 3b. THE PROCESS TERM, ON THE QUANTITY IT BELONGS ON — how much LARGE-SCALE relief is erased
+// ═════════════════════════════════════════════════════════════════════════════
+// ⭐ THE UNITS ARE OCTAVES, AND THAT IS ONLY MEANINGFUL BECAUSE THE FREQUENCY IS NOW SHARED. With lambda = K*R for
+// every body, octave n is a fixed physical scale — K/2^n body radii — so an octave INDEX is a real size and a cut
+// expressed in octaves means the same thing on every world. Under the old law it would have meant nothing.
+// ⭐ CALIBRATED ON THE SAME Io ANCHOR THE OLD TERM USED, so no new evidence is invented: Io's largest relief sits at
+// K_MACRO_R_IO = 0.068 R, and log2(K_MACRO_R / K_MACRO_R_IO) is how many octaves below the shared base that is.
+// Everything coarser than the cut is suppressed toward COARSE_RELIEF_FLOOR; everything finer is untouched. A cold
+// body cuts at 0 and is unchanged, which is what makes this additive rather than a re-tune of the seven.
+export const COARSE_CUT_IO = Math.log2(K_MACRO_R / K_MACRO_R_IO);
+// ⛔ BOUNDED, AND ASYMPTOTIC RATHER THAN CLAMPED — the same discipline §2 argued for and for the same reason: a hard
+// clamp would collapse the hottest moons onto one shared value. u/(u+0.5) is exact at BOTH anchors (0 at u=0,
+// COARSE_CUT_IO at u=1), strictly monotone, and tends to 1.5x the Io cut. Above Io this is still extrapolation, but
+// it is extrapolation in AMPLITUDE, where the failure mode is a smoother world rather than an unrenderable one.
+export const COARSE_CUT_MAX = 1.5 * COARSE_CUT_IO;
+export function coarseReliefCut(condition) {
+  const c = condition || {};
+  const t = c.rawTidalIoRatio ?? c.tidalHeat ?? 0;   // SAME field, SAME precedence as macroWavelengthKm below
+  const u = calibrateTidal(Math.max(0, t || 0)) / U_IO;
+  return COARSE_CUT_MAX * u / (u + 0.5);
+}
+
 export function macroWavelengthKm(condition) {
   const c = condition || {};
   const t = c.rawTidalIoRatio ?? c.tidalHeat ?? 0;
-  return K_MACRO_R * macroShortening(t) * c.radiusEarth * R_EARTH_KM;
+  return K_MACRO_R * c.radiusEarth * R_EARTH_KM;   // ⭐⭐ THE TIDAL TERM IS GONE FROM THE FREQUENCY, 2026-08-26. It moved to AMPLITUDE — see coarseReliefCut below. ⛔ THE `t` READ ABOVE IS NOW UNUSED HERE ON PURPOSE and is kept because coarseReliefCut reads the SAME field in the SAME precedence order, so a reader comparing them sees one input feeding two laws rather than two inputs.
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -157,7 +193,7 @@ export function macroWavelengthKm(condition) {
 // ⛔ `uNoiseScale` IS NOT ADDED TO `giantDeck`, AND THE REFUSAL IS RULED HERE RATHER THAN LEFT TO
 // LOOK LIKE AN OVERSIGHT. On a gas body the same uniform is a BAND-WARP frequency, not a terrain
 // wavelength: `bandWarpField` and `jetsDisp` reach it through `fbmd`, whose octave 0 is
-// src/worldengine/shaders/heightNoise.glsl.js:115 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale`,
+// src/worldengine/shaders/heightNoise.glsl.js:129 `        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale`,
 // and a zonal-flow warp has no macro-relief structure to calibrate against — none of the eight
 // reference bodies in §1 is a gas giant, and the process term's Io anchor is a solid-body anchor.
 // Writing this name into the gas deck would give the SAME SPELLING TWO QUANTITIES, which is ledger

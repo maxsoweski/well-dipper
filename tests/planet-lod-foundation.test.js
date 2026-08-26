@@ -5,25 +5,25 @@ import { describe, it, expect } from 'vitest';
 import { lodRampOf, autoOctaves, lodHysteresis, qualityKnobs, deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 describe('lodRampOf', () => {
-  it('is 0 at/over the far edge (>=20 radii)', () => {
-    expect(lodRampOf(20)).toBe(0);
+  it('is 0 at/over the far edge (>=8 radii)', () => {
+    expect(lodRampOf(8)).toBe(0);   // ⭐ CHANGED 2026-08-26: the ramp moved 20..6 -> 8..1.5 and the far-end budget 4 -> 1, so 'when does detail appear' is finally a DISTANCE control rather than a side-effect of screen frequency. See src/worldengine/base/labCore.js.
     expect(lodRampOf(30)).toBe(0);
   });
-  it('is 1 at/under the near edge (<=6 radii)', () => {
-    expect(lodRampOf(6)).toBe(1);
+  it('is 1 at/under the near edge (<=1.5 radii)', () => {
+    expect(lodRampOf(1.5)).toBe(1);   // ⭐ CHANGED 2026-08-26: the ramp moved 20..6 -> 8..1.5 and the far-end budget 4 -> 1, so 'when does detail appear' is finally a DISTANCE control rather than a side-effect of screen frequency. See src/worldengine/base/labCore.js.
     expect(lodRampOf(1.1)).toBe(1);
   });
   it('rises monotonically as distance shrinks', () => {
-    expect(lodRampOf(10)).toBeGreaterThan(lodRampOf(15));
+    expect(lodRampOf(3)).toBeGreaterThan(lodRampOf(6));   // ⭐ sample points moved INSIDE the new 8..1.5 ramp — 10 and 15 both sit past the far edge now and would compare 0 to 0, which is the shape of a vacuously-green test.
   });
 });
 
 describe('autoOctaves', () => {
-  it('is 4 at far (lodRamp 0)', () => expect(autoOctaves(0)).toBe(4));
+  it('is 1 at far (lodRamp 0) — the LANDFORM ALONE, which is what reads as a big object', () => expect(autoOctaves(0)).toBe(1));   // ⭐ CHANGED 2026-08-26: the ramp moved 20..6 -> 8..1.5 and the far-end budget 4 -> 1, so 'when does detail appear' is finally a DISTANCE control rather than a side-effect of screen frequency. See src/worldengine/base/labCore.js.
   it('is 9 at near (lodRamp 1, full quality)', () => expect(autoOctaves(1, 1.0)).toBe(9));
   it('trims LOD2 octaves at low qualityTier', () => {
-    expect(autoOctaves(1, 0.0)).toBe(4);          // no LOD2 octaves on weakest GPU
-    expect(autoOctaves(1, 0.5)).toBeCloseTo(6.5); // half the ramp
+    expect(autoOctaves(1, 0.0)).toBe(1);          // weakest GPU trims to the far-end budget   // ⭐ CHANGED 2026-08-26: the ramp moved 20..6 -> 8..1.5 and the far-end budget 4 -> 1, so 'when does detail appear' is finally a DISTANCE control rather than a side-effect of screen frequency. See src/worldengine/base/labCore.js.
+    expect(autoOctaves(1, 0.5)).toBeCloseTo(5.0); // half the ramp, now 1..9 rather than 4..9
   });
 });
 

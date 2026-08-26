@@ -10,7 +10,7 @@
 // property no test holds is exactly the shape this program keeps convicting.
 import { describe, it, expect } from 'vitest';
 import {
-  K_MACRO_R, K_MACRO_R_IO, C_MACRO, MACRO_FREQ_CEIL, macroShortening, macroWavelengthKm,
+  K_MACRO_R, K_MACRO_R_IO, C_MACRO, MACRO_FREQ_CEIL, macroShortening, coarseReliefCut, COARSE_CUT_IO, COARSE_CUT_MAX, macroWavelengthKm,
 } from '../src/worldengine/base/macroWavelength.js';
 import { R_EARTH_KM, featureFrequencyFromKm } from '../src/worldengine/base/featureScale.js';
 
@@ -29,7 +29,17 @@ describe('the base-field wavelength law', () => {
     // ⛔ EXACT, not close: the shortening is written as a ratio of the two constants precisely so
     // that the hot anchor is reproduced rather than approached.
     expect(K_MACRO_R * macroShortening(1)).toBeCloseTo(K_MACRO_R_IO, 15);
-    expect(macroWavelengthKm({ radiusEarth: 1, rawTidalIoRatio: 1 })).toBeCloseTo(K_MACRO_R_IO * R_EARTH_KM, 9);
+    // ⛔⛔ AND THE WAVELENGTH NO LONGER MOVES WITH IT, 2026-08-26. The two lines that used to assert
+    // λ(Io-grade) === K_MACRO_R_IO · R are GONE, and their absence is the change: `macroShortening`
+    // is retired as a frequency term, so an Io-grade body now carries the SAME λ as a cold one and
+    // is differentiated by `coarseReliefCut` instead. Kept as an assertion rather than a deletion so
+    // a reader sees WHICH property was traded.
+    expect(macroWavelengthKm({ radiusEarth: 1, rawTidalIoRatio: 1 }))
+      .toBe(macroWavelengthKm({ radiusEarth: 1, rawTidalIoRatio: 0 }));
+    // ⭐ THE PROCESS TERM'S OWN ANCHORS, on the quantity it moved to. Exact at both, by construction.
+    expect(coarseReliefCut({ rawTidalIoRatio: 0 })).toBe(0);
+    expect(coarseReliefCut({ rawTidalIoRatio: 1 })).toBeCloseTo(COARSE_CUT_IO, 12);
+    expect(COARSE_CUT_IO).toBeCloseTo(Math.log2(K_MACRO_R / K_MACRO_R_IO), 12);
   });
 
   it('⭐ the RADIUS CANCELS — the base law is a CONSTANT, and that is the honest headline', () => {
@@ -72,8 +82,32 @@ describe('the base-field wavelength law', () => {
     // ⛔ THE BOUND IS THE REASON THIS FORM WAS CHOSEN, so it is asserted rather than described.
     // `calibrateTidal` never reaches 1, so the shortening never reaches its infimum either.
     expect(macroShortening(Infinity)).toBeGreaterThan(0);
-    expect(macroShortening(Infinity)).toBeCloseTo(0.011447, 6);
-    expect(MACRO_FREQ_CEIL).toBeCloseTo(251.031, 3);
+    // ⚠ 0.011447 UNTIL 2026-08-26. The retired term was re-bounded (MAX_FINER_THAN_IO) hours before it
+    // was retired outright; this pin follows the code so the file stays honest about dead exports.
+    expect(macroShortening(Infinity)).toBeCloseTo(0.042775, 6);
+    // ⛔⛔ 251.031 -> 2.8736, AND IT IS NOW A CONSTANT. With the tidal term off the frequency,
+    // λ = K_MACRO_R · R for every non-gas body and the radius cancels, so EVERY body resolves the
+    // same uNoiseScale under the game policy. The old ceiling described a range that no longer exists.
+    expect(MACRO_FREQ_CEIL).toBeCloseTo(C_MACRO / K_MACRO_R, 12);
+    expect(MACRO_FREQ_CEIL).toBeCloseTo(2.8736, 4);
+    // ⭐ THE BOUND THAT MATTERS NOW is on the process term, and it is asymptotic rather than clamped
+    // for the same reason the old one was: a hard clamp collapses the hottest moons onto one value.
+    // ⛔ NEVER ATTAINED, AND THAT IS INHERITED RATHER THAN DESIGNED: `calibrateTidal` never reaches 1,
+    // so `u` never reaches its own supremum and the cut approaches COARSE_CUT_MAX without touching it.
+    // Exactly the property the retired frequency term had, which is why the same bound argument carries over.
+    // MEASURED supremum 5.616465 against the analytic bound 6.138669 — and Lava reads 5.616 live, i.e. the
+    // hottest preset in the corpus already sits AT this practical maximum.
+    expect(coarseReliefCut({ rawTidalIoRatio: Infinity })).toBeLessThan(COARSE_CUT_MAX);
+    expect(coarseReliefCut({ rawTidalIoRatio: Infinity })).toBeCloseTo(5.616465, 6);
+    expect(COARSE_CUT_MAX).toBeCloseTo(1.5 * COARSE_CUT_IO, 12);
+    const hot = [1, 10, 1e3, 1e6, 1e12];
+    for (let i = 1; i < hot.length; i++) {
+      expect(coarseReliefCut({ rawTidalIoRatio: hot[i] }), `t=${hot[i]}`)
+        .toBeGreaterThan(coarseReliefCut({ rawTidalIoRatio: hot[i - 1] }));
+    }
+    for (const t of [1e6, 1e30, Number.MAX_VALUE]) {
+      expect(coarseReliefCut({ rawTidalIoRatio: t })).toBeLessThan(COARSE_CUT_MAX);
+    }
     for (const t of [1e6, 1e30, Number.MAX_VALUE]) {
       expect(freqOf(1, t), `t=${t}`).toBeLessThanOrEqual(MACRO_FREQ_CEIL);
       expect(Number.isFinite(freqOf(1, t))).toBe(true);

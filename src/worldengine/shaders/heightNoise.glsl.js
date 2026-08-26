@@ -22,17 +22,19 @@
 // fbmd() returns vec4(height, gradient.xyz) — the gradient is ANALYTIC (chain-ruled through
 // every octave), which is what lets the game drop the 3-sample finite-difference normal.
 
-// The five uniforms fbmd() reads. The lab declares these in its own header; the game has to
+// The six uniforms fbmd() reads. The lab declares these in its own header; the game has to
 // declare them itself because it injects only the function bodies.
 //   uNoiseScale       per-planet base feature frequency (the game mirrors its own noiseScale)
 //   uDispDomainScale  global domain multiplier; 1.0 = identity, which is what the game uses
 //   uFwClamp          0 = octave clamp off · 1 = anti-shimmer bar (ships) · 2 = the 4 render px bar
+//   uCoarseCut        octaves of LARGE-SCALE relief erased by tidal resurfacing (0 = none, ~4.09 = Io-grade)
 //   uMacroOffset      seed offset for the big-feature octaves (0..2)
 //   uDetailOffset     seed offset for the remaining octaves
 export const HEIGHT_NOISE_UNIFORMS_GLSL = /* glsl */ `
 uniform float uNoiseScale;
 uniform float uDispDomainScale;
 uniform int   uFwClamp;
+uniform float uCoarseCut;
 uniform vec3  uMacroOffset;
 uniform vec3  uDetailOffset;
 `;
@@ -111,14 +113,27 @@ export const HASH3_NOISED_GLSL = /* glsl */ `vec3 hash3(vec3 p){
 // height.glsl.js share this uniform, and an == 1 guard turns their clamp OFF at arm 2, which would
 // make mountains, plateaus and glacial ice shimmer and read as a false result for this A/B.
 // Derivation + the live sweep: docs/FEATURES/macro-frequency-rootcause-2026-08-26.md.
-export const FBMD_GLSL = /* glsl */ `vec4 fbmd(vec3 pos, float octaves, float fwBase){
+// ⭐⭐ COARSE_RELIEF_FLOOR — HOW COMPLETELY TIDAL RESURFACING ERASES BIG TOPOGRAPHY, 2026-08-26.
+// uCoarseCut says WHERE the erasure reaches (in octaves below the shared base); this says HOW FAR DOWN it goes.
+// ⛔ DECLARED, NOT DERIVED, and named so rather than dressed up: Io is NOT featureless at large scales — it carries
+// mountains up to ~17 km — so the coarse band is ATTENUATED, never deleted. 0.15 is the number that says 'a fully
+// resurfaced world keeps a sixth of its large-scale relief', and it is the tunable of this pair.
+// ⚠ THE 2.0 IN THE smoothstep IS THE SOFTNESS OF THE KNEE, in octaves, and it is deliberately WIDE: a sharp cut
+// would put a visible amplitude step at one spatial frequency, which is the class of artefact this whole thread has
+// been removing. Two octaves means the transition spans a 4x range of scales.
+// ⭐ A cold body has uCoarseCut = 0, so smoothstep(-2, 0, i) is 1 at every octave and this term is EXACTLY 1.0 —
+// the seven non-tidal reference bodies are bit-unchanged by construction, which is what keeps this additive.
+export const COARSE_RELIEF_FLOOR_JS = 0.15;
+export const FBMD_GLSL = /* glsl */ `const float COARSE_RELIEF_FLOOR = 0.15;
+      vec4 fbmd(vec3 pos, float octaves, float fwBase){
         float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale
         float amp  = 0.5 * 1.159;   // ⭐⭐ FBM GAIN 0.42, NOT 0.5, 2026-08-26 — Max: the fine grain "seems to delete any sense of scale", and separately approved making "each finer layer push on the lighting less than the one above it". AT GAIN 0.5 WITH LACUNARITY 2 THE AMPLITUDE HALVES WHILE THE FREQUENCY DOUBLES, SO amp*freq IS CONSTANT — and since grad accumulates amp*w*freq, EVERY octave shaded exactly as hard as octave 0 however small its bumps. New detail did not refine the landform, it COMPETED with it, which is what "unrelated grain" was. At gain 0.42 each octave contributes 0.84x the previous, so the ninth contributes 0.84^8 = 0.25x the first instead of 1.0x. ⭐ THE 1.159 IS A DERIVED COMPENSATION, NOT A TASTE KNOB: the height sum over 9 octaves is 0.5*(1-0.5^9)/0.5 = 0.998 at gain 0.5 and 0.5*(1-0.42^9)/(1-0.42) = 0.861 at gain 0.42, and 0.998/0.861 = 1.159. It restores TOTAL HEIGHT so landform amplitude is unchanged and the ONLY thing that moves is how the relief is DISTRIBUTED across scales — which is the variable being tested. Scaling the starting amplitude keeps h and grad in step, so the analytic normal stays exact.
         float h = 0.0;
         vec3 grad = vec3(0.0);
         for (int i = 0; i < 12; i++){
           if (float(i) >= octaves) break;
-          float w = clamp(octaves - float(i), 0.0, 1.0);    // trailing-octave fade
+          float w = clamp(octaves - float(i), 0.0, 1.0);
+          w *= mix(COARSE_RELIEF_FLOOR, 1.0, smoothstep(uCoarseCut - 2.0, uCoarseCut, float(i)));
           if (uFwClamp != 0){
             float screenF = fwBase * freq;                  // per-octave screen freq, CYCLES PER RENDER PIXEL
             w *= 1.0 - smoothstep((uFwClamp == 2) ? 0.125 : 0.4, (uFwClamp == 2) ? 0.25 : 0.8, screenF);

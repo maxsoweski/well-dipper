@@ -82,7 +82,7 @@
 // ⛔ THREE-FREE, AND NO ENTROPY. The import closure is `base/` + `display/` + `port/`. Measured on
 // this file's own imports rather than assumed:
 //   · `base/labCore.js` imports exactly ONE module —
-//     src/worldengine/base/labCore.js:1102 `import { R_EARTH_KM, featureFrequencyFromKm } from './featureScale.js';`
+//     src/worldengine/base/labCore.js:1121 `import { R_EARTH_KM, featureFrequencyFromKm } from './featureScale.js';`
 //     — and `featureScale.js` imports nothing at all. So the 1264-line module adds ZERO npm deps and
 //     ZERO renderer surface to the closure. The alternative was weighed BEFORE writing — extract
 //     `reliefEnvelope` and its four constants into a leaf module rather than pull a 1264-line file
@@ -104,7 +104,7 @@
 //   The contract's whole shape is that the pack states a SIZE and the writer resolves the FREQUENCY.
 //
 // ⚠ CARRIED DEFECT, NOT FIXED HERE. `reliefEnvelope`'s first parameter is dead:
-// src/worldengine/base/labCore.js:1178 `// for call-site symmetry with the old reliefNorm signature but is UNUSED in the return (radius via`
+// src/worldengine/base/labCore.js:1197 `// for call-site symmetry with the old reliefNorm signature but is UNUSED in the return (radius via`
 // — the radius reaches the answer only through g. It is filed as a defect in the gravity/self-
 // compression workstream's evidence folder,
 // docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/evidence/FINDING-uperturb-radius-blind.md.
@@ -121,9 +121,9 @@ import { surfacePaletteBlock, offsetDriverBlock } from './giantSurface.js';   //
 // ⚠ THE FIVE PRODUCER IMPORTS THIS LINE REPLACES (`surfacePaletteOf`, `icenessOf`, `biosphereOf`, `BIO_PIGMENT`, `applyAlbedoTransfer`) MOVED WITH THE BLOCK and NOT ONE of them is called from this file any more. An unused import kept "for symmetry" is how a file grows a dependency it no longer has — the same note `scalar`'s departure carries three lines below.
 import { reliefEnvelope } from '../base/labCore.js';
 // ⚠ `scalar` LEFT THIS IMPORT AT B3 LEG 2 AND WAS NOT DROPPED FROM THE PROGRAM: the only two gated drivers this pack ever emitted are the crater/ejecta master gates, and they moved to `./craterDeck.js` with the block. An unused import kept "for symmetry" is how a file grows a dependency it no longer has.
-import { sizeKm, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js';   // ⭐ `resolveDriver` JOINED THIS LINE AT THE LAB SEAM (2026-08-25) and it is the ONLY symbol the seam needs: the mirror at the foot of this file resolves each bound driver exactly as the writer would, so a pack driver and its lab mirror cannot disagree about what a gate or a km shape means. It is the same import `polarDeck`, `solidOptics`, `solidFeatures` and `giantSurface` all took for their own mirrors.
+import { sizeKm, scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js';   // ⭐ `resolveDriver` JOINED THIS LINE AT THE LAB SEAM (2026-08-25) and it is the ONLY symbol the seam needs: the mirror at the foot of this file resolves each bound driver exactly as the writer would, so a pack driver and its lab mirror cannot disagree about what a gate or a km shape means. It is the same import `polarDeck`, `solidOptics`, `solidFeatures` and `giantSurface` all took for their own mirrors.
 // ⭐ B2 LEG 3 — the base field's km wavelength and its cFeature. ⛔ THE CALIBRATION CONSTANTS LIVE IN THAT MODULE AND ARE ONLY FORWARDED FROM HERE, and the reason is a shipped fence rather than taste: tests/driver-pack-rockysurface.test.js:767 `    expect(literals.sort()).toEqual(['0', '0.55', '1.0']);` asserts this file's numeric literals are exactly those THREE — ⭐ FOUR UNTIL 2026-08-21, and the `'3'` did not get deleted, it MOVED: its only source was `offsetOf`'s array-length guard, which went to `./giantSurface.js` with `offsetDriverBlock` and is fenced there instead (⭐ was also cited as :717 until 2026-08-21; that line is the `literalsIn` call, not the assertion, and being symbol-less the ref sat in gate 2's UNCHECKED column where nothing could catch it) — so a calibration constant TYPED here reds it. `C_CRATER` below is the same NAMED-FORWARD shape and escapes only because its value happens to be one of the three; a base-field constant of 1.16 does not, and routing around the fence rather than through a shared module is exactly the transcription it exists to catch.
-import { macroWavelengthKm, C_MACRO } from '../base/macroWavelength.js';
+import { macroWavelengthKm, coarseReliefCut, C_MACRO } from '../base/macroWavelength.js';
 
 // ── The two declared gate names and the crater cFeature — RE-EXPORTED, NOT DECLARED ─────────────
 // ⭐ ALL THREE MOVED TO `./craterDeck.js` AT B3 LEG 2 (2026-08-21), WITH THE DRIVERS THEY BELONG TO,
@@ -265,7 +265,7 @@ export function rockySurfacePack(condition, ctx = {}) {
 
     // ── B2 LEG 3: the base field's characteristic wavelength (ledger P-10 / M-09) ────────────────
     // ⭐ THE SECOND km-SHAPED DRIVER IN THIS PACK, and the second name whose VALUE this file refuses to author: `macroWavelengthKm` states a physical size in km and the writer resolves it at the front-end's display radius, exactly as `uCraterScale` does above. The eight-body calibration table, its two-convention caveat, the Io-anchored process term and every constant behind them live in src/worldengine/base/macroWavelength.js — ⛔ do not re-state any of them here. ⚠ UNGATED ON PURPOSE, AND THE SCOPE IS PINNED ELSEWHERE: tests/driver-pack-rockysurface.test.js:416 `  it('FAMILY 6b · GATE SCOPE: the two gates move those two names and NOTHING else', () => {` holds the gated set at exactly `uCraterDensity` and `uEjectaStrength`. There is no lab toggle over the base field, and a gate here would short-circuit to +0 — src/worldengine/port/writePackUniforms.js:186 `    if (!gates[d.gate]) return 0;` — i.e. hand a gated-off body a frequency of zero, one noise cell across the whole disc, a state neither front-end has ever rendered.
-    uNoiseScale: sizeKm(macroWavelengthKm(condition), C_MACRO),
+    uNoiseScale: sizeKm(macroWavelengthKm(condition), C_MACRO),   uCoarseCut: scalar(coarseReliefCut(condition)),   // ⭐⭐ THE PROCESS TERM, MOVED OFF THE FREQUENCY AND ONTO THE AMPLITUDE, 2026-08-26. `uNoiseScale` above is now the SAME for every non-gas body — lambda = K*R, the radius cancels — and this is what differentiates them instead: how many octaves of LARGE-SCALE relief tidal resurfacing has erased. ⛔ IT IS A `scalar`, NOT A `sizeKm`, and that is the whole point: it is not a size and must not be resolved at any display radius. An octave INDEX is a real physical scale only because the base frequency is now shared, so this number means the same thing on every world. ⭐ UNGATED, like uNoiseScale beside it, and for the same reason: a gated-off body would receive 0, which is 'no flattening at all' — a legitimate value, so the gate could not be distinguished from a cold world. Derivation, the Io anchor and the bound live in src/worldengine/base/macroWavelength.js; do not restate them here.
   };
 
   // ⚠ POPULATED, NOT DECORATIVE. src/worldengine/port/writePackUniforms.js:296 `export function assertPackResult(result, packName = 'pack') {`
@@ -370,7 +370,7 @@ export const ROCKY_SURFACE_UNIFORMS = Object.freeze([
   // on moons. ⛔ SO THIS NAME CANNOT REACH BYTE-IDENTITY WITH THE GAME AND IS NOT MEANT TO: the two
   // sides answer different questions, one drawn and one derived, and the ledger row is what records
   // that. MEASURED over `lab-procedural-0…199`: 0 of 1160 non-gas bodies agree.
-  'uNoiseScale',
+  'uNoiseScale',   'uCoarseCut',   // ⭐ 22 -> 23, 2026-08-26. Unlike `uNoiseScale` above, this name has NO legacy counterpart at all — the game has never had a term for 'how much large-scale relief was erased', so there is nothing for it to reach byte-identity WITH. It is new physics, not a port.
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
