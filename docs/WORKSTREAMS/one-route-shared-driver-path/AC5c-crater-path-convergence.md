@@ -71,16 +71,37 @@ that its stated reason is true.
   new line in `Planet.js` broke 149 citations; `material-parity-list` caught a new GLSL local at
   26 → 27, so `normalize(pos)` is written twice rather than bound to a temp.
 
-⛔ **NOT VERIFIED LIVE, AND THIS IS THE HONEST GAP.** There is no headless GL in this project — no
-puppeteer, no playwright, no `gl` — so **the shader has never been compiled.** Every assertion in
-this repo greps source text, and the one way this change can fail (a splice ordering that puts a call
-above its declaration) produces a black planet while leaving all of them green.
+✅ **VERIFIED LIVE, 2026-08-26 — and the gap I reported was mine, not the project's.**
 
-⭐ Which is why a new **assembled-shader fence** landed with it: every function defined before it is
-called, braces balance, no backtick survived — checked against `HEIGHT_GLSL` with the splices
-resolved, not against source text. It closes that class. **It is not a compiler and does not claim to
-be.** Loading the lab still needs Max's dev server, and the lab's own history says so in its own
-words: *"every headless gate stayed GREEN, and the lab died only on page load."*
+I stated in the step-2 commit that "there is no headless GL in this project, so the shader has never
+been compiled." The first half is true; the conclusion was wrong, and it was wrong because I looked
+for a *test harness* and stopped instead of looking for an *instrument*. **The game precompiles every
+shader variant at boot and publishes the result on `window.__shaderWarmup`:**
+
+```
+ok: true   requested: [gas, rocky, exotic, lab]   warmed: all four   skipped: []   omitted: []
+  gas    ok  31 430 B      rocky  ok  56 649 B   <- the crater-bearing GAME shader
+  exotic ok  38 384 B      lab    ok 386 117 B   <- HEIGHT_GLSL with BOTH of my splices resolved
+```
+
+That is a real link on a real driver, not a string assertion. Both sides of the convergence compile.
+
+**And the lab renders craters.** Parked on `Moon/Mercury (impact-airless)` at 1.6 body radii via
+`_lab.frameBody({radii})` — bowls, rims, terraced inner walls, correct terminator shading.
+
+⭐ **One independent confirmation worth keeping.** Live, `uCraterAmp * uCraterScale` measures
+**0.5225**. `craterRelief.glsl.js` recorded that same product, before any of this work, as *"MEASURED
+LIVE 0.522 (Moon/Mercury)"*. A number written down weeks ago by someone else reproduced to three
+decimals after six functions moved files — which is a much stronger statement than "the tests pass".
+
+⚠ **One trap on the way, recorded because it nearly produced a false negative.** `gl.readPixels` on
+the lab canvas returned 0% non-black and mean luma 0 — a black screen, apparently. It is an artifact:
+the context has no `preserveDrawingBuffer`, so the buffer reads empty after compositing. **The
+screenshot, an instrument that does not depend on that flag, showed a fully rendered planet.** Reading
+a zero off an instrument is not the same as the answer being zero.
+
+⛔ **What is still NOT claimed:** that the craters look *right*. Compile, render and reproduce-a-
+recorded-number are objective and mine to check. Whether the result reads correctly is Max's eyes.
 
 ## 7. Two fences rewritten, both ending stronger
 
