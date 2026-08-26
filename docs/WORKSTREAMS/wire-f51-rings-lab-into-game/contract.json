@@ -1,0 +1,90 @@
+{
+  "workstream": "wire-f51-rings-lab-into-game",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance: the ring's world-engine inputs come from the shared condition/physics path, and no new parallel ring implementation is created. The game's _createRing body is REPLACED by the lab's program rather than the lab's data being grafted onto the game's sine-wave shader.",
+      "verifyVia": {
+        "input": "grep the shipped Planet.js _createRing for the legacy band terms and for the lab's terms",
+        "observable": "`sin(t * 30.0)` and `sin(t * 12.0` are ABSENT from src/objects/Planet.js; the ringlet loop, the gap loop, `uRingMeanDensity` and the `fwidth(ringT)` band-limit clamp are all PRESENT. No third ring shader exists anywhere in src/."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-1",
+      "statement": "Rings show real gaps where the moons actually put them. A ringed planet whose moon lands a 2:1 or 3:1 resonance inside the annulus renders a visible division there; a planet with no such moon renders none.",
+      "verifyVia": {
+        "input": "Generate the 60-system probe corpus and read each ringed planet's rings.physics after moons are generated",
+        "observable": "Ringed planets carrying a resonance-producing moon report gaps.length > 0 and ringlets.length > 1, and the gap radius matches moonOrbitMult * (1/2)^(2/3) or * (1/3)^(2/3). Today every one of the 33 reports 0 gaps and 1 ringlet, so this AC fails at HEAD."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-2",
+      "statement": "A ring's colour comes from what it is made of, not from one fixed palette on every planet. An icy ring reads bright cyan-white, a rocky one dark grey, a dusty one brown.",
+      "verifyVia": {
+        "input": "Render a ringed planet of each generated composition class and sample the ring's pixels",
+        "observable": "Mean ring colour differs measurably between an ice-composition and a rock-composition ring, and each matches its COMPOSITION_COLORS entry rather than the planet's rings.color1/color2."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-3",
+      "statement": "Tilt a ring toward edge-on and its bands fade smoothly to an even tone instead of flickering and crawling.",
+      "verifyVia": {
+        "input": "In the running game, frame a ringed planet and sweep the camera elevation from face-on down through the grazing angles, capturing at each step",
+        "observable": "Radial pixel variance across the annulus falls monotonically toward zero as elevation drops (bands converging on uRingMeanDensity), and frame-to-frame pixel churn under a small camera move does NOT rise as elevation falls. At HEAD both go the other way. SABOTAGE ARM: force the band-limit clamp to 0.0 and confirm the variance stays high and the churn returns — a clamp that is wired but inert must not be able to pass."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-4",
+      "statement": "Nothing else about the universe moves. Same planets, same moons, same seeds — wiring the gaps must not reorder any random draw.",
+      "verifyVia": {
+        "input": "npm run test:body-identity, plus a direct diff of the 60-system corpus before and after",
+        "observable": "The body-identity instrument's failure set is IDENTICAL to its pre-existing baseline (3 assertions, the other lane's moon-population drift) with no new failures, and every planet's radius/type/moonCount and every moon's orbitRadiusEarth is byte-identical across the change. Only rings.physics.gaps and .ringlets may differ."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-5",
+      "statement": "Flying to a ringed planet, the rings read as rings — they hold together as one thing across the approach rather than looking like separate effects switching over.",
+      "verifyVia": {
+        "input": "Max flies to a ringed planet in the live build and approaches it from several angles",
+        "observable": "Max's holistic judgment. Never driven or PASSed by an agent; always deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/generation/PhysicsEngine.js generateRingPhysics() — ringlets, gaps, composition, density, colors. Its gap+ringlet derivation is a pure function of already-drawn rngFloat1/rngFloat5 plus the moon list, which is what makes AC-4 achievable.",
+      "src/generation/PlanetGenerator.js:561 — calls generateRingPhysics with moons: [] because moons do not exist yet at that point. This is the reason gaps are empty today.",
+      "src/generation/StarSystemGenerator.js:591-600 — the seam where a planet's rings AND its finished moon list both exist. Zero-draw re-derivation goes here.",
+      "world-engine-lab.html:486-745 — the lab's ring: ringlet/gap loop, RING_COMPOSITION_COLORS, uRingMeanDensity, and the fwidth(ringT) band-limit clamp at :674. This is the implementation being wired, not a reference to reimplement.",
+      "src/rendering/objects/RingRenderer.js — the dead multi-band renderer whose shader body the lab resurrected. Its fate (revive as the shared module, or delete) is part of this work."
+    ],
+    "outputs": [
+      "src/objects/Planet.js _createRing() (:1764) — the program being replaced.",
+      "docs/FEATURES/one-pipeline-two-frontends-PLAN.md §3 — the F51 row moves from `GAME ❌ R` toward `✅`, and the 4-of-53 headline moves.",
+      "docs/FEATURES/mvp-spine-lab-quality-backlog.md QB-14 — gains the measured intra-band-texture finding."
+    ],
+    "mustStayWorking": [
+      "Body identity across the corpus — no RNG reordering (this IS AC-4, and it is the dominant risk).",
+      "Planet shadow on the ring — the analytic cylinder test, present identically in both programs.",
+      "The Bayer dither-discard + posterize envelope (F50) — rings must keep quantising with the body they orbit; POSTERIZE_QUANTUM is wired to the same shared object and must stay so.",
+      "setRingGaps(sceneMoons) from main.js:7805 — the live shepherd-moon path; it must not double-count now that resonance gaps are real.",
+      "The uniform-inventory ratchets (lab-surface-ratchet, material-parity-list, swap-ledger) — new uniform names will trip them by design and each needs a named justification plus a step6-parity-ledger.md row matching /^[PGRS]-\\d\\d$/ inside the LEDGER-CH1 region.",
+      "Ring tilt from axialTilt (Planet.js:1539-1540) — unchanged by this work.",
+      "The world-engine lab itself must keep rendering its ring; it is the source, not a casualty."
+    ]
+  }
+}
