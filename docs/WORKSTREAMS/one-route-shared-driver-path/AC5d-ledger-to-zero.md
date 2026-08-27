@@ -1,6 +1,12 @@
 # AC5d — the ledger reaches zero, and what that does and does not mean
 
 **Landed:** 2026-08-26 · `1d15cbc` (the arm) + `c7bc437` (the migration)
+**UAT:** ✅ **CLOSED by Max, 2026-08-27** — *"looks the same"*, on the lab parked at
+`Gas giant (Jovian)`, 2.4 body radii. Invisible was the pass: the whole workstream moves the route,
+not the pixels. ⚠ In the same sitting he named three REAL gas-giant defects — the great spot not
+blending, a terrestrial cloud shader over the bands, missing "ink in water" complexity — and ruled
+them behind the wiring. They are QB-16/17/18, not regressions from this work.
+
 **Method:** a 12-agent survey/refute/synthesise workflow, which killed the plan it was asked to check.
 
 ---

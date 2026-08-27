@@ -2,7 +2,7 @@
   "workstream": "one-route-shared-driver-path",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verifying",
+  "status": "shipped",
   "acceptanceCriteria": [
     {
       "id": "AC1",
