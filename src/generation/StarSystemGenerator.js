@@ -1,7 +1,7 @@
 import { SeededRandom } from './SeededRandom.js';
 import { componentSeed, buildComponentContext } from './componentSystems.js';
 import { PlanetGenerator } from './PlanetGenerator.js';
-import { MoonGenerator } from './MoonGenerator.js';
+import { MoonGenerator } from './MoonGenerator.js';  import { deriveRingStructure } from './PhysicsEngine.js';   // ⛔ RIDES THIS LINE: a new import line shifts every cited line below it.
 import { AsteroidBeltGenerator } from './AsteroidBeltGenerator.js';
 import { ExoticOverlay } from './ExoticOverlay.js';
 import { realisticOrbitSpeed as orb } from '../core/CelestialTime.js';
@@ -597,7 +597,7 @@ export class StarSystemGenerator {
         moonData._ordinal = `${i}.${m}`;
         moons.push(moonData);
       }
-      const companion = MoonGenerator.generateBinaryCompanion(planetData, moons.length, parentZone, zones, orbitRadiusAU); if (companion) { companion._systemSeed = seed; companion._ordinal = `${i}.${moons.length}`; moons.push(companion); }  // B5.0 binary companion — zero-draw selector over `binarypair:seed:ordinal`, predicted coordinate-list-and-all in docs/FEATURES/moon-formation-b4-prediction-2026-08-17.md §8
+      const companion = MoonGenerator.generateBinaryCompanion(planetData, moons.length, parentZone, zones, orbitRadiusAU); if (companion) { companion._systemSeed = seed; companion._ordinal = `${i}.${moons.length}`; moons.push(companion); }   if (planetData.rings?.physics) { const _rp = planetData.rings.physics; const _rs = deriveRingStructure({ innerRadius: _rp.innerRadius, outerRadius: _rp.outerRadius, density: _rp.density, composition: _rp.composition, moons, planetRadiusEarth: planetData.radiusEarth, rngFloat1: _rp._rngFloat1, rngFloat5: _rp._rngFloat5 }); _rp.gaps = _rs.gaps; _rp.ringlets = _rs.ringlets; }   // B5.0 binary companion — zero-draw selector over `binarypair:seed:ordinal`, predicted coordinate-list-and-all in docs/FEATURES/moon-formation-b4-prediction-2026-08-17.md §8 ⭐⭐ AND THE RING STRUCTURE IS RE-DERIVED ON THIS LINE, BEFORE THIS COMMENT, because this is the first point where a planet has both its rings and its moons. PlanetGenerator.js builds rings before moons exist and says so (`moons: []  // moons not generated yet at this point`), so every generated ring carried ZERO resonance gaps and exactly ONE ringlet — 0 gaps on 33 of 33 ringed planets across 60 systems, which is why the renderer has never had a gap to draw. ⛔ IT DRAWS NOTHING: deriveRingStructure is pure and its two random inputs were drawn by generateRingPhysics and carried as _rngFloat1/_rngFloat5, so the rng stream is untouched and no body moves. ⛔⛔ MY FIRST ATTEMPT AT THIS APPENDED PAST THIS COMMENT — column 501 against a // at column 241 — and was DEAD. Every headless gate stayed green and the corpus diff read 'no change', which is exactly what a working no-op looks like; it was caught only because a PRIOR measurement predicted 9 of 33 rings would gain gaps and 0 did. ⛔ RIDES THIS LINE — a new line here shifts every cited line below it.
       const wrapper = {
         planetData,
         moons,

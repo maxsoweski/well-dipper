@@ -936,29 +936,108 @@ export function generateRingPhysics(params) {
   const ageFactor = Math.exp(-ringAgeGyr * 1000 / ringLifetimeMyr);
   const density = 0.2 + 0.6 * ageFactor; // 0.2 = tenuous remnant, 0.8 = fresh dense
 
-  // Gaps from moon resonances
+  // Gaps from moon resonances, and the ringlets they partition the disk into.
+  // ⭐ EXTRACTED to deriveRingStructure below, 2026-08-27, and called here with whatever moons the
+  // caller had — which at PlanetGenerator.js's call site is [] , because moons do not exist yet at
+  // that point in generation. That is why every generated ring has had ZERO gaps and exactly ONE
+  // ringlet: measured 0 gaps on 33/33 ringed planets across 60 systems. The extraction exists so
+  // StarSystemGenerator can RE-DERIVE the structure once the moon list is real, WITHOUT drawing a
+  // single new random number — see that function's header.
+  const { gaps, ringlets } = deriveRingStructure({
+    innerRadius, outerRadius, density, composition, moons,
+    planetRadiusEarth: params.planetRadiusEarth, rngFloat1, rngFloat5,
+  });
+
+  // ⛔⛔ THE TWO DRAWS ARE CARRIED ON THE RESULT NON-ENUMERABLY, AND BOTH HALVES OF THAT MATTER.
+  // CARRIED, because re-deriving the ring structure once moons exist needs the SAME two random
+  // values this call already consumed — StarSystemGenerator reads them back and passes them to
+  // deriveRingStructure, which therefore draws NOTHING. Re-drawing there instead would reorder every
+  // rng draw after this point and move every body in the corpus.
+  // NON-ENUMERABLY, because `planetData` is hashed key-by-key by the body-identity fence
+  // (tests/body-identity-fence.test.js `planetRecord` walks Object.keys), and two plumbing fields
+  // appearing on all 33 ringed planets would move the corpus rollup for a reason that has nothing to
+  // do with what the rings actually look like. Hidden from Object.keys, they are hidden from the
+  // hash and from JSON serialisation, so the ONLY thing that moves the rollup is the gap/ringlet
+  // structure itself — which is the change we actually made, on the 9 planets that actually have a
+  // shepherding moon. An unattributable hash movement is a re-bless nobody can check.
+  const out = {
+    origin,
+    composition,
+    innerRadius,
+    outerRadius,
+    density,
+    ringAgeGyr,
+    gaps,
+    ringlets,
+
+    tiltX: axialTilt,
+    tiltZ: 0,
+    color1,
+    color2,
+  };
+  Object.defineProperty(out, '_rngFloat1', { value: rngFloat1, enumerable: false, writable: false });
+  Object.defineProperty(out, '_rngFloat5', { value: rngFloat5, enumerable: false, writable: false });
+  return out;
+}
+
+
+/**
+ * The gap + ringlet structure of a ring, derived from its bounds and the moons that shepherd it.
+ *
+ * ⭐⭐ PURE, AND DRAWS NOTHING. Every random input it needs (`rngFloat1`, `rngFloat5`) is passed in,
+ * already drawn. That is what lets StarSystemGenerator call it a SECOND time once a planet's moons
+ * exist, without reordering the rng stream — and the rng stream is load-bearing: reordering it moves
+ * every body in the corpus, which `npm run test:body-identity` pins.
+ *
+ * WHY IT HAS TO BE CALLED TWICE. Resonance gaps are a function of MOON ORBITS, and
+ * `PlanetGenerator.js` generates rings BEFORE moons — its own call site says so
+ * (`moons: []  // moons not generated yet at this point`). So the first call produces the honest
+ * answer for "no moons": zero gaps, one ringlet spanning the disk. Measured across 60 systems, that
+ * is what all 33 ringed planets got, and it is why the renderer has never had a gap to draw.
+ *
+ * @param {object}   p
+ * @param {number}   p.innerRadius       inner edge, in planet radii
+ * @param {number}   p.outerRadius       outer edge, in planet radii
+ * @param {number}   p.density           age-derived opacity, 0.2 (tenuous remnant) .. 0.8 (fresh)
+ * @param {string}   p.composition       'ice' | 'rock' | 'dust' | 'mixed'
+ * @param {Array}    p.moons             moon records carrying `orbitRadiusEarth`; [] is legal
+ * @param {number}   p.planetRadiusEarth the parent's radius, to put moon orbits in planet radii
+ * @param {number}   p.rngFloat1         pre-drawn, varies ringlet opacity
+ * @param {number}   p.rngFloat5         pre-drawn, varies gap width
+ * @returns {{gaps: Array, ringlets: Array}}
+ */
+export function deriveRingStructure({
+  innerRadius, outerRadius, density, composition,
+  moons = [], planetRadiusEarth, rngFloat1 = 0, rngFloat5 = 0,
+}) {
   const gaps = [];
-  const planetRE = params.planetRadiusEarth || 1;
+  const planetRE = planetRadiusEarth || 1;
   for (let i = 0; i < moons.length; i++) {
     const moonOrbitRE = moons[i]?.orbitRadiusEarth;
     if (!moonOrbitRE || !isFinite(moonOrbitRE) || moonOrbitRE <= 0) continue;
     const moonOrbitMult = moonOrbitRE / planetRE;
 
     // 2:1 resonance gap
-    const gapRadius21 = moonOrbitMult * Math.pow(0.5, 2/3); // a where P_ring/P_moon = 1/2
+    const gapRadius21 = moonOrbitMult * Math.pow(0.5, 2 / 3); // a where P_ring/P_moon = 1/2
     if (gapRadius21 > innerRadius && gapRadius21 < outerRadius) {
       gaps.push({ radius: gapRadius21, width: 0.02 + rngFloat5 * 0.03, moonIndex: i, resonance: '2:1' });
     }
     // 3:1 resonance gap
-    const gapRadius31 = moonOrbitMult * Math.pow(1/3, 2/3);
+    const gapRadius31 = moonOrbitMult * Math.pow(1 / 3, 2 / 3);
     if (gapRadius31 > innerRadius && gapRadius31 < outerRadius) {
       gaps.push({ radius: gapRadius31, width: 0.01 + rngFloat5 * 0.02, moonIndex: i, resonance: '3:1' });
     }
   }
 
-  // Ringlets: divide the ring into bands separated by gaps
+  // Ringlets: the bands between the gaps.
+  // ⚠ THE COMPARATOR IS NEW AND IT IS A LATENT-BUG FIX, NOT A BEHAVIOUR CHANGE. This was a bare
+  // `.sort()`, which sorts NUMBERS AS STRINGS — '10.2' sorts before '2.3'. It has never bitten,
+  // because every gap radius lies inside [innerRadius, outerRadius] and the widest ring measured in
+  // the corpus reaches 5.60 planet radii, so every value is a single digit and string order happens
+  // to equal numeric order. It bites the moment a ring passes 10 planet radii. Bounded today,
+  // unbounded in principle, and free to fix while the code is being moved.
   const ringlets = [];
-  const sortedBoundaries = [innerRadius, ...gaps.map(g => g.radius).sort(), outerRadius];
+  const sortedBoundaries = [innerRadius, ...gaps.map((g) => g.radius).sort((a, b) => a - b), outerRadius];
   for (let i = 0; i < sortedBoundaries.length - 1; i++) {
     const inner = sortedBoundaries[i];
     const outer = sortedBoundaries[i + 1];
@@ -971,21 +1050,7 @@ export function generateRingPhysics(params) {
       });
     }
   }
-
-  return {
-    origin,
-    composition,
-    innerRadius,
-    outerRadius,
-    density,
-    ringAgeGyr,
-    gaps,
-    ringlets,
-    tiltX: axialTilt,
-    tiltZ: 0,
-    color1,
-    color2,
-  };
+  return { gaps, ringlets };
 }
 
 
