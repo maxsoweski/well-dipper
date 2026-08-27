@@ -1,6 +1,8 @@
 # AC5c — the crater path, converged, and the first row this ledger lost to a CONVERGENCE
 
 **Landed:** 2026-08-26 · `afcf6ee` (game side) + `dd08faa` (lab side)
+**UAT:** ✅ **CLOSED by Max, 2026-08-26** — *"yes looks right to me"*, on the lab parked at
+`Moon/Mercury (impact-airless)`, 1.6 body radii. The convergence is invisible, which is the pass.
 **Ruling:** Max — *"we need to converge; I need to be able to stop saying this, that the lab and game
 need to have the same rendering system."*
 
