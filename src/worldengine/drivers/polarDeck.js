@@ -33,7 +33,7 @@
 // changed is that a SIBLING now has the producer in scope. Extending pack #1 instead would force
 // that comment to be rewritten from a statement into a history note, and would
 // put two unrelated scope fences in one module. The uniform-collision throw at
-// src/worldengine/drivers/index.js:305 `throw new PackContractError(` guarantees the two packs
+// src/worldengine/drivers/index.js:414 `throw new PackContractError(` guarantees the two packs
 // cannot silently overlap; their emitted name sets are disjoint (`uBand*`/`uJet*` vs `uPolar*`) and
 // the pack test asserts that as a set difference rather than trusting the prefixes.
 //
@@ -290,7 +290,7 @@ export const POLAR_DECK_ENTRY = Object.freeze({
   name: 'polarDeck',
   applies: (condition) => compositionClass(condition) === 'gas',
   gates: Object.freeze([POLAR_GATE]),
-  pack: polarDeckPack,
+  pack: polarDeckPack, labState: polarDeckLabState,   // ⭐ labState ADDED 2026-08-26 — the registry can now reach this pack's OWN lab mirror, which is what lets applyDriverPacksToState exist without a second hand-written roster. IMPORTED, NEVER RETYPED, exactly as `pack` above is: the mirror and its LAB_BINDING live in this module and the composer only dereferences them. ⛔ RIDES THIS LINE.
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────

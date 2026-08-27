@@ -50,7 +50,7 @@
 // caller — which already owns three — does that one line.
 // ─────────────────────────────────────────────────────────────────────────────
 import { compositionClass } from '../base/e1Regime.js';
-import { giantDeckPack, bandedEnvelopeOf } from './giantDeck.js';
+import { giantDeckPack, bandedEnvelopeOf, giantDeckLabState } from './giantDeck.js';
 import { LIMB_DECK_ENTRY } from './limbDeck.js';
 import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
@@ -114,7 +114,7 @@ export const PACKS = Object.freeze([
     // optics — asserted by NAME LOOKUP over a generated population in the deck's own suite.
     applies: (condition) => bandedEnvelopeOf(condition),
     gates: Object.freeze(['bands', 'jets']),
-    pack: giantDeckPack,
+    pack: giantDeckPack, labState: giantDeckLabState,   // ⭐ labState ADDED 2026-08-26 — see the identical note on the seven *_ENTRY objects. This entry is the one built inline here rather than imported, so its mirror is imported on the giantDeck import line above. ⛔ RIDES THIS LINE.
   }),
   // ⛔ APPENDED AFTER giantDeck, NEVER BEFORE IT, AND THIS IS NOT A STYLE PREFERENCE. Four
   // assertions index this array POSITIONALLY, and the dangerous one is
@@ -298,12 +298,95 @@ export function applyDriverPacks(material, condition, ctx = {}) {
       'skip here is a body that renders the pack-less default and reports success.',
     );
   }
+  return runPacks(condition, ctx, {
+    label: 'applyDriverPacks',
+    write: (entry, result, packCtx) => { writePackUniforms(uniforms, result.drivers, packCtx); },
+  });
+}
+
+/**
+ * Run every applicable pack against one LAB STATE object — the state-mirroring front-end's entry
+ * point, and the exact counterpart of applyDriverPacks above.
+ *
+ * ⭐⭐ WHY A SECOND ENTRY POINT RATHER THAN AN ADAPTER, and it is not a sink-shape convenience.
+ * The two front-ends genuinely need different things and the difference is load-bearing:
+ *
+ *   GAME: pack -> uniforms. Final. Nothing reads them back.
+ *   LAB:  pack -> `state` -> uniforms every frame. `state` is what the lil-gui sliders are bound to
+ *         with `.listen()`, so a pack that wrote uniforms DIRECTLY in the lab would render correctly
+ *         and leave every slider showing a stale number — the authoring surface silently lying.
+ *         solidFeatures.js:322 says so in its own words: the mirror "is what makes the import-back
+ *         survivable: every one of the fourteen is a live `.listen()`".
+ *
+ * So the lab's mirror is not a workaround to be adapted away; it is the correct sink for that
+ * front-end, and each pack already owns its own (`<NAME>_LAB_BINDING` + `<name>LabState`). What was
+ * missing was only the registry knowing about them — now `entry.labState`.
+ *
+ * ⛔ AND THE SELECTION PATH IS SHARED, NOT COPIED. Both entry points call `runPacks`, so the
+ * applicability predicates, the gate policy, the collision throws and the returned shape cannot
+ * drift between lab and game. A second hand-written loop here would be a new lab/game divergence
+ * inside the very function whose job is to end them.
+ *
+ * ⚠ WHAT THIS BUYS THE LAB BEYOND TIDINESS: the lab calls eight packs by hand today with NO
+ * collision detection and NO gate policy. Two packs naming one uniform is currently last-writer-wins
+ * by source order, with no symptom. Through here it throws.
+ *
+ * @param {object} state      the lab's authoring state object; mutated in place.
+ * @param {object} condition  the body's condition vector.
+ * @param {object} ctx        pack context MINUS `gates`, supplied per entry from the gate policy.
+ * @returns {{applied: string[], skipped: string[], attributes: object, uniformsWritten: string[],
+ *            gates: object, meta: object, results: object, stateWritten: string[]}}
+ *   `attributes`, `meta` and `results` are RETURNED rather than applied, because the bespoke work
+ *   each lab call site does around its pack — geometry attribute uploads, direct-driver writes,
+ *   live-AC probes — is the front-end's and this module must not invent it.
+ */
+export function applyDriverPacksToState(state, condition, ctx = {}) {
+  if (state == null || typeof state !== 'object') {
+    throw new PackContractError(
+      'applyDriverPacksToState: state object is missing. Refusing rather than no-oping, for the ' +
+      'same reason applyDriverPacks refuses a material without uniforms: a silent skip is a body ' +
+      'that authors nothing and reports success.',
+    );
+  }
+  const stateWritten = [];
+  return runPacks(condition, ctx, {
+    label: 'applyDriverPacksToState',
+    stateWritten,
+    write: (entry, result) => {
+      if (typeof entry.labState !== 'function') {
+        throw new PackContractError(
+          `applyDriverPacksToState: pack '${entry.name}' has no labState mirror on its registry ` +
+          'entry. Every pack owns one; an entry without it would silently author nothing in the ' +
+          'lab while the game rendered it, which is the two-route divergence this file exists to end.',
+        );
+      }
+      const mirrored = entry.labState(result);
+      for (const name of Object.keys(mirrored)) {
+        if (stateWritten.includes(name)) {
+          throw new PackContractError(
+            `applyDriverPacksToState: state field '${name}' is written by two packs on the same ` +
+            `body (${stateWritten.join(', ')} then ${entry.name}). Array order would decide what ` +
+            'the lab authors, which is not a decision anyone made.',
+          );
+        }
+        stateWritten.push(name);
+      }
+      Object.assign(state, mirrored);
+    },
+  });
+}
+
+/**
+ * The one selection/gate/collision path both entry points run. Everything that could drift between
+ * the lab and the game if it were written twice lives HERE and is written once.
+ */
+function runPacks(condition, ctx, sink) {
   // The display policy is the FRONT-END's and this module never invents one — see
   // src/worldengine/port/writePackUniforms.js:107 `export function assertDisplayPolicy(ctx) {`.
   assertDisplayPolicy(ctx);
   if (ctx.gates !== undefined) {
     throw new PackContractError(
-      'applyDriverPacks: ctx.gates is supplied per-entry by the gate policy and may not be passed ' +
+      `${sink.label}: ctx.gates is supplied per-entry by the gate policy and may not be passed ` +
       'in. A caller-supplied map would silence the absent-gate throw for every pack at once.',
     );
   }
@@ -314,6 +397,7 @@ export function applyDriverPacks(material, condition, ctx = {}) {
   const uniformsWritten = [];
   const meta = {};
   const gates = {};
+  const results = {};
 
   for (const entry of PACKS) {
     if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }
@@ -322,13 +406,13 @@ export function applyDriverPacks(material, condition, ctx = {}) {
     const result = assertPackResult(entry.pack(condition, packCtx), entry.name);
 
     // ⛔ COLLISION IS AN ERROR, NOT A LAST-WRITER-WINS. Two packs claiming one body is legal by
-    // construction (Step 9's rocky pack and this one are mutually exclusive TODAY and nothing
+    // construction (Step 9's rocky pack and giantDeck are mutually exclusive TODAY and nothing
     // enforces that they stay so), and the moment two of them name the same uniform the visible
     // result is whichever entry sits later in the array — an ordering dependency with no symptom.
     for (const name of Object.keys(result.drivers)) {
       if (uniformsWritten.includes(name)) {
         throw new PackContractError(
-          `applyDriverPacks: uniform '${name}' is written by two packs on the same body ` +
+          `${sink.label}: uniform '${name}' is written by two packs on the same body ` +
           `(${uniformsWritten.join(', ')} then ${entry.name}). Array order would decide what ` +
           'renders, which is not a decision anyone made.',
         );
@@ -337,18 +421,23 @@ export function applyDriverPacks(material, condition, ctx = {}) {
     for (const name of Object.keys(result.attributes)) {
       if (name in attributes) {
         throw new PackContractError(
-          `applyDriverPacks: vertex attribute '${name}' is baked by two packs on the same body.`,
+          `${sink.label}: vertex attribute '${name}' is baked by two packs on the same body.`,
         );
       }
     }
 
-    writePackUniforms(uniforms, result.drivers, packCtx);
+    sink.write(entry, result, packCtx);
+
     for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);
     Object.assign(attributes, result.attributes);
     Object.assign(gates, entryGates);
     meta[entry.name] = result.meta ?? null;
+    results[entry.name] = result;
     applied.push(entry.name);
   }
 
-  return { applied, skipped, attributes, uniformsWritten, gates, meta };
+  const out = { applied, skipped, attributes, uniformsWritten, gates, meta, results };
+  if (sink.stateWritten) out.stateWritten = sink.stateWritten;
+  return out;
 }
+

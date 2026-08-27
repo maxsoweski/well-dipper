@@ -69,7 +69,7 @@
 //     `applyDriverPacks` is reached only by front-ends that built a full ctx.
 //  2. THE DECK'S PREDICATE IS WIDER THAN GAS. It is `bandedEnvelopeOf` — gas OR an opaque CO2
 //     shroud — so it co-applies with `rockySurface` and `solidOptics` on 130 rocky venus-typed
-//     bodies that ALREADY receive all thirteen of these names. src/worldengine/drivers/index.js:324 `    // ⛔ COLLISION IS AN ERROR, NOT A LAST-WRITER-WINS. Two packs claiming one body is legal by`
+//     bodies that ALREADY receive all thirteen of these names. src/worldengine/drivers/index.js:408 `    // ⛔ COLLISION IS AN ERROR, NOT A LAST-WRITER-WINS. Two packs claiming one body is legal by`
 //     makes that a throw at a player, not a merge.
 // The complement predicate has neither problem, and it is the shape this tree already uses twice:
 // src/worldengine/drivers/craterDeck.js:272 `    applies: (condition) => compositionClass(condition) === 'gas',` and its solid mirror.
@@ -356,7 +356,7 @@ export const GIANT_SURFACE_ENTRY = Object.freeze({
   name: 'giantSurface',
   applies: (condition) => compositionClass(condition) === 'gas',
   gates: Object.freeze([TERMINATOR_GATE]),
-  pack: giantSurfacePack,
+  pack: giantSurfacePack, labState: giantSurfaceLabState,   // ⭐ labState ADDED 2026-08-26 — the registry can now reach this pack's OWN lab mirror, which is what lets applyDriverPacksToState exist without a second hand-written roster. IMPORTED, NEVER RETYPED, exactly as `pack` above is: the mirror and its LAB_BINDING live in this module and the composer only dereferences them. ⛔ RIDES THIS LINE.
 });
 
 /**

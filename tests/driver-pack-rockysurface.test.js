@@ -1334,7 +1334,19 @@ describe('F — the entry is registry-ready and collision-free', () => {
     expect(ROCKY_SURFACE_ENTRY.pack).toBe(rockySurfacePack);
     expect(Array.isArray(ROCKY_SURFACE_ENTRY.gates)).toBe(true);
     expect(ROCKY_SURFACE_ENTRY.applies.length).toBeLessThanOrEqual(2);
-    expect(Object.keys(ROCKY_SURFACE_ENTRY).sort()).toEqual(['applies', 'gates', 'name', 'pack']);
+    // ⭐ FOUR FIELDS BECAME FIVE ON 2026-08-26, DELIBERATELY, AND THE PIN IS RE-BLESSED RATHER THAN
+    // LOOSENED. `labState` joins the contract because the registry now has to reach each pack's OWN
+    // lab mirror: applyDriverPacksToState routes a result through `entry.labState` instead of
+    // writing uniforms, which is what lets the LAB run packs through the shared composer at all
+    // rather than calling eight of them by hand. Without it the composer would need a second
+    // hand-written pack->mirror roster, i.e. a new lab/game divergence inside the function whose
+    // job is to end them. The mirror itself is not new and is not moved: ROCKY_SURFACE_LAB_BINDING
+    // and rockySurfaceLabState have always lived in rockySurface.js, and the entry only points at
+    // them — `pack:` above is the same arrangement.
+    // ⚠ THE ASSERTION IS STRICTER NOW, NOT LOOSER: the exact key set is still pinned AND labState is
+    // required to be callable, so an entry carrying the name but not the function still reds.
+    expect(Object.keys(ROCKY_SURFACE_ENTRY).sort()).toEqual(['applies', 'gates', 'labState', 'name', 'pack']);
+    expect(typeof ROCKY_SURFACE_ENTRY.labState, 'labState must be callable, not merely present').toBe('function');
   });
 
   it('FAMILY 21 + 26 · ⭐ REGISTERED AT STEP 10a — the inverted fence, and the identity gate', () => {

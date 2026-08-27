@@ -545,7 +545,7 @@ describe('F — the entry is registry-ready and collision-free', () => {
   });
 
   it('names NO uniform giantDeck names — the collision throw will not fire at integration', () => {
-    // src/worldengine/drivers/index.js:329 `if (uniformsWritten.includes(name)) {`
+    // src/worldengine/drivers/index.js:413 `if (uniformsWritten.includes(name)) {`
     // makes two packs naming one uniform an ERROR rather than
     // a last-writer-wins, because array order would otherwise decide what renders. Both packs claim
     // the same bodies, so the disjointness is a precondition of the integration commit, checked here.

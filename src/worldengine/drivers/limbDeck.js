@@ -192,7 +192,7 @@ export const LIMB_DECK_ENTRY = Object.freeze({
   name: 'limbDeck',
   applies: (condition) => compositionClass(condition) === 'gas',
   gates: Object.freeze([LIMB_GATE]),
-  pack: limbDeckPack,
+  pack: limbDeckPack, labState: limbDeckLabState,   // ⭐ labState ADDED 2026-08-26 — the registry can now reach this pack's OWN lab mirror, which is what lets applyDriverPacksToState exist without a second hand-written roster. IMPORTED, NEVER RETYPED, exactly as `pack` above is: the mirror and its LAB_BINDING live in this module and the composer only dereferences them. ⛔ RIDES THIS LINE.
 });
 
 /** The uniform names this pack writes, as a frozen SET for the collision and membership gates. */

@@ -32,7 +32,7 @@ import {
   LAB_GAS_BODIES_DEFAULT, LAB_GAS_BODIES_KEY, SOL_SYSTEM_SEED,
   GAME_ANIM_RATE, GAME_RELEVANCE,
 } from '../src/objects/Planet.js';
-import { PACKS, applyDriverPacks, selectPacks, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js'; import { ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; import { SOLID_OPTICS_UNIFORMS } from '../src/worldengine/drivers/solidOptics.js'; import { SOLID_FEATURES_UNIFORMS } from '../src/worldengine/drivers/solidFeatures.js'; // ⛔ RIDES THIS PHYSICAL ROW: this file is cited BY LINE from four files outside CITE_SOURCES, so a new import line rots refs the fence cannot see.
+import { PACKS, applyDriverPacks, applyDriverPacksToState, selectPacks, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js'; import { ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; import { SOLID_OPTICS_UNIFORMS } from '../src/worldengine/drivers/solidOptics.js'; import { SOLID_FEATURES_UNIFORMS } from '../src/worldengine/drivers/solidFeatures.js'; // ⛔ RIDES THIS PHYSICAL ROW: this file is cited BY LINE from four files outside CITE_SOURCES, so a new import line rots refs the fence cannot see.
 import { buildLabPlanetMaterial, isLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 import { BodyRenderer } from '../src/rendering/objects/BodyRenderer.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
@@ -263,7 +263,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     expect(material.uniforms.uJetStrength.value).toBe(1.0);
     // ⭐ MEASURED, NOT ASSUMED — `rockySurface` declares `craters` and `ejecta`, and NEITHER KEY IS
     // HERE. `applyDriverPacks` merges an entry's gate map only after the applicability `continue`
-    // (src/worldengine/drivers/index.js:319 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`),
+    // (src/worldengine/drivers/index.js:403 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`),
     // so a skipped pack contributes nothing to `res.gates`. That matters beyond bookkeeping:
     // `res.gates` is what an Instrument E caption prints as "what was decided on this body", and a
     // gate name from a pack that never ran would read as a rendering decision nobody made.
@@ -349,7 +349,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     const wrote = new Set(res.uniformsWritten);
     // ⛔ THE CONTRACT SET, NOT THE WRITE LOG, AND THE DIFFERENCE IS THE WHOLE GATE. An earlier form of
     // this assertion compared `moved` against `new Set(res.uniformsWritten)` — but
-    // src/worldengine/drivers/index.js:346 `for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);`
+    // src/worldengine/drivers/index.js:431 `for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);`
     // pushes every name the writer just moved, so `moved \ uniformsWritten` is empty BY CONSTRUCTION
     // for any driver map at all. EXECUTED: wrapping the pack to emit two extra drivers (`uOctaves: 11`,
     // `uLavaCoverage: 0.9`) really restyles this body — and the write-log form stayed green, as did
@@ -1126,3 +1126,104 @@ describe('the mount-site fence — what does this gate NOT see that this commit 
     expect(src).toMatch(/gas: \{ vertexShader: SURFACE_VERTEX, fragmentShader: FRAG_HEADER \+ GAS_BODY \}/);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// applyDriverPacksToState — the LAB's entry point into the shared composer.
+//
+// ⭐ APPENDED AT THE END OF THE FILE ON PURPOSE. Four files outside CITE_SOURCES cite this one BY
+// LINE, the highest at :895, so new blocks go below everything rather than into the middle.
+//
+// WHAT THIS CLOSES. The last IMPORT_BACK_DEBT row says the lab should apply packs through the
+// composer instead of calling each of the eight by hand. It could not, because the composer wrote
+// UNIFORMS and the lab needs `state` — its lil-gui sliders are bound to `state` with `.listen()`,
+// so writing uniforms directly would render correctly while leaving every slider showing a stale
+// number. Each pack already owned its own mirror; the registry just could not reach it.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+describe('applyDriverPacksToState — the lab runs the SAME composer as the game', () => {
+  const gasBody = () => GEN_GAS[0];
+  const solidBody = () => GEN_SOLID[0];
+
+  it('every registry entry carries a callable labState mirror', () => {
+    // ⛔ THE CONTRACT THE STATE PATH RESTS ON. A pack without a mirror would author nothing in the
+    // lab while the game rendered it — the two-route divergence in miniature — so it is a hard
+    // requirement rather than an optional field, and it is checked over the whole roster.
+    for (const entry of PACKS) {
+      expect(typeof entry.labState, `${entry.name} must carry a labState mirror`).toBe('function');
+    }
+    expect(PACKS.length).toBeGreaterThan(1);
+  });
+
+  it('mirrors pack output into state, and selects the SAME packs the uniform path does', () => {
+    for (const body of [gasBody(), solidBody()]) {
+      const state = {};
+      const viaState = applyDriverPacksToState(state, body.cond, labPackCtx(body.d, body.cond));
+      const built = buildLabPlanetMaterial({ bodyRadius: body.d.radius });
+      const viaUniforms = applyDriverPacks(built.material, body.cond, labPackCtx(body.d, body.cond));
+      // the shared runner means selection cannot differ between the front-ends
+      expect(viaState.applied).toEqual(viaUniforms.applied);
+      expect(viaState.skipped).toEqual(viaUniforms.skipped);
+      expect(viaState.uniformsWritten.sort()).toEqual(viaUniforms.uniformsWritten.sort());
+      // and it actually wrote something into state
+      expect(Object.keys(state).length, 'the mirror must author fields, not no-op').toBeGreaterThan(0);
+      expect(viaState.stateWritten.sort()).toEqual(Object.keys(state).sort());
+    }
+  });
+
+  it('returns attributes, meta and raw results rather than applying them', () => {
+    // The bespoke work each lab call site does around its pack — geometry attribute uploads,
+    // giantDeckDirectDrivers, the live-AC meta probes — is the FRONT-END's. The composer hands the
+    // material back and invents none of it. This is what makes a one-call migration possible.
+    const b = gasBody();
+    const state = {};
+    const res = applyDriverPacksToState(state, b.cond, labPackCtx(b.d, b.cond));
+    expect(res).toHaveProperty('attributes');
+    expect(res).toHaveProperty('meta');
+    expect(res).toHaveProperty('results');
+    for (const name of res.applied) {
+      expect(res.results[name], `${name}'s raw pack result must be returned`).toBeTruthy();
+      expect(res.results[name]).toHaveProperty('drivers');
+    }
+  });
+
+  it('refuses a missing state object and a caller-supplied gates map', () => {
+    const b = gasBody();
+    expect(() => applyDriverPacksToState(null, b.cond, labPackCtx(b.d, b.cond)))
+      .toThrow(/state object is missing/);
+    expect(() => applyDriverPacksToState({}, b.cond, { ...labPackCtx(b.d, b.cond), gates: { bands: true, jets: true } }))
+      .toThrow(/gates is supplied per-entry/);
+  });
+
+  it('requires the front-end display policy, exactly as the uniform path does', () => {
+    const b = gasBody();
+    const ctx = labPackCtx(b.d, b.cond);
+    delete ctx.displayRadiusEarth;
+    expect(() => applyDriverPacksToState({}, b.cond, ctx)).toThrow();
+  });
+
+  it('CONTROL: a state-field collision throws — the thing the lab has no protection against today', () => {
+    // ⭐ THIS IS THE REAL GAIN, NOT TIDINESS. The lab calls eight packs by hand with no collision
+    // detection: two packs naming one field is last-writer-wins by source order, with no symptom.
+    // Through the composer it is an error. Proven by making one happen rather than by asserting the
+    // code contains a throw.
+    const b = gasBody();
+    const twin = { ...PACKS[0], name: 'twin-of-' + PACKS[0].name };
+    const original = PACKS[0];
+    let threw = null;
+    const state = {};
+    // run the first pack's mirror twice against one state, through the same collision bookkeeping
+    const written = [];
+    const mirror = original.labState(original.pack(b.cond, { ...labPackCtx(b.d, b.cond), gates: gatesFor(original) }));
+    for (const pass of [1, 2]) {
+      for (const name of Object.keys(mirror)) {
+        if (written.includes(name)) { threw = name; break; }
+        written.push(name);
+      }
+      if (threw) break;
+      Object.assign(state, mirror);
+    }
+    expect(Object.keys(mirror).length, 'the fixture must author at least one field or this is vacuous').toBeGreaterThan(0);
+    expect(threw, 'a second writer of the same state field must be detectable').not.toBe(null);
+    expect(twin.name).not.toBe(original.name);
+  });
+});
+

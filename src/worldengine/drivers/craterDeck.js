@@ -27,7 +27,7 @@
 // ⛔ THE PREDICATES ARE EXACT COMPLEMENTS AND THAT IS THE WHOLE COLLISION ARGUMENT.
 // `rockySurface` is `!== 'gas'`, this entry is `=== 'gas'`, so every body in any corpus is claimed by
 // EXACTLY ONE writer of the family — never zero (which was P-14) and never two (which
-// src/worldengine/drivers/index.js:330 `          throw new PackContractError(` refuses at run time).
+// src/worldengine/drivers/index.js:414 `          throw new PackContractError(` refuses at run time).
 // Asserted over a generated population by NAME LOOKUP in this pack's suite, not by reading two
 // `applies` lines side by side.
 //
@@ -271,7 +271,7 @@ export const CRATER_DECK_ENTRY = Object.freeze({
   name: 'craterDeck',
   applies: (condition) => compositionClass(condition) === 'gas',
   gates: Object.freeze([CRATER_GATE, EJECTA_GATE]),
-  pack: craterDeckPack,
+  pack: craterDeckPack, labState: craterDeckLabState,   // ⭐ labState ADDED 2026-08-26 — the registry can now reach this pack's OWN lab mirror, which is what lets applyDriverPacksToState exist without a second hand-written roster. IMPORTED, NEVER RETYPED, exactly as `pack` above is: the mirror and its LAB_BINDING live in this module and the composer only dereferences them. ⛔ RIDES THIS LINE.
 });
 
 /**

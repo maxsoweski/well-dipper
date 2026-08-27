@@ -147,7 +147,7 @@ export const SOLID_OPTICS_ENTRY = Object.freeze({
   name: 'solidOptics',
   applies: (condition) => compositionClass(condition) !== 'gas',
   gates: Object.freeze([TERMINATOR_GATE, AURORA_GATE]),
-  pack: solidOpticsPack,
+  pack: solidOpticsPack, labState: solidOpticsLabState,   // ⭐ labState ADDED 2026-08-26 — the registry can now reach this pack's OWN lab mirror, which is what lets applyDriverPacksToState exist without a second hand-written roster. IMPORTED, NEVER RETYPED, exactly as `pack` above is: the mirror and its LAB_BINDING live in this module and the composer only dereferences them. ⛔ RIDES THIS LINE.
 });
 
 /**

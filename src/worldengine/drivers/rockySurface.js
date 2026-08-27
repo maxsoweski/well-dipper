@@ -327,7 +327,7 @@ export function rockySurfacePack(condition, ctx = {}) {
  *
  * ⚠ IT MUST RETURN THE BOOLEAN, not a truthy value. Both admission sites compare with `=== true` —
  * src/worldengine/drivers/index.js:275 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
- * and src/worldengine/drivers/index.js:319 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
+ * and src/worldengine/drivers/index.js:403 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
  * — so a truthy non-boolean registers, reports as `skipped`, renders nothing, and throws nothing.
  * `!==` already yields a boolean; this is a note against a future rewrite, not a cast.
  *
@@ -340,7 +340,7 @@ export function rockySurfacePack(condition, ctx = {}) {
  * that slice and the two are held apart by NAME rather than by predicate. That is asserted over the
  * population in FAMILY 22 alongside `solidOptics`, which has always had the same shape. For the three
  * that remain complementary, the collision throw at
- * src/worldengine/drivers/index.js:305 `throw new PackContractError(` is inert here. Inert is not the
+ * src/worldengine/drivers/index.js:414 `throw new PackContractError(` is inert here. Inert is not the
  * same as impossible — the pack test asserts the emitted name sets are disjoint by NAME LOOKUP, so
  * the day a predicate widens the overlap is caught by a test rather than by array order.
  */
@@ -348,7 +348,7 @@ export const ROCKY_SURFACE_ENTRY = Object.freeze({
   name: 'rockySurface',
   applies: (condition) => compositionClass(condition) !== 'gas',
   gates: Object.freeze([CRATER_GATE, EJECTA_GATE]),
-  pack: rockySurfacePack,
+  pack: rockySurfacePack, labState: rockySurfaceLabState,   // ⭐ labState ADDED 2026-08-26 — the registry can now reach this pack's OWN lab mirror, which is what lets applyDriverPacksToState exist without a second hand-written roster. IMPORTED, NEVER RETYPED, exactly as `pack` above is: the mirror and its LAB_BINDING live in this module and the composer only dereferences them. ⛔ RIDES THIS LINE.
 });
 
 /**
