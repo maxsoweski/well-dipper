@@ -604,7 +604,7 @@ describe('AC-SAMPLER L1/D — the edit does not disturb the standing fences', ()
   });
 
   it('the lab still carries at least the 8 /* glsl */ markers vis-scale-fence counts', () => {
-    expect(countOf(labSrc, '/* glsl */')).toBeGreaterThanOrEqual(8);
+    expect(countOf(labSrc, '/* glsl */')).toBeGreaterThanOrEqual(6)   // ⭐ 8 -> 6 ON 2026-08-27 — mirrors vis-scale-fence's floor, same cause: F51 moved the ring's two inline GLSL blocks into src/worldengine/shaders/ringRelief.glsl.js, where the display-scale ban is stricter. This assertion exists to notice the OTHER fence going vacuous, so it tracks that floor rather than holding an independent number.;
   });
 
   it('no tap comment contains a backslash (it would swallow the fence extractor\'s region boundary)', () => {

@@ -7,7 +7,7 @@ import { fnv1aString } from 'motion-test-kit/core/hash/fnv1a.js';          // th
 import {
   CRATER_RELIEF_GLSL,
   CRATER_RELIEF_UNIFORMS_GLSL,
-} from '../worldengine/shaders/craterRelief.glsl.js';
+} from '../worldengine/shaders/craterRelief.glsl.js'; import { RING_VERTEX_GLSL, RING_FRAGMENT_GLSL, ringUniformsFrom } from '../worldengine/shaders/ringRelief.glsl.js';   // ⛔ RIDES THIS LINE: F51's ring module, shared with the lab.
 import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
 import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js'; import { terminatorOpticsOf } from '../worldengine/base/terminatorOptics.js';  // ⛔ B3-1 RIDES THIS LINE: a new import line would shift every line-anchored citation that points below it, in this lane and in the concurrent one.
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
@@ -1761,6 +1761,24 @@ export class Planet {
     return surface;
   }
 
+  // ⭐⭐ F51 — THE GAME NO LONGER HAS ITS OWN RING. This method used to carry a whole ShaderMaterial:
+  // two hardcoded sine waves, sin(t*30.0) and sin(t*12.0), over a Cassini gap at a fixed fraction of
+  // the annulus — the same ring on every planet in the galaxy, keyed to nothing: not composition, not
+  // age, not moons. src/worldengine/shaders/ringRelief.glsl.js is now the ONE ring program and the LAB
+  // draws the same module, so F51 moves from GAME-has-its-own to shared, and a change to the ring is a
+  // change to one file.
+  //
+  // ⛔ THE OLD PROGRAM IS NEUTRALISED IN PLACE BELOW RATHER THAN DELETED — this repo's own convention
+  // for line-cited files, not padding. Planet.js carries symbol-anchored citations down to line 2251;
+  // deleting this 132-line block broke 183 of them on my first attempt, 53 of those ambiguously, and
+  // the citation instrument warns in its own words that a ref repaired to a second wrong line is worse
+  // than a stale one because it reads as freshly verified. world-engine-lab.html states the same rule
+  // for the same reason. So this replacement is line-neutral and every citation below still resolves.
+  //
+  // ⚠ WHAT CHANGES VISUALLY, stated plainly because it is not nothing: rings gain real resonance gaps
+  // (empty on 33 of 33 ringed planets until 2026-08-27), colour from what the ring is MADE of rather
+  // than a generated palette, and a band-limit clamp that fades fine structure to tone at grazing
+  // angles — Max's >= 4 render px ruling, measured for rings before any of this was built.
   _createRing() {
     const d = this.data;
     if (!d.rings) return null;
@@ -1768,131 +1786,113 @@ export class Planet {
     const innerR = d.radius * d.rings.innerRadius;
     const outerR = d.radius * d.rings.outerRadius;
     const geometry = new THREE.RingGeometry(innerR, outerR, 64);
-
-    // RingGeometry is in XY plane — rotate to XZ so it wraps the equator
-    geometry.rotateX(Math.PI / 2);
+    geometry.rotateX(Math.PI / 2);   // RingGeometry is in XY; rotate to XZ so it wraps the equator
 
     const material = new THREE.ShaderMaterial({
       side: THREE.DoubleSide,
-      uniforms: {
-        ringColor1: { value: new THREE.Vector3(...d.rings.color1) }, uPosterizeLevels: POSTERIZE_QUANTUM, // B2P — the ring is its OWN program with its OWN posterize copy, so it needs its own entry; wired to the same object so a disc and its ring never quantise differently. ⛔ RIDES THIS LINE.
-        ringColor2: { value: new THREE.Vector3(...d.rings.color2) },
-        ringOpacity: { value: d.rings.opacity },
-        innerRadius: { value: innerR },
-        outerRadius: { value: outerR },
-        lightDir: { value: this._lightDir },
-        planetRadius: { value: d.radius },
-        // Moon-cleared gaps (shepherd moon effect)
-        moonGapCount: { value: 0 },
-        moonGapRadii: { value: new Float32Array(6) },
-        moonGapWidths: { value: new Float32Array(6) },
-      },
-
-      vertexShader: /* glsl */ `
-        #include <common>
-        #include <logdepthbuf_pars_vertex>
-        varying vec3 vPos;
-        varying vec3 vRelWorldPos;
-
-        void main() {
-          vPos = position;
-          // Planet-relative world position: extract planet center from modelMatrix
-          // and subtract it so shadow math works regardless of orbital position
-          vec4 worldPos = modelMatrix * vec4(position, 1.0);
-          vec3 planetCenter = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-          vRelWorldPos = worldPos.xyz - planetCenter;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          #include <logdepthbuf_vertex>
-        }
-      `,
-
-      fragmentShader: /* glsl */ `
-        #include <logdepthbuf_pars_fragment>
-        uniform vec3 ringColor1;
-        uniform vec3 ringColor2;
-        uniform float ringOpacity;
-        uniform float innerRadius;
-        uniform float outerRadius;
-        uniform vec3 lightDir;
-        uniform float planetRadius;  uniform vec2 uPosterizeLevels;   // B2P — the colour quantum as a vec2: .x = levels, .y = its CPU-carried float32 reciprocal. It is a vec2 and not a float so the reciprocal cannot be re-derived (and re-folded into a divide) by the shader compiler; see posterizeLevels.js 'POSTERIZE_QUANTUM'. ⛔ RIDES THIS LINE.
-        // Moon-cleared gaps
-        const int MAX_MOON_GAPS = 6;
-        uniform int moonGapCount;
-        uniform float moonGapRadii[6];
-        uniform float moonGapWidths[6];
-
-        varying vec3 vPos;
-        varying vec3 vRelWorldPos;
-
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
-          }
-          return t / 16.0;
-        }
-
-        vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {
-          float dither = bayerDither(fragCoord) - 0.5;
-          vec3 dithered = color + dither * (edgeWidth * levels.y);  // ⭐ B2P — levels.y is the reciprocal CARRIED FROM THE CPU (posterizeLevels.js 'POSTERIZE_QUANTUM'), and THE INNER PARENTHESES ARE LOAD-BEARING. Pre-B2P was 'dither * edgeWidth / 6.0' with BOTH operands literal, which the compiler folds into ONE constant multiply; parity therefore needs one multiply by that same constant, which '(edgeWidth * levels.y)' reproduces and '(dither * edgeWidth) * levels.y' does not. MEASURED on ANGLE/SwiftShader Vulkan over 12,582,912 knife-edge samples (6,291,456 per edgeWidth): this form 0 divergences from the bed3235 programs at edgeWidth 0.4 AND 0.6. The two forms that FAIL: the round-2 'dither * edgeWidth * inv' = 4 divergences at 0.4 and 1 at 0.6, max byte delta 43; and a shader-DERIVED '1.0 / levels' with these same parentheses = 0 at 0.4 but 5 at 0.6, because the compiler re-folds 'edgeWidth * (1.0 / levels)' back into a divide. Runtime '1.0/6.0' is itself bit-exact (0x3e2aaaab); it is the RE-FOLDING an opaque uniform denies. Also 0 differing across the FULL input domain (8,388,608 float32 samples, both edgeWidths) and 0 bytes differing in unorm8; and gl-reach's seven whole programs each render 0 px differ vs bed3235. Scope: ANGLE/SwiftShader Vulkan — not proven on every driver. ⛔ RIDES THIS LINE.
-          return floor(dithered * levels.x + 0.5) * levels.y;  // B2P — the SECOND divide. '* levels.y' is a plain reciprocal multiply by the carried constant, and matched pre-B2P's folded '/ 6.0' in every one of the 12,582,912 samples above. levels.x is the quantum itself; both components ride ONE uniform, so a level and its reciprocal cannot drift apart.
-        }
-
-        void main() {
-          #include <logdepthbuf_fragment>
-          float dist = length(vPos.xz);
-          float t = (dist - innerRadius) / (outerRadius - innerRadius);
-
-          float band1 = sin(t * 30.0) * 0.5 + 0.5;
-          float band2 = sin(t * 12.0 + 1.0) * 0.5 + 0.5;
-          float density = band1 * 0.6 + band2 * 0.4;
-
-          vec3 color = mix(ringColor1, ringColor2, band1);
-
-          // Cassini-like gap
-          float gap = smoothstep(0.4, 0.43, t) * (1.0 - smoothstep(0.48, 0.51, t));
-          float alpha = density * (1.0 - gap * 0.8) * ringOpacity;
-
-          // Fade at inner and outer edges
-          alpha *= smoothstep(0.0, 0.08, t) * (1.0 - smoothstep(0.92, 1.0, t));
-
-          // Moon-cleared gaps (shepherd moon effect — like Mimas creating the Cassini Division)
-          for (int i = 0; i < MAX_MOON_GAPS; i++) {
-            if (i >= moonGapCount) break;
-            float gapDist = abs(dist - moonGapRadii[i]);
-            alpha *= smoothstep(0.0, moonGapWidths[i], gapDist);
-          }
-
-          // Planet shadow on ring — use planet-relative position with lightDir
-          float shadowDist = length(cross(vRelWorldPos, lightDir));
-          float behindPlanet = step(dot(vRelWorldPos, lightDir), 0.0);
-          float inShadow = behindPlanet * (1.0 - smoothstep(planetRadius * 0.9, planetRadius * 1.1, shadowDist));
-
-          float ringLight = 1.0 - inShadow;
-          color *= ringLight;
-          // Shadow also reduces opacity — prevents opaque black fragments
-          // from blocking objects behind the ring (like stars)
-          alpha *= mix(0.15, 1.0, ringLight);
-
-          if (bayerDither(gl_FragCoord.xy) > alpha) discard;
-
-          color = posterize(color, uPosterizeLevels, gl_FragCoord.xy, 0.4);
-
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
+      uniforms: ringUniformsFrom({
+        physics: d.rings.physics, planetRadius: d.radius,
+        innerR, outerR, opacity: d.rings.opacity,
+        lightDir: this._lightDir, posterizeQuantum: POSTERIZE_QUANTUM,
+      }),
+      vertexShader: RING_VERTEX_GLSL,
+      fragmentShader: RING_FRAGMENT_GLSL,
     });
 
     return new THREE.Mesh(geometry, material);
   }
-
+  /* ── DEAD SINCE 2026-08-27, KEPT FOR LINE STABILITY — the game's former ring program ──
+    _createRing() {
+      const d = this.data;
+      if (!d.rings) return null;
+  
+      const innerR = d.radius * d.rings.innerRadius;
+      const outerR = d.radius * d.rings.outerRadius;
+      const geometry = new THREE.RingGeometry(innerR, outerR, 64);
+  
+      // RingGeometry is in XY plane — rotate to XZ so it wraps the equator
+      geometry.rotateX(Math.PI / 2);
+  
+      const material = new THREE.ShaderMaterial({
+        side: THREE.DoubleSide,
+        uniforms: {
+          ringColor1: { value: new THREE.Vector3(...d.rings.color1) }, uPosterizeLevels: POSTERIZE_QUANTUM, // B2P — the ring is its OWN program with its OWN posterize copy, so it needs its own entry; wired to the same object so a disc and its ring never quantise differently. ⛔ RIDES THIS LINE.
+          ringColor2: { value: new THREE.Vector3(...d.rings.color2) },
+          ringOpacity: { value: d.rings.opacity },
+          innerRadius: { value: innerR },
+          outerRadius: { value: outerR },
+          lightDir: { value: this._lightDir },
+          planetRadius: { value: d.radius },
+          // Moon-cleared gaps (shepherd moon effect)
+          moonGapCount: { value: 0 },
+          moonGapRadii: { value: new Float32Array(6) },
+          moonGapWidths: { value: new Float32Array(6) },
+        },
+  
+        vertexShader: / * glsl * / `
+          #include <common>
+          #include <logdepthbuf_pars_vertex>
+          varying vec3 vPos;
+          varying vec3 vRelWorldPos;
+  
+          void main() {
+            vPos = position;
+            // Planet-relative world position: extract planet center from modelMatrix
+            // and subtract it so shadow math works regardless of orbital position
+            vec4 worldPos = modelMatrix * vec4(position, 1.0);
+            vec3 planetCenter = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+            vRelWorldPos = worldPos.xyz - planetCenter;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            #include <logdepthbuf_vertex>
+          }
+        `,
+  
+        fragmentShader: / * glsl * / `
+          #include <logdepthbuf_pars_fragment>
+          uniform vec3 ringColor1;
+          uniform vec3 ringColor2;
+          uniform float ringOpacity;
+          uniform float innerRadius;
+          uniform float outerRadius;
+          uniform vec3 lightDir;
+          uniform float planetRadius;  uniform vec2 uPosterizeLevels;   // B2P — the colour quantum as a vec2: .x = levels, .y = its CPU-carried float32 reciprocal. It is a vec2 and not a float so the reciprocal cannot be re-derived (and re-folded into a divide) by the shader compiler; see posterizeLevels.js 'POSTERIZE_QUANTUM'. ⛔ RIDES THIS LINE.
+          // Moon-cleared gaps
+          const int MAX_MOON_GAPS = 6;
+          uniform int moonGapCount;
+          uniform float moonGapRadii[6];
+          uniform float moonGapWidths[6];
+  
+          varying vec3 vPos;
+          varying vec3 vRelWorldPos;
+  
+          float bayerDither(vec2 coord) {
+            vec2 p = mod(floor(coord), 4.0);
+            float t = 0.0;
+            if (p.y < 0.5) {
+              t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
+            } else if (p.y < 1.5) {
+              t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
+            } else if (p.y < 2.5) {
+              t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
+            } else {
+              t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+            }
+            return t / 16.0;
+          }
+  
+          vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {
+            float dither = bayerDither(fragCoord) - 0.5;
+            vec3 dithered = color + dither * (edgeWidth * levels.y);  // ⭐ B2P — levels.y is the reciprocal CARRIED FROM THE CPU (posterizeLevels.js 'POSTERIZE_QUANTUM'), and THE INNER PARENTHESES ARE LOAD-BEARING. Pre-B2P was 'dither * edgeWidth / 6.0' with BOTH operands literal, which the compiler folds into ONE constant multiply; parity therefore needs one multiply by that same constant, which '(edgeWidth * levels.y)' reproduces and '(dither * edgeWidth) * levels.y' does not. MEASURED on ANGLE/SwiftShader Vulkan over 12,582,912 knife-edge samples (6,291,456 per edgeWidth): this form 0 divergences from the bed3235 programs at edgeWidth 0.4 AND 0.6. The two forms that FAIL: the round-2 'dither * edgeWidth * inv' = 4 divergences at 0.4 and 1 at 0.6, max byte delta 43; and a shader-DERIVED '1.0 / levels' with these same parentheses = 0 at 0.4 but 5 at 0.6, because the compiler re-folds 'edgeWidth * (1.0 / levels)' back into a divide. Runtime '1.0/6.0' is itself bit-exact (0x3e2aaaab); it is the RE-FOLDING an opaque uniform denies. Also 0 differing across the FULL input domain (8,388,608 float32 samples, both edgeWidths) and 0 bytes differing in unorm8; and gl-reach's seven whole programs each render 0 px differ vs bed3235. Scope: ANGLE/SwiftShader Vulkan — not proven on every driver. ⛔ RIDES THIS LINE.
+            return floor(dithered * levels.x + 0.5) * levels.y;  // B2P — the SECOND divide. '* levels.y' is a plain reciprocal multiply by the carried constant, and matched pre-B2P's folded '/ 6.0' in every one of the 12,582,912 samples above. levels.x is the quantum itself; both components ride ONE uniform, so a level and its reciprocal cannot drift apart.
+          }
+  
+          void main() {
+            #include <logdepthbuf_fragment>
+            float dist = length(vPos.xz);
+            float t = (dist - innerRadius) / (outerRadius - innerRadius);
+  
+            float band1 = sin(t * 30.0) * 0.5 + 0.5;
+  */
   /**
    * Set ring gaps at moon orbital radii (shepherd moon effect).
    * Call after creating moons, passing the moon data array.

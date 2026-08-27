@@ -123,8 +123,18 @@ describe('B2P 3 — the shipped GLSL declares the uniform and spends it in poste
     it(`${name}: declares \`uniform vec2 uPosterizeLevels\`, spends it, and keeps no 6.0 literal`, () => {
       const s = get();
       expect(/uniform\s+vec2\s+uPosterizeLevels\s*;/.test(s), `${name} never declares the uniform as a vec2`).toBe(true);
-      expect(/posterize\([^;]*?,\s*uPosterizeLevels\s*,/.test(s), `${name} declares it but never spends it`).toBe(true);
-      expect(/posterize\([^;]*?,\s*6\.0\s*,/.test(s), `${name} still has a hard-coded 6.0 in a posterize call`).toBe(false);
+      // ⭐ THE FUNCTION NAME MAY CARRY A MODULE PREFIX SINCE 2026-08-27, and widening for it is not a
+      // loosening. F51 moved the ring's program out of Planet.js into the shared
+      // src/worldengine/shaders/ringRelief.glsl.js that the LAB splices too, and the copy there is named
+      // `ringPosterize` so that a host splicing this module ALONGSIDE a program that already declares its
+      // own `posterize` (Planet.js:208 does, for the three body programs) cannot hit a redefinition. The
+      // property under test is unchanged — the quantum is declared as a vec2 and SPENT — and the pattern
+      // still pins the argument position, so a program that declares the uniform and never uses it reds
+      // exactly as before. ⚠ The 6.0 arm widens with it, or it would stop watching the ring entirely.
+      const SPENDS = /[A-Za-z]*[Pp]osterize\([^;]*?,\s*uPosterizeLevels\s*,/;
+      const HARDCODED = /[A-Za-z]*[Pp]osterize\([^;]*?,\s*6\.0\s*,/;
+      expect(SPENDS.test(s), `${name} declares it but never spends it`).toBe(true);
+      expect(HARDCODED.test(s), `${name} still has a hard-coded 6.0 in a posterize call`).toBe(false);
     });
   }
   it('the moon keeps its own edgeWidth 0.6 (planets use 0.4) — the port did not flatten it', () => {

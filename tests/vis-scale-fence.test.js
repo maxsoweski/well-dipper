@@ -153,7 +153,7 @@ describe('AC-ZERO-CLOBBER — the lab GLSL regions are sVis-free (breach only al
   it('finds the lab shader blocks and none contains a display-scale token', () => {
     const lab = read('world-engine-lab.html');
     const regions = extractGlslRegions(lab);
-    expect(regions.length).toBeGreaterThanOrEqual(8);   // the 8 /* glsl */ blocks
+    expect(regions.length).toBeGreaterThanOrEqual(6)   // ⭐ 8 -> 6 ON 2026-08-27, AND THE TWO BLOCKS DID NOT STOP BEING CHECKED — THEY MOVED SOMEWHERE STRICTER. F51 lifted the lab's ring vertex + fragment shaders out of world-engine-lab.html into src/worldengine/shaders/ringRelief.glsl.js, which the GAME splices too. This floor exists so the sVis scan cannot silently find zero inline blocks; the ring's GLSL is now under src/worldengine/**, where THIS SAME FILE bans the display-scale token outright, COMMENTS INCLUDED — a strictly harder arm than the one it left. Verified: the module carries no sVis/visScale token.;   // the 8 /* glsl */ blocks
     const offending = regions.filter((r) => DENY.test(r));
     expect(offending).toEqual([]);
   });

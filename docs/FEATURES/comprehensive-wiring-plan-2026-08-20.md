@@ -1167,10 +1167,15 @@ call, not an agent's.
    src/objects/Planet.js:1279 `  finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.4);` — the
    three body programs (`GAS_BODY`, `ROCKY_BODY`, `EXOTIC_BODY`), each a separate fragment shader.
 2. ⚠ **REF CORRECTED HERE: the fourth site is the RING material, and it is a different quantity.**
-   src/objects/Planet.js:1886 `          color = posterize(color, uPosterizeLevels, gl_FragCoord.xy, 0.4);` spends
+   src/worldengine/shaders/ringRelief.glsl.js:270 `  color = ringPosterize(color, uPosterizeLevels, gl_FragCoord.xy, 0.4);` spends
    `color`, not `finalColor`, inside a material built by its own factory — and it carries its own second
-   copy of the function at src/objects/Planet.js:1842 `        vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {`,
+   copy of the function at src/worldengine/shaders/ringRelief.glsl.js:205 `vec3 ringPosterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {`,
    distinct from the body copy at src/objects/Planet.js:208 `vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {`.
+   ⭐ **REFS MOVED 2026-08-27, AND THE CLAIM SURVIVES THE MOVE.** Both pointed into `Planet.js`'s own ring
+   material, which no longer exists: F51 replaced it with the shared `ringRelief.glsl.js` that the LAB draws
+   too, and the ring's copy of the function went with it (renamed `ringPosterize` so the two copies cannot
+   collide when a host splices both). Still two programs and two function copies — the second one is simply
+   no longer the game's alone, which is the point of the move.
    **So this is two shader programs and two function copies, not one program with four call sites**, and
    a single uniform added to one material object reaches neither the other three programs nor the ring.
    ⭐ Whether rings follow the planet quantum or keep their own is a LOOK question; the conservative
