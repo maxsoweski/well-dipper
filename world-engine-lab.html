@@ -185,7 +185,7 @@
     import { E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a regime tags. ⭐ `bakeClimateE5Attributes` is NO LONGER IMPORTED HERE — PLAN §4 Step 5c moved the band/jet bake into giantDeckPack, and an unused import is how a "deleted" copy stays one edit away from coming back
     import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)
     import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars, drawRotationHours } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation); + S1 giantDriverScalars (single-sourced radius/rotation wire) & drawRotationHours (per-archetype rotation draw, hot-Jupiter derived)
-    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms, resolveDriver } from './src/worldengine/port/writePackUniforms.js'; import { solidFeaturesPack, solidFeaturesLabState } from './src/worldengine/drivers/solidFeatures.js'; import { giantSurfacePack, giantSurfaceLabState } from './src/worldengine/drivers/giantSurface.js'; import { polarDeckPack, polarDeckLabState } from './src/worldengine/drivers/polarDeck.js'; import { solidOpticsPack, solidOpticsLabState } from './src/worldengine/drivers/solidOptics.js'; import { limbDeckPack, limbDeckLabState } from './src/worldengine/drivers/limbDeck.js'; import { rockySurfacePack, rockySurfaceLabState } from './src/worldengine/drivers/rockySurface.js'; import { craterDeckPack, craterDeckLabState } from './src/worldengine/drivers/craterDeck.js'; import { EMISSION_PHYS } from './src/worldengine/base/emission-e.js'; import { selectPacks } from './src/worldengine/drivers/index.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does ⭐⭐ A THIRD import STATEMENT JOINED THIS LINE 2026-08-22 — DRIVER PACK #2, `solidFeatures` (workstream AC5), for the same line-budget reason the first two share it. ⛔⛔ IT WAS INSERTED BEFORE THIS COMMENT AND NEVER APPENDED AFTER IT: an import appended past a trailing `//` lands INSIDE the comment, both new imports were silently disabled exactly that way on 2026-08-21, every headless gate stayed GREEN, and the lab died only on page load. Loading the page is the only thing that found it. ⭐ AND A FOURTH, 2026-08-22 — DRIVER PACK #8 `giantSurface`, the GAS-class complement, wired the same day and under the same two rules: inserted BEFORE this comment, and sharing this line rather than spending one. ⭐ AND A FIFTH AND SIXTH, 2026-08-25 — THE CRATER WIRE: `rockySurface` (the SOLID-class complement of `giantSurface`, the same two shared blocks under the exact complement predicate) and `craterDeck` (its gas-class sibling over the crater block alone). Under the same two rules again: inserted BEFORE this comment, and sharing this line rather than spending two. ⛔ AND THE PAGE WAS LOADED. The mirrors' call site records at :2880 why no headless gate can stand in for that here either. ⭐ AND A SEVENTH, 2026-08-25 — `EMISSION_PHYS`, which is NOT a pack: it is the four-constant blackbody register the game already ships, and the lab held its own copies of three of them. Same two rules again. ⭐ AND AN EIGHTH, 2026-08-26 — `selectPacks`, the SHARED APPLICABILITY LAW from the composition point. NOT a pack: it is the predicate list applyDriverPacks itself filters on, so adopting it single-homes the question "does this pack apply to this body" that the lab has been hand-writing as `compositionClass(...) === 'gas'` in three separate places. Inserted BEFORE this comment and sharing this line, under the same two rules as the seven above.
+    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms, resolveDriver } from './src/worldengine/port/writePackUniforms.js'; import { solidFeaturesPack, solidFeaturesLabState } from './src/worldengine/drivers/solidFeatures.js'; import { giantSurfacePack, giantSurfaceLabState } from './src/worldengine/drivers/giantSurface.js'; import { polarDeckPack, polarDeckLabState } from './src/worldengine/drivers/polarDeck.js'; import { solidOpticsPack, solidOpticsLabState } from './src/worldengine/drivers/solidOptics.js'; import { limbDeckPack, limbDeckLabState } from './src/worldengine/drivers/limbDeck.js'; import { rockySurfacePack, rockySurfaceLabState } from './src/worldengine/drivers/rockySurface.js'; import { craterDeckPack, craterDeckLabState } from './src/worldengine/drivers/craterDeck.js'; import { EMISSION_PHYS } from './src/worldengine/base/emission-e.js'; import { selectPacks } from './src/worldengine/drivers/index.js'; import { RING_VERTEX_GLSL, RING_FRAGMENT_GLSL, ringUniformsFrom, RING_MAX_RINGLETS, RING_MAX_GAPS } from './src/worldengine/shaders/ringRelief.glsl.js'; import { POSTERIZE_QUANTUM } from './src/rendering/posterizeLevels.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does ⭐⭐ A THIRD import STATEMENT JOINED THIS LINE 2026-08-22 — DRIVER PACK #2, `solidFeatures` (workstream AC5), for the same line-budget reason the first two share it. ⛔⛔ IT WAS INSERTED BEFORE THIS COMMENT AND NEVER APPENDED AFTER IT: an import appended past a trailing `//` lands INSIDE the comment, both new imports were silently disabled exactly that way on 2026-08-21, every headless gate stayed GREEN, and the lab died only on page load. Loading the page is the only thing that found it. ⭐ AND A FOURTH, 2026-08-22 — DRIVER PACK #8 `giantSurface`, the GAS-class complement, wired the same day and under the same two rules: inserted BEFORE this comment, and sharing this line rather than spending one. ⭐ AND A FIFTH AND SIXTH, 2026-08-25 — THE CRATER WIRE: `rockySurface` (the SOLID-class complement of `giantSurface`, the same two shared blocks under the exact complement predicate) and `craterDeck` (its gas-class sibling over the crater block alone). Under the same two rules again: inserted BEFORE this comment, and sharing this line rather than spending two. ⛔ AND THE PAGE WAS LOADED. The mirrors' call site records at :2880 why no headless gate can stand in for that here either. ⭐ AND A SEVENTH, 2026-08-25 — `EMISSION_PHYS`, which is NOT a pack: it is the four-constant blackbody register the game already ships, and the lab held its own copies of three of them. Same two rules again. ⭐ AND AN EIGHTH, 2026-08-26 — `selectPacks`, the SHARED APPLICABILITY LAW from the composition point. NOT a pack: it is the predicate list applyDriverPacks itself filters on, so adopting it single-homes the question "does this pack apply to this body" that the lab has been hand-writing as `compositionClass(...) === 'gas'` in three separate places. Inserted BEFORE this comment and sharing this line, under the same two rules as the seven above. ⭐ AND A NINTH + TENTH, 2026-08-27 — F51's ring module and the shared posterize quantum. Inserted BEFORE this comment, sharing this line, under the same two rules as the eight above.
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -494,19 +494,19 @@
     // moiréing against the 4×4 Bayer grid. All identifiers prefixed uRing*/ring* — NO
     // GLSL reserved words (esp. NOT `partition`, the acute trap for ring code).
     // ─────────────────────────────────────────────────────────────────────────
-    const RING_MAX_RINGLETS = 16;
-    const RING_MAX_GAPS = 8;
-    const RING_COMPOSITION_COLORS = {   // RingRenderer.js:28-33
-      ice:   [0.85, 0.92, 0.98],
-      rock:  [0.35, 0.32, 0.30],
-      dust:  [0.55, 0.45, 0.35],
-      mixed: [0.60, 0.58, 0.55],
-    };
-
-    // Synthetic params bundle (§6.5 host-preset step): origin 'roche', a density pair,
-    // an ageGyr, and ONE synthetic inner moon (orbit = 9 planet radii) that both clips
-    // the outer edge and carves a 2:1 resonance gap inside the annulus. planetRadiusEarth=1
-    // so the physics' radii-in-planet-radii equal lab object-space units (lab R = 1.0).
+      // ⭐⭐ F51 — THE RING CONSTANTS COME FROM THE SHARED MODULE NOW. The lab held its own copies of
+      // RING_MAX_RINGLETS / RING_MAX_GAPS / RING_COMPOSITION_COLORS, which were themselves copied out of
+      // the dead RingRenderer.js. src/worldengine/shaders/ringRelief.glsl.js is the one home, and the GAME
+      // splices the same module, so the ring the lab authors is literally the ring the game draws.
+      /* ── DEAD SINCE 2026-08-27, KEPT FOR LINE STABILITY — §10 line-stability, 500+ refs at or past :1933 ──
+          const RING_MAX_RINGLETS = 16;
+          const RING_MAX_GAPS = 8;
+          const RING_COMPOSITION_COLORS = {   // RingRenderer.js:28-33
+            ice:   [0.85, 0.92, 0.98],
+            rock:  [0.35, 0.32, 0.30],
+            dust:  [0.55, 0.45, 0.35],
+            mixed: [0.60, 0.58, 0.55],
+      */
     function makeRingPhysics() {
       return generateRingPhysics({
         origin: 'roche',
@@ -523,205 +523,206 @@
         rngFloat1: 0.3, rngFloat2: 0.5, rngFloat3: 0.6, rngFloat4: 0.2, rngFloat5: 0.5,
       });
     }
-    const ringPhysics = makeRingPhysics();
-
-    // Flatten ringlets[]/gaps[] into the Float32Array layout RingRenderer builds
-    // (RingRenderer.js:69-101). Lab R = 1.0, so multiply by R (= identity) for clarity.
-    const ringletInnerR  = new Float32Array(RING_MAX_RINGLETS);
-    const ringletOuterR  = new Float32Array(RING_MAX_RINGLETS);
-    const ringletOpacity = new Float32Array(RING_MAX_RINGLETS);
-    const ringletColors  = new Float32Array(RING_MAX_RINGLETS * 3);
-    let ringletCount = 0;
-    for (let i = 0; i < ringPhysics.ringlets.length && ringletCount < RING_MAX_RINGLETS; i++) {
-      const rl = ringPhysics.ringlets[i];
-      if (rl.outerR - rl.innerR < 0.001) continue;
-      const j = ringletCount;
-      ringletInnerR[j]  = R * rl.innerR;
-      ringletOuterR[j]  = R * rl.outerR;
-      // PRESENTATIONAL OPACITY LIFT + ALTERNATING CONTRAST (UAT item 2): physics opacities
-      // (~0.45/0.52/0.58) sit close together × density ~0.64 → effective ~0.29-0.37, which
-      // reads as a smooth radial gradient rather than discrete ringlets after the 6-level
-      // posterize. We (a) lift the base so the dense bands read solidly, and (b) push adjacent
-      // ringlets apart in density (odd brighter / even dimmer) so the band BOUNDARIES register
-      // as discrete light/dark steps. Physics ORDERING is preserved (this only amplifies).
-      const baseOp = rl.opacity * (ringPhysics.density ?? 1.0);
-      const altContrast = (j % 2 === 0) ? 1.15 : 0.78;   // discrete light/dark banding
-      ringletOpacity[j] = Math.min(1.0, baseOp * 1.6 * altContrast);
-      const c = RING_COMPOSITION_COLORS[rl.composition] || RING_COMPOSITION_COLORS.mixed;
-      ringletColors[j*3] = c[0]; ringletColors[j*3+1] = c[1]; ringletColors[j*3+2] = c[2];
-      ringletCount++;
-    }
-    const ringGapCenters = new Float32Array(RING_MAX_GAPS);
-    const ringGapWidths  = new Float32Array(RING_MAX_GAPS);
-    let ringGapCount = 0;
-    // PRESENTATIONAL GAP-WIDTH BOOST (UAT item 3): the physics gap widths (~0.035 R_p
-    // for the dominant 2:1, ~0.02 for the finer 3:1) are physically faithful but
-    // sub-Bayer-cell at this stylized scale, so the dominant Cassini-analog clearing
-    // never registers against the 4×4 dither. We widen the clearings for read WITHOUT
-    // touching the upstream physics: the WIDEST physics gap is the dominant one (2:1
-    // resonance carves the most), so it gets the larger boost → ONE commanding gap,
-    // thinner ones stay subordinate. Half-falloff in R_p; visible clearing ≈ 2×.
-    const ringGapsSorted = ringPhysics.gaps
-      .map((g, idx) => ({ ...g, idx }))
-      .sort((a, b) => b.width - a.width);   // widest (dominant) first
-    for (let k = 0; k < ringGapsSorted.length && ringGapCount < RING_MAX_GAPS; k++) {
-      const g = ringGapsSorted[k];
-      ringGapCenters[ringGapCount] = R * g.radius;
-      // Dominant gap (k===0) → ~0.34 R_p half-width (commanding Cassini clearing);
-      // subordinate gaps → ~0.12 R_p (crisp but clearly thinner, appear up close).
-      const boostHalfWidth = (k === 0) ? 0.34 : 0.12;
-      ringGapWidths[ringGapCount] = R * boostHalfWidth;
-      ringGapCount++;
-    }
-
-    const ringInnerR = R * ringPhysics.innerRadius;
-    const ringOuterR = R * ringPhysics.outerRadius;
-
-    const ringUniforms = {
-      ringColor1:   { value: new THREE.Vector3(...ringPhysics.color1) },
-      ringColor2:   { value: new THREE.Vector3(...ringPhysics.color2) },
-      ringOpacity:  { value: 1.0 },
-      innerRadius:  { value: ringInnerR },
-      outerRadius:  { value: ringOuterR },
-      lightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },   // object-space, written per-frame
-      planetRadius: { value: R },
-      uRingletCount:   { value: ringletCount },
-      uRingletInnerR:  { value: ringletInnerR },
-      uRingletOuterR:  { value: ringletOuterR },
-      uRingletOpacity: { value: ringletOpacity },
-      uRingletColors:  { value: ringletColors },
-      uGapCount:    { value: ringGapCount },
-      uGapCenters:  { value: ringGapCenters },
-      uGapWidths:   { value: ringGapWidths },
-      uRingMeanDensity: { value: ringPhysics.density ?? 0.5 },   // disk-wide baseline for the fwidth band-limit fade
-    };
-
-    const ringMat = new THREE.ShaderMaterial({
-      side: THREE.DoubleSide,
-      transparent: true,
-      depthWrite: false,
-      uniforms: ringUniforms,
-      vertexShader: /* glsl */ `
-        #include <common>
-        #include <logdepthbuf_pars_vertex>
-        varying vec3 vPos;
-        varying vec3 vRelWorldPos;
-        void main() {
-          vPos = position;
-          vec4 worldPos = modelMatrix * vec4(position, 1.0);
-          vec3 planetCenter = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-          vRelWorldPos = worldPos.xyz - planetCenter;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          #include <logdepthbuf_vertex>
-        }
-      `,
-      fragmentShader: /* glsl */ `
-        #include <logdepthbuf_pars_fragment>
-        uniform vec3 ringColor1;
-        uniform vec3 ringColor2;
-        uniform float ringOpacity;
-        uniform float innerRadius;
-        uniform float outerRadius;
-        uniform vec3 lightDir;
-        uniform float planetRadius;
-
-        const int RING_MAX_RINGLETS = ${RING_MAX_RINGLETS};
-        uniform int uRingletCount;
-        uniform float uRingletInnerR[${RING_MAX_RINGLETS}];
-        uniform float uRingletOuterR[${RING_MAX_RINGLETS}];
-        uniform float uRingletOpacity[${RING_MAX_RINGLETS}];
-        uniform float uRingletColors[${RING_MAX_RINGLETS * 3}];
-
-        const int RING_MAX_GAPS = ${RING_MAX_GAPS};
-        uniform int uGapCount;
-        uniform float uGapCenters[${RING_MAX_GAPS}];
-        uniform float uGapWidths[${RING_MAX_GAPS}];
-        uniform float uRingMeanDensity;
-
-        varying vec3 vPos;
-        varying vec3 vRelWorldPos;
-
-        float bayerDither(vec2 coord) {
-          vec2 p = mod(floor(coord), 4.0);
-          float t = 0.0;
-          if (p.y < 0.5) {
-            t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
-          } else if (p.y < 1.5) {
-            t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
-          } else if (p.y < 2.5) {
-            t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
-          } else {
-            t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+      const ringPhysics = makeRingPhysics();
+      // ⭐ THE UNIFORM PACKING IS SHARED TOO. Seventy lines of Float32Array flattening stood here and an
+      // identical seventy stood in the dead RingRenderer.js; a third copy was about to go into Planet.js.
+      // ringUniformArraysFrom is that packing, owned once. ⚠ It also computes uRingMeanDensity — the value
+      // the band-limit clamp fades toward — as the mean of the ringlet opacities ACTUALLY DRAWN, which the
+      // lab never had: its old copy passed a nominal density, so a grazing ring changed brightness as it
+      // flattened, the very artefact the clamp exists to remove.
+      const ringInnerR = R * ringPhysics.innerRadius;
+      const ringOuterR = R * ringPhysics.outerRadius;   // ⛔ these two were inside the block neutralised below; the lab died on page load without them, with every headless gate green.
+      const ringUniforms = ringUniformsFrom({
+        physics: ringPhysics, planetRadius: R, innerR: ringInnerR, outerR: ringOuterR,
+        opacity: 1.0, lightDir: WORLD_LIGHT, posterizeQuantum: POSTERIZE_QUANTUM,
+      });
+      /* ── DEAD SINCE 2026-08-27, KEPT FOR LINE STABILITY — §10 line-stability, 500+ refs at or past :1933 ──
+          const ringPhysics = makeRingPhysics();
+      
+          // Flatten ringlets[]/gaps[] into the Float32Array layout RingRenderer builds
+          // (RingRenderer.js:69-101). Lab R = 1.0, so multiply by R (= identity) for clarity.
+          const ringletInnerR  = new Float32Array(RING_MAX_RINGLETS);
+          const ringletOuterR  = new Float32Array(RING_MAX_RINGLETS);
+          const ringletOpacity = new Float32Array(RING_MAX_RINGLETS);
+          const ringletColors  = new Float32Array(RING_MAX_RINGLETS * 3);
+          let ringletCount = 0;
+          for (let i = 0; i < ringPhysics.ringlets.length && ringletCount < RING_MAX_RINGLETS; i++) {
+            const rl = ringPhysics.ringlets[i];
+            if (rl.outerR - rl.innerR < 0.001) continue;
+            const j = ringletCount;
+            ringletInnerR[j]  = R * rl.innerR;
+            ringletOuterR[j]  = R * rl.outerR;
+            // PRESENTATIONAL OPACITY LIFT + ALTERNATING CONTRAST (UAT item 2): physics opacities
+            // (~0.45/0.52/0.58) sit close together × density ~0.64 → effective ~0.29-0.37, which
+            // reads as a smooth radial gradient rather than discrete ringlets after the 6-level
+            // posterize. We (a) lift the base so the dense bands read solidly, and (b) push adjacent
+            // ringlets apart in density (odd brighter / even dimmer) so the band BOUNDARIES register
+            // as discrete light/dark steps. Physics ORDERING is preserved (this only amplifies).
+            const baseOp = rl.opacity * (ringPhysics.density ?? 1.0);
+            const altContrast = (j % 2 === 0) ? 1.15 : 0.78;   // discrete light/dark banding
+            ringletOpacity[j] = Math.min(1.0, baseOp * 1.6 * altContrast);
+            const c = RING_COMPOSITION_COLORS[rl.composition] || RING_COMPOSITION_COLORS.mixed;
+            ringletColors[j*3] = c[0]; ringletColors[j*3+1] = c[1]; ringletColors[j*3+2] = c[2];
+            ringletCount++;
           }
-          return t / 16.0;
-        }
-
-        vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {
-          float dither = bayerDither(fragCoord) - 0.5;
-          vec3 dithered = color + dither * edgeWidth / levels;
-          return floor(dithered * levels + 0.5) / levels;
-        }
-
-        void main() {
-          #include <logdepthbuf_fragment>
-          float dist = length(vPos.xz);
-          float ringT = (dist - innerRadius) / (outerRadius - innerRadius);
-
-          // ── Band-limit clamp (§4, the one new term) ──────────────────────────
-          // The radial sampling rate in normalized-t units; at grazing angles a single
-          // pixel spans many ringlets, so fwidth(ringT) blows up and we cross-fade fine
-          // bands toward their mean instead of moiréing against the 4×4 Bayer grid.
-          float ringBandLimit = clamp(fwidth(ringT) * 8.0, 0.0, 1.0);
-
-          // ── Physics-driven ringlet/gap body (resurrected RingRenderer.js:208-235) ──
-          float density = 0.0;
-          vec3 color = ringColor1;   // fallback
-          for (int i = 0; i < RING_MAX_RINGLETS; i++) {
-            if (i >= uRingletCount) break;
-            if (dist >= uRingletInnerR[i] && dist <= uRingletOuterR[i]) {
-              float rlT = (dist - uRingletInnerR[i]) / max(0.001, uRingletOuterR[i] - uRingletInnerR[i]);
-              float edgeFade = smoothstep(0.0, 0.08, rlT) * (1.0 - smoothstep(0.92, 1.0, rlT));
-              density = max(density, uRingletOpacity[i] * edgeFade);
-              int ci = i * 3;
-              color = vec3(uRingletColors[ci], uRingletColors[ci + 1], uRingletColors[ci + 2]);
-            }
+          const ringGapCenters = new Float32Array(RING_MAX_GAPS);
+          const ringGapWidths  = new Float32Array(RING_MAX_GAPS);
+          let ringGapCount = 0;
+          // PRESENTATIONAL GAP-WIDTH BOOST (UAT item 3): the physics gap widths (~0.035 R_p
+          // for the dominant 2:1, ~0.02 for the finer 3:1) are physically faithful but
+          // sub-Bayer-cell at this stylized scale, so the dominant Cassini-analog clearing
+          // never registers against the 4×4 dither. We widen the clearings for read WITHOUT
+          // touching the upstream physics: the WIDEST physics gap is the dominant one (2:1
+          // resonance carves the most), so it gets the larger boost → ONE commanding gap,
+          // thinner ones stay subordinate. Half-falloff in R_p; visible clearing ≈ 2×.
+          const ringGapsSorted = ringPhysics.gaps
+            .map((g, idx) => ({ ...g, idx }))
+            .sort((a, b) => b.width - a.width);   // widest (dominant) first
+          for (let k = 0; k < ringGapsSorted.length && ringGapCount < RING_MAX_GAPS; k++) {
+            const g = ringGapsSorted[k];
+            ringGapCenters[ringGapCount] = R * g.radius;
+            // Dominant gap (k===0) → ~0.34 R_p half-width (commanding Cassini clearing);
+            // subordinate gaps → ~0.12 R_p (crisp but clearly thinner, appear up close).
+            const boostHalfWidth = (k === 0) ? 0.34 : 0.12;
+            ringGapWidths[ringGapCount] = R * boostHalfWidth;
+            ringGapCount++;
           }
-          // Resonance / shepherd gaps (smoothstep clearing)
-          for (int i = 0; i < RING_MAX_GAPS; i++) {
-            if (i >= uGapCount) break;
-            float gapDist = abs(dist - uGapCenters[i]);
-            density *= smoothstep(0.0, uGapWidths[i], gapDist);
-          }
-          // Fade the per-ringlet density toward the disk-wide baseline as bands become
-          // sub-pixel (grazing); preserves the dominant gap, kills the fine-band shimmer.
-          density = mix(density, uRingMeanDensity, ringBandLimit);
-
-          float alpha = density * ringOpacity;
-
-          // Fade at inner and outer edges
-          alpha *= smoothstep(0.0, 0.08, ringT) * (1.0 - smoothstep(0.92, 1.0, ringT));
-
-          // Planet shadow on ring — analytic cylinder test (Planet.js:1214-1223)
-          float shadowDist = length(cross(vRelWorldPos, lightDir));
-          float behindPlanet = step(dot(vRelWorldPos, lightDir), 0.0);
-          float inShadow = behindPlanet * (1.0 - smoothstep(planetRadius * 0.9, planetRadius * 1.1, shadowDist));
-          float ringLight = 1.0 - inShadow;
-          color *= ringLight;
-          alpha *= mix(0.15, 1.0, ringLight);   // shadow drops alpha so stars show through
-
-          if (bayerDither(gl_FragCoord.xy) > alpha) discard;
-
-          color = posterize(color, 6.0, gl_FragCoord.xy, 0.4);
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-    });
+      
+          const ringInnerR = R * ringPhysics.innerRadius;
+          const ringOuterR = R * ringPhysics.outerRadius;
+      
+          const ringUniforms = {
+            ringColor1:   { value: new THREE.Vector3(...ringPhysics.color1) },
+            ringColor2:   { value: new THREE.Vector3(...ringPhysics.color2) },
+            ringOpacity:  { value: 1.0 },
+            innerRadius:  { value: ringInnerR },
+            outerRadius:  { value: ringOuterR },
+      */
+      // ⭐⭐ ONE RING PROGRAM, SPLICED BY BOTH FRONT-ENDS. What stood here was the lab's own 120-line
+      // ShaderMaterial. It is now src/worldengine/shaders/ringRelief.glsl.js, which Planet.js splices too.
+      // ⚠ AND THE LAB'S RING GETS FINER BY DOING THIS, WHICH IS A FIX RATHER THAN A REGRESSION: this copy
+      // posterized at a hardcoded 6.0 while the game has used the shared POSTERIZE_QUANTUM at 31 since
+      // 2026-08-21 (Max: 31 gives 32 values per channel = RGB555, the N64/PlayStation/Saturn depth). The
+      // lab was showing 7 colour levels where the game showed 32 — a lab/game divergence hiding inside the
+      // claim that the lab renders identically to the game, a claim earned for the planet SURFACE and never
+      // for the ring.
+      const ringMat = new THREE.ShaderMaterial({
+        side: THREE.DoubleSide,
+        transparent: true,
+        depthWrite: false,
+        uniforms: ringUniforms,
+        vertexShader: RING_VERTEX_GLSL,
+        fragmentShader: RING_FRAGMENT_GLSL,
+      });
+      /* ── DEAD SINCE 2026-08-27, KEPT FOR LINE STABILITY — §10 line-stability, 500+ refs at or past :1933 ──
+          const ringMat = new THREE.ShaderMaterial({
+            side: THREE.DoubleSide,
+            transparent: true,
+            depthWrite: false,
+            uniforms: ringUniforms,
+            vertexShader: / * glsl * / `
+              #include <common>
+              #include <logdepthbuf_pars_vertex>
+              varying vec3 vPos;
+              varying vec3 vRelWorldPos;
+              void main() {
+                vPos = position;
+                vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                vec3 planetCenter = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+                vRelWorldPos = worldPos.xyz - planetCenter;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                #include <logdepthbuf_vertex>
+              }
+            `,
+            fragmentShader: / * glsl * / `
+              #include <logdepthbuf_pars_fragment>
+              uniform vec3 ringColor1;
+              uniform vec3 ringColor2;
+              uniform float ringOpacity;
+              uniform float innerRadius;
+              uniform float outerRadius;
+              uniform vec3 lightDir;
+              uniform float planetRadius;
+      
+              const int RING_MAX_RINGLETS = ${RING_MAX_RINGLETS};
+              uniform int uRingletCount;
+              uniform float uRingletInnerR[${RING_MAX_RINGLETS}];
+              uniform float uRingletOuterR[${RING_MAX_RINGLETS}];
+              uniform float uRingletOpacity[${RING_MAX_RINGLETS}];
+              uniform float uRingletColors[${RING_MAX_RINGLETS * 3}];
+      
+              const int RING_MAX_GAPS = ${RING_MAX_GAPS};
+              uniform int uGapCount;
+              uniform float uGapCenters[${RING_MAX_GAPS}];
+              uniform float uGapWidths[${RING_MAX_GAPS}];
+              uniform float uRingMeanDensity;
+      
+              varying vec3 vPos;
+              varying vec3 vRelWorldPos;
+      
+              float bayerDither(vec2 coord) {
+                vec2 p = mod(floor(coord), 4.0);
+                float t = 0.0;
+                if (p.y < 0.5) {
+                  t = (p.x < 0.5) ? 0.0 : (p.x < 1.5) ? 8.0 : (p.x < 2.5) ? 2.0 : 10.0;
+                } else if (p.y < 1.5) {
+                  t = (p.x < 0.5) ? 12.0 : (p.x < 1.5) ? 4.0 : (p.x < 2.5) ? 14.0 : 6.0;
+                } else if (p.y < 2.5) {
+                  t = (p.x < 0.5) ? 3.0 : (p.x < 1.5) ? 11.0 : (p.x < 2.5) ? 1.0 : 9.0;
+                } else {
+                  t = (p.x < 0.5) ? 15.0 : (p.x < 1.5) ? 7.0 : (p.x < 2.5) ? 13.0 : 5.0;
+                }
+                return t / 16.0;
+              }
+      
+              vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {
+                float dither = bayerDither(fragCoord) - 0.5;
+                vec3 dithered = color + dither * edgeWidth / levels;
+                return floor(dithered * levels + 0.5) / levels;
+              }
+      
+              void main() {
+                #include <logdepthbuf_fragment>
+                float dist = length(vPos.xz);
+                float ringT = (dist - innerRadius) / (outerRadius - innerRadius);
+      
+                // ── Band-limit clamp (§4, the one new term) ──────────────────────────
+                // The radial sampling rate in normalized-t units; at grazing angles a single
+                // pixel spans many ringlets, so fwidth(ringT) blows up and we cross-fade fine
+                // bands toward their mean instead of moiréing against the 4×4 Bayer grid.
+                float ringBandLimit = clamp(fwidth(ringT) * 8.0, 0.0, 1.0);
+      
+                // ── Physics-driven ringlet/gap body (resurrected RingRenderer.js:208-235) ──
+                float density = 0.0;
+                vec3 color = ringColor1;   // fallback
+                for (int i = 0; i < RING_MAX_RINGLETS; i++) {
+                  if (i >= uRingletCount) break;
+                  if (dist >= uRingletInnerR[i] && dist <= uRingletOuterR[i]) {
+                    float rlT = (dist - uRingletInnerR[i]) / max(0.001, uRingletOuterR[i] - uRingletInnerR[i]);
+                    float edgeFade = smoothstep(0.0, 0.08, rlT) * (1.0 - smoothstep(0.92, 1.0, rlT));
+                    density = max(density, uRingletOpacity[i] * edgeFade);
+                    int ci = i * 3;
+                    color = vec3(uRingletColors[ci], uRingletColors[ci + 1], uRingletColors[ci + 2]);
+                  }
+                }
+                // Resonance / shepherd gaps (smoothstep clearing)
+                for (int i = 0; i < RING_MAX_GAPS; i++) {
+                  if (i >= uGapCount) break;
+                  float gapDist = abs(dist - uGapCenters[i]);
+                  density *= smoothstep(0.0, uGapWidths[i], gapDist);
+                }
+                // Fade the per-ringlet density toward the disk-wide baseline as bands become
+                // sub-pixel (grazing); preserves the dominant gap, kills the fine-band shimmer.
+                density = mix(density, uRingMeanDensity, ringBandLimit);
+      
+                float alpha = density * ringOpacity;
+      
+      */
     const ringGeo = new THREE.RingGeometry(ringInnerR, ringOuterR, 64);
     ringGeo.rotateX(Math.PI / 2);   // XY → XZ equatorial plane
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.visible = false;
     scene.add(ring);
-
     // F51 rings-v2 — near-tier LOD particle cloud (proven in rings-lod-lab.html).
     // Same ringPhysics the impostor samples → cloud inherits the banded structure and
     // the cloud↔impostor seam stays invisible. Centered on origin, already in the XZ
@@ -762,7 +763,6 @@
       }
       buildRingCloud();   // reads the current state.ring* (incl. the new count/thickness + live LOD/size)
     }
-
     // ─────────────────────────────────────────────────────────────────────────
     // Low-res render target + nearest-upscale blit — FAITHFUL to production.
     //
