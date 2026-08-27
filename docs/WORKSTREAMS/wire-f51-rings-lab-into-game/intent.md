@@ -62,3 +62,31 @@ world, then pay to migrate them a second time."*
 31 assertions). So rings wait, and then ride the finished route as a shared module both front-ends
 import. That is also this workstream's cleanest possible proof of AC5 in the route contract —
 *"wiring the NEXT lab feature is demonstrably not a hand reconciliation of two routes."*
+
+
+## ⚠ Findings from the live check, 2026-08-27
+
+**Max, on the parked lab:** *"the ring looks very thick, almost more like a planetary accretion disk."*
+
+⭐ **Diagnosed, and it is not the program this workstream wired.** Two tiers draw at once over a wide
+band. Measured live on `Gas giant (Jovian)`:
+
+| | |
+|---|---|
+| particle cloud full strength | below **9.97** body radii |
+| particle cloud faded out | at **34.90** (`uDCull` = `ringDCull` 14 × display scale) |
+| flat impostor disc | draws throughout |
+| **overlap** | **~10 → ~35 body radii — both tiers visible** |
+
+Past 34.9 the impostor alone is flat, thin, and carries a visible division. It reads as a ring. The
+volumetric look is the 400,000-point cloud (`ringThickness` 0.01, `ringPointScale` 300) sitting on
+top of it.
+
+⚠ **Note the trap in the numbers:** `state.ringDCull` reads 14, but the shader gets `14 × sVis` =
+34.9. Reading the state value alone understates the cloud's reach by 2.5×, which is why the overlap
+was not obvious.
+
+**Logged as QB-19, not fixed here.** The cloud was out of scope for this workstream by its own
+statement — *"wiring it in the same increment would make any failure unattributable between the two
+tiers"* — and that turned out to be the right call for the opposite reason to the one expected: the
+tiers were already unattributable to the eye, and separating them is what identified the cause.
