@@ -561,7 +561,27 @@ function packEntryOf(rel) {
  * was inside a comment and read as live by a scanner that did not strip.
  * @returns {boolean} true for a non-pack module, where reachability is the whole criterion
  */
+// ⛔⛔ THE COMPOSITION POINT NEEDS ITS OWN ARM, AND WITHOUT IT THE LEDGER CANNOT TELL IMPORT FROM
+// USE FOR THE ONE MODULE WHERE THAT DISTINCTION IS THE WHOLE POINT. `packEntryOf` looks for
+// `export function \w+Pack(`, and src/worldengine/drivers/index.js exports `applyDriverPacks`,
+// `applyDriverPacksToState` and `selectPacks` — every one of them ends in "Packs", so the regex
+// matches NONE of them and `packEntryOf` returns null. The `entry == null → true` branch below then
+// treats the composer as a non-pack module, where reachability IS the criterion, and the debt row
+// clears the instant the lab adds the import WHETHER OR NOT IT CALLS ANYTHING.
+//
+// ⭐ That is precisely the free/transitive clear this ledger has had to reverse: `drivers/solidOptics.js`
+// cleared on 2026-08-22 because it entered the lab's closure through another pack's import, nobody
+// called it, and no gate was red. The criterion was fixed on 2026-08-25 to reachable-AND-CALLED. This
+// module slipped through that fix because it fails the pack-name regex rather than the call test.
+// ⚠ Verified by running it: packEntryOf('src/worldengine/drivers/index.js') === null, while
+// packEntryOf('.../giantDeck.js') === 'giantDeckPack'.
+const COMPOSITION_POINT = 'src/worldengine/drivers/index.js';
+const COMPOSITION_POINT_CALLS = Object.freeze(['selectPacks', 'applyDriverPacksToState', 'applyDriverPacks']);
+
 function labExercises(rel, labCode) {
+  if (rel === COMPOSITION_POINT) {
+    return COMPOSITION_POINT_CALLS.some((fn) => new RegExp(`\\b${fn}\\s*\\(`).test(labCode));
+  }
   const entry = packEntryOf(rel);
   if (entry == null) return true;
   return new RegExp(`\\b${entry}\\s*\\(`).test(labCode);
