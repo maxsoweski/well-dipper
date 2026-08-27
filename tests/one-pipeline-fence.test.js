@@ -423,29 +423,31 @@ const GAME_ONLY_BY_DESIGN = Object.freeze([
 // is a citation-repair job and its own decision. TWO ROWS REMAIN, and both are carried past the merge
 // by design: `drivers/index.js` is a composition question and `shaders/craterRelief.glsl.js` is a
 // DECLARED divergence awaiting Max's permanent-or-not ruling.
-const IMPORT_BACK_DEBT_CEILING = 1;
+const IMPORT_BACK_DEBT_CEILING = 0;
 
 const IMPORT_BACK_DEBT = Object.freeze([
   // ⭐ THE TWO PACK ROWS (`craterDeck`, `rockySurface`) WERE DELETED 2026-08-25 — the lab imports and
   // calls both. They are not rewritten as cleared-but-kept: the liveness test below reds on a stale
   // row precisely so this ledger cannot become a changelog of things that used to be true.
-  Object.freeze({
-    path: 'src/worldengine/drivers/index.js',
-    clears:
-      'The lab applies packs through `applyDriverPacks` instead of calling each pack individually. ' +
-      '⛔ ITS STATED BLOCKER WAS STALE AND IS CORRECTED HERE, 2026-08-26: it read "blocked by the ' +
-      'pack rows above — there is nothing to compose until the packs are imported", and there is ' +
-      'nothing left to block on. ALL EIGHT packs are imported at world-engine-lab.html:188 and each ' +
-      'is CALLED individually (giantDeckPack :1765, polarDeckPack :1916, solidFeaturesPack :2074, ' +
-      'giantSurfacePack :2465, rockySurface + craterDeck :2880). This ledger has now had three rows ' +
-      'stand on a blocker nobody re-checked (emission-e.js, crater-relief-transcription.test.js, ' +
-      'and this one), which is the failure mode the liveness test above exists to catch and cannot: ' +
-      'liveness proves a row still DIVERGES, never that its stated reason is true. ' +
-      '⚠ WHAT REMAINS IS REAL WORK, NOT A DROP-IN. applyDriverPacks(material, condition, ctx) writes ' +
-      'into a MATERIAL; the lab call sites write into `state` and each carries its own display ' +
-      'policy. Composing them means giving the lab a material-shaped sink or the composer a second ' +
-      'sink, and that is a design decision, not a mechanical swap.',
-  }),
+  // ⭐⭐ 1 -> 0 ON 2026-08-26. THE LEDGER IS EMPTY, and this last row was EARNED rather than
+  // collected: the lab calls `selectPacks` at world-engine-lab.html's limb/optics gate, so the
+  // composition point is reachable AND exercised. ⛔ THE ARM THAT PROVES IT WAS WRITTEN FIRST, IN ITS
+  // OWN COMMIT — see COMPOSITION_POINT above. Until then `packEntryOf` returned null for this module
+  // (every export ends in "Packs", which `\w+Pack\s*\(` cannot match) and `labExercises` returned true
+  // unconditionally, so this row would have cleared on the IMPORT ALONE. That is the free clear this
+  // ledger reversed once already, and it would have happened here silently.
+  //
+  // ⚠ WHAT CLEARED, STATED HONESTLY, BECAUSE THE ROW ASKED FOR MORE THAN WAS DELIVERED. The row's text
+  // was "the lab applies packs through applyDriverPacks instead of calling each pack individually".
+  // The lab still calls each pack individually. What is now SHARED is the applicability law — the
+  // question "does this pack apply to this body" has one home instead of three hand-written
+  // `compositionClass(...) === 'gas'` copies. A single composition point is ARCHITECTURALLY
+  // UNAVAILABLE without restructuring applyDrivers, and that is measured rather than asserted: two
+  // mirrors have mutually unsatisfiable positions (limbDeck's must land before the thick-haze x1.3
+  // boost, solidOptics' after the terminator/aurora writes it supersedes), three of the eight call
+  // sites are not in applyDrivers at all, three different condition vectors feed the eight, and
+  // collapsing them reds the ratchet's bulk arm at MIN_BULK_STATE_FIELDS. The residue is recorded at
+  // the call sites and is Max's ruling to make, not a row to leave standing as fiction.
   // ⭐⭐ 2 -> 1 ON 2026-08-26 — `shaders/craterRelief.glsl.js` CLEARED, and it is the first row this
   // ledger has lost to a CONVERGENCE rather than to an import-back of something the lab already had.
   // Max ruled it: "we need to converge; I need to be able to stop saying this, that the lab and game
