@@ -83,16 +83,16 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 | F19 | Mass‑wasting deposits | ⚠️ **inert** | ❌ | measured .00006 |
 | F20 | Coastlines | ✅ | ❌ | |
 | F21 | Karst / dissolution | ✅ | ❌ | |
-| F22 | Polar caps & frost | ✅ | ❌ R | game has hardcoded caps; needs `axialTilt` (unit bug, §7) |
-| F23 | Snowline boundary | ✅ | ❌ | same input gap as F22 |
-| F24 | Zonal belts & zones | ✅ | ❌ R | **step 5/6 target** |
-| F25 | Jets & shear | ✅ | ❌ R | **step 5/6 target** |
+| **F22** | **Polar caps & frost** | ✅ | **✅** | ⭐ ALREADY WIRED — the row was stale, not the code. `solidFeaturesPack` is in the frozen runtime registry (`src/worldengine/drivers/index.js:240`) and the game reaches it through `applyDriverPacks` at `src/objects/Planet.js:2035`; the uniforms are declared in the SHARED bag (`src/worldengine/shaders/uniforms.js`), not in `Planet.js`. MEASURED 2026-08-28 over 60 seeds / 229 planets: `solidFeatures` claims 138, and `uFrostMaxCoverage` is non-zero on **45 of 138** with **46 distinct values**, range 0→1. |
+| **F23** | **Snowline boundary** | ✅ | **✅** | Same wire as F22 — one `solidFeaturesPack` call, consumed by `pldBands` (`src/worldengine/shaders/height.glsl.js:3195`). ⚠ NOT separately measured: F22 is the arm I put a number on; F23 is inferred from riding the same pack. Confirm before quoting it alone. |
+| F24 | Zonal belts & zones | ✅ | ◑ | Band field IS wired — MEASURED 2026-08-28: `giantDeckPack` bakes `aBand`/`aShear`/`aMush` **non-zero on 124 of 124** gas bodies. Edge roughness is DEAD: `height.glsl.js:2103` multiplies `uBandRough` by `clamp(wStorm,0,1)` and `aStorm` is **ABSENT on 124 of 124**. Queue (b), behind the `aStorm` bake. |
+| F25 | Jets & shear | ✅ | ◑ | Jets wired on the same `aShear` bake; the ink-in-water filamentation is DEAD — `height.glsl.js:2086` gates on `shearMask = wShear * clamp(wStorm,0,1)`, and advection at `:1905` does the same. Same `aStorm` blocker as F24. Queue (b). |
 | F26 | Latitude weather bands | ✅ | **UNKNOWN** | doc says `[current]`; no Hadley/ITCZ code found in `Planet.js`. Doc stale or ID wrong — resolve before scoring |
 | F27 | Great‑spot anticyclone | ✅ | ❌ R | storm slice — **not in this plan** (§7) |
 | F28 | Storm clusters | ✅ | ❌ | storm slice |
-| F29 | Polar vortex | ✅ | ❌ R | **step 5/6 target** |
+| **F29** | **Polar vortex** | ✅ | **✅** | ⭐ ALREADY WIRED — `POLAR_DECK_ENTRY` is in the frozen registry (`drivers/index.js:155`) and `polarVortexCol` (`height.glsl.js:1777`) takes NO storm mask, so nothing here is annihilated by the `aStorm` gap. MEASURED 2026-08-28 over 91 gas bodies: `uPolarR0` has **91 distinct values** (fully per-body), `uPolarStrength` non-zero on **56 of 91**, `uPolarSides` spans 5–7. |
 | F30 | Lightning | ✅ | ❌ | |
-| F31a–f | Cloud/haze family (6) | ✅ | ❌ R | F31c/e partial in lab; F31b is the gas band deck |
+| F31a–f | Cloud/haze family (6) | ✅ | ◑ F31b only | F31b rides `giantDeckPack`'s band machinery and inherits F24/F25's dead `wStorm`-gated terms — queue (b), not done. F31a/c/d/e/f unwired; F31c/e partial in lab. |
 | F32 | Dayside thermal hotspot | ✅ | ❌ R | |
 | F33 | Nightside thermal glow | ✅ | ❌ R | |
 | **F34** | **Limb rim glow** | ✅ | **✅ 2/2** | via `atmosphereOpticsOf` — a shared module |
@@ -118,7 +118,7 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 
 ### Honest headline
 
-- **Through the world engine, in both lab and game: 6 of 53 (11.3%)** — F2, F34, F51 complete; F3, F35, F53 partial. ⭐ UPDATED 2026-08-27: was `4 of 53 (7.5%)`, naming only F2/F34 complete and F3/F35 partial. F51 landed, and F53 was already carrying `◑ split` in the table above without being counted in this line.
+- **Through the world engine, in both lab and game: 11 of 53 (20.8%)** — complete (6): F2, F22, F23, F29, F34, F51. Partial (5): F3, F24, F25, F35, F53. ⭐ UPDATED 2026-08-28: was `6 of 53 (11.3%)`. F22/F23/F29 were ALREADY WIRED and only their rows were stale; F24/F25 moved ❌→◑ on the `aStorm` finding. ⛔ ENUMERATED BY F-ID ON PURPOSE — the bare arithmetic has now gone stale twice.
 - **Lab‑only: 47.** Of those, 23 have a game‑own parallel to delete (`❌ R`) and 23 have nothing in the game at all. ⚠ The previous `48 / 22 / 26` predates F51 and did not sum against the table's own rows; these three are counted off the GAME column directly.
 - **Game‑only: 1** (F52).
 - **UNKNOWN: 1** (F26 — resolve the doc/ID question; do not guess).
@@ -128,8 +128,8 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 
 Wiring queue (b) or (c) first manufactures a failure nobody can attribute:
 
-- **(a) Wire‑and‑it‑works** — the pack targets in this plan: F24, F25, F29, F31b, F2, F3, F22, F23, plus the crater/palette/iceness family.
-- **(b) Wire‑and‑it‑needs‑a‑bake** — F11/F12 (river router), F27/F28 (storm slice), the four gas vertex attributes (`aBand/aShear/aMush/aStorm`, zero‑filled at `LabPlanetMaterial.js:36`).
+- **(a) Wire‑and‑it‑works** — ⛔⛔ **EMPTY as of 2026-08-28, and this line is why the queue was trusted.** It listed F2/F22/F23/F29 (already wired), F24/F25/F31b (queue (b), blocked on `aStorm`) and **F3 — which the VERY NEXT LINE correctly places in queue (c)**. A build session reads this line first, so the contradiction shipped as a work order. MEASURED: `planetData.atmosphere` is falsy on **0 of 800** planets over seeds 1–200 and `atmosphere.physics.retained === false` on **0 of 800**, so `uRayBrightness ≡ 0` and `height.glsl.js:2191 if (uRayBrightness <= 0.0) return 0.0;` returns before any pixel. Palette/iceness: visible half wired, `uCratonColor` → (b), `uBioGround*` → (c).
+- **(b) Wire‑and‑it‑needs‑a‑bake** — F11/F12 (river router), F27/F28 (storm slice), and **`aStorm` ALONE** of the four gas attributes: `aBand`/`aShear`/`aMush` bake live at `src/worldengine/drivers/giantDeck.js:307-309` (measured non-zero on 124/124 gas bodies) while `aStorm` is absent on 124/124 and zero-filled at `src/rendering/LabPlanetMaterial.js:37`. ⭐ It carries **F24/F25/F31b** with it, because it masks their albedo and not just the storm slice. Plus `uCratonColor`, blocked on the province cube (`LabPlanetMaterial.js:84`; producer is lab-only).
 - **(c) Wire‑and‑it‑renders‑nothing until world‑gen work lands** — ~8 features whose inputs are degenerate today: `uRayBrightness ≡ 0` because `hasAtmo` is true on 100% of bodies; `uFacetStrength ≡ 0` because `conditionFromPlanet.js`'s `atmosphereFromPlanet` only nulls atmosphere on `if (phys.retained === false) return null;`, which never happens; `habGate ≡ 0`; `airlessnessOf ≡ 0`. **These must not be measured through the renderer.**
 
 ---
