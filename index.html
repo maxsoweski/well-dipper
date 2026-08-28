@@ -280,13 +280,31 @@
       <!-- FAB: opens speed dial -->
       <button class="mobile-fab" title="Menu" aria-label="Toggle menu">&#x2699;</button>
       <!-- Speed dial: toggle buttons (radial burst) -->
+      <!-- ⭐⭐ THE ORDER IS LOAD-BEARING AND IT IS ORDERED BY WHAT A PHONE CAN REACH, NOT BY THEME.
+           MEASURED ON MAX'S iPHONE, 2026-08-28: with the dial open he counts SIX controls including the
+           gear — so five of these six were on screen and one was not. The geometry says which. Each
+           button's top edge sits at (.mobile-speed-dial bottom:64) + (nth-child bottom) + (height:40) =
+           160 / 208 / 256 / 304 / 352 / 400 px above the viewport bottom, so his visible ceiling is
+           between 352 and 400 — a landscape iPhone is ~390 CSS px tall before Safari's chrome. SETTINGS
+           was sixth. The single most useful control in this menu was the one button nobody could tap.
+           ⛔ SO ORDER BY PHONE VALUE, WORST LAST, because the last slot is the one that gets clipped:
+             settings  — the panel; the reason this menu exists
+             orbits    — ORRERY is the phone default and this is its main toggle
+             minimap   — useful in both modes
+             gyro      — needs an iOS permission grant that may never be given
+             autonav   — INERT in ORRERY (src/main.js logs and returns), i.e. dead in the phone default
+             fullscreen— dead on iOS entirely; the Fullscreen API is not available on iPhone
+           The two that lose least by being clipped now occupy the two clipped slots.
+           ⚠ Reordering is behaviourally INERT: every handler resolves by data-action or
+           querySelector('[data-action=…]') (src/main.js:14843, :14897, :14920, :15078). Nothing keys on
+           position. Pinned by tests/mobile-speed-dial-reachability.test.js so a tidy-up cannot undo it. -->
       <div class="mobile-speed-dial">
-        <button class="speed-dial-btn" data-action="autonav" title="Autopilot">&#x25B7;</button>
-        <button class="speed-dial-btn" data-action="gyro" title="Gyroscope">&#x2B55;</button>
-        <button class="speed-dial-btn" data-action="minimap" title="Minimap">&#x25A3;</button>
-        <button class="speed-dial-btn" data-action="orbits" title="Orbits">&#x25CE;</button>
-        <button class="speed-dial-btn" data-action="fullscreen" title="Fullscreen">&#x26F6;</button>
         <button class="speed-dial-btn" data-action="settings" title="Settings">&#x2630;</button>
+        <button class="speed-dial-btn" data-action="orbits" title="Orbits">&#x25CE;</button>
+        <button class="speed-dial-btn" data-action="minimap" title="Minimap">&#x25A3;</button>
+        <button class="speed-dial-btn" data-action="gyro" title="Gyroscope">&#x2B55;</button>
+        <button class="speed-dial-btn" data-action="autonav" title="Autopilot">&#x25B7;</button>
+        <button class="speed-dial-btn" data-action="fullscreen" title="Fullscreen">&#x26F6;</button>
       </div>
     </div>
 
