@@ -350,3 +350,44 @@ could not distinguish the new breakage from the expected one.
 **What the increment does:** author real `massEarth` on Sol's planets and moons from published
 values, then re-derive the wobble table and check it against the four rows above. Cheap, isolated,
 and it needs the window CLOSED (post-B7) so the instruments can actually witness it.
+
+---
+
+## P7 — ExoticOverlay strips world-engine provenance from 5 of 800 planets
+
+**Origin:** the 2026-08-28 queue-(a) reconnaissance workflow. Found by an adversarial
+refuter looking for something else; not on anyone's list before that.
+
+**Symptom, measured.** `src/generation/ExoticOverlay.js:401` does
+`planetEntry.planetData = newData;`, replacing the record built at
+`StarSystemGenerator.js:563` and never re-applying the `_systemSeed` / `_ordinal`
+provenance stamped onto it at `:566-567`. Over seeds 1–200 / 800 planets: **5 planets
+have `_systemSeed === undefined`, all of them `crystal`** (seeds 70, 93, 109, 181, 192).
+Those bodies are refused by `worldEngineProvenance` and never reach the shared pipeline.
+`labMacroSeed` (`Planet.js:2248`) also degrades for them — it hashes the literal string
+`"undefined:undefined"`, so all five would share one macro seed if they were admitted.
+
+**⛔ THE COST IS NOT ONE LINE, AND THAT IS WHY THIS IS PARKED.** The fix itself is a
+line-neutral two-assignment append at `:401`. Its blast radius is not:
+
+- **Instrument B reds, on TWO arms.** MEASURED: the tree currently holds exactly **two**
+  `planetData` key-sets — 795 records at 36 keys and **5 at 34**, differing by exactly
+  `_systemSeed` and `_ordinal`. Re-stamping collapses two shapes into one, so `planetShapes`
+  moves (RECORD SHAPE) and those 5 planet hashes move (BODY IDENTITY). Needs a named re-bless.
+- **Instrument C reds structurally.** Those 5 bodies flip from the 74-uniform legacy material
+  to the lab material, so the watched-value set changes on their rows. Needs a re-record.
+- ⚠ The 2026-08-18 B5.0 record (`moon-formation-b4-prediction-2026-08-17.md` §8.7 trap 1)
+  relies on the strip: it states `selectsBinaryCompanion` **cannot** be re-evaluated against
+  `generate()`'s output, and that re-evaluating it is "short by exactly one row on FENCE-221"
+  *because* ExoticOverlay strips these keys. Fixing the strip makes that predicate
+  re-evaluatable and quietly invalidates a written invariant. **Read §8.7 before touching it.**
+
+**Owner's ruling, 2026-08-28:** *"Crystal types are not yet developed enough to worry about."*
+Said in answer to a visual-regression caution, before the instrument cost above was measured.
+Deferred on the cost, not on the ruling — the ruling removed the only reason to hesitate about
+how the five bodies would LOOK.
+
+**When to pull it:** bundle with the next Instrument B/C re-bless that is happening anyway,
+so the population move is one reviewed event instead of two. Do NOT take it as a standalone
+commit — re-opening both instruments for five undeveloped bodies is the wrong trade, and a
+re-bless whose only content is five crystal planets is a re-bless nobody can attribute later.
