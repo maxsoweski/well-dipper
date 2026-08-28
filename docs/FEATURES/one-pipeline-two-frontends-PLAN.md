@@ -129,7 +129,7 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 Wiring queue (b) or (c) first manufactures a failure nobody can attribute:
 
 - **(a) Wire‑and‑it‑works** — ⛔⛔ **EMPTY as of 2026-08-28, and this line is why the queue was trusted.** It listed F2/F22/F23/F29 (already wired), F24/F25/F31b (queue (b), blocked on `aStorm`) and **F3 — which the VERY NEXT LINE correctly places in queue (c)**. A build session reads this line first, so the contradiction shipped as a work order. MEASURED: `planetData.atmosphere` is falsy on **0 of 800** planets over seeds 1–200 and `atmosphere.physics.retained === false` on **0 of 800**, so `uRayBrightness ≡ 0` and `height.glsl.js:2191 if (uRayBrightness <= 0.0) return 0.0;` returns before any pixel. Palette/iceness: visible half wired, `uCratonColor` → (b), `uBioGround*` → (c).
-- **(b) Wire‑and‑it‑needs‑a‑bake** — F11/F12 (river router), F27/F28 (storm slice — the `uStorm*` UNIFORM family, still out), and `uCratonColor`, blocked on the province cube (`LabPlanetMaterial.js:84`; producer is lab-only). ⭐ **`aStorm` LEFT THIS QUEUE 2026-08-28** — all four gas attributes now bake in `giantDeck.js:307-309`, and F24/F25/F31b went with it.
+- **(b) Wire‑and‑it‑needs‑a‑bake** — F11/F12 (river router), F27/F28 (storm slice — the `uStorm*` UNIFORM family, still out), and `uCratonColor`, blocked on the province cube (`LabPlanetMaterial.js:84`; producer is lab-only). ⭐ **`aStorm` LEFT THIS QUEUE 2026-08-28** — all four gas attributes now bake in `giantDeck.js:307-309`, and F24/F25/F31b went with it.  ⭐⭐ **THE PROVINCE CUBE IS MEASURED END-TO-END AS OF 2026-08-28 — the prerequisite is GONE and the value is QUALIFIED. Do not scope `uCratonColor` without reading the appendix at the END of this file (§ THE PROVINCE CUBE, MEASURED).**
 - **(c) Wire‑and‑it‑renders‑nothing until world‑gen work lands** — ~8 features whose inputs are degenerate today: `uRayBrightness ≡ 0` because `hasAtmo` is true on 100% of bodies; `uFacetStrength ≡ 0` because `conditionFromPlanet.js`'s `atmosphereFromPlanet` only nulls atmosphere on `if (phys.retained === false) return null;`, which never happens; `habGate ≡ 0`; `airlessnessOf ≡ 0`. **These must not be measured through the renderer.**
 
 ---
@@ -867,3 +867,81 @@ E is one hook family on `window._lab` plus one offline script. It is not a new f
 ### 12.8 What E does not do, stated now so it is not discovered later
 
 It does **not** make Step 4 items 1‑3, Step 5 before 5c, Step 8a or four of Step 11's registrations visible — those publish tables, hashes and failing builds, and that is the correct output. It does **not** put a lab‑preset body and a game body side by side: no surface renders a `PlanetGenerator` body in the lab and none renders a `DRIVER_PRESETS` body in the game, which is exactly why `tools/port-palette-measure.mjs` and `tools/port-condition-delta.mjs` had to be written as **number** comparisons. It does **not** add a headless renderer — there is no puppeteer, playwright or headless‑gl in this repo, and every shot still comes from a visible Chrome on Max's desktop over the 9223 debug instance, which means any prompt that opens pages carries a close‑your‑pages step. It does **not** freeze what the game legitimately recomputes per frame that is not a clock — the LOD ramp still resolves from the pinned camera distance, and the shadow arrays still refill — so the freeze is a statement about time and pose, not about the whole pipeline. It does **not** prove a forced‑gate frame 3 is *equivalent* to the game's version of the feature: forcing `uLimbStrength` to 1.0 shows that the gate is what is off, not that the lab's limb matches the game's `uLimbMix` limb. It does **not** witness a loss whose enabling condition is outside the four committed seeds — that gets captioned, not passed. It does **not** judge whether pixels are *right* — only that they moved, where, and with which gates live. It does **not** reach Sol, by rule and by construction. And it does **not** replace Instrument D: on Steps 6 and 10 the render loop surviving ≥120 frames with zero uncaught exceptions remains the **primary** gate, because a lit‑pixel check passes on the last frame drawn before a throw.
+
+
+---
+
+## § THE PROVINCE CUBE, MEASURED — appendix, 2026-08-28
+
+⛔ **THIS IS AN APPENDIX BECAUSE OF WHERE IT IS, NOT WHAT IT IS.** Its first draft was inserted at the
+queue-(b) bullet (:132), which shifted every line below it and broke **20 symbol-anchored citations** —
+this file's own self-citations plus `comprehensive-wiring-plan-2026-08-20.md`'s citations INTO it. Appending
+at EOF shifts nothing. Any future measurement block belongs here for the same reason.
+
+Read this before scoping `uCratonColor`. The numbers change the shape of the job in three directions.
+
+### (i) The blocker was smaller than §7 said, and it is now GONE
+
+§7 read the prerequisite as "planet-lod-rivers.js (108 KB, 24 exports) must move first — still its own step."
+MEASURED: over its own 122 lines `writeBodyRelief` calls 22 imported functions, **all already under
+`src/worldengine/base/`**, and exactly ONE binding local to rivers.js (`DEFAULT_GRAIN_DRIVERS`, a 3-key
+frozen literal). It touches no THREE symbol. So it moved **alone** (`df6818c`) to
+`src/worldengine/dispatch/bodyRelief.js`, byte-verbatim, with all instruments unmoved.
+⭐ Its destination was chosen by a test, not by preference: `base/` reddened
+`worldengine-e1-shadow-audit`, whose invariant is that base/ writers stay E1-blind.
+**The 108 KB file move is still unrun and is no longer on this critical path.**
+
+### (ii) Cost is NOT the objection — mesh resolution is a free parameter and province is low-frequency
+
+| mesh | build (once, body-independent) | per body | shell craton/orogen/basin |
+|---|---|---|---|
+| 700 / lloyd 2 | 2 ms | 0–2 ms | 61.9 / 13.9 / 24.3 |
+| 2500 / lloyd 3 | 11 ms | 1–9 ms | 63.8 / 14.2 / 22.0 |
+| 5000 / lloyd 3 | 27 ms | 4–17 ms | 64.9 / 14.0 / 21.1 |
+| 10000 / lloyd 3 | 95 ms | 8–53 ms | 65.3 / 14.0 / 20.7 |
+| **40000 / lloyd 4** (the lab's `DEFAULT_PARAMS`) | **807 ms** | **31–534 ms** | 64.0 / 14.0 / 21.9 |
+
+Class fractions are flat from 2500 up (orogen 14.0–14.2% at every resolution ≥ 2500) while cost spans 60×,
+and `PROVINCE_CUBE_SIZE` is 128 — deliberately half the relief cube, "a low-frequency, 3-class partition with
+deliberately soft margins."
+⚠ **A matching 3-bucket count is a WEAK identity test.** It says nothing about whether the spatial pattern
+matches, and the pattern is what a player sees. Treat 2500–5000 as a cost envelope to VERIFY against a 40k
+reference, not as settled equivalence. Worst case measured is the stagnant-lid (Venus-class) path, 534 ms at 40k.
+
+### (iii) The value is real but QUALIFIED, and the qualification is the finding
+
+Over 156 real generated bodies (24 `rocky-*` seeds, planets + moons through `conditionFromBody`):
+124 solid / 32 gas; dispatch paths **shell 81, despun 59, stagnant-lid 11, volcanic 5**.
+**97 of 156 get a genuine three-class partition; 59 — every despun body — get orogen ≡ 0.00%.**
+
+And on the despun path province is **BODY-BLIND**. At a fixed `macroSeed = 777`, a rocky R=0.91 T=265 body,
+a gas R=12.57 body and an icy R=0.20 body produce **byte-identical** province arrays.
+⭐ CONTROL, so the zero is a measurement and not a blind instrument: the SAME body at macroSeed 999 differs,
+and the plate path moves across both seed and preset. Cause is visible in `despun()` — it passes
+`DEFAULT_GRAIN_DRIVERS` (a constant) and a seed-derived `heightSeed`, and reads no `bodyDrivers` at all.
+
+⇒ **Wiring `uCratonColor` buys a body-derived ground palette on ~97 of 124 solid bodies, and a
+seed-decorative one on the other ~27.** Worth having. Not "the province map every body earns."
+
+### (iv) A separate, pre-existing finding that is NOT this lane's to fix
+
+The plate path — the Earth-like one-pass plate/uplift field, and the only writer producing passive margins —
+is reached by **7 of 895** generated bodies (**0.8%**), measured across three independent seed families
+(`rocky-*` 1/280, `seed-*` 1/269, `wd-*` 5/346); `inSeededBand` is true on only 13 of 895. Cause: the
+generator's median `volatileFraction` is 0.047–0.129 against the Earth preset's 0.15 and Ocean's 0.35.
+CONTROL: the Rocky and Ocean presets ARE in-band and Mars is not, so `inSeededBand` is not returning false
+for everything. ⇒ `writePassiveMargins` runs on <1% of real bodies.
+⛔ **NOT a new defect.** The V2-3 contract already records that seeded multistability "goes production-live
+with SEEDED bodies at V2-10 game-port." What is new is the measured RATE.
+⚠ A first 24-seed sample read this as **zero** plate bodies. Cross-checking on two more seed families is what
+turned an overclaim into a number — do not report a rate from one seed family.
+
+### What is still missing to bake a province cube in the game
+
+Neither is written; both are small.
+1. **The sphere mesh builder** (`buildIrregularSphere`) — three-coupled for `Vector3`/`ConvexHull`, but **GPU-free**.
+2. **`createProvinceCube` / `bakeProvinceCube`** — genuinely GPU-coupled (`WebGLCubeRenderTarget` + `CubeCamera`),
+   and therefore bound for `src/rendering/bake/` under carried C25.
+
+⚠ **The C25 split is "needs a renderer" vs "does not", NOT "rivers.js vs tectonic.js".** Only
+`createProvinceCube` needs one. Reading C25 as a file-level rule sends the mesh builder to the wrong layer.
