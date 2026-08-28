@@ -1723,7 +1723,7 @@ if (MODE === 'record') {
     recordedAtGit: gitHead(),
     tool: path.relative(ROOT, fileURLToPath(import.meta.url)),
     population: pop,
-    uniforms: RES.shared,
+    uniforms: RES.shared,   untiered: RES.untiered,   // ⭐ the coverage gap is RECORDED, not just printed — so a uniform that slipped its tier shows up as a capture DIFF next time instead of only in a banner somebody has to be watching for.
     shapes: RES.shapes,
     counts: RES.counts,
     gameOnly: RES.gameOnly,
