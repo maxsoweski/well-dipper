@@ -18,7 +18,7 @@
 //                                                        # is not on that line (findings 5 + 6)
 //
 // Exit codes:  0 ok · 1 shipped uniforms moved · 2 structural break (basis changed, or a broken
-//              citation) · 3 selftest
+//              citation) · 3 selftest · 4 coverage gap (an untiered uniform was excluded)
 //              failed · 64 usage · 65 refused to overwrite a capture · 66 no capture · 69 a game
 //              module would not load · 70 population is not deterministic
 //
@@ -620,14 +620,14 @@ function resolveSharedUniforms(probeMaterialUniforms) {
   // TIER_BY_NAME below; everything else carries it on its map entry.
   const aliasByGame = new Map(ALIASES.map((a) => [a.game, a]));
   const onlyByGame = new Map(GAME_ONLY_WATCHED.map((a) => [a.game, a]));
-  const shapes = {};
+  const shapes = {};   const untiered = [];   // ⭐ 2026-08-27 hardening: a uniform with no tier is a coverage gap in ONE row, not a reason the other 55 cannot be compared.
   for (const n of watched) {
     const gk = kindOf(probeMaterialUniforms[n].value);
-    if (!gk) throw new Error(`resolveSharedUniforms: game uniform ${n} has an unrecognised value shape`);
+    if (!gk) { untiered.push({ n, why: 'unrecognised value shape on the production material' }); continue; }   // was: throw. A bad cell now vanishes from the table and is REPORTED, instead of stopping the run.
     const labName = aliasByGame.has(n) ? aliasByGame.get(n).lab : (labSet.has(n) ? n : null);
     const origin = aliasByGame.has(n) ? 'aliased' : onlyByGame.has(n) ? 'game-only' : 'name-matched';
     const tier = aliasByGame.get(n)?.tier || onlyByGame.get(n)?.tier || TIER_BY_NAME[n];
-    if (!tier) throw new Error(`resolveSharedUniforms: no tier for name-matched uniform ${n} — add it to TIER_BY_NAME.`);
+    if (!tier) { untiered.push({ n, why: 'name-matched but absent from TIER_BY_NAME — add it IN THE COMMIT THAT ADDS THE UNIFORM' }); continue; }   // ⛔⛔ THIS THROW KILLED THE INSTRUMENT TWICE (uProvinceWeight 2026-08-25, uCoarseCut in b0c0cda) and both times it read exactly like a pass, because an uncaught throw exits 1 — the SAME code this tool uses for "shipped uniforms moved". Report and exclude; never die.
     shapes[n] = {
       gameKind: gk,
       labKind: labName ? kindOf(labU[labName].value) : null,   // recorded, never differenced
@@ -639,12 +639,12 @@ function resolveSharedUniforms(probeMaterialUniforms) {
   }
 
   return {
-    shared: watched,
+    shared: watched.filter((n) => !untiered.some((x) => x.n === n)),   untiered,   // every consumer already treats RES.shared as the authority, so they follow this automatically
     shapes,
     counts: {
       game: gameNames.length,
       lab: labNames.length,
-      shared: watched.length,
+      shared: watched.length - untiered.length,
       nameMatched: nameMatched.length,
       aliased: aliasGames.length,
       gameOnly: onlyGames.length,
@@ -702,7 +702,7 @@ const TIER_BY_NAME = {
   uDispDomainScale: 'gate',   // RELIEF_DOMAIN_SCALE      — Planet.js:1381 `const RELIEF_DOMAIN_SCALE`
   uFwClamp: 'gate',           // literal 1                — Planet.js:1683 `uFwClamp`. ⭐ TRI-STATE since 2026-08-26 (0 off / 1 anti-shimmer, ships / 2 the 4px legibility bar) — still a literal, still 'gate'; the shipped value is unchanged at 1.
   uVoroCells: 'gate',   uProvinceWeight: 'gate',   // CRATER_VORO_CELLS        — Planet.js:1395 `const CRATER_VORO_CELLS`. ⛔ uProvinceWeight ADDED HERE 2026-08-26 AS A REPAIR, NOT AS NEW WORK: it landed on the shipped material at 6f52330 (the game adopting the lab's province gating, Max's 2026-08-25 ruling) and was never classified, so THIS WHOLE INSTRUMENT HAS THROWN ON EVERY RUN SINCE — a dead instrument reads exactly like a passing one from the outside. It is a literal 1.0 on Planet.js:1703, i.e. the same shape as uFwClamp above, hence 'gate'.
-  uNoiseScale: 'record',      // d.noiseScale             — Planet.js:1681 `uNoiseScale`
+  uNoiseScale: 'condition',   // ⭐ RE-TIERED 2026-08-27, was 'record'. The cited legacy branch Planet.js:1681 `uNoiseScale` is DEAD for admitted bodies since B7 (LAB_GAS_BODIES_DEFAULT = true): the shipped value comes from src/worldengine/drivers/rockySurface.js:268 `sizeKm(macroWavelengthKm(condition), C_MACRO)`, i.e. the condition, not a drawn field. MEASURED in the 87e678f capture: 262 rows carry both `noiseScale` and `uNoiseScale` byte-identical (legacy material) and 371 carry `uNoiseScale` alone (lab surface); all 133 movers were in the latter. Tiering it 'record' put it on the "NOT evidence of stability" caveat list at the same time as it was the only row that moved — the caveat and the finding contradicted each other on the same page.
   uMacroOffset: 'record',     // reliefOffsets(d).macro   — Planet.js:1293 `function reliefOffsets`,
                               // hashed from 8 drawn record fields
   uDetailOffset: 'record',    // reliefOffsets(d).detail
@@ -1678,7 +1678,7 @@ function printResolution(res) {
 //    Planet._createSurface builds one object literal for every type; verified across all 18).
 const probeRec = toSceneData(PlanetGenerator.generate(new SeededRandom(20260806), 1.0, null, null, 'rocky'));
 const probeU = new Planet(probeRec).surface.material.uniforms;
-const RES = resolveSharedUniforms(probeU);
+const RES = resolveSharedUniforms(probeU);   if (RES.untiered.length) { console.error('⛔ INSTRUMENT C: COVERAGE GAP — ' + RES.untiered.length + ' watched uniform(s) have no tier and were EXCLUDED from the comparison. Every other uniform below is still measured and still trustworthy.'); for (const g of RES.untiered) console.error(`   ${g.n}: ${g.why}`); console.error('   ⛔ THIS USED TO BE A BARE THROW, AND A THROWN INSTRUMENT READS EXACTLY LIKE A PASSING ONE. Fix TIER_BY_NAME in tools/port-uniform-delta.mjs, then re-run.'); }
 
 if (MODE === 'list') {
   printResolution(RES);
@@ -1930,7 +1930,7 @@ function compareAndReport(cap, nowMeasured, RES) {
   const movedUniforms = ordered.filter((s) => s.moved > 0);
   console.log('── VERDICT ' + '─'.repeat(78));
   console.log(`  uniforms compared      : ${stats.length}`);
-  console.log(`  bodies compared        : ${stats.length ? stats[0].compared : 0}`);
+  console.log(`  bodies compared        : ${stats.length ? Math.max(...stats.map((s) => s.compared)) : 0}`);   // ⭐ THE MAX, NOT stats[0]. `stats` is built in nowSet order and never sorted, so this printed the FIRST uniform's population — 232, a legacy-only row — while uNoiseScale had compared 592. It understated the corpus by 2.5x in a report to the owner on 2026-08-27.
   console.log(`  uniforms that MOVED    : ${movedUniforms.length}${movedUniforms.length ? ' → ' + movedUniforms.map((s) => s.name).join(', ') : ''}`);
   for (const s of movedUniforms) {
     console.log(`      ${s.name}: ${s.moved}/${s.compared} bodies, signed Δ range [${s.signedMin.toExponential(6)}, ${s.signedMax.toExponential(6)}]`);
@@ -2009,7 +2009,7 @@ function runSelftest() {
     for (const r of before.rows) for (const c of (r.v[i] || [])) m = Math.max(m, Math.abs(c));
     return m;
   };
-  const problems = [];
+  const problems = [];   const CTL = 'uMacroOffset'; const _savedTier = TIER_BY_NAME[CTL]; delete TIER_BY_NAME[CTL]; let _gapRes = null, _gapThrew = null; try { _gapRes = resolveSharedUniforms(probeU); } catch (e) { _gapThrew = String(e && e.message || e); } finally { TIER_BY_NAME[CTL] = _savedTier; } if (_gapThrew) problems.push(`UNTIERED CONTROL: removing ${CTL} from TIER_BY_NAME still THREW (${_gapThrew}) — an unclassified uniform is still fatal and still reads like a pass`); else if (!_gapRes.untiered.some((g) => g.n === CTL)) problems.push(`UNTIERED CONTROL: ${CTL} was not reported in RES.untiered — the gap is INVISIBLE, which is worse than fatal`); else if (_gapRes.shared.includes(CTL)) problems.push(`UNTIERED CONTROL: ${CTL} has no tier but is still in the watched set — it would be compared with an undefined tier`); else if (_gapRes.shared.length !== RES.shared.length - 1 || RES.shared.filter((x) => x !== CTL).some((x, i) => x !== _gapRes.shared[i])) problems.push(`UNTIERED CONTROL: one untiered uniform cost ${RES.shared.length - _gapRes.shared.length} row(s); it must cost exactly 1 and leave the rest byte-identical`); else if (Object.keys(_gapRes.shapes).some((x) => _gapRes.shapes[x].tier !== RES.shapes[x].tier)) problems.push('UNTIERED CONTROL: a surviving uniform changed tier when a different one was dropped');   // ⭐ THE CONTROL FOR THE 2026-08-27 HARDENING. TIER_BY_NAME is an unfrozen plain object, so this poisons the REAL map, calls the REAL function and restores it — no synthetic uniform, no test-only parameter, the exact production path. Four assertions: did not throw · the gap is VISIBLE (this is what stops the fix from being a silent catch) · genuinely excluded, not compared with tier undefined · costs exactly one row and leaves the survivors byte-identical.
   if (structural) problems.push(`selftest saw ${structural} structural break(s); it should see none`);
   for (const nud of [NUDGE_SCALAR, NUDGE_VECTOR]) {
     const s = byName.get(nud.name);
@@ -2036,7 +2036,7 @@ function runSelftest() {
   console.log(`  ✓ ${NUDGE_SCALAR.name} nudged by ${NUDGE_SCALAR.eps} → reported, not swallowed (no epsilon anywhere)`);
   console.log(`  ✓ ${NUDGE_VECTOR.name} channel ${NUDGE_VECTOR.comp} nudged by ${NUDGE_VECTOR.eps} → reported, correct component`);
   console.log(`  ✓ the other ${stats.length - 2} shared uniforms reported exactly 0 — the report is per-uniform, not aggregated`);
-  console.log('  RESULT: the gate bites. Exit 0.');
+  console.log(`  ✓ ${CTL} with its tier deleted → REPORTED in RES.untiered, excluded from the table, and the other ${_gapRes ? _gapRes.shared.length : 0} rows compared unchanged (this was a bare throw that exited 1, indistinguishable from a pass)`);   console.log('  RESULT: the gate bites. Exit 0.');
   process.exit(0);
 }
 
@@ -2067,7 +2067,7 @@ if (structural) {
   console.log('');
   console.log(`RESULT: STRUCTURAL BREAK (${structural}) — the comparison basis itself changed. Exit 2.`);
   process.exit(2);
-}
+}   if (RES.untiered.length) { console.log(''); console.log(`RESULT: COVERAGE GAP (4) — ${RES.untiered.length} uniform(s) had no tier and were not compared: ${RES.untiered.map((g) => g.n).join(', ')}. Every other row above IS a real reading. Exit 4.`); process.exit(4); }
 if (movedUniforms.length && !has('--allow-deltas')) {
   console.log('');
   console.log('RESULT: SHIPPED UNIFORMS MOVED. Exit 1.');
