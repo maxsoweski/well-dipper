@@ -297,6 +297,18 @@ export class NavComputer {
     canvas.addEventListener('wheel', this._handleWheel.bind(this), { passive: false });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
+    // ── TOUCH (2026-08-28 mobile pass) ────────────────────────────────────────────────────────────
+    // The star map had SIX input listeners and not one of them was a touch event, so on a phone the
+    // map opened and then could not be moved: no pan, no orbit, no zoom. iOS synthesizes a click from
+    // a tap, which is why SELECTING a tile appeared to work — it hid the fact that everything
+    // requiring a DRAG or a WHEEL was unreachable.
+    // ⚠ { passive: false } is load-bearing on touchstart/touchmove: without it the browser ignores
+    // preventDefault and the page pans and rubber-bands underneath the map while you try to drag it.
+    canvas.addEventListener('touchstart', this._handleTouchStart.bind(this), { passive: false });
+    canvas.addEventListener('touchmove', this._handleTouchMove.bind(this), { passive: false });
+    canvas.addEventListener('touchend', this._handleTouchEnd.bind(this));
+    canvas.addEventListener('touchcancel', this._handleTouchEnd.bind(this));
+
     // WASD panning for local view
     this._heldKeys = new Set();
     /** sim-clock ms at the last pan step, or null when no gesture is running. */
@@ -646,10 +658,18 @@ export class NavComputer {
       row.appendChild(kind);
       // mousedown (not click) so selection fires BEFORE the input's blur, and
       // preventDefault keeps focus stable through the select→warp→close path.
-      row.addEventListener('mousedown', (e) => {
+      // ⚠ mousedown ONLY was the shipped form, and `preventDefault()` on it is exactly what makes it
+      // fragile on a phone: it is there to stop the search input losing focus, but suppressing the
+      // default on a synthesized mousedown can also suppress the synthesized click that would have
+      // followed. A touchend path removes the dependency on synthesis altogether (2026-08-28).
+      const pick = (e) => {
         e.preventDefault();
         this._selectSearchResult(i);
-      });
+      };
+      row.addEventListener('mousedown', pick);
+      // touchend, not touchstart: a tap that begins on a row and slides off should not commit, and
+      // touchstart would fire while the finger is still deciding.
+      row.addEventListener('touchend', pick);
       list.appendChild(row);
     });
   }
@@ -4148,6 +4168,78 @@ export class NavComputer {
   _handleMouseUp() {
     this._dragging = false;
     this._panStartCenter = null;
+  }
+
+  // ── Touch: one finger drags (pan on the 2D levels, orbit on the 3D ones), two fingers pinch ──────
+  // A Touch carries clientX/clientY exactly as a MouseEvent does, so _getCanvasPos and the whole drag
+  // model are reused verbatim rather than reimplemented. The finger IS the mouse here; only the
+  // multi-touch gesture is new.
+
+  /** Distance between the first two touches, for pinch. */
+  _touchSpread(t) {
+    const dx = t[0].clientX - t[1].clientX;
+    const dy = t[0].clientY - t[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  /**
+   * Continuous zoom. r > 1 zooms IN, r < 1 zooms out. Clamps are the wheel's own, to the digit.
+   *
+   * ⛔ THE WHEEL DELIBERATELY DOES NOT CALL THIS, AND THE REASON IS ONE MISSING DIGIT. Its two
+   * constants are 1.15 and 0.87, which are NOT exact reciprocals (1/1.15 = 0.869565…). Routing the
+   * wheel through a single continuous law would therefore have MOVED desktop zoom by ~0.05% per notch
+   * — invisible, and still a silent change to shipped behaviour made for tidiness. The wheel keeps its
+   * literal constants; pinch gets a continuous law with the identical clamps. Two expressions, one
+   * behaviour envelope, and no undeclared drift.
+   */
+  _zoomByRatio(r) {
+    if (!(r > 0) || !Number.isFinite(r)) return;
+    if (this._levelIndex === 3) {
+      // Prism: a SMALLER radius is a closer view, so zooming in divides.
+      this._localRadius = Math.max(0.002, Math.min(this._localCubeSize || 0.01, this._localRadius / r));
+    } else if (this._levelIndex === 4) {
+      // System view: a LARGER zoom is a closer view, so zooming in multiplies.
+      this._systemZoom = Math.max(0.3, Math.min(5.0, this._systemZoom * r));
+    }
+  }
+
+  _handleTouchStart(e) {
+    if (!e.touches || e.touches.length === 0) return;
+    e.preventDefault();
+    if (e.touches.length >= 2) {
+      // Pinch begins — and any in-flight one-finger drag ends, or the map lurches as the second
+      // finger lands and the midpoint jumps.
+      this._pinchStart = this._touchSpread(e.touches);
+      this._dragging = false;
+      this._panStartCenter = null;
+      return;
+    }
+    this._pinchStart = null;
+    this._handleMouseDown(e.touches[0]);
+  }
+
+  _handleTouchMove(e) {
+    if (!e.touches || e.touches.length === 0) return;
+    e.preventDefault();
+    if (e.touches.length >= 2) {
+      if (!this._pinchStart) { this._pinchStart = this._touchSpread(e.touches); return; }
+      const now = this._touchSpread(e.touches);
+      if (this._pinchStart > 0 && now > 0) {
+        this._zoomByRatio(now / this._pinchStart);
+        this._pinchStart = now;   // incremental, so the gesture tracks the fingers rather than the origin
+      }
+      return;
+    }
+    if (this._pinchStart) return;   // a finger was lifted mid-pinch: wait for a clean new gesture
+    this._handleMouseMove(e.touches[0]);
+  }
+
+  _handleTouchEnd(e) {
+    // Only end the gesture once every finger is off; otherwise lifting one of two mid-pinch would
+    // start a one-finger drag from a stale origin and throw the view across the screen.
+    if (e && e.touches && e.touches.length > 0) return;
+    this._pinchStart = null;
+    this._handleMouseUp();
   }
 
   _handleClick(e) {
