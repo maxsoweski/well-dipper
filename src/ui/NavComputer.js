@@ -548,7 +548,7 @@ export class NavComputer {
     const input = document.createElement('input');
     input.className = 'nav-search-input';
     input.type = 'text';
-    input.setAttribute('placeholder', 'Search stars · systems · structures…');
+    input.setAttribute('placeholder', 'Type a name to travel there…');   // 2026-08-28: says what it DOES, not what it indexes — this field arms a warp, and on a phone it is the only way to choose a destination rather than let autoSelectWarpTarget pick one
     input.setAttribute('aria-label', 'Search known objects');
     input.autocomplete = 'off';
     input.spellcheck = false;
@@ -597,6 +597,15 @@ export class NavComputer {
     this._searchHighlight = -1;
     this._renderSearchResults();
     this._searchDom.root.style.display = 'block';
+    // ⭐ FOCUS IT (2026-08-28). This field takes a system name and ARMS A WARP STRAIGHT THERE
+    // (_selectSearchResult below) — the difference between "take me somewhere" and "take me THERE",
+    // where the dock's WARP button is the former (autoSelectWarpTarget picks for you). It is the most
+    // capable travel control on a phone and, before this line, nothing pointed at it: no focus, and
+    // grep for focus() in this 4,400-line file returned nothing at all.
+    // ⚠ [NEEDS-MAX] On iOS this may raise the keyboard over the map every time the panel opens. If it
+    // does, the fix is to focus on the field's first tap instead — NOT to delete the affordance.
+    // preventScroll keeps the panel from jumping to the field on the way in.
+    try { this._searchDom.input.focus({ preventScroll: true }); } catch { /* focus is a nicety */ }
   }
 
   /** Hide + reset the search overlay and clear the focus guard (from deactivate()). */

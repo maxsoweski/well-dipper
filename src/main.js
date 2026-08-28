@@ -499,6 +499,27 @@ function _hudSlotScene() {
   return null;
 }
 
+// ⭐⭐ THE MOBILE DOCK'S CENTRE SLOT IS MODE-AWARE (2026-08-28), and this is what keeps it honest.
+// It used to be a fixed `autonav-toggle` sitting between ◀ and ▶ — the most reachable spot on a phone —
+// whose whole ORRERY branch is a console.log, in the mode phones DEFAULT to. So the best slot on the
+// screen did nothing for the default player. Now it carries the control this mode actually uses:
+//   ORRERY → orbit lines   HELM → autopilot
+// ⛔ IT SETS data-action TO ONE OF THE TWO THE DOCK HANDLER ALREADY KNOWS. No new branch, no new
+// dispatch path — the button changes identity, not the handler. A third value here would silently
+// become a dead button again, which is the exact defect this replaced.
+// Called from setScManual (the universal regime-flip point) so every HELM<->ORRERY path re-labels it.
+function _syncModeDockButton() {
+  const btn = document.getElementById('mobile-mode-slot');
+  if (!btn) return;
+  const helm = _effectiveRegime() === 'helm';
+  btn.dataset.action = helm ? 'autonav-toggle' : 'orbits';
+  btn.title = helm ? 'Autopilot on/off' : 'Orbit lines';
+  btn.innerHTML = helm ? '&#x25B6;' : '&#x25CE;';
+  btn.classList.toggle('mobile-autopilot-btn', helm);
+  // Reflect live state so the button is not just relevant but honest about what it is showing.
+  btn.classList.toggle('active', helm ? autoNav.isActive : orbitsVisible);
+}
+
 function _applyHudSlot() {
   const which = _hudSlotScene();
   if (which === 'minimap') retroRenderer.setHud(systemMap.scene, systemMap.camera);
@@ -754,6 +775,8 @@ function setScManual(on) {
   // THE universal regime-flip point, so hooking here covers every HELM<->ORRERY path
   // (same hoisted-forward-reference safety as above).
   if (typeof _syncOrbitsToMode === 'function') _syncOrbitsToMode();
+  // The mobile dock's centre slot is mode-aware — re-label it on the same universal flip point.
+  if (typeof _syncModeDockButton === 'function') _syncModeDockButton();
   // AC-OVERLAYS-RETIRE-IN-HELM: the minimap retires in HELM and returns in
   // ORRERY, so the REGIME is an input to the slot decision and a flip has to
   // re-decide. Found live 2026-07-30 — without this the minimap went away on
@@ -13490,7 +13513,14 @@ function _updateModeSwapButton() {
 {
   const hudBtn = document.getElementById('mode-swap-btn');
   if (hudBtn) {
-    hudBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); _doModeSwap(); });
+    // ⭐ touchend BESIDE click (2026-08-28). This is the ONLY exit from mobile HELM
+    // (see the `_isMobile && !swap.exitFlight` refusal above), and it was the one mobile-reachable
+    // button in this file relying on WebKit synthesizing a click from a tap. Every dock and dial
+    // button gets an explicit touchend; the button whose failure STRANDS the player should not be
+    // the exception. preventDefault on touchend also stops the synthesized click double-firing it.
+    const _swap = (e) => { e.preventDefault(); e.stopPropagation(); _doModeSwap(); };
+    hudBtn.addEventListener('click', _swap);
+    hudBtn.addEventListener('touchend', _swap);
   }
   const optBtn = document.getElementById('mode-swap-settings-btn');
   if (optBtn) {
@@ -15144,11 +15174,23 @@ if (mobileControls) {
     } else if (action === 'fullscreen') {
       toggleFullscreen();
       // State updated by fullscreenchange listener
+    } else if (action === 'hud') {
+      // The HUD master toggle (desktop `H`). Player-facing — it is how you get a clean look at a
+      // planet — and it had NO touch path at all before 2026-08-28. Same two lines the key runs.
+      _hudVisible = !_hudVisible;
+      _applyHudVisibility();
+      btn.classList.toggle('active', !_hudVisible);
+      btn.title = _hudVisible ? 'Hide HUD' : 'Show HUD';
     } else if (action === 'settings') {
       toggleSettings();
       fab.classList.remove('open'); // close speed dial when opening settings
     }
   }
+
+  // Label the mode-aware centre slot for the CURRENT regime before any flip happens — setScManual
+  // keeps it in sync afterwards, but nothing has flipped yet at boot and an unlabelled slot would
+  // show the markup default regardless of which station the player picked at the chooser.
+  _syncModeDockButton();
 
   // Listen on dock and speed dial
   const dock = mobileControls.querySelector('.mobile-dock');

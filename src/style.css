@@ -793,6 +793,18 @@ body.hud-hidden #flight-mode-toast { display: none !important; }
   top: 16px;
   right: 16px;
   z-index: 100;
+  /* ⭐ 44px MINIMUM (2026-08-28). This is the ONLY exit from mobile HELM, and at font-size 12 with
+     7px padding it was ~31px tall — under the 44pt floor every dock and dial button already meets,
+     and the one button whose failure strands the player. Height comes from min-height + centring
+     rather than more padding, so the desktop look barely moves.
+     Also lifted clear of the notch: `top` and `right` now respect the safe-area insets. */
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: 'DotGothic16', monospace;
   font-size: 12px;
   font-weight: bold;

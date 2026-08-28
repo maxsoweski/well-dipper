@@ -290,12 +290,28 @@
     <!-- Mobile controls: Bottom dock + FAB speed dial (hidden on desktop) -->
     <div id="mobile-controls">
       <!-- Bottom dock: always-visible navigation -->
+      <!-- ⭐⭐ THE DOCK CARRIES WHAT THIS MODE DOES (2026-08-28). It used to be a fixed row with
+           `autonav-toggle` at position 2 of 5 — BETWEEN the ◀ ▶ pair it split, in the most
+           thumb-reachable spot on the screen — whose entire ORRERY branch was one console.log
+           (src/main.js, the `action === 'autonav-toggle'` case). ORRERY is the phone default, so the
+           best slot on the screen was a no-op for the default player, with no visible feedback that
+           the tap even registered. The same action ALSO sat in the speed dial: the only duplicated
+           control in the set, spending 2 of 11 slots on one function meaningful in one mode.
+           Now ◀ ▶ are adjacent and the centre slot is MODE-AWARE — `#mobile-mode-slot`, relabelled by
+           _syncModeDockButton() on every regime flip:
+             ORRERY → orbit lines (the main ORRERY view control)
+             HELM   → autopilot   (the main HELM control)
+           ⛔ Its data-action is set at RUNTIME and must stay one of the two the dock handler already
+           knows ('orbits' / 'autonav-toggle') — this element adds no new handler branch on purpose.
+           ⚠ ACCEPTED LOSS, stated rather than hidden: orbit lines can no longer be toggled from HELM.
+           _syncOrbitsToMode() turns them off in HELM by design, and mobile HELM is a hands-off tour,
+           so the control has no job there. If that turns out wrong it comes back as a dial slot. -->
       <div class="mobile-dock">
         <button data-action="prev" title="Previous body">&#x25C0;</button>
-        <button data-action="autonav-toggle" title="Autopilot on/off" class="mobile-autopilot-btn">&#x25B6;</button>
         <button data-action="next" title="Next body">&#x25B6;</button>
+        <button id="mobile-mode-slot" data-action="orbits" title="Orbit lines">&#x25CE;</button>
         <button data-action="warp" title="Warp">&#x25CE;</button>
-        <button data-action="nav" title="Nav computer">&#x2726;</button>
+        <button data-action="nav" title="Nav computer &mdash; search to travel">&#x2726;</button>
       </div>
       <!-- FAB: opens speed dial -->
       <button class="mobile-fab" title="Menu" aria-label="Toggle menu">&#x2699;</button>
@@ -309,21 +325,25 @@
            was sixth. The single most useful control in this menu was the one button nobody could tap.
            ⛔ SO ORDER BY PHONE VALUE, WORST LAST, because the last slot is the one that gets clipped:
              settings  — the panel; the reason this menu exists
-             orbits    — ORRERY is the phone default and this is its main toggle
              minimap   — useful in both modes
              gyro      — needs an iOS permission grant that may never be given
-             autonav   — INERT in ORRERY (src/main.js logs and returns), i.e. dead in the phone default
+             hud       — hide the overlay for a clean look at a planet; had NO touch path before
              fullscreen— dead on iOS entirely; the Fullscreen API is not available on iPhone
-           The two that lose least by being clipped now occupy the two clipped slots.
+           The one that loses least by being clipped occupies the clipped slot.
+           ⭐ AMENDED 2026-08-28 (second pass): the dial is FIVE, not six. `orbits` and `autonav` both
+           left — each is now the dock's mode-aware centre slot in the mode where it means anything
+           (ORRERY / HELM respectively), so keeping them here would have re-created the duplication this
+           whole pass removed. `hud` took a freed slot: it is player-facing, is one boolean with an
+           existing apply function, and had no touch path at all. Five buttons top out at 352px — the
+           highest slot Max confirmed he can actually see.
            ⚠ Reordering is behaviourally INERT: every handler resolves by data-action or
            querySelector('[data-action=…]') (src/main.js:14843, :14897, :14920, :15078). Nothing keys on
            position. Pinned by tests/mobile-speed-dial-reachability.test.js so a tidy-up cannot undo it. -->
       <div class="mobile-speed-dial">
         <button class="speed-dial-btn" data-action="settings" title="Settings">&#x2630;</button>
-        <button class="speed-dial-btn" data-action="orbits" title="Orbits">&#x25CE;</button>
         <button class="speed-dial-btn" data-action="minimap" title="Minimap">&#x25A3;</button>
-        <button class="speed-dial-btn" data-action="gyro" title="Gyroscope">&#x2B55;</button>
-        <button class="speed-dial-btn" data-action="autonav" title="Autopilot">&#x25B7;</button>
+        <button class="speed-dial-btn" data-action="gyro" title="Gyro look">&#x2B55;</button>
+        <button class="speed-dial-btn" data-action="hud" title="Hide HUD">&#x25A1;</button>
         <button class="speed-dial-btn" data-action="fullscreen" title="Fullscreen">&#x26F6;</button>
       </div>
     </div>

@@ -68,9 +68,13 @@ function topEdgePx(n) {
 const REACHABLE_CEILING_PX = 352;
 
 describe('mobile speed dial — the controls a phone needs are where a phone can reach', () => {
-  it('has the six buttons it is supposed to have, none lost in the reorder', () => {
+  it('has the five buttons it is supposed to have', () => {
+    // ⭐ FIVE, NOT SIX, as of the 2026-08-28 controls pass. `orbits` and `autonav` both LEFT: each is
+    // now the dock's mode-aware centre slot in the mode where it means anything, so keeping them here
+    // would have re-created the duplication that pass removed. `hud` took a freed slot — player-facing,
+    // one boolean with an existing apply function, and it had no touch path at all before.
     expect(dialOrder().slice().sort()).toEqual(
-      ['autonav', 'fullscreen', 'gyro', 'minimap', 'orbits', 'settings'].sort(),
+      ['fullscreen', 'gyro', 'hud', 'minimap', 'settings'].sort(),
     );
   });
 
@@ -81,15 +85,13 @@ describe('mobile speed dial — the controls a phone needs are where a phone can
       .toBeLessThanOrEqual(REACHABLE_CEILING_PX);
   });
 
-  it('the controls that survive being clipped are the ones that are clipped', () => {
-    // fullscreen is dead on iOS (no Fullscreen API on iPhone) and autonav is INERT in ORRERY, which is
-    // the phone default — so those two are the only acceptable occupants of the top slots.
+  it('⭐ EVERY dial button is now inside the ceiling Max measured — nothing is clipped at all', () => {
+    // With five buttons the stack tops out at 352px, the highest slot he confirmed he could see. This
+    // is the actual win of dropping the two duplicates: not "the clipped one is expendable" but
+    // "nothing is clipped". If a sixth is ever added it lands at 400 and this reds — deliberately.
     const order = dialOrder();
     const clipped = order.filter((_, i) => topEdgePx(i + 1) > REACHABLE_CEILING_PX);
-    for (const a of clipped) {
-      expect(['fullscreen', 'autonav'], `"${a}" is clipped but is not one of the two that can afford to be`)
-        .toContain(a);
-    }
+    expect(clipped, 'no dial button sits above the reachable ceiling').toEqual([]);
   });
 
   it('⭐ the dial clears the home indicator, and the ladder still fits WITH that inset applied', () => {
@@ -110,9 +112,12 @@ describe('mobile speed dial — the controls a phone needs are where a phone can
     // A geometry test that silently parsed nothing would pass every assertion above by comparing
     // undefined-ish values. Pin the actual ladder: if the stylesheet moves, this reds and says so.
     expect([1, 2, 3, 4, 5, 6].map(topEdgePx)).toEqual([160, 208, 256, 304, 352, 400]);
-    // …and the ladder must genuinely straddle the ceiling, or the reachability assertions are vacuous:
-    // a dial that fitted entirely on screen would pass them while proving nothing.
-    expect(topEdgePx(6), 'the top slot really is out of reach — otherwise this fence tests nothing')
+    // ⚠ AND THE LADDER MUST STILL STRADDLE THE CEILING, or "nothing is clipped" is vacuous — a stack
+    // that could never reach past 352 would pass that clause while proving nothing about the geometry.
+    // The stylesheet still DEFINES a sixth slot at 400, above the ceiling; the improvement is that no
+    // button occupies it any more, not that the constraint went away.
+    expect(topEdgePx(6), 'the CSS still defines a slot beyond reach — the constraint is real')
       .toBeGreaterThan(REACHABLE_CEILING_PX);
+    expect(dialOrder().length, 'and the dial stops short of it').toBeLessThan(6);
   });
 });
