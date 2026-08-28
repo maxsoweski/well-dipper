@@ -37,7 +37,22 @@ function dialOrder() {
   return [...block[1].matchAll(/data-action="([a-z-]+)"/g)].map((m) => m[1]);
 }
 
-/** Top edge of the Nth (1-based) dial button, in CSS px above the viewport bottom. */
+/**
+ * The safe-area inset the dial anchor applies, as a declaration. ⭐ ASSERTED SEPARATELY BECAUSE THE
+ * LADDER MATH CANNOT SEE IT: the anchor carries `bottom: 64px` first (the fallback for engines that do
+ * not know env()) and `bottom: calc(64px + env(safe-area-inset-bottom, 0px))` second. topEdgePx below
+ * matches the FIRST, so it computes the ZERO-INSET ladder — correct, and blind to the inset by
+ * construction. When the insets were added this file still went green, for a reason that had nothing to
+ * do with what it claims to check. So the inset gets its own explicit clause rather than riding along
+ * invisibly, and the worst-case ladder is checked against the ceiling separately.
+ */
+function dialAnchorHasSafeArea() {
+  const block = CSS.match(/\.mobile-speed-dial\s*\{[\s\S]*?\}/);
+  expect(block, '.mobile-speed-dial block found').toBeTruthy();
+  return /bottom:\s*calc\([^)]*env\(\s*safe-area-inset-bottom/.test(block[0]);
+}
+
+/** Top edge of the Nth (1-based) dial button, in CSS px above the viewport bottom, at ZERO inset. */
 function topEdgePx(n) {
   const anchor = CSS.match(/\.mobile-speed-dial\s*\{[^}]*?bottom:\s*(\d+)px/);
   const height = CSS.match(/\.speed-dial-btn\s*\{[^}]*?height:\s*(\d+)px/s);
@@ -75,6 +90,20 @@ describe('mobile speed dial — the controls a phone needs are where a phone can
       expect(['fullscreen', 'autonav'], `"${a}" is clipped but is not one of the two that can afford to be`)
         .toContain(a);
     }
+  });
+
+  it('⭐ the dial clears the home indicator, and the ladder still fits WITH that inset applied', () => {
+    // The dock and the FAB/dial were pinned to the physical bottom edge, so on an iPhone the lower part
+    // of every button sat under the system's home-indicator gesture strip. The anchor now adds
+    // env(safe-area-inset-bottom), which lifts all six buttons by exactly the inset, once.
+    expect(dialAnchorHasSafeArea(), '.mobile-speed-dial lifts by env(safe-area-inset-bottom)').toBe(true);
+    // ⚠ That lift is NOT free: it pushes the whole ladder UP, toward the ceiling. A landscape iPhone's
+    // bottom inset is ~21px; 34px is the portrait home-indicator figure and is the harsher of the two,
+    // so use it as the worst case rather than the flattering one.
+    const WORST_INSET_PX = 34;
+    const idx = dialOrder().indexOf('settings');
+    expect(topEdgePx(idx + 1) + WORST_INSET_PX, 'settings still reachable at the worst realistic inset')
+      .toBeLessThanOrEqual(REACHABLE_CEILING_PX);
   });
 
   it('CONTROL — the arithmetic is live, and reproduces the numbers Max\'s count implies', () => {

@@ -45,7 +45,16 @@ html, body {
   left: 0;
   right: 0;
   z-index: 700;
+  /* ⭐ SAFE AREA, 2026-08-28. This band was pinned to bottom:0 with 44px tap targets inside it — which
+     is exactly where the iPhone home indicator lives, so the lower part of every dock button sat under
+     the system's own gesture strip. The band GROWS by the inset rather than moving up, so the gradient
+     still reaches the physical bottom edge and only the buttons clear the indicator.
+     ⚠ Inert without `viewport-fit=cover` on the viewport meta (index.html): without it iOS letterboxes
+     the page inside the safe area and every env() inset reads 0. The two changes are one change.
+     The plain declaration first is the fallback for anything that does not know env(). */
   height: 56px;
+  height: calc(56px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -86,8 +95,13 @@ html, body {
 /* ── FAB: Floating Action Button ── */
 .mobile-fab {
   position: fixed;
+  /* Lifted by the same inset as the dock (2026-08-28) so the FAB keeps its 64px clearance ABOVE the
+     dock rather than losing it to the home indicator. .mobile-speed-dial gets the identical treatment,
+     so the whole stack moves as one and the button ladder keeps its spacing. */
   bottom: 64px;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   right: 16px;
+  right: calc(16px + env(safe-area-inset-right, 0px));
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -120,8 +134,16 @@ html, body {
 /* ── Speed Dial: arc of buttons above FAB ── */
 .mobile-speed-dial {
   position: fixed;
+  /* Same lift as .mobile-fab — the dial is anchored to the FAB and must move with it, or the ladder
+     detaches from the button it fans out of. ⚠ The buttons' own `bottom` values stay PLAIN px: they are
+     offsets from THIS anchor, so applying the inset here moves all six by exactly the inset, once.
+     Adding it to the children too would apply it seven times over.
+     Pinned by tests/mobile-speed-dial-reachability.test.js, which reads this anchor and asserts the
+     resulting ladder still puts Settings inside the ceiling Max measured on his phone. */
   bottom: 64px;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   right: 16px;
+  right: calc(16px + env(safe-area-inset-right, 0px));
   z-index: 700;
   pointer-events: none;
 }

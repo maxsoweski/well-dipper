@@ -61,6 +61,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
 import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp, bootSkipDecision, needsHandsOnRecenter, deepLinkBoot } from './flight/flightModes.js';
+import { fullscreenAvailable, isFullscreen, requestFullscreen as fsRequest, exitFullscreen as fsExit } from './util/fullscreen.js';   // 2026-08-28 mobile pass: the Fullscreen API does not exist on iPhone, and `.catch(()=>{})` cannot catch a method that is undefined — that is a SYNCHRONOUS TypeError.
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -6200,7 +6201,13 @@ function populateSettingsUI() {
   el.querySelectorAll('[data-setting]').forEach(input => {
     const key = input.dataset.setting;
     if (key === 'fullscreen') {
-      input.checked = !!document.fullscreenElement;
+      // 2026-08-28: reads BOTH spellings. It read only the unprefixed one, so on a browser exposing
+      // only webkitFullscreenElement the box said "not fullscreen" while fullscreen — and the next
+      // toggle would try to ENTER again instead of exiting. The row also hides itself entirely where
+      // fullscreen is unavailable (iPhone): a control that cannot work should not be offered.
+      input.checked = isFullscreen(document);
+      const row = input.closest('label, .settings-row, li, div');
+      if (row && !fullscreenAvailable(document)) row.style.display = 'none';
       return;
     }
     if (key === 'soundEnabled') {
@@ -6300,10 +6307,13 @@ function applySettingChange(key, value) {
       // or an effect. Left readable so an old save's value is not an error.
       break;
     case 'fullscreen':
-      if (value && !document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else if (!value && document.fullscreenElement) {
-        document.exitFullscreen();
+      // Guarded 2026-08-28. Both calls were bare: on iPhone `requestFullscreen` is undefined, so the
+      // shipped form threw a TypeError while EVALUATING the call — before the promise existed and so
+      // before its own .catch could ever run. The helpers guard the METHOD, not the promise.
+      if (value && !isFullscreen(document)) {
+        fsRequest(document);
+      } else if (!value && isFullscreen(document)) {
+        fsExit(document);
       }
       break;
     case 'colorPalette':
@@ -6401,7 +6411,7 @@ function applySettingChange(key, value) {
     // Update fullscreen checkbox when fullscreen state changes
     document.addEventListener('fullscreenchange', () => {
       const fsCheckbox = settingsEl.querySelector('[data-setting="fullscreen"]');
-      if (fsCheckbox) fsCheckbox.checked = !!document.fullscreenElement;
+      if (fsCheckbox) fsCheckbox.checked = isFullscreen(document);   // both spellings (2026-08-28) — the last unprefixed-only read
     });
   }
 }
@@ -7364,18 +7374,26 @@ function hitTestBodies(clientX, clientY, minThresholdPx = 24) {
 
   // Mobile fullscreen button on title screen — only goes fullscreen, no dismiss
   const fsBtn = document.getElementById('title-fullscreen-btn');
-  if (fsBtn) {
+  // ⭐⭐ THIS BUTTON IS SHOWN **ONLY** ON TOUCH DEVICES (src/style.css, @media (pointer: coarse)) AND
+  // BLINKS FOR ATTENTION — so the platform least able to honour it was the only platform being offered
+  // it, in the most eye-catching way available. On iPhone `requestFullscreen` is undefined and the
+  // shipped form threw a synchronous TypeError that its own .catch could never see.
+  // So: hide it outright where the capability is absent. A blinking control that does nothing is worse
+  // than no control — it teaches the player the game is broken on the very first screen.
+  if (fsBtn && !fullscreenAvailable(document)) {
+    fsBtn.style.display = 'none';
+  } else if (fsBtn) {
     fsBtn.addEventListener('touchstart', (e) => {
       e.stopPropagation();
     }, { passive: false });
     fsBtn.addEventListener('touchend', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      document.documentElement.requestFullscreen().catch(() => {});
+      fsRequest(document);
     });
     fsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      document.documentElement.requestFullscreen().catch(() => {});
+      fsRequest(document);
     });
   }
 }
@@ -10760,13 +10778,12 @@ function _updateOrbitVisibilityFactor() {
 }
 
 function toggleFullscreen() {
-  const el = document.documentElement;
-  const isFs = document.fullscreenElement || document.webkitFullscreenElement;
-  if (isFs) {
-    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
-  } else {
-    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch(() => {});
-  }
+  // ⭐ THIS FUNCTION WAS ALREADY CORRECT, AND THAT IS WHY THE OTHER SITES WERE WORTH FIXING: the guarded
+  // shape existed here the whole time while three other call sites used the bare one. Routing it through
+  // src/util/fullscreen.js makes the correct form the ONLY form, so the next call site copies from a
+  // single source instead of from whichever neighbour it happened to read.
+  if (isFullscreen(document)) fsExit(document);
+  else fsRequest(document);
 }
 
 // `toggleGravityWell` DELETED 2026-07-30 with the surface it toggled. Its four
@@ -15073,10 +15090,19 @@ if (mobileControls) {
   if (speedDial) speedDial.addEventListener('touchend', handleMobileAction);
 
   // Update fullscreen button state when fullscreen changes
+  // Hide the dial's fullscreen button where the capability is absent (iPhone), for the same reason as
+  // the title button. ⚠ It stays in the DOM: `nth-child` counts ALL element children regardless of
+  // display, so removing it would NOT reflow its siblings — and it already sits in the top slot, the
+  // one that gets clipped, precisely because it is the least useful control here
+  // (index.html, .mobile-speed-dial ordering). Hiding costs its neighbours nothing.
+  {
+    const dialFsBtn = mobileControls.querySelector('[data-action="fullscreen"]');
+    if (dialFsBtn && !fullscreenAvailable(document)) dialFsBtn.style.display = 'none';
+  }
+
   const onFsChange = () => {
-    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
     const fsBtn = mobileControls.querySelector('[data-action="fullscreen"]');
-    if (fsBtn) fsBtn.classList.toggle('active', isFs);
+    if (fsBtn) fsBtn.classList.toggle('active', isFullscreen(document));
   };
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);

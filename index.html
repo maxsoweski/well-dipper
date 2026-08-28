@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover added 2026-08-28. It is the HALF THAT MAKES env(safe-area-inset-*) NON-ZERO:
+         without it iOS letterboxes the page inside the safe area, every inset reads 0, and the CSS that
+         pads for the notch and the home indicator is silently inert. The two changes only work together —
+         see src/style.css, .mobile-dock / .mobile-fab / .mobile-speed-dial. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Well Dipper</title>
     <link rel="icon" href="data:,">
     <link rel="preconnect" href="https://fonts.googleapis.com">
