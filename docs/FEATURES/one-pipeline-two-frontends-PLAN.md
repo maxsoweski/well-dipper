@@ -63,7 +63,7 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 | ID | Feature | LAB | GAME (WE) | Note |
 |---|---|---|---|---|
 | F1 | Mountains / ranges | ✅ | ❌ R | game has type‑branch relief |
-| **F2** | **Craters** | ✅ | **✅ 7/7** | but the GLSL is a transcription, not a shared module |
+| **F2** | **Craters** | ✅ | **✅ 7/7** | ⭐ THE TRANSCRIPTION CAVEAT IS CLOSED — `dd08faa` (2026-08-27) deleted the lab's six copies and both front-ends now splice `src/worldengine/shaders/craterRelief.glsl.js`. One module, not two texts. |
 | **F3** | **Ejecta & rays** | ✅ | **◑ 4/7** | apron only; `uRayBrightness/uRayCount/uRaySharp` absent — the ray system is the missing half |
 | F4 | Canyons / rifts | ✅ | ❌ | |
 | F5 | Scarps & fault systems | ✅ | ❌ | |
@@ -112,14 +112,14 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 | F48 | City lights | ⚠️ **BLOCKED** | ❌ R | |
 | F49 | Ecumenopolis | ⚠️ **BLOCKED** | ❌ R | |
 | F50 | Posterize + Bayer | ✅ | ❌ R | universal envelope |
-| F51 | Rings | ✅ | ❌ R | `RingRenderer.js` multi‑band dead |
+| **F51** | **Rings** | ✅ | **✅** | ⭐ WIRED 2026-08-27. `src/worldengine/shaders/ringRelief.glsl.js` is the ONE ring program and both front-ends splice it; the game's hardcoded `sin(t*30.0)` band pair is neutralised in place at `Planet.js:1894` inside a closed block comment. Rings also gained resonance gaps for the first time (`deriveRingStructure`, re-derived once the moons exist, drawing zero new random numbers) — 9 of 33. |
 | **F52** | **Eclipse / moon shadows** | ❌ **absent** | game‑only | the ONE feature the lab lacks — see §7 |
 | F53 | Close‑up LOD2 detail | ✅ | ◑ split | distance ramp IS shared (`BodyRenderer.js:11` imports `lodRampOf`); `lodLevel` uniform declared at `Planet.js:118`, read by no shader |
 
 ### Honest headline
 
-- **Through the world engine, in both lab and game: 4 of 53 (7.5%)** — F2, F34 complete; F3, F35 partial.
-- **Lab‑only: 48.** Of those, 22 have a game‑own parallel to delete, 26 have nothing in the game.
+- **Through the world engine, in both lab and game: 6 of 53 (11.3%)** — F2, F34, F51 complete; F3, F35, F53 partial. ⭐ UPDATED 2026-08-27: was `4 of 53 (7.5%)`, naming only F2/F34 complete and F3/F35 partial. F51 landed, and F53 was already carrying `◑ split` in the table above without being counted in this line.
+- **Lab‑only: 47.** Of those, 23 have a game‑own parallel to delete (`❌ R`) and 23 have nothing in the game at all. ⚠ The previous `48 / 22 / 26` predates F51 and did not sum against the table's own rows; these three are counted off the GAME column directly.
 - **Game‑only: 1** (F52).
 - **UNKNOWN: 1** (F26 — resolve the doc/ID question; do not guess).
 - **Never observed rendering anywhere: 10** — F44–F49 blocked, F11/F12/F19 inert, F36 unverified.
