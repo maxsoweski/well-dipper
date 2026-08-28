@@ -33,10 +33,17 @@ const baseFiles = readdirSync(repo(BASE_DIR)).filter((f) => f.endsWith('.js'));
 //   • e1Regime.js          — the E1 SOURCE.
 //   • lidResponse.js       — the V2-2a CONSUMER/router (imports the classification constants
 //                            L_STRONG/SHOULDER_LO/HEATPIPE_PEG/MOBILE_L from e1Regime.js).
-//   • planet-lod-rivers.js — NEW at V2-3: writeBodyRelief's condition-bearing dispatch derives its route
-//                            from computeE1 (+ modalRegime/inSeededBand) — the flip this guardrail used to
-//                            forbid is now the production invariant. Its label-freeness is guarded by the
-//                            AC-0 grep in worldengine-v2-3-dispatch-oracle.test.js (function-body slice).
+//   • src/worldengine/dispatch/bodyRelief.js — NEW at V2-3 as planet-lod-rivers.js; RE-POINTED 2026-08-28
+//                            when writeBodyRelief moved to its own layer. Its condition-bearing dispatch
+//                            derives the route from computeE1 (+ modalRegime/inSeededBand) — the flip this
+//                            guardrail used to forbid is now the production invariant. Its label-freeness is
+//                            guarded by the AC-0 grep in worldengine-v2-3-dispatch-oracle.test.js.
+//                            ⭐ THE MOVE'S DESTINATION WAS CHOSEN BY THIS SUITE. The dispatch was first put in
+//                            base/ and this scan reddened on it, correctly: base/ is the E1-BLIND writer layer
+//                            (see the line below), and the dispatch is the one thing above those writers whose
+//                            job IS reading the tuple. Rather than cut a third exception into the scan, the file
+//                            went to src/worldengine/dispatch/ and the scan below is unchanged — it still covers
+//                            every base/ writer, with no new hole.
 // The base/ WRITERS stay E1-blind: the pre-flip "E1 has zero influence inside the expression layer" target
 // still holds one layer down (writers consume args, never the tuple).
 // ⭐ STEP 7 ADDED A THIRD CATEGORY, AND IT IS NARROWER THAN THE EXCLUSION IT REPLACES. Moving
@@ -107,8 +114,11 @@ describe('V2-1 AC1/AC7 (repurposed V2-3) — computeE1 is imported by NO base/ w
     expect(planted.includes('computeE1'), 'the comment-blind predicate MISSED a live call').toBe(true);
   });
 
-  it('planet-lod-rivers.js is a LEGITIMATE consumer: its ONE computeE1 call site feeds the nested condition vector + macroSeed', () => {
-    const code = read('planet-lod-rivers.js').replace(/\/\/[^\n]*/g, '');
+  it('src/worldengine/dispatch/bodyRelief.js is a LEGITIMATE consumer: its ONE computeE1 call site feeds the nested condition vector + macroSeed', () => {
+    // RE-POINTED 2026-08-28 with writeBodyRelief. ⛔ planet-lod-rivers.js now holds ZERO computeE1 call
+    // sites, so leaving this on the old file would have asserted `1 === 0` — loud, not vacuous, which is
+    // why this is a re-point. The clause itself is unweakened: still exactly one call, still (cond, macroSeed).
+    const code = read('src/worldengine/dispatch/bodyRelief.js').replace(/\/\/[^\n]*/g, '');
     const calls = [...code.matchAll(/computeE1\(([^)]*)\)/g)].map((m) => m[1]);
     expect(calls.length, 'exactly one dispatch call site (writeBodyRelief)').toBe(1);
     expect(calls[0].split(',')[0].trim(), 'first arg is the condition-vector handle').toBe('cond');

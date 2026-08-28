@@ -240,7 +240,15 @@ describe('V2-3 AC-0 check 1 — the condition-bearing routing region is label-fr
   // writeBodyRelief ONLY — the else-bridge below it legitimately still runs the archetype chain, and the
   // file legitimately reads PRESET_ARCHETYPE elsewhere (radius plumbing).
   const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  const RIVERS = stripComments(readFileSync(fileURLToPath(new URL('../planet-lod-rivers.js', import.meta.url)), 'utf8'));
+  // ⭐ RE-POINTED 2026-08-28: writeBodyRelief moved out of planet-lod-rivers.js to
+  // src/worldengine/dispatch/bodyRelief.js (three-free, so the game can reach the dispatch and bake a
+  // province cube). This grep follows its subject rather than staying on the old file — a pin whose
+  // subject has moved is the failure this repo has recorded in blood (driver-pack-rockysurface.test.js:97).
+  // ⚠ NOT a silent re-point: the `fnStart > -1` guard below ALREADY caught the move loudly
+  // ("expected -1 to be greater than -1") rather than scanning an empty slice, which is why this
+  // edit is a re-point and not a repair. The guard stays, and the two sanity anchors under it
+  // (computeE1 / compositionClass) remain the liveness proof that the slice is the real dispatch.
+  const RIVERS = stripComments(readFileSync(fileURLToPath(new URL('../src/worldengine/dispatch/bodyRelief.js', import.meta.url)), 'utf8'));
 
   function block(code, from) {
     const start = code.indexOf(from);

@@ -730,7 +730,7 @@ across overlays.** That is the layer-4 architecture decision, and this file neve
 ⚠ **`route()` cost is FLAT in radius** (111–138 ms over a 30× radius span) because the mesh is
 global; `radiusEarth` feeds only the ribbon/valley WIDTH law. **The radius sweep this file
 prescribed was the wrong probe.** The real radius dependence is a **BRANCH**:
-`planet-lod-rivers.js:1528` gates the router's height source on `uReliefBakeStrength > 0`, and the
+`planet-lod-rivers.js:1419` `const bakedOn` gates the router's height source on `uReliefBakeStrength > 0`, and the
 lab rewrites that uniform every frame as `grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis)`
 (`world-engine-lab.html:4941`) with `sVis = radiusEarth^0.5` — **exactly 0 for radiusEarth ≤ 0.25 or
 ≥ 4.0.** On that branch `route()` calls `sampler.read()`: a 200×200 RGBA-float RTT running the full

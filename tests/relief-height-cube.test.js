@@ -165,6 +165,13 @@ describe('relief height cube — (3) pole-cap is finite / bounded / continuous (
 
 describe('relief height cube — (4) bake-host wiring source-scan (planet-lod-rivers.js)', () => {
   const riversSrc = readFileSync(fileURLToPath(new URL('../planet-lod-rivers.js', import.meta.url)), 'utf8');
+  // ⭐ ADDED 2026-08-28: writeBodyRelief moved to src/worldengine/dispatch/bodyRelief.js, taking the
+  // `writeGrainSphere(carrier, …)` call with it (it lives in the dispatch's despun() closure). The bake
+  // call site itself stayed in rivers.js's route(), so this scan now legitimately spans two files —
+  // one assertion per file, each still reading its own subject. ⛔ Not a widening: the grain-before-height
+  // clause below is asserted on the dispatch source ONLY, so it cannot be satisfied by an unrelated
+  // match somewhere in rivers.js's 1500 lines.
+  const dispatchSrc = readFileSync(fileURLToPath(new URL('../src/worldengine/dispatch/bodyRelief.js', import.meta.url)), 'utf8');
 
   it('imports the height writer + cube fns + carrier builder', () => {
     expect(riversSrc).toMatch(/import\s*\{[^}]*\bwriteHeightSphere\b[^}]*\}\s*from\s*['"]\.\/src\/worldengine\/base\/tectonic\.js['"]/);
@@ -196,9 +203,10 @@ describe('relief height cube — (4) bake-host wiring source-scan (planet-lod-ri
     // before the bare `r` so only the standalone sampler readback `r.height` is caught.
     expect(bakeCall[0]).not.toMatch(/(^|[^A-Za-z0-9_])r\.height\b/);
     expect(bakeCall[0]).not.toMatch(/sampler\.read/);
-    // the carrier feeding the bake comes from writeHeightSphere (generated DATA), grain written first
-    expect(riversSrc).toMatch(/writeGrainSphere\(\s*carrier\s*,/);
-    expect(riversSrc).toMatch(/writeHeightSphere\(\s*carrier\s*,/);
+    // the carrier feeding the bake comes from writeHeightSphere (generated DATA), grain written first.
+    // RE-POINTED 2026-08-28 → the dispatch file, which is where that ordering now lives.
+    expect(dispatchSrc).toMatch(/writeGrainSphere\(\s*carrier\s*,/);
+    expect(dispatchSrc).toMatch(/writeHeightSphere\(\s*carrier\s*,/);   // RE-POINTED 2026-08-28 with its sibling above
   });
 });
 

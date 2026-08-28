@@ -167,23 +167,40 @@ describe('V2-3 AC-ZERO-CLOBBER (repurposed) — exactly TWO legitimate router ca
     return { body: code.slice(open, i + 1), start, end: i + 1 };
   }
 
-  it('rivers.js calls writeLidResponseSphere at EXACTLY two sites: production dispatch (inside writeBodyRelief) + labLidOverride (outside)', () => {
-    expect(RIVERS_CODE, 'imports writeLidResponseSphere')
+  // ⭐ RE-POINTED 2026-08-28, AND THE INVARIANT NOW SPANS TWO FILES BECAUSE THE CODE DOES.
+  // writeBodyRelief moved to src/worldengine/dispatch/bodyRelief.js, so the production call site and the
+  // lab-seam call site no longer live in one file. The clause is UNCHANGED in substance — still exactly two
+  // writeLidResponseSphere call sites in the whole pipeline, one production (inside the dispatch function)
+  // and one lab seam (guarded by labLidOverride) — it is only counted across both files now.
+  // ⛔ Leaving it on rivers.js alone would have counted ONE and reddened on `1 === 2`; loud, not vacuous.
+  const DISPATCH_CODE = stripComments(readSrc('../src/worldengine/dispatch/bodyRelief.js'));
+
+  it('writeLidResponseSphere has EXACTLY two call sites pipeline-wide: production dispatch (inside writeBodyRelief) + labLidOverride (rivers.js lab seam)', () => {
+    expect(DISPATCH_CODE, 'the dispatch file imports writeLidResponseSphere')
       .toMatch(/import\s*\{[^}]*writeLidResponseSphere[^}]*\}\s*from\s+['"][^'"]*lidResponse/);
-    const wbr = functionBody(RIVERS_CODE, 'function writeBodyRelief');
-    const callIdxs = [...RIVERS_CODE.matchAll(/writeLidResponseSphere\(/g)].map((m) => m.index);
-    expect(callIdxs.length, 'exactly two call sites').toBe(2);
-    const inside = callIdxs.filter((i) => i > wbr.start && i < wbr.end);
-    const outside = callIdxs.filter((i) => i <= wbr.start || i >= wbr.end);
+    expect(RIVERS_CODE, 'rivers.js imports writeLidResponseSphere for the lab seam')
+      .toMatch(/import\s*\{[^}]*writeLidResponseSphere[^}]*\}\s*from\s+['"][^'"]*lidResponse/);
+
     // 1. the PRODUCTION dispatch call, inside writeBodyRelief's condition-bearing branch:
-    expect(inside.length, 'one call inside writeBodyRelief (the derived unbrokenLid delegation)').toBe(1);
+    const wbr = functionBody(DISPATCH_CODE, 'function writeBodyRelief');
+    const dispatchCalls = [...DISPATCH_CODE.matchAll(/writeLidResponseSphere\(/g)].map((m) => m.index);
+    expect(dispatchCalls.length, 'exactly one call site in the dispatch file').toBe(1);
+    expect(dispatchCalls.filter((i) => i > wbr.start && i < wbr.end).length,
+      'that call is INSIDE writeBodyRelief (the derived unbrokenLid delegation)').toBe(1);
+
     // 2. the LAB seam call, guarded by the null-default labLidOverride hook:
-    expect(outside.length, 'one call outside writeBodyRelief (the lab render seam)').toBe(1);
-    const guardWindow = RIVERS_CODE.slice(Math.max(0, outside[0] - 600), outside[0]);
+    const riversCalls = [...RIVERS_CODE.matchAll(/writeLidResponseSphere\(/g)].map((m) => m.index);
+    expect(riversCalls.length, 'exactly one call site in rivers.js (the lab render seam)').toBe(1);
+    const guardWindow = RIVERS_CODE.slice(Math.max(0, riversCalls[0] - 600), riversCalls[0]);
     expect(guardWindow, 'the lab call is guarded by the labLidOverride hook').toMatch(/labLidOverride/);
-    // The dispatch file still never calls classifyLidPath (the router classifies internally; the dispatch
-    // reads only the SUBTRACTIVE gate isUnbrokenLidPath).
-    expect(RIVERS_CODE, 'no classifyLidPath reference in the dispatch file').not.toMatch(/classifyLidPath/);
+
+    // …and no third site has appeared in either file.
+    expect(dispatchCalls.length + riversCalls.length, 'exactly two call sites pipeline-wide').toBe(2);
+
+    // The dispatch still never calls classifyLidPath (the router classifies internally; the dispatch reads
+    // only the SUBTRACTIVE gate isUnbrokenLidPath). Asserted on BOTH files, so the move added no hiding place.
+    expect(DISPATCH_CODE, 'no classifyLidPath in the dispatch file').not.toMatch(/classifyLidPath/);
+    expect(RIVERS_CODE, 'no classifyLidPath in rivers.js').not.toMatch(/classifyLidPath/);
   });
 
   // The NEW base-writer scan (BUILD-PLAN §4 repurposing #2): the six base/ WRITERS the dispatch routes to
