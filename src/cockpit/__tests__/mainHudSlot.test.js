@@ -271,7 +271,11 @@ describe('the HUD slot has exactly one decision point', () => {
     // mobile players.
     expect(body, 'mobile-HELM still gets a labelled, displayable button')
       .toMatch(/btn\.textContent = _scManual \? 'HELM' : 'ORRERY'/);
-    expect(body).toMatch(/btn\.style\.display = swappable \? 'block' : 'none'/);
+    // 'flex' since 2026-08-28, deliberately and not as drift: #mode-swap-btn gained a 44px minimum and
+    // centring declarations, and an inline `display: block` beats the stylesheet — so 'block' left the
+    // centring inert while the tap-target height still applied. The property this line guards is that
+    // the button is DISPLAYABLE when swappable and hidden otherwise; that is unchanged.
+    expect(body).toMatch(/btn\.style\.display = swappable \? 'flex' : 'none'/);
   });
 
   it('the click and drag dead zones ask the same question the renderer asked', () => {

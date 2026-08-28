@@ -81,6 +81,16 @@ html, body {
   transition: all 0.15s;
 }
 
+/* ⭐ THE DOCK'S ACTIVE STATE (2026-08-28, found by adversarial review). The mode-aware centre slot
+   carries `.mobile-autopilot-btn` only in HELM, so in ORRERY its whole classList is ['active'] — and
+   the stylesheet's ONLY two `.active` rules were `.mobile-autopilot-btn.active` and
+   `.speed-dial-btn.active`. Neither matched, so "orbit lines are on" rendered as nothing at all, in the
+   mode phones default to, while the same slot in HELM showed autopilot state correctly. */
+.mobile-dock button.active {
+  border-color: rgba(100, 180, 255, 0.6);
+  color: rgba(100, 180, 255, 0.9);
+}
+
 .mobile-dock button:active {
   background: rgba(255, 255, 255, 0.15);
   transform: scale(0.92);

@@ -5412,6 +5412,20 @@ function _pickBootMode(mode) {
   if (!splashActive) return;
   const decided = mode ?? 'orrery';
   _pendingBootMode = bootModeAction(decided).mode;
+  // ⭐⭐ RE-LABEL THE MOBILE DOCK'S MODE SLOT THE MOMENT THE STATION IS PICKED (2026-08-28, found by
+  // adversarial review of ffe2838). Without this the next re-label is _armHelmBootTour → setScManual,
+  // which is at the END of logos → title → warp-turn. So a HELM pick left the centre slot reading
+  // "Orbit lines" for the whole ceremony — and the dock is live over the splash and title
+  // (.mobile-dock z-index 700 vs splash 600 / title 500), so it is TAPPABLE the whole time.
+  // ⛔ AND THAT TAP IS NOT HARMLESS, which is why this is a fix and not a polish. The title screen
+  // spawns a system, so toggleOrbits' `if (!system) return` no longer guards it: a stray tap sets
+  // _orbitsUserOverride = true, and _syncOrbitsToMode then returns early FOREVER — the mode-driven
+  // orbit default is dead for the rest of the session. Before this commit that slot was an inert
+  // autonav-toggle and the tap did nothing; the live toggle in that window is new, so this is a
+  // regression this pass introduced and closes.
+  // _effectiveRegime() is boot-reveal-aware and _pendingBootReveal is still true here, so it resolves
+  // to the mode just picked rather than the live one.
+  if (typeof _syncModeDockButton === 'function') _syncModeDockButton();
   // D-hold boot skip (orrery-entry-orbits-2026-07-20, AC1/AC2): holding D while
   // clicking a chooser button boots STRAIGHT to Sol in the chosen mode — no intro
   // logos, no title. Branching BEFORE startIntroSequence means _titleAutoTimer is
@@ -13504,7 +13518,7 @@ function _updateModeSwapButton() {
   const swappable = _hudVisible && !splashActive && !titleScreenActive
     && !!system && !(system.type && system.type !== 'star-system')
     && (_isMobile && _scManual);
-  btn.style.display = swappable ? 'block' : 'none';
+  btn.style.display = swappable ? 'flex' : 'none';   // 'flex', not 'block' (2026-08-28): the inline style beats the stylesheet, so 'block' silently made #mode-swap-btn's centring declarations inert while the 44px min-height still applied. Either fix the display or delete the centring — a stylesheet that does not apply is worse than one that is absent.
   if (swappable) btn.textContent = _scManual ? 'HELM' : 'ORRERY';
 }
 

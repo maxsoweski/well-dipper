@@ -69,6 +69,14 @@ describe('mobile dock — mode-aware, and nothing duplicated', () => {
     }
     expect(orreryAction, 'ORRERY gets the orbit-line toggle').toBe('orbits');
     expect(helmAction, 'HELM gets the autopilot').toBe('autonav-toggle');
+    // ⭐ AND THE CONDITION ITSELF IS PINNED, which it was not. Capturing the two action strings said
+    // nothing about WHICH regime gets which. The realistic mutation is not flipping === to !== — it is
+    // a future edit substituting the raw `_scManual` flag for `_effectiveRegime()`, and main.js's own
+    // comment records that exact substitution having already "silently downgraded a HELM boot to an
+    // ORRERY instant-cut" once. _scManual is DISHONEST during the boot window; _effectiveRegime is not.
+    expect(fn[0], 'the regime is read through _effectiveRegime, never the raw _scManual flag')
+      .toMatch(/_effectiveRegime\(\)\s*===\s*'helm'/);
+    expect(fn[0], 'and not from the boot-window-dishonest flag directly').not.toMatch(/\b_scManual\b/);
   });
 
   it('⭐ it is re-labelled on the UNIVERSAL regime flip, not at one call site', () => {
@@ -78,9 +86,23 @@ describe('mobile dock — mode-aware, and nothing duplicated', () => {
     const fn = MAIN.match(/function setScManual\(on\)\s*\{[\s\S]*?\n\}/);
     expect(fn, 'setScManual found').toBeTruthy();
     expect(fn[0], 'the mode slot re-syncs on every regime flip').toMatch(/_syncModeDockButton\(/);
-    // …and once at wiring time, because nothing has flipped yet at boot.
-    expect(MAIN.match(/_syncModeDockButton\(\)/g)?.length ?? 0,
-      'called at boot as well as on flip').toBeGreaterThanOrEqual(2);
+    // ⛔ AND THE CALL COUNT IS MATCHED ON REAL CALL SITES ONLY. The first version of this clause
+    // counted `/_syncModeDockButton\(\)/g`, which matches the FUNCTION'S OWN DECLARATION — so deleting
+    // every call site still left a count of 1 and the clause could never fall below its threshold in
+    // the way that mattered. Require the statement form.
+    const calls = MAIN.match(/[^n]\s*_syncModeDockButton\(\);/g) || [];
+    expect(calls.length, 'at least the regime-flip hook and the boot-pick hook').toBeGreaterThanOrEqual(2);
+    // ⭐⭐ THE BOOT-PICK HOOK, and it is here because its absence was a REAL BUG found by review.
+    // _pickBootMode records the chosen station and goes straight to the intro; the next re-label was
+    // setScManual at the END of the whole ceremony. So a HELM pick showed "Orbit lines" on the most
+    // reachable slot for the entire intro — and the dock sits ABOVE the splash and title in z-order, so
+    // it is tappable throughout. The title screen spawns a system, so toggleOrbits' `if (!system)`
+    // guard does not apply and one stray tap sets _orbitsUserOverride permanently, killing the
+    // mode-driven orbit default for the whole session.
+    const pick = MAIN.match(/function _pickBootMode\(mode\)\s*\{[\s\S]*?\n\}/);
+    expect(pick, '_pickBootMode found').toBeTruthy();
+    expect(pick[0], 'the slot is re-labelled the moment a station is picked')
+      .toMatch(/_syncModeDockButton\(\)/);
   });
 
   it('the HUD toggle finally has a touch path', () => {
