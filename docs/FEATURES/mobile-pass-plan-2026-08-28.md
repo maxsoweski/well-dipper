@@ -205,6 +205,34 @@ This is the reachability pass, and the settings button is the reason it's second
 
 ---
 
+## ✅ CLOSED BY MAX ON HIS iPHONE — 2026-08-28
+
+> **"I checked and the game works between app switches"** — Max, 2026-08-28
+
+That closes the pass's **highest-severity** item ([NEEDS-MAX] #10 below): before the
+`webglcontextlost`/`webglcontextrestored` work (`eac337d`, live on master), backgrounding the tab and
+returning could leave a permanently black canvas with every control dead at once.
+
+⚠ **AND HERE IS THE HONEST LIMIT OF WHAT THAT SENTENCE PROVES.** "It works" is consistent with TWO
+different worlds and does not distinguish them:
+  (a) iOS dropped the GL context and the new handler recovered it — the fix firing, as designed; or
+  (b) iOS retained the context on his device and hardware, so the handler never ran at all.
+The symptom the item existed to remove is gone either way, which is what Max actually needed. But this
+is **not** evidence that the recovery path executes on iOS, and it must not be cited as such later.
+The synthetic half IS proven — a forced `WEBGL_lose_context` cycle in a real browser against the live
+production bundle showed the overlay appear, the context restore, the loop resume and the scene draw
+again — so the mechanism works; what is unconfirmed is only whether iOS ever invokes it on his phone.
+⛔ Do not "close" (b) by asking Max to read a console — he does not use it (`feedback_max-does-not-run-console-commands`).
+The distinguishing observation is visible without one: if the overlay flashes up and vanishes on return,
+the handler fired.
+
+Also closed the same day: **[NEEDS-MAX] #1**, the speed-dial count. Max reported "6 total including the
+gear", which located his viewport ceiling between 352 and 400 CSS px and identified SETTINGS as the
+clipped button — see the reorder in `f1ac868` and the derivation in
+`tests/mobile-speed-dial-reachability.test.js`.
+
+---
+
 ## 4. [NEEDS-MAX] — things only his actual phone can settle
 
 Each of these is a look, not a test. Open the game on the iPhone and:
