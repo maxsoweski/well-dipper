@@ -50,7 +50,7 @@ import { compositionClass, giantRegimeOf } from '../base/e1Regime.js';
 import { opaqueCO2ShroudOf } from '../base/auroraOptics.js';
 import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars } from '../base/giant-drivers.js';
 import { bakeClimateE5Attributes } from '../base/climate-e5.js';
-import { bandProxyUniforms, drawBandRoughness } from '../base/band-flow.js';
+import { bandProxyUniforms, drawBandRoughness } from '../base/band-flow.js';   import { bakeStormEAttributes } from '../base/storm-e.js';   import { GAME_STORM_SEED } from './polarDeck.js';   // ⭐ 2026-08-28 — the aStorm bake. GAME_STORM_SEED is imported rather than re-declared because polarDeck.js:102 already authored it WITH its reasoning; a second 0 here would be a silent duplicate law. ⛔ No import cycle: polarDeck.js imports only e1Regime and storm-e.
 import {
   scalar, resolveDriver, isPackDriver,
   assertMacroSeed, assertDisplayPolicy, assertPackResult, PackContractError,
@@ -306,10 +306,10 @@ export function giantDeckPack(condition, ctx = {}) {
     });
     attributes.aBand = bake.aBand;
     attributes.aShear = bake.aShear;
-    attributes.aMush = bake.aMush;
-    // ⚠ `aStorm` IS NOT SET HERE. See the header: its producer is the storm slice, fenced out of
-    // pack #1 by PLAN §7. It stays zero-filled, and a reader must be able to see that the pack
-    // never touched it rather than having to prove a negative.
+    attributes.aMush = bake.aMush;   const stormBake = bakeStormEAttributes(mesh.positions, mesh.count, mesh.radius ?? 1.0, { regime, drivers: { ...e5Drivers, composition: condition.atmosphere && condition.atmosphere.composition, T_eq }, macroSeed: macroSeed | 0, stormSeed: GAME_STORM_SEED | 0 });   attributes.aStorm = stormBake.aStorm;   meta.stormStrength = stormBake.strength;   meta.stormCount = stormBake.count;
+    // ⭐⭐ aStorm IS NOW SET, one line up — 2026-08-28. WAS: "`aStorm` IS NOT SET HERE. See the header:
+    // its producer is the storm slice, fenced out of pack #1 by PLAN §7. It stays zero-filled…" That
+    // fence is LIFTED: aStorm was absent on 124 of 124 gas bodies while aBand/aShear/aMush baked non-zero on all 124, and height.glsl.js:2103/:2086/:1905 multiply F24 edge roughness, F25 filamentation and ink advection by clamp(wStorm,0,1) — so ONE missing bake was holding THREE feature rows dead. ⛔ Coherence rule, from world-engine-lab.html:1777-1779: the storm mask is baked from the SAME resolved e5Drivers as the bands, never a second local derive, or the mask skews against the field it masks. ⚠ ORDER STILL MATTERS DOWNSTREAM — Planet.js hands these arrays on BEFORE ensureLabAttributes zero-fills, and that function never overwrites an attribute that already exists.
     meta.baked = true;
     meta.bandParams = bake.params;
     meta.bandCount = bake.bandCount;

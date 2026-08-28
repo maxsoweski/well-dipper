@@ -564,7 +564,7 @@ describe('SCOPE · the storm and polar families are OUT, and the pack proves it 
         expect(k, `${row.preset} named ${k}`).not.toMatch(/^uStorm/);
       }
       expect(Object.keys(deck.attributes).sort()).toEqual(
-        deck.meta.baked ? ['aBand', 'aMush', 'aShear'] : [],
+        deck.meta.baked ? ['aBand', 'aMush', 'aShear', 'aStorm'] : [],   // ⭐ aStorm ADDED 2026-08-28. The uPolar/uStorm DRIVER-name bans two lines up still hold and are deliberately untouched — the pack emits the storm ATTRIBUTE, never a uStorm* uniform.
       );
     }
   });
@@ -575,8 +575,8 @@ describe('SCOPE · the storm and polar families are OUT, and the pack proves it 
     expect(UNIF).toMatch(/uStormCount/);
   });
 
-  it('the pack never emits aStorm, and the LAB still bakes it — from the pack\'s own regime/drivers', () => {
-    expect(PACK_SRC).not.toMatch(/attributes\.aStorm\s*=/);
+  it('the pack NOW emits aStorm from its OWN regime/drivers, coherently with the bands, and the LAB still bakes its own', () => {
+    expect(PACK_SRC).toMatch(/attributes\.aStorm\s*=\s*stormBake\.aStorm/);   expect(PACK_SRC).toMatch(/bakeStormEAttributes\([^)]*drivers:\s*\{\s*\.\.\.e5Drivers/);   // ⛔ THE SECOND ASSERTION IS THE COHERENCE RULE, NOT A DUPLICATE. world-engine-lab.html:1777-1778 records why: a storm mask baked from a SECOND local derive skews against the very band field it masks, and nothing downstream would report it. Spreading e5Drivers is what pins the two bakes to one resolution. WAS, until 2026-08-28: `expect(PACK_SRC).not.toMatch(/attributes\.aStorm\s*=/)` — the scope-out under PLAN §7, lifted because one absent bake held F24, F25 and F31b dead.
     expect(LAB_CODE).toMatch(/bakeStormEAttributes\(pos\.array,\s*pos\.count,\s*R,\s*\{\s*regime:\s*_deck\.meta\.regime/);
   });
 });

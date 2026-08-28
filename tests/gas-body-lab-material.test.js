@@ -282,7 +282,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     // right move is to re-aim again — not to drop the direction.
     expect(res.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true, terminator: true });
     expect(Object.keys(res.gates)).not.toContain('aurora');
-    expect(Object.keys(res.attributes).sort()).toEqual(['aBand', 'aMush', 'aShear']);
+    expect(Object.keys(res.attributes).sort()).toEqual(['aBand', 'aMush', 'aShear', 'aStorm']);   // ⭐ aStorm ADDED 2026-08-28 — giantDeck.js:309 now bakes it beside the other three, from the same e5Drivers. WAS ['aBand','aMush','aShear'].
     expect(res.attributes.aBand.length).toBe(count);
     // Non-zero variance — a constant aBand is what a dead bake looks like.
     const a = res.attributes.aBand;
@@ -700,11 +700,11 @@ describe('6e — ⭐ the flag is ON by default since B7 (was OFF), and either va
     expect(aBand.count).toBe(surface.geometry.getAttribute('position').count);
     expect(new Set(Array.from(aBand.array)).size).toBeGreaterThan(8);
 
-    // aStorm is the zero-fill: its producer is fenced out of pack #1 by name, and "zero" here has
-    // to be readable as a decision rather than as an accident.
-    expect(lab.bakedAttributes.sort()).toEqual(['aBand', 'aMush', 'aShear']);
-    expect(lab.zeroFilledAttributes).toEqual(['aStorm']);
-    expect(Array.from(surface.geometry.getAttribute('aStorm').array).every((v) => v === 0)).toBe(true);
+    // ⭐⭐ aStorm IS NO LONGER THE ZERO-FILL — 2026-08-28. WAS: "aStorm is the zero-fill: its producer
+    // is fenced out of pack #1 by name, and 'zero' here has to be readable as a decision." Lifted: absent on 124 of 124 gas bodies, it held F24/F25/F31b dead through clamp(wStorm,0,1) at height.glsl.js:2103/:2086/:1905.
+    expect(lab.bakedAttributes.sort()).toEqual(['aBand', 'aMush', 'aShear', 'aStorm']);
+    expect(lab.zeroFilledAttributes).toEqual([]);   // nothing is zero-filled any more — ensureLabAttributes only fills what the pack did not supply, and the pack now supplies all four.
+    expect(surface.geometry.getAttribute('aStorm').array.length).toBeGreaterThan(0);   expect(new Set(Array.from(surface.geometry.getAttribute('aStorm').array)).size).toBeGreaterThan(1);   // ⭐ VARIANCE, the same idiom as aBand at :287 — a CONSTANT aStorm is what a dead bake looks like and an all-zero one is what the old zero-fill looked like. WAS: `.every((v) => v === 0)`.
   });
 
   it('the E caption can print the flag AND its source off the body itself (§12.5 fact 6)', () => {
