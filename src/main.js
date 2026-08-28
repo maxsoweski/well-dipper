@@ -60,7 +60,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp, bootSkipDecision, needsHandsOnRecenter } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp, bootSkipDecision, needsHandsOnRecenter, deepLinkBoot } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -5536,6 +5536,37 @@ function dismissTitleScreen() {
   };
   wirePick('splash-mode-orrery', 'orrery');
   wirePick('splash-mode-helm', 'helm');
+}
+// ── Deep-link boot (2026-08-28): `?system=<seed>` opens straight into that generated system ──
+// Max asked for a URL he can tap on his phone that lands him in a named system. The decision is the
+// pure `deepLinkBoot` reducer in src/flight/flightModes.js; this is the two-line dispatch.
+//
+// ⚠ PLACEMENT IS A HARD CONSTRAINT, NOT A STYLE CHOICE. spawnProceduralSystem reads `splashActive`
+// (declared `let` at :5177) and `titleScreenActive` (`let` at :5335). Both are TEMPORAL DEAD ZONE
+// until those lines execute, so calling it from any earlier point in this 15,000-line module throws
+// a ReferenceError. This block sits immediately after the chooser wiring — past both declarations —
+// which is also the honest seam: the deep link is an alternative to tapping a chooser button.
+//
+// The tail of spawnProceduralSystem already does everything a phone arrival needs: it hides the splash
+// and title, clears _pendingBootReveal, sets _pendingBootMode='orrery', frames the system and syncs the
+// orbit lines. ORRERY is the right landing for a link — it is the mode that survives a touch screen.
+// ⛔ NOT BUILT HERE, on purpose: no ?mode= (ORRERY is the only phone-viable mode), and no "skip the
+// arrival glide" option — the glide resolves in about a second and what he taps still becomes what he sees.
+{
+  const _deepLink = deepLinkBoot({ search: location.search });
+  // ⛔⛔ DEFERRED, AND THE DEFERRAL IS THE WHOLE FIX — DO NOT CALL THIS SYNCHRONOUSLY.
+  // The first version of this block called spawnProceduralSystem right here and it threw LIVE:
+  //   Uncaught ReferenceError: Cannot access 'galleryMode' before initialization
+  // spawnProceduralSystem reads module-scope `let` bindings declared much further down this file —
+  // `galleryMode` (:6592), `_manualBurnOrbiting` (:5607), and via its tail `_frameSystemForOrrery`
+  // (:9629), `_beginOrreryArrivalZoom` (:9712) and `_syncOrbitsToMode` (:10705). `let` does not hoist,
+  // so ANY synchronous call site in this 15,000-line module is in someone's temporal dead zone. Placing
+  // the block "after splashActive and titleScreenActive are declared" was the wrong invariant — it fixed
+  // the two identifiers that had been NAMED and left every other one live.
+  // queueMicrotask runs after this module's body has finished evaluating, so every `let` in the file is
+  // initialised and the renderer, scene and loop are all wired. That makes the fix structural rather than
+  // positional: this block is now correct wherever it sits, and no future `let` can break it.
+  if (_deepLink.open) queueMicrotask(() => window._lab.spawnProceduralSystem(_deepLink.system));
 }
 
 function toggleKeybinds() {
