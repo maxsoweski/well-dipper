@@ -396,7 +396,7 @@ have, so the reach is stated here as its own measurement:
 | population | carries a baked `landPalette` | what binds it | leg 2's reach at the DEFAULT flag |
 |---|---:|---|---|
 | 509 non-gas planets | **509 / 509** | src/objects/Planet.js:1629 `uWeatheredColor: { value: new THREE.Vector3(...(d.landPalette?.weathered` | **336 move — REAL TODAY** |
-| 19 non-gas planet-class | **19 / 19** | the same legacy `Planet` program — src/main.js:7752 `        const planetMoon = new Planet(scenePMData, pmStarInfo);` where `scenePMData` is a spread of `moonData.planetData`, so the baked palette carries through | **14 move — REAL TODAY** |
+| 19 non-gas planet-class | **19 / 19** | the same legacy `Planet` program — src/main.js:7764 `        const planetMoon = new Planet(scenePMData, pmStarInfo);` where `scenePMData` is a spread of `moonData.planetData`, so the baked palette carries through | **14 move — REAL TODAY** |
 | **632 plain moons** | **0 / 632** | ⛔ **nothing.** `MoonGenerator` never calls `surfacePaletteOf`, and `grep -c 'uWeatheredColor\|uSedColor\|uFreshColor\|uBioGroundColor\|landPalette' src/objects/Moon.js` → **0**. A plain moon's colour is src/generation/MoonGenerator.js:134 `    const palette = rng.pick(this.PALETTES[type]);` | **0 move — the 313 above is a POST-FLIP figure only** |
 
 **So leg 2's pixel reach today is 350 of 1160 bodies** (336 planets + 14 planet-class), not 663. The

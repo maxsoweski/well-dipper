@@ -5555,7 +5555,19 @@ function dismissTitleScreen() {
 // arrival glide" option — the glide resolves in about a second and what he taps still becomes what he sees.
 {
   const _deepLink = deepLinkBoot({ search: location.search });
-  if (_deepLink.open) window._lab.spawnProceduralSystem(_deepLink.system);
+  // ⛔⛔ DEFERRED, AND THE DEFERRAL IS THE WHOLE FIX — DO NOT CALL THIS SYNCHRONOUSLY.
+  // The first version of this block called spawnProceduralSystem right here and it threw LIVE:
+  //   Uncaught ReferenceError: Cannot access 'galleryMode' before initialization
+  // spawnProceduralSystem reads module-scope `let` bindings declared much further down this file —
+  // `galleryMode` (:6592), `_manualBurnOrbiting` (:5607), and via its tail `_frameSystemForOrrery`
+  // (:9629), `_beginOrreryArrivalZoom` (:9712) and `_syncOrbitsToMode` (:10705). `let` does not hoist,
+  // so ANY synchronous call site in this 15,000-line module is in someone's temporal dead zone. Placing
+  // the block "after splashActive and titleScreenActive are declared" was the wrong invariant — it fixed
+  // the two identifiers that had been NAMED and left every other one live.
+  // queueMicrotask runs after this module's body has finished evaluating, so every `let` in the file is
+  // initialised and the renderer, scene and loop are all wired. That makes the fix structural rather than
+  // positional: this block is now correct wherever it sits, and no future `let` can break it.
+  if (_deepLink.open) queueMicrotask(() => window._lab.spawnProceduralSystem(_deepLink.system));
 }
 
 
