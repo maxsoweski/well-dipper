@@ -112,8 +112,8 @@ const CORPORA = {
         + '24 `gc-N` GalacticMap positions under master seed `body-identity-fence`',
     provenance: 'verbatim from tests/body-identity-fence.test.js — the corpus every fence '
               + 'measurement in this tree is stated against',
-    // The fence's pinned population, asserted below.
-    pinned: { seeds: 221, planets: 961, plain: 770, planetClass: 24 },
+    // The fence's pinned population, asserted below. planetClass 24 -> 51 at the B5.0 re-bless.
+    pinned: { seeds: 221, planets: 961, plain: 770, planetClass: 51 },
     build: () => {
       const map = new GalacticMap(GALAXY_MASTER_SEED);
       return [

@@ -280,16 +280,16 @@ function uninstallDrawCounter() {
 // planet array is reordered. Keying off it would attribute a moved hash to a
 // different body than the one that moved.
 //
-// Measured at bcb62d1 over this file's own 221 seeds: 24 planet-class moons in
-// 22 systems; wd-133 and wd-166 carry two each; exactly one galaxy-context seed
-// (gc-22) and exactly one pinned seed (wd-1403) contribute. Listed in generation
-// order, which is the order `captureAll` walks its job list.
-// ─────────────────────────────────────────────────────────────────────────────
+// Measured at 09b71a4 over this file's own 221 seeds: 51 planet-class moons in
+// 43 systems — 24 of them predate B5.0 and 27 are its binary companions; 6 sit on
+// galaxy-context seeds and 2 on pinned ones; wd-27, wd-133, wd-161, wd-166, wd-174,
+// wd-1403 and gc-22 carry two each. Listed in generation order, which is the order
+// `captureAll` walks its job list.
 const PLANET_CLASS_MOONS = [
-  'wd-11/2/2', 'wd-15/6/1', 'wd-24/1/2', 'wd-27/3/1', 'wd-40/4/4', 'wd-61/1/2',
-  'wd-66/0/1', 'wd-70/5/5', 'wd-100/5/1', 'wd-101/4/2', 'wd-116/5/1', 'wd-126/4/3',
-  'wd-133/4/3', 'wd-133/4/4', 'wd-147/1/2', 'wd-161/5/1', 'wd-166/3/1', 'wd-166/3/5',
-  'wd-168/3/1', 'wd-174/0/1', 'wd-187/2/1', 'wd-189/0/1', 'wd-1403/2/2', 'gc-22/2/2',
+  'wd-10/3/0', 'wd-11/2/2', 'wd-15/6/1', 'wd-17/3/0', 'wd-20/5/1', 'wd-24/1/2', 'wd-27/1/0', 'wd-27/3/1', 'wd-29/0/0', 'wd-30/5/1', 'wd-31/5/0', 'wd-34/0/0', 'wd-35/2/0',
+  'wd-36/2/0', 'wd-40/4/4', 'wd-53/2/0', 'wd-61/1/2', 'wd-66/0/1', 'wd-70/5/5', 'wd-82/2/0', 'wd-91/2/0', 'wd-100/5/1', 'wd-101/4/2', 'wd-116/5/1', 'wd-121/0/0', 'wd-126/4/3',
+  'wd-133/4/3', 'wd-133/4/4', 'wd-147/1/2', 'wd-148/1/0', 'wd-153/2/1', 'wd-161/4/1', 'wd-161/5/1', 'wd-166/0/1', 'wd-166/3/1', 'wd-166/3/5', 'wd-168/3/1', 'wd-172/0/0', 'wd-174/0/1',
+  'wd-174/1/0', 'wd-181/1/1', 'wd-187/2/1', 'wd-189/0/1', 'wd-1403/1/0', 'wd-1403/2/2', 'gc-0/3/0', 'gc-7/5/0', 'gc-9/1/1', 'gc-19/4/1', 'gc-22/1/0', 'gc-22/2/2',
 ];
 
 /**
@@ -684,7 +684,7 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
         planetClass: live.planetClassMoons.length,
       },
       'live body population',
-    ).toEqual({ planets: 961, moons: 794, plain: 770, planetClass: 24 });
+    ).toEqual({ planets: 961, moons: 821, plain: 770, planetClass: 51 });
 
     // The same population, read out of the baseline's OWN per-system counts.
     // This needs no re-bless — those numbers were recorded at b2ac455 — and it
@@ -694,7 +694,7 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
       (a, s) => ({ planets: a.planets + s.system.planets, moons: a.moons + s.system.moons }),
       { planets: 0, moons: 0 },
     );
-    expect(onDisk, 'population recorded in the baseline').toEqual({ planets: 961, moons: 794 });
+    expect(onDisk, 'population recorded in the baseline').toEqual({ planets: 961, moons: 821 });
 
     // The side-channel itself. Pinned as a literal rather than compared against
     // the baseline: `baseline.planetClassMoons` does not exist on disk until the
@@ -776,7 +776,7 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
     // `shapes: 2, keyCounts: [19, 25]` rather than silently blessing itself.
     expect(live.moonShapeCensus, 'moon record shapes, partitioned by class').toEqual({
       plain:       { shapes: 1, keyCounts: [25], records: 770 },  // 19 + the six 8a fields, C5 (8a)
-      planetClass: { shapes: 1, keyCounts: [20], records: 24 },
+      planetClass: { shapes: 1, keyCounts: [20], records: 51 },
     });
 
     // THE HIDDEN-KEY CHANNEL — the half of the inversion the shape sets cannot
