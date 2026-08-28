@@ -1243,3 +1243,59 @@ body.hud-hidden #targeting-overlay {
 #nav-computer-canvas:active {
   cursor: grabbing;
 }
+
+/* ── WebGL context-loss overlay (2026-08-28 mobile pass) ──────────────────────────────────────────
+   Hidden until src/main.js's webglcontextlost handler shows it. `display:none` here and `flex` there,
+   so the handler's toggle is a single property and cannot half-apply.
+   ⭐ z-index above every HUD layer and the mobile dock (700): when the context is gone, nothing else
+   on screen can do anything, so nothing else should be reachable — a dock button that responds but
+   changes nothing is worse than one that is plainly unavailable. */
+#gl-lost-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  /* The notch and home indicator still exist while the context is gone. */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+           env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+.gl-lost-box {
+  max-width: 30rem;
+  margin: 0 1.25rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid rgba(100, 180, 255, 0.35);
+  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  text-align: center;
+}
+
+.gl-lost-title {
+  color: rgba(100, 180, 255, 0.9);
+  letter-spacing: 0.18em;
+  font-size: 0.85rem;
+  margin-bottom: 0.6rem;
+}
+
+.gl-lost-msg {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+/* 44px minimum so it is a real tap target on a phone — the same floor as the dock buttons. */
+.gl-lost-reload {
+  margin-top: 1rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 1.25rem;
+  border: 1px solid rgba(100, 180, 255, 0.5);
+  background: rgba(0, 0, 0, 0.5);
+  color: rgba(100, 180, 255, 0.9);
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}

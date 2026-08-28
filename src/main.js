@@ -13221,6 +13221,73 @@ const _animateController = bindToRAF({
 });
 _replayReady.then(() => _animateController.start());
 
+// ── WebGL context loss (2026-08-28 mobile pass) ──────────────────────────────────────────────────
+// ⭐⭐ THE HIGHEST-SEVERITY ITEM IN THE MOBILE AUDIT, because when it fires EVERY control stops at
+// once. Nothing in this codebase handled it. On a phone, losing the GL context is not an edge case:
+// iOS reclaims GPU memory from backgrounded tabs, so switching apps and coming back is the ordinary
+// way to hit it. Unhandled, the canvas goes black permanently and stays black — the game looks dead,
+// and no button on the page can bring it back.
+//
+// ⛔ `preventDefault()` IS NOT OPTIONAL AND IT IS NOT DEFENSIVE STYLING. The spec makes restoration
+// conditional on it: if the `webglcontextlost` handler does not cancel the event, the browser will
+// NEVER fire `webglcontextrestored`, and the context is gone for the life of the page. It is the one
+// line that decides whether this is recoverable at all.
+const _glCanvas = retroRenderer.renderer.domElement;
+
+function _showContextLostOverlay(show, restoring) {
+  const el = document.getElementById('gl-lost-overlay');
+  if (!el) return;
+  el.style.display = show ? 'flex' : 'none';
+  const msg = el.querySelector('[data-gl-lost-msg]');
+  if (msg) {
+    msg.textContent = restoring
+      ? 'Restoring graphics…'
+      : 'Graphics paused — the browser reclaimed this page\'s GPU memory.';
+  }
+}
+
+_glCanvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();          // ⛔ see above — without this there is no restore, ever.
+  _animateController.stop();   // idempotent; stops us rendering into a dead context every frame
+  _showContextLostOverlay(true, false);
+  console.warn('[gl] context lost — render loop stopped, awaiting restore');
+}, false);
+
+_glCanvas.addEventListener('webglcontextrestored', () => {
+  // three.js re-initialises GL state and re-uploads geometries/textures lazily on the next render,
+  // but the RENDER TARGETS are ours and are dead. resize() disposes and rebuilds every one of them
+  // (bgTarget / sceneTarget / hudTarget / cockpitTarget), which is exactly the rebuild this needs —
+  // so it is called here rather than duplicating the target construction.
+  try {
+    _showContextLostOverlay(true, true);
+    // ⚠ DROP THE DEAD TARGETS BEFORE REBUILDING, don't dispose them. resize() disposes whatever it
+    // finds, and these belong to the context the browser just destroyed — so disposing them asks the
+    // NEW context to free objects that were never its, which WebGL answers with
+    //   "INVALID_OPERATION: delete: object does not belong to this context"  x6, measured live.
+    // Nulling is not a leak dodge: the old context is gone and took its objects with it, so dispose()
+    // has nothing left to free. Six warnings per recovery is a red herring for whoever debugs the next
+    // real fault on this path.
+    retroRenderer.bgTarget = null;
+    retroRenderer.sceneTarget = null;
+    retroRenderer.hudTarget = null;
+    retroRenderer.cockpitTarget = null;
+    retroRenderer.resize();
+    _animateController.start();
+    _showContextLostOverlay(false, false);
+    console.warn('[gl] context restored — render loop resumed');
+  } catch (err) {
+    // ⚠ HONEST FALLBACK. A silent auto-restore of a scene this size is not something anyone here can
+    // prove works on every device, and pretending otherwise is how a black screen becomes a black
+    // screen with a confident log line. If the rebuild throws, leave the overlay up with a reload
+    // that definitely works, rather than resuming a loop that renders nothing.
+    console.error('[gl] restore failed — offering reload', err);
+    _showContextLostOverlay(true, false);
+    const el = document.getElementById('gl-lost-overlay');
+    const btn = el && el.querySelector('[data-gl-lost-reload]');
+    if (btn) btn.style.display = '';
+  }
+}, false);
+
 // ── Handle Window Resize ──
 window.addEventListener('resize', () => {
   retroRenderer.resize();

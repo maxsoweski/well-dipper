@@ -16,6 +16,22 @@
   <body>
     <canvas id="canvas"></canvas>
 
+    <!-- WebGL context-loss overlay (2026-08-28 mobile pass). Hidden until the GPU context is lost.
+         On a phone this is not an edge case: iOS reclaims GPU memory from backgrounded tabs, so
+         switching apps and coming back is the ordinary way to hit it. Unhandled, the canvas simply
+         goes black forever and the game looks dead. This says what happened, in words rather than a
+         black rectangle, and — if the automatic rebuild fails — offers the reload that always works.
+         ⚠ The reload button is display:none until the rebuild has actually FAILED: offering "reload"
+         first would train the player to throw away a session the game can usually recover on its own. -->
+    <div id="gl-lost-overlay">
+      <div class="gl-lost-box">
+        <div class="gl-lost-title">GRAPHICS PAUSED</div>
+        <div data-gl-lost-msg class="gl-lost-msg"></div>
+        <button data-gl-lost-reload class="gl-lost-reload" style="display:none"
+                onclick="location.reload()">RELOAD</button>
+      </div>
+    </div>
+
     <!-- Cold-open: the BLACK ORRERY/HELM chooser (boot-flow corrected 2026-06-27).
          This is the begin-gate — the FIRST thing shown, replacing the old
          "Do you wish to begin?" splash. Black background, ONLY the two choices.
