@@ -2090,7 +2090,7 @@ export class Planet {
 //
 // ⭐ THE ADMISSION TEST IS ONE FUNCTION, AND THAT IS THE POINT OF 6a. Two routes reach
 // `_createSurface`: BodyRenderer's planets, and planet-class moons, which are built directly at
-// src/main.js:7731 `const planetMoon = new Planet(scenePMData, pmStarInfo);` and never touch
+// src/main.js:7752 `const planetMoon = new Planet(scenePMData, pmStarInfo);` and never touch
 // BodyRenderer. If the branch condition were written inline it would be written once and apply to
 // both by luck; when Step 10 added the plain-moon branch — in `src/objects/Moon.js`, not in
 // `BodyRenderer.createMoon` as this note predicted — an inline condition would have become a
@@ -2119,7 +2119,7 @@ export const SOL_SYSTEM_SEED = 'sol';
  *                            predicate calls them 'rocky' while their `type` says 'gas-giant'.
  *                            That inversion is why 6d forbids the type branch.)
  *   2. `_systemSeed` present and not `'sol'` — excludes the other 23. It reaches planet-class moons
- *                            too, because src/main.js:7724 `_systemSeed: systemData.seed,` stamps
+ *                            too, because src/main.js:7745 `_systemSeed: systemData.seed,` stamps
  *                            the parent system's seed onto `scenePMData` before `new Planet`.
  *
  * ⛔ CORRECTED 2026-08-19 — THE NOTE THAT STOOD HERE WAS FALSE IN BOTH HALVES. It said a PLAIN moon

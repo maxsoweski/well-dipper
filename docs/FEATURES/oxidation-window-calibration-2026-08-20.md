@@ -145,7 +145,7 @@ palette uniform actually reaches today is smaller, and the difference is the who
 | population | carries a baked `landPalette` | reached today |
 |---|---:|---|
 | 509 non-gas planets | **509 / 509** | ✅ src/objects/Planet.js:1629 `uWeatheredColor: { value: new THREE.Vector3(...(d.landPalette?.weathered` binds it — **336 move** |
-| 19 non-gas planet-class moons | **19 / 19** | ✅ the same legacy `Planet` program — src/main.js:7731 `const planetMoon = new Planet(scenePMData, pmStarInfo);` — **14 move** |
+| 19 non-gas planet-class moons | **19 / 19** | ✅ the same legacy `Planet` program — src/main.js:7752 `const planetMoon = new Planet(scenePMData, pmStarInfo);` — **14 move** |
 | **632 plain moons** | **0 / 632** | ⛔ **nothing binds a palette on a plain moon.** `grep -c 'uWeatheredColor\|uSedColor\|uFreshColor\|uBioGroundColor\|landPalette' src/objects/Moon.js` → **0**; a plain moon's colour is src/generation/MoonGenerator.js:134 `const palette = rng.pick(this.PALETTES[type]);`. The 313 that "move" is a POST-FLIP figure |
 
 **Leg 2's pixel reach today is 350 of 1160 bodies**, not 663 — and the lab material that would carry

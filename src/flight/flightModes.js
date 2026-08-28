@@ -632,3 +632,50 @@ export function navDispatchDuringWarp({ warpInFlight, foldSnapshotTaken } = {}) 
   if (!warpInFlight) return { action: 'normal' };
   return foldSnapshotTaken ? { action: 'stash' } : { action: 'overwrite' };
 }
+
+// ---------------------------------------------------------------------------
+// DEEP-LINK BOOT (2026-08-28). Max, travelling and steering from his phone:
+// "is there some way for us to work out some functions such that you could give me a URL that I
+//  could access remotely that would open the game and load in automatically to a specific system?"
+//
+// `?system=<seed>` on the game URL boots straight into that generated system, skipping the
+// ORRERY/HELM chooser and the intro. This is the DECISION half only — pure, DOM-free, location-free
+// (the caller passes the string in), so it is unit-testable while src/main.js is not: main.js has
+// zero top-level exports and evaluates THREE + document.getElementById at module scope.
+//
+// ⭐ THE PARAM IS `system`, NOT `seed`, AND THE DIFFERENCE IS LOAD-BEARING. `?seed=` is ALREADY TAKEN:
+// src/core/SimRandom.js:37 reads it and coerces it to a uint32 for the SIM RNG. spawnProceduralSystem's
+// seed is a STRING. Reusing `seed` would both fail to name a system and silently reseed determinism —
+// two bugs, one of them invisible. The occupied namespace measured 2026-08-28: seed (SimRandom.js:37),
+// lab (debug/LabMode.js:50), debug (debug/SceneInspector.js:51), portalLab (main.js:2157),
+// warpDebug (main.js:4384), recordInput/replayInput (core/InputReplay.js:45-46). `system` was free.
+//
+// ⛔ THE ALLOWLIST IS NOT DECORATION. The returned string is handed to StarSystemGenerator.generate()
+// off a URL anyone can hand Max. Seeds in this repo look like `rocky-0`, `wd-12`, `lab-procedural-1`,
+// so [A-Za-z0-9._:-] covers every real one, and a bounded length keeps a hostile URL from becoming an
+// unbounded string in the generator. Anything else is not sanitised into something — it is REFUSED,
+// and the game boots normally as if no parameter were present.
+//
+// Robust to a missing args object and to junk, exactly as bootSkipDecision above is: never throws,
+// and every rejection path returns the same inert { open: false, system: null }.
+// The seed grammar this repo actually uses, and a bound. Exported so the test asserts against the
+// SAME constants the reducer applies rather than transcribing them — a transcribed limit is a second
+// source of truth that drifts silently.
+export const DEEP_LINK_SYSTEM_MAX = 64;
+export const DEEP_LINK_SYSTEM_RE = /^[A-Za-z0-9._:-]+$/;
+
+export function deepLinkBoot({ search } = {}) {
+  const inert = { open: false, system: null };
+  if (typeof search !== 'string' || search === '') return inert;
+  let raw;
+  try {
+    raw = new URLSearchParams(search).get('system');
+  } catch {
+    return inert;                      // malformed query string ⇒ boot normally
+  }
+  if (typeof raw !== 'string') return inert;
+  const system = raw.trim();
+  if (system === '' || system.length > DEEP_LINK_SYSTEM_MAX) return inert;
+  if (!DEEP_LINK_SYSTEM_RE.test(system)) return inert;
+  return { open: true, system };
+}

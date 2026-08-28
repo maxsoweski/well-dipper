@@ -60,7 +60,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp, bootSkipDecision, needsHandsOnRecenter } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp, bootSkipDecision, needsHandsOnRecenter, deepLinkBoot } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -5537,6 +5537,27 @@ function dismissTitleScreen() {
   wirePick('splash-mode-orrery', 'orrery');
   wirePick('splash-mode-helm', 'helm');
 }
+
+// ── Deep-link boot (2026-08-28): `?system=<seed>` opens straight into that generated system ──
+// Max asked for a URL he can tap on his phone that lands him in a named system. The decision is the
+// pure `deepLinkBoot` reducer in src/flight/flightModes.js; this is the two-line dispatch.
+//
+// ⚠ PLACEMENT IS A HARD CONSTRAINT, NOT A STYLE CHOICE. spawnProceduralSystem reads `splashActive`
+// (declared `let` at :5177) and `titleScreenActive` (`let` at :5335). Both are TEMPORAL DEAD ZONE
+// until those lines execute, so calling it from any earlier point in this 15,000-line module throws
+// a ReferenceError. This block sits immediately after the chooser wiring — past both declarations —
+// which is also the honest seam: the deep link is an alternative to tapping a chooser button.
+//
+// The tail of spawnProceduralSystem already does everything a phone arrival needs: it hides the splash
+// and title, clears _pendingBootReveal, sets _pendingBootMode='orrery', frames the system and syncs the
+// orbit lines. ORRERY is the right landing for a link — it is the mode that survives a touch screen.
+// ⛔ NOT BUILT HERE, on purpose: no ?mode= (ORRERY is the only phone-viable mode), and no "skip the
+// arrival glide" option — the glide resolves in about a second and what he taps still becomes what he sees.
+{
+  const _deepLink = deepLinkBoot({ search: location.search });
+  if (_deepLink.open) window._lab.spawnProceduralSystem(_deepLink.system);
+}
+
 
 function toggleKeybinds() {
   const el = document.getElementById('keybinds-overlay');
