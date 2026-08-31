@@ -1,94 +1,96 @@
-# Does HELM make sense on a phone? — every control it needs, and what touch can carry
+# HELM on a phone — the cockpit is already there, and you cannot look around it
 
-**2026-08-31.** Max: *"Helm seems not to make sense on mobile because it's not easy to freelook.
-Think through all needed controls on helm."*
+**2026-08-31.** Max: *"Helm seems not to make sense on mobile because it's not easy to freelook"* and
+then, sharpening it: *"the fine navigation will be entirely autopilot and the player is there to look
+around the cockpit and choose which planet/moon or system to go to next at most."*
+
+⛔⛔ **THIS FILE REPLACES ITS OWN FIRST VERSION, WHICH WAS WRONG ON ITS CENTRAL CLAIM.** That draft said
+"a phone has no cockpit" and built a whole three-option recommendation on it. It was written from a code
+comment — *"Mobile is the only absolute constraint (mobile can never be Flight)"*
+(`src/camera/ShipCameraSystem.js:446`) — and from an audit line repeating it. **Neither was checked
+against a running game.** Driving the live site emulated as a landscape iPhone shows a full cockpit:
+canopy frame, a nav screen and a body-info panel down the left, speed (`8.20 Mm/s`) and a target panel
+down the right, `SAFE TO DROP`, the body named on the glass, and the green HELM badge. The screenshot is
+the record. **A comment about a camera mode is not a statement about what renders.**
 
 ---
 
-## 1. First, a correction to the premise — and it makes the case stronger, not weaker
+## 1. What is actually true
 
-**Free-look is not a capability you need in order to fly. It is the hands-OFF state.**
-`src/main.js`, the `KeyF` handler: `const handsOn = _scManual && !freeLook.latched;` — F toggles the
-latch, and *latched ON* means the autopilot may fly while you look around. Latched OFF means you have
-the stick. They are two ends of one switch, and the ship's own comment calls E "the REGIME-entry + drive
-axis" with F "the orthogonal free-look axis".
-
-So "free-look is hard on touch" is not the thing standing between a phone and a helm. Touch already has
-two look mechanisms and both work: one-finger drag (`src/camera/ShipCameraSystem.js:1554-1606`) and the
-gyro toggle. **The real blocker is one line and it is absolute.**
-
-## 2. The real blocker
-
+**`_cockpitShouldRender()` has no mobile check at all** — `src/main.js`:
 ```
-setCameraMode(mode) {
-  // Mobile is hard-locked to Toy Box
-  if (this.isMobile) mode = CameraMode.TOY_BOX;
+return _scManual && _cockpitReady && !!_cockpitRig && !_cockpitRig.loadError;
 ```
-`src/camera/ShipCameraSystem.js:446` — and the doc comment four lines above says it outright:
-*"Mobile is the only absolute constraint (mobile can never be Flight)."* `_loadPersistedMode()` refuses
-to restore FLIGHT on mobile too (`:512`).
+The cockpit is gated on being in HELM, not on the camera mode. The TOY_BOX lock governs how the ORBIT
+camera is driven; it does not decide whether the cockpit draws. A prior workstream already recorded
+driving mobile HELM *"with the cockpit rendering and the camera at the helm"*
+(`docs/WORKSTREAMS/cockpit-into-helm-2026-07-30/contract.json`) — the evidence was on disk the whole
+time and the first draft did not look for it.
 
-**A phone has no cockpit.** TOY_BOX is an exterior orbit camera looking AT the ship. So even with a
-perfect virtual stick, mobile HELM would be flying a model you are watching from outside — not
-piloting from inside it. The thing HELM is *for* is the thing a phone cannot render.
+## 2. So Max's description is already ~80% of what ships
 
-## 3. What mobile HELM therefore is today
+He describes: autopilot flies, the player looks around the cockpit and picks the next destination.
+Measured against mobile HELM today:
 
-Not a helm. It is a **guided fly-along**: pick HELM at the chooser and `_armHelmBootTour` starts a
-hands-off autopilot tour, exterior camera, with prev/next to step legs and a button to stop it. Every
-manual-flight key returns early on mobile (`if (_isMobile) return` on the F, R and drive handlers).
+| what he describes | state |
+|---|---|
+| Autopilot does the flying | ✅ that is exactly what mobile HELM is — a hands-off tour |
+| A cockpit to sit in | ✅ renders, with all four glass panels |
+| Choose the next planet / moon | ✅ ◀ ▶ on the dock step the selection |
+| Choose the next system | ✅ nav computer search arms a warp; ◎ warp commits |
+| **Look around the cockpit** | ⛔ **does not work** |
 
-⭐ **That is a perfectly good thing to have on a phone.** The problem is the label: the chooser promises
-"take the ship — pilot & free-look", and then the phone hands you a tour. Max's instinct that it "doesn't
-make sense" is a response to a promise the mode cannot keep.
+## 3. The one thing missing, measured
 
-## 4. Every control HELM needs, and what touch could carry
+Dragging one finger in mobile HELM **does not move the view.** Measured live, twice:
 
-| # | control | desktop | what it is for | touch mapping | verdict |
-|---|---|---|---|---|---|
-| 1 | **Pitch / yaw** | mouse position as a virtual joystick (`main.js`, gated on hands-on) | steering, continuously, while looking where you go | left-thumb virtual stick | **feasible**, standard |
-| 2 | **Throttle** | W / S held | speed, continuously | right-side vertical slider, or up/down on a second stick | **feasible** |
-| 3 | **Roll** | Q / E held (`main.js:12678` → `scModel.turnInput.roll`) | orienting the ship about its nose | ⚠ needs a THIRD simultaneous axis — two-finger twist, tilt, or a pair of buttons | **awkward**; the first real cost |
-| 4 | **Drive engage / dropout** | E (tap) | enter/leave supercruise | button | feasible |
-| 5 | **Hands-on ↔ hands-off** | F | give the ship back to the autopilot and look around | button (it is a latch, not an axis) | feasible |
-| 6 | **Autopilot tour** | Z | the system flies you a route | button — **already exists** on the dock in HELM | done |
-| 7 | **Commit burn to selection** | Space | the actual "go there" | button | feasible |
-| 8 | **Target selection** | Tab, 1–9 | choose what to burn to | ◀ ▶ — **already exists** | done |
-| 9 | **Look around** | mouse while hands-off; middle-mouse peek | see where you are | drag + gyro — **already exist and work** | done |
-| 10 | **Back to ORRERY** | M | leave | the swap button — **already exists** | done |
+| | before drag | after a ~540 px drag |
+|---|---|---|
+| `controller.yaw` | 3.401 | **4.373** |
+| `controller.smoothedYaw` (the value actually applied) | 3.399 | **3.399** |
+| camera quaternion | — | unchanged |
+| `controller.bypassed` | `true` | `true` |
 
-**Score: four of ten already work on touch. Three more are ordinary buttons. Two are real axis work
-(stick, throttle). One — roll — has no comfortable touch home.**
+The touch handler writes yaw/pitch into the orbit controller, and in HELM that controller is
+**bypassed** — the camera is driven by the flight system through `scHead` (`HeadMount`,
+`src/flight/HeadMount.js:39`), whose `applyTo(camera, position, orientation)` is the real pose path.
+`src/main.js:832` records that on desktop the head is driven "by the canvas mousemove handler while
+`_scManual && !scHead.held`". **On mobile nothing drives it.** The drag is recorded and discarded.
 
-⛔ **And the table is misleading on its own, because it costs nothing to fix rows 1–5 and still leaves
-you outside the ship.** Every row above is reachable; none of them addresses §2. Building the whole
-table gets you a stick that flies an exterior camera.
+⭐ **So Max's original instinct was right and my "correction" of it was wrong.** I replied that free-look
+is merely the hands-OFF state and therefore not a blocker. That is true on desktop, where hands-off is
+one half of a toggle. On mobile hands-off is *permanent* — so looking around is not half the mode, it is
+**the whole interaction**, and it is the one thing that does not work.
 
-## 5. Three options
+## 4. What to build
 
-### (a) Drop HELM on phones — ORRERY only
-Hide the HELM chooser button under `pointer: coarse`. **Cost:** loses the fly-along, which is genuinely
-nice. **Gain:** removes the one-way mode trap entirely, and removes a promise the platform cannot keep.
-**Size: XS.**
+**Route touch look to the head, not to the bypassed orbit controller.** In HELM, one-finger drag should
+write `scHead.yaw/pitch` (clamped as the desktop path clamps them) instead of `cameraController`. The
+gyro toggle should feed the same place — ⚠ untested, but it drives the same `ShipCameraSystem` look path
+the drag does, so it is likely to be inert for the same reason. **Size: S.** It is one input re-route,
+not a new subsystem, and it is the difference between a cockpit you sit in and a cockpit you are
+strapped into facing forward.
 
-### (b) ⭐ Rename it to what it is, and finish it as that — RECOMMENDED
-Call it a tour / fly-along on touch, not a helm. Keep exactly the controls it has (start/stop, leg
-stepping, drag + gyro look), fix the chooser copy so it promises watching rather than piloting, and put
-the two controls a spectator actually wants — look and time — under the thumb.
-**Cost:** labels, copy, maybe one control. **Gain:** the mode stops disappointing, because it stops
-claiming. **Size: S.** ⚠ This is the option that treats Max's reaction as information about the LABEL
-rather than about the feature.
+**Then the rest of his description is already satisfied**, and the honest follow-ups are small:
+- the dock is live and tappable over the splash and title screens, where there is nothing to step
+  through — it should not be;
+- ◀ ▶ step one body at a time, so the seventh body is six taps (the missing 1–9 direct jump);
+- nothing announces that the nav computer's search is how you choose a *system*.
 
-### (c) Build real touch flight
-Rows 1–5 above **plus** lifting the TOY_BOX lock so there is a cockpit to fly from. The lock is
-described in its own source as the only absolute constraint, so lifting it is an investigation before it
-is a build — every mobile assumption downstream of "mobile is never FLIGHT" would need auditing.
-**Size: L at least, and the roll axis has no good answer.** Not recommended now; recorded so the option
-is costed rather than vaguely dismissed.
+## 5. What NOT to build, and why the earlier draft was wrong to cost it
 
-## 6. What only Max can decide
+The first draft's option (c) was "build a virtual stick, throttle and roll, and lift the camera lock —
+L at least". **Under Max's framing none of that is wanted:** if fine navigation is entirely autopilot,
+the stick, the throttle and the roll axis all drop out — including roll, which was the one control with
+no comfortable touch home. The hard part of that estimate was work nobody asked for.
 
-**Is mobile HELM meant to be piloting, or watching?** Everything above follows from that one answer, and
-it is a question about what the game IS on a phone, not about what is technically reachable.
-- "Watching" → (b), and it is cheap.
-- "Piloting" → (c), and the cockpit lock is the first thing to investigate, not the stick.
+⛔ And do NOT lift the TOY_BOX lock as part of this. Nothing in §4 needs it: the cockpit already renders
+and `scHead` already drives the camera in HELM. Touching "the only absolute constraint" to fix a look
+input would be changing a load-bearing invariant to solve a problem it is not causing.
+
+## 6. Method note, kept because it cost a wrong answer
+
+The first draft reasoned from two comments that agreed with each other and never opened the game. Both
+described a camera-mode constraint; neither said anything about what renders, and I read one as the
+other. ⭐ **One emulated-phone screenshot refuted a document.** For anything about what a player SEES,
+the screenshot comes before the analysis, not after it.
