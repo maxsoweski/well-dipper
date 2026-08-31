@@ -745,6 +745,32 @@ const ship = new Ship();
 // advance / jumps); _scManual stays unset until the manual-controls task.
 const scModel = new SupercruiseModel();
 const scHead = new HeadMount();
+
+// ⭐⭐ TOUCH + GYRO LOOK IN HELM (2026-08-31). Max: "the fine navigation will be entirely autopilot and
+// the player is there to look around the cockpit and choose which planet/moon or system to go to next
+// at most." Mobile HELM already had all of that EXCEPT the looking — measured live, a ~540px drag moved
+// cameraController.yaw 3.401 → 4.373 while the APPLIED smoothedYaw never left 3.399 and the camera
+// quaternion did not change, because in HELM that controller is `bypassed` and the camera is driven
+// from scHead instead. The gyro wrote to the same dead place. So the one interaction mobile HELM is
+// FOR was the one that did nothing.
+//
+// This is the redirect, and it is deliberately the SAME sink the desktop mouse ends up in
+// (scHead.addLook, main.js's mousemove handler) rather than a parallel mobile look path — two
+// implementations of "turn your head" would drift the moment either is tuned.
+// ⛔ `claim()` gates on _scManual, NOT on _cockpitShouldRender(): in HELM the camera is head-driven
+// whether or not the cockpit GLB loaded, so gating on the mesh would leave a GLB failure with a dead
+// drag AND no cockpit. The regime is the honest question.
+// ⚠ addLook() is a no-op unless `held` is set, so the sink holds the head for the duration of a look
+// and releases on the next frame's boundary via the touchend path below. Release HOLDS the view —
+// HeadMount.update only eases back on an explicit beginRecenter — which is what you want on a phone:
+// look left, let go, keep looking left.
+cameraController.lookSink = {
+  claim: () => _scManual,
+  add: (dyaw, dpitch) => {
+    if (!scHead.held) scHead.beginLook();
+    scHead.addLook(dyaw, dpitch);
+  },
+};
 const scPilot = new SupercruisePilot(scModel);
 // Latched free-look state (§supercruise-arrival-modes-design-2026-06-27, F key).
 // Pure latch + input-routing decision; the camera math stays in HeadMount. F
@@ -14974,7 +15000,19 @@ canvas.addEventListener('touchstart', (e) => {
   if (!autoNav.isActive) idleTimer = 0;
 }, { passive: true });
 
+// ⚠ touchcancel too, and not as belt-and-braces: iOS fires it instead of touchend when a call, a
+// notification or the app switcher interrupts a gesture. Without this the head stays `held` forever
+// after one interrupted look, and every later drag keeps accumulating from where that one stopped.
+canvas.addEventListener('touchcancel', () => { if (scHead.held) scHead.endLook(); });
+
 canvas.addEventListener('touchend', (e) => {
+  // ⭐ RELEASE THE COCKPIT HEAD FIRST, before any early return. A drag exits this handler at the
+  // 20px tap-slop check below, so releasing further down would leave `held` set forever after the
+  // first look — and addLook() only writes while held, so the NEXT gesture would keep accumulating
+  // from wherever the last one stopped with no gesture boundary between them. Release HOLDS the view
+  // (HeadMount.update only eases back on an explicit beginRecenter), which is the behaviour a phone
+  // wants: look left, let go, keep looking left.
+  if (scHead.held && _scManual) scHead.endLook();
   if (e.changedTouches.length !== 1) return;
   const touch = e.changedTouches[0];
   const dx = touch.clientX - _touchStart.x;

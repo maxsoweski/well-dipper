@@ -384,6 +384,23 @@ export class ShipCameraSystem {
 
     // ── Gyroscope ──
     this.gyroEnabled = false;
+
+    // ── LOOK SINK (2026-08-31) ────────────────────────────────────────────────────────────────────
+    // ⭐⭐ WHY THIS EXISTS. In HELM the orbit controller is BYPASSED — the camera is driven by the
+    // flight system's head mount, not by this class. So on a phone, dragging in HELM updated
+    // `this.yaw` and the camera never moved: MEASURED LIVE, a ~540px drag took yaw 3.401 → 4.373 while
+    // the applied `smoothedYaw` stayed at 3.399 and the camera quaternion did not change. The gyro
+    // wrote to the identical dead place. Both look inputs were recorded and discarded — and on mobile
+    // HELM that is the ENTIRE interaction, because the autopilot does the flying.
+    //
+    // A sink lets the host redirect look input without this class learning what a cockpit is.
+    // Shape: { claim(): boolean, add(dyaw, dpitch) } — `claim()` is asked per event so the host can
+    // take the input in HELM and leave it here in ORRERY, where the orbit drag is correct and must
+    // not change.
+    // ⛔ Deltas are handed over in RADIANS, already sensitivity-scaled, so the sink owns clamping and
+    // this class owns feel. Never raw pixels — the two consumers clamp differently (85° here, 60° at
+    // the head mount).
+    this.lookSink = null;
     this._prevAlpha = null;
     this._prevBeta = null;
     this._prevGamma = null;
@@ -506,6 +523,12 @@ export class ShipCameraSystem {
   /** True if we're currently in Flight mode AND gravity is wired up. */
   get isFlightMode() {
     return this.cameraMode === CameraMode.FLIGHT && this._hasGravity;
+  }
+
+  /** True when the host wants this look input instead of the orbit controller (HELM). */
+  _sinkClaims() {
+    const sk = this.lookSink;
+    return !!(sk && typeof sk.add === 'function' && typeof sk.claim === 'function' && sk.claim());
   }
 
   _loadPersistedMode() {
@@ -1577,6 +1600,14 @@ export class ShipCameraSystem {
         const y = e.touches[0].clientY;
         const dx = x - this._lastTouchX;
         const dy = y - this._lastTouchY;
+        // Offer the gesture to the host's look sink (HELM: the cockpit head). Same sensitivity as the
+        // orbit path, so a full-width swipe is the same amount of turn in both modes.
+        if (this._sinkClaims()) {
+          this.lookSink.add(-dx * this.dragSensitivity, -dy * this.dragSensitivity);
+          this._lastTouchX = x;
+          this._lastTouchY = y;
+          return;
+        }
         this.yaw -= dx * this.dragSensitivity;
         this.pitch += dy * this.dragSensitivity;
         const limit = (85 * Math.PI) / 180;
@@ -1631,6 +1662,13 @@ export class ShipCameraSystem {
           dPitch = -dBeta * sign;
         }
 
+        if (this._sinkClaims()) {
+          // The gyro wrote to the same bypassed place as the drag, so it was inert in HELM for the
+          // same reason and is fixed by the same seam.
+          this.lookSink.add(dYaw * this._gyroSensitivity, dPitch * this._gyroSensitivity);
+          this._prevAlpha = e.alpha; this._prevBeta = e.beta; this._prevGamma = e.gamma;
+          return;
+        }
         this.yaw += dYaw * this._gyroSensitivity;
         this.pitch += dPitch * this._gyroSensitivity;
         const limit = (85 * Math.PI) / 180;
