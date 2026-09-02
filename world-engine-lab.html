@@ -2142,7 +2142,7 @@
       // Coverage ∝ stability × volatile budget; seaLevel maps coverage onto the accumulated-h
       // range (≈ -0.2 low basins … +0.3 drowns most relief). Same _wet gate as F11: a world
       // that can't hold surface liquid gets seaLevel -1 (the shader pass early-outs).
-      const _vol = _clamp01((_fp.composition?.volatileFraction ?? 0) * 2.0);
+      const _vol = _clamp01((_fp.composition?.volatileFraction ?? 0) * 2.0);   // ⚠ UNREAD SINCE PACK #9 (2026-09-02): its one reader was `_seaCoverage`, which moved into the pack at :2136 — and the pack reads volatiles off the per-seed `_dp`, not this frozen `_fp`, which is the measured seam tests/driver-pack-fluvialdeck.test.js §H pins. Kept, not deleted, for §10 line-stability.
       // ↳ MOVED TO DRIVER PACK #9 (:2136). Was `const _seaCoverage = _wet ? _clamp01(_stab * _vol) : 0.0;` — the F14 coverage scalar. It is the ONE value the pack hands the lab as a DIRECT driver rather than through `state`, because it has no slider. Neutralised, not deleted: §10 line-stability.
       // ↳ MOVED TO DRIVER PACK #9 (:2136). Was `state.seaLevel = _wet && _seaCoverage > 0.0 ? -0.2 + 0.5 * _seaCoverage : -1.0;` Neutralised, not deleted: §10 line-stability.
       // ↳ MOVED TO DRIVER PACK #9 (:2136). Was `uniforms.uLiquidMask.value = _seaCoverage;   // the F36 coverage scalar (registry row)` — and the write it fed now happens through `fluvialDeckDirectDrivers` at :2136. Neutralised, not deleted: §10 line-stability.

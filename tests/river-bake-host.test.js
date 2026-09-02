@@ -547,11 +547,22 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
       expect(got.routedGraph.maxOrder).toBe(want.routed.maxOrder);
       expect(got.routedGraph.channelCount).toBe(want.routed.channelCount);
 
-      // the two geometries
-      for (const attr of ['position', 'color']) {
-        expect(bytes(got.ribbonGeo.getAttribute(attr).array), `ribbon.${attr}`).toEqual(bytes(want.ribGeo.getAttribute(attr).array));
+      // the two geometries. ⛔ THE RIBBON IS THE WET HALF ONLY as of the final review (2026-09-02,
+      // ruling #11): the bundle builds it for `wet` alone, because `bindRiverHalf` parents it on
+      // `wet` alone. On the relict case the assertion is therefore its ABSENCE — and the LAB's own
+      // route() still builds one on the same body, which is the DECLARED difference between the two
+      // front-ends rather than a drift: the lab routes one body behind a global toggle, the game
+      // classes every body. The valley footprint is unaffected and stays byte-compared on both arms.
+      const isWet = fluvialClassOf(b.cond) === 'wet';
+      if (isWet) {
+        for (const attr of ['position', 'color']) {
+          expect(bytes(got.ribbonGeo.getAttribute(attr).array), `ribbon.${attr}`).toEqual(bytes(want.ribGeo.getAttribute(attr).array));
+        }
+        expect(bytes(got.ribbonGeo.getIndex().array)).toEqual(bytes(want.ribGeo.getIndex().array));
+      } else {
+        expect(got.ribbonGeo, 'a relict body builds no ribbon — nothing parents, binds or draws it').toBeUndefined();
+        expect(want.ribGeo, 'the LAB still builds one here; that difference is declared, not drifted').toBeTruthy();
       }
-      expect(bytes(got.ribbonGeo.getIndex().array)).toEqual(bytes(want.ribGeo.getIndex().array));
       for (const attr of ['position', 'aDepth', 'aMouth', 'aOrder']) {
         expect(bytes(got.valleyGeo.getAttribute(attr).array), `valley.${attr}`).toEqual(bytes(want.valleyGeo.getAttribute(attr).array));
       }
@@ -568,9 +579,11 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
       expect(want.pEff.WIDTH_SCALE).not.toBe(PARAMS_VIA_LAB.WIDTH_SCALE);
       const pEffRouted = routeViaLab({ mesh: mLab, height: want.marginHeight, grad: want.marginGrad, isOcean: want.isOcean, params: want.pEff });
       expect(bytes(pEffRouted.isChannel), 'AC6 says routing is width-invariant — RECORDED').toEqual(bytes(got.routedGraph.isChannel));
-      const baseRib = ribbonViaLab({ mesh: mLab, routed: want.routed, params: PARAMS_VIA_LAB });
-      expect(bytes(baseRib.getAttribute('position').array),
-        'the ribbon must be built with pEff — base params give a different width').not.toEqual(bytes(got.ribbonGeo.getAttribute('position').array));
+      if (isWet) {
+        const baseRib = ribbonViaLab({ mesh: mLab, routed: want.routed, params: PARAMS_VIA_LAB });
+        expect(bytes(baseRib.getAttribute('position').array),
+          'the ribbon must be built with pEff — base params give a different width').not.toEqual(bytes(got.ribbonGeo.getAttribute('position').array));
+      }
     }, 120000);
   }
 
@@ -578,10 +591,24 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
     const mesh = small();
     let routed = 0, notRouted = 0, composited = 0, orphan = 0, uphill = 0, selfLoopLand = 0, badDrain = 0, mouths = 0;
     let oceanFracMin = 1, oceanFracMax = 0;
+    // ⭐ E1 (verify-workstream verdict, 2026-09-02) — AC-2's observable ends "max Strahler order and
+    // R_b recorded" and NEITHER was written anywhere. Both come off the routed graph itself: `maxOrder`
+    // and `bifurcationRatio`, which is where planet-lod-rivers.js `buildStats` (:504) reads them from
+    // too — buildStats does not COMPUTE R_b, `routeAndOrder` does (src/worldengine/rivers/router.js
+    // :416-431: the log-linear fit exp(−slope) over `streamCount` by order, falling back to the
+    // trimmed mean of consecutive ratios when fewer than two orders are populated). So this records
+    // the same two fields the lab's own stats bundle names, under the same names.
+    // ⛔ A RECORDING WITH A SANITY FLOOR, NOT A TOLERANCE: R_b's real-world band (Horton 3–5) is a
+    // property of the DRAINAGE LAW, not of this wire, and gating on it here would put a landform
+    // judgement inside a wiring suite. Finite and > 1 is the floor that says "the network branches at
+    // all" — R_b ≤ 1 would mean a body whose streams do not merge.
+    const wetNetworks = [];
+    const routedPerSystem = {}, solidPerSystem = {};
     for (const b of RIVER_BODIES) {
       if (compositionClass(b.cond) === 'gas') continue;
       const got = buildLabBundleForBody(bodyOf(b), mesh);
       expect(got.fluvialClass, `${b.seed}/${b.kind}`).toBe(fluvialClassOf(b.cond));
+      solidPerSystem[b.seed] = (solidPerSystem[b.seed] || 0) + 1;
       // the relief + crater arrays ride on EVERY solid body, routed or not (intent.md decision 2)
       expect(got.marginHeight.length).toBe(mesh.verts.length);
       expect(got.marginGrad.length).toBe(mesh.verts.length * 3);
@@ -599,8 +626,23 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
         continue;
       }
       routed++;
+      routedPerSystem[b.seed] = (routedPerSystem[b.seed] || 0) + 1;
       if (got.marginHeight !== got.carrier.height) composited++;
       const r = got.routedGraph;
+      // ⛔ THE RIBBON IS NARROWER THAN THE ROUTE (final review #11): `wet` only. A relict body carries
+      // the graph and the valley footprint — F13 outflow and F12 mouths read the carve cube's B and G
+      // channels — and no ribbon at all, because nothing would parent it.
+      if (got.fluvialClass === 'relict') expect(got.ribbonGeo, `${b.seed}/${b.kind}: a relict body must build no ribbon`).toBeUndefined();
+      else expect(got.ribbonGeo, `${b.seed}/${b.kind}: a wet body must build one`).toBeTruthy();
+      if (got.fluvialClass === 'wet') {
+        const R_b = r.bifurcationRatio;
+        expect(Number.isFinite(R_b), `${b.seed}/${b.kind}: R_b is not finite`).toBe(true);
+        expect(R_b, `${b.seed}/${b.kind}: R_b ≤ 1 means the streams never merge — this is not a drainage network`).toBeGreaterThan(1);
+        expect(r.maxOrder, `${b.seed}/${b.kind}: a wet body with no Strahler order at all`).toBeGreaterThan(0);
+        wetNetworks.push({ seed: b.seed, kind: b.kind, radiusEarth: +b.cond.radiusEarth.toFixed(4),
+          maxStrahler: r.maxOrder, bifurcationRatio: R_b, bifurcationRatioTrimmed: r.bifurcationRatioTrimmed,
+          channelCount: r.channelCount, orderHist: r.orderHist, streamCount: r.streamCount });
+      }
       orphan += r.orphan; uphill += r.uphill; selfLoopLand += r.selfLoopLand;
       const frac = got.oceanCount / mesh.verts.length;
       oceanFracMin = Math.min(oceanFracMin, frac); oceanFracMax = Math.max(oceanFracMax, frac);
@@ -629,9 +671,28 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
     expect(oceanFracMax).toBeLessThan(0.36);
     // MEASURED and recorded rather than asserted as a law: exactly one routed body composites.
     expect(composited).toBe(1);
+    expect(wetNetworks.length, 'the R_b / maxStrahler record is empty — AC-2 asks for it on every wet body').toBe(4);
+    // ⭐ THE PER-SYSTEM ROUTED COUNT, for the VRAM arithmetic the contract and the PLAN quote. The
+    // per-BODY figure (57.3 MB routed / 7.0 MB solid) is what a body costs; what a phone allocates is
+    // a whole SYSTEM's worth at once, so the distribution over systems is the number that matters and
+    // it is recorded here rather than assumed uniform.
+    const routedCounts = SEEDS.map((s) => routedPerSystem[s] || 0);
+    const withRouted = routedCounts.filter((n) => n > 0);
     recordCorpus({ routing: { routed, notRouted, composited, orphan, uphill, selfLoopLand, badDrain, mouths,
       oceanFraction: { min: +oceanFracMin.toFixed(4), max: +oceanFracMax.toFixed(4), target: DEFAULT_PARAMS.TARGET_OCEAN_FRACTION },
-      mesh: { targetN: 2500, lloyd: 2 } } });
+      mesh: { targetN: 2500, lloyd: 2 } },
+      wetNetworks,
+      wetNetworksNote: 'AC-2: "max Strahler order and R_b recorded". R_b = routedGraph.bifurcationRatio, the field planet-lod-rivers.js buildStats:504 publishes; computed in routeAndOrder (router.js:416-431). Measured at 2500/2, the corpus mesh — the structural metrics are mesh-independent, the ABSOLUTE order count is not.',
+      perSystem: {
+        systems: SEEDS.length,
+        systemsWithRoutedBodies: withRouted.length,
+        routedPerSystem, solidPerSystem,
+        routedMeanAllSystems: +(routed / SEEDS.length).toFixed(2),
+        routedMeanWhereRouted: withRouted.length ? +(routed / withRouted.length).toFixed(2) : 0,
+        routedMax: Math.max(0, ...routedCounts),
+        solidMeanAllSystems: +((routed + notRouted) / SEEDS.length).toFixed(2),
+        note: 'VRAM per SYSTEM = 57.3 MB x routed + 7.0 MB x (solid - routed); the two means differ because some seeds have no routed body at all',
+      } });
   }, 600000);
 
   it('AC-7 RECORDED — the three timed bodies (one wet, one relict, one airless) on the REAL 40000/4 carrier', () => {
@@ -703,6 +764,17 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
       // top-level keys (labBakeHost.js `bakeFromResult`), so they stay at the top level and keep
       // their names. tests/province-bake-host.test.js `payloadOf` is the same shape.
       for (const k of ['pos', 'wgt', 'idx', 'nodes', 'path', 'ms', 'fractions']) expect(m, `province key ${k}`).toHaveProperty(k);
+      // ⛔ AND THE WHOLE TOP-LEVEL KEY SET, PINNED — the seven above are asserted by PRESENCE, which
+      // cannot see a key ADDED or SILENTLY RENAMED. The host reads every one of these by name in
+      // `bakeFromResult` / `partFromPayload`, and a name that drifts on one side of the transport is a
+      // quiet `undefined` in a uniform, never a red test. Transcribed from provinceWorker.js's `msg`
+      // literal (final review #12, 2026-09-02).
+      expect(Object.keys(m).sort()).toEqual([
+        'id', 'ok',
+        'pos', 'wgt', 'idx', 'nodes', 'path', 'ms', 'fractions',
+        'fluvialClass', 'routed', 'strength', 'restore', 'routeMs',
+        'relief', 'crater', 'sea', 'valley', 'ribbon',
+      ].sort());
       expect(m.nodes).toBe(40000);
       expect(m.fractions.labelled).toBe(1);
 
@@ -733,6 +805,28 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
       expect(m.crater.pos).toBeUndefined();
       expect(m.crater.idx).toBeUndefined();
     }
+  }, 600000);
+
+  it('a RELICT body posts ribbon: null — the whole route, the carve footprint, no water', async () => {
+    // ⛔ THE NARROWER HALF, DRIVEN THROUGH THE REAL WORKER (final review #11). The bundle builds a
+    // ribbon for `wet` alone, so the handler's ribbon block rides `b.ribbonGeo` rather than `b.routed`
+    // — reading `b.ribbonGeo` under `if (b.routed)` would THROW on 64 of the 68 routed bodies, in the
+    // browser only, where this suite would never see it.
+    const b = RIVER_BODIES.find((x) => compositionClass(x.cond) !== 'gas' && fluvialClassOf(x.cond) === 'relict');
+    expect(b, 'the corpus carries no relict body').toBeTruthy();
+    const posted = await driveWorker({ id: 11, ...bodyOf(b) });
+    expect(posted.length).toBe(1);
+    const { m, t } = posted[0];
+    expect(m.ok).toBe(true); expect(m.id).toBe(11);
+    expect(m.fluvialClass).toBe('relict');
+    expect(m.routed, 'a relict body IS routed — only the ribbon is withheld').toBe(true);
+    expect(m.sea, 'the sea is still solved: computeOcean is the router\'s outlet condition').toBeTruthy();
+    expect(m.valley, 'the carve footprint still posts — F13 outflow reads its B channel').toBeTruthy();
+    expect(m.ribbon, 'a relict body builds no ribbon, so none is posted').toBe(null);
+    // the transfer list is exactly the wet one MINUS the ribbon's three buffers: 3 province + 4 relief
+    // + 2 crater + 5 valley = 14, each listed once.
+    expect(t.length).toBe(14);
+    expect(new Set(t).size).toBe(t.length);
   }, 600000);
 
   it('the worker answers a failure the way it always did — { ok: false, error }', async () => {
@@ -802,15 +896,33 @@ describe('AC-3 — the routing surface is the display surface', () => {
     // 0.25 R⊕ or above 4 R⊕ has a crossover of exactly 0, so it would route rivers on a surface it
     // does not display. Wetness needs a retained atmosphere, so the count SHOULD be empty; a non-zero
     // count is a decision for Max, not a red test, and the bundle flags each such body itself.
-    const zero = RIVER_BODIES.filter((b) => compositionClass(b.cond) !== 'gas' && fluvialClassOf(b.cond) === 'wet'
-      && bakeReliefCrossover(visScaleOf(b.cond.radiusEarth)) === 0);
+    // ⭐ WIDENED FROM WET TO ROUTED (final review #10, 2026-09-02). The hazard is not about the
+    // RIBBON, it is about the CARVE: a relict body at strength 0 also gouges valleys into a surface
+    // the shader is not displaying, because `uRiverCarveMap` is bound on every routed body while
+    // `uReliefBakeStrength` is 0. Counting only the wet ones left 64 of the 68 routed bodies outside
+    // the instrument.
+    const isSolid = (b) => compositionClass(b.cond) !== 'gas';
+    const strengthOf = (b) => bakeReliefCrossover(visScaleOf(b.cond.radiusEarth));
+    const zero = RIVER_BODIES.filter((b) => isSolid(b) && fluvialClassOf(b.cond) === 'wet' && strengthOf(b) === 0);
+    const zeroRouted = RIVER_BODIES.filter((b) => isSolid(b) && fluvialClassOf(b.cond) !== 'airless' && strengthOf(b) === 0);
+    const zeroSolid = RIVER_BODIES.filter((b) => isSolid(b) && strengthOf(b) === 0);
     writeFileSync(join(process.env.TMPDIR || tmpdir(), 'river-strength-zero.json'), JSON.stringify({
       wetWithZeroStrength: zero.length,
+      routedWithZeroStrength: zeroRouted.length,
       bodies: zero.map((b) => ({ seed: b.seed, kind: b.kind, radiusEarth: b.cond.radiusEarth })),
-      solidWithZeroStrength: RIVER_BODIES.filter((b) => compositionClass(b.cond) !== 'gas'
-        && bakeReliefCrossover(visScaleOf(b.cond.radiusEarth)) === 0).length,
-      note: 'counted, not gated — a non-zero wetWithZeroStrength is surfaced to Max (contract AC-3); the bundle marks such a body routedOnUndisplayedField',
+      routedBodies: zeroRouted.map((b) => ({ seed: b.seed, kind: b.kind, cls: fluvialClassOf(b.cond), radiusEarth: b.cond.radiusEarth })),
+      solidWithZeroStrength: zeroSolid.length,
+      solidZeroClasses: zeroSolid.reduce((a, b) => { const k = fluvialClassOf(b.cond); a[k] = (a[k] || 0) + 1; return a; }, {}),
+      note: 'counted, not gated — a non-zero wetWithZeroStrength is surfaced to Max (contract AC-3); the bundle marks such a body routedOnUndisplayedField. The ROUTED count is PINNED at 0 below, so a change reaches him as a red rather than as a line in a file nobody opens.',
     }, null, 2));
+    // ⛔ PINNED AT THE MEASURED VALUE, AND THE RED IS THE SURFACING MECHANISM — not a quality bar. The
+    // corpus's strength-0 population is entirely AIRLESS (measured 41 of 41), which are not routed at
+    // all, so no body in this corpus routes on a field it does not display. If that ever stops being
+    // true it is a decision for Max (the lab's sampler fallback vs a floor), and a red here is how he
+    // finds out; a JSON field would not have told anyone.
+    expect(zeroRouted.length, 'a ROUTED body now sits at crossover 0 — it carves a surface it does not display; this is Max\'s call, see contract AC-3').toBe(0);
+    expect(zero.length, 'implied by the routed count, stated so a future reader does not have to derive it').toBe(0);
+    expect(zeroSolid.length, 'NON-VACUITY: strength 0 must actually OCCUR in this corpus, or the count above proves nothing').toBeGreaterThan(0);
     // the FLAG is gated (the bundle must be honest about what it did), the COUNT is not
     const mesh = small();
     for (const b of RIVER_BODIES) {
@@ -818,7 +930,6 @@ describe('AC-3 — the routing surface is the display surface', () => {
       const got = buildLabBundleForBody(bodyOf(b), mesh);
       expect(got.routedOnUndisplayedField, `${b.seed}/${b.kind}`).toBe(got.routed && got.strength === 0);
     }
-    expect(typeof zero.length).toBe('number');
   }, 600000);
 });
 
@@ -920,6 +1031,10 @@ describe('AC-7 — one request, one bake frame, four cubes + the ribbon, dispose
       msg.sea = { seaLevel: b.seaLevel, oceanCount: b.oceanCount };
       msg.valley = { pos: attrOf(b.valleyGeo, 'position'), aDepth: attrOf(b.valleyGeo, 'aDepth'),
         aMouth: attrOf(b.valleyGeo, 'aMouth'), aOrder: attrOf(b.valleyGeo, 'aOrder'), idx: b.valleyGeo.getIndex().array };
+    }
+    // ⛔ THE RIBBON RIDES ITS OWN PRESENCE TEST, MIRRORING THE HANDLER (final review #11): the bundle
+    // builds one for `wet` alone, so `b.routed` is the wrong guard here exactly as it is there.
+    if (b.ribbonGeo) {
       // the ribbon's `normal` is NOT posted — the host rebuilds it with computeVertexNormals()
       msg.ribbon = { pos: attrOf(b.ribbonGeo, 'position'), col: attrOf(b.ribbonGeo, 'color'), idx: b.ribbonGeo.getIndex().array };
     }
@@ -1007,7 +1122,13 @@ describe('AC-7 — one request, one bake frame, four cubes + the ribbon, dispose
   }, 120000);
 
   it('an AIRLESS body: province + relief + crater bake, NO carve cube, NO ribbon, uSeaLevel untouched', () => {
-    const b = pick('airless'); const s = fakeSurface({ packSea: -1, packCoast: 0 });
+    // ⛔ THE SENTINEL IS 0.31, NOT −1 (final review #9, 2026-09-02). Mounting this case with the
+    // pack's own −1 made "untouched" and "taken to −1 and never given back" the SAME assertion: the
+    // host's deferral writes exactly −1, so a bug that admitted an airless body to the sea half would
+    // have passed here unseen. A value the host could not have produced makes the claim real.
+    // ⚠ 0.31 IS NOT A REAL AIRLESS SEA — the pack writes −1 on this class (AC-1) — it is a TRACER,
+    // and it is the same one the wet cases use so the two read as one instrument.
+    const b = pick('airless'); const s = fakeSurface({ packSea: 0.31, packCoast: 0 });
     const sm = seams(); const m = small();
     const rec = attachLabBake(s, bodyOf(b), { ...sm.deps, compute: (body) => buildLabBundleForBody(body, m) });
     s.onBeforeRender({});
@@ -1016,7 +1137,8 @@ describe('AC-7 — one request, one bake frame, four cubes + the ribbon, dispose
     expect(sm.all().length).toBe(3);
     expect(s.children.length).toBe(0); expect(rec.rivers.ribbon).toBe(null);
     expect(s.material.uniforms.uRiverCarveMap.value).toBe(placeholdersOf(s).carve);
-    expect(s.material.uniforms.uSeaLevel.value).toBe(-1);
+    expect(s.material.uniforms.uSeaLevel.value).toBe(0.31);          // ⭐ UNTOUCHED — not the host's own −1
+    expect(rec.rivers.packSeaLevel, 'an unadmitted body must not even RECORD a pack sea').toBe(null);
     expect(s.material.uniforms.uCoastStrength.value).toBe(0);
     expect(s.material.uniforms.uRiverCarveStrength.value).toBe(0);   // created, never amounted
     expect(rec.rivers.class).toBe('airless'); expect(rec.rivers.routed).toBe(false); expect(rec.rivers.admitted).toBe(false);
@@ -1024,20 +1146,29 @@ describe('AC-7 — one request, one bake frame, four cubes + the ribbon, dispose
     disposeLabBake(s);
   }, 120000);
 
-  it('a RELICT body: routed — the carve cube binds — but no ribbon, no sea, no gouging amounts', () => {
-    const b = pick('relict'); const s = fakeSurface({ packSea: -1, packCoast: 0 });
-    const sm = seams(); const m = small();
-    const rec = attachLabBake(s, bodyOf(b), { ...sm.deps, compute: (body) => buildLabBundleForBody(body, m) });
+  it('a RELICT body: routed — the carve cube binds — but no ribbon geometry at all, no sea, no gouging amounts', () => {
+    // ⛔ SAME 0.31 TRACER AS THE AIRLESS CASE (final review #9): with a −1 here, "the relict body's sea
+    // is untouched" and "the host deferred it and never restored it" were the same number.
+    const b = pick('relict'); const s = fakeSurface({ packSea: 0.31, packCoast: 0 });
+    const sm = seams(); const m = small(); let bundle = null;
+    const rec = attachLabBake(s, bodyOf(b), { ...sm.deps, compute: (body) => (bundle = buildLabBundleForBody(body, m)) });
     s.onBeforeRender({});
     expect(sm.all().length).toBe(4); expect(sm.carve.length).toBe(1);
     expect(s.material.uniforms.uRiverCarveMap.value).toBe(sm.carve[0].texture);
     expect(s.children.length).toBe(0); expect(rec.rivers.ribbon).toBe(null);
-    expect(s.material.uniforms.uSeaLevel.value).toBe(-1);
+    // ⭐ AND THE BUNDLE NEVER BUILT ONE (final review #11) — the host is not hiding a ribbon it was
+    // handed, there is none to hide. The route and the valley footprint ARE there.
+    expect(bundle.ribbonGeo, 'a relict bundle must carry no ribbon geometry').toBeUndefined();
+    expect(bundle.valleyGeo, 'the carve footprint still rides — F13 outflow reads its B channel').toBeTruthy();
+    expect(bundle.routedGraph).toBeTruthy();
+    expect(s.material.uniforms.uSeaLevel.value).toBe(0.31);          // ⭐ UNTOUCHED — not the host's own −1
+    expect(rec.rivers.packSeaLevel).toBe(null);
     expect(s.material.uniforms.uCoastStrength.value).toBe(0);
     expect(s.material.uniforms.uRiverCarveStrength.value).toBe(0);   // the F13 outflow reads the B channel; nothing gouges
     expect(rec.rivers.class).toBe('relict'); expect(rec.rivers.routed).toBe(true); expect(rec.rivers.admitted).toBe(false);
     expect(rec.rivers.seaLevel).toBe(null);
     disposeLabBake(s);
+    expect(s.material.uniforms.uSeaLevel.value).toBe(0.31);          // and dispose leaves it where it found it
   }, 120000);
 
   it('RECORDED bytes: carve 1024²·6·8, relief + crater 256²·6·8, province 128²·6·8', () => {
@@ -1265,6 +1396,63 @@ describe('AC-7 — one request, one bake frame, four cubes + the ribbon, dispose
     expect(s.children.length).toBe(0);
     disposeLabBake(s);
     expect(u.uSeaLevel.value).toBe(0.31);                          // and dispose leaves it there
+  }, 120000);
+
+  it('⭐ a SUCCESSFUL bake that solves no sea on a wet body gives the pack\'s value back — the silent −1, closed', async () => {
+    // ⛔ THE DEFECT THIS GATES, and it is the one the whole-branch review found. `record.failed` had a
+    // guard; `record.baked` did not. Attach takes a wet body's `uSeaLevel` to −1 so the sea arrives
+    // WITH the rivers, and `record.baked` makes the hook return early on every later frame — so a bake
+    // that SUCCEEDS without writing a level leaves −1 standing for the life of the body. The shader
+    // reads −1 as "no liquid": the ocean simply never appears, on a body the pack said was wet, with
+    // nothing red anywhere and no exception to catch.
+    //
+    // THE PATH THAT PRODUCES IT: the host classes the body from `condition` and the WORKER classes it
+    // again inside its own `buildLabBundleForBody`. Those are two `fluvialClassOf` calls across a
+    // structured clone. Disagree — a mangled condition, a stale worker chunk carrying an older pack —
+    // and the host admits a body whose payload has `sea: null` and no ribbon. Driven here by handing
+    // the host exactly that payload, which is cheaper and more honest than simulating a stale chunk.
+    const b = pick('wet'); const s = fakeSurface({ packSea: 0.31, packCoast: 1 });
+    const sm = seams(); const m = small();
+    const bundle = buildLabBundleForBody(bodyOf(b), m);
+    // the payload the worker WOULD post for a relict body, handed to a host that says `wet`
+    const payload = { ...workerPayloadOf(bundle), fluvialClass: 'relict', ribbon: null, sea: null };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let rec, said = [];
+    try {
+      rec = attachLabBake(s, bodyOf(b), { ...sm.deps, compute: () => tick().then(() => payload) });
+      expect(rec.rivers.admitted, 'the HOST still says wet — that is what makes the disagreement dangerous').toBe(true);
+      s.onBeforeRender({});
+      expect(s.material.uniforms.uSeaLevel.value).toBe(-1);          // attach deferred it, as on any wet body
+      await tick(); await tick();
+      s.onBeforeRender({});
+      // ⚠ READ THE CALLS BEFORE THE RESTORE. `mockRestore()` in vitest also RESETS the spy, so
+      // `warn.mock.calls` is empty afterwards — the first draft of this test asserted on an empty
+      // array and reported "no warning" for a host that had warned twice.
+      said = warn.mock.calls.map((c) => String(c[0]));
+    } finally { warn.mockRestore(); }
+    const u = s.material.uniforms;
+
+    // the bake SUCCEEDED — which is exactly why the failure-path guard could not see this
+    expect(rec.baked).toBe(true); expect(rec.failed).toBe(null);
+    expect(rec.rivers.class).toBe('wet');                            // the host's own class, from fluvialClassOf
+    expect(rec.rivers.seaLevel).toBe(null);
+    // ⭐ THE PACK'S SEA IS BACK, and the coast with it
+    expect(u.uSeaLevel.value).toBe(0.31);
+    expect(u.uCoastStrength.value).toBe(1);
+    // …and the admitted half was withheld: no ribbon child, no gouging
+    expect(s.children.length).toBe(0); expect(rec.rivers.ribbon).toBe(null);
+    expect(u.uRiverCarveStrength.value).toBe(0); expect(u.uRiverCarveRough.value).toBe(0);
+    // the province + relief + crater + carve cubes still bound — this is a withholding, not a failure
+    expect(sm.prov.length).toBe(1); expect(sm.hgt.length).toBe(2); expect(sm.carve.length).toBe(1);
+    expect(u.uRiverCarveMap.value).toBe(sm.carve[0].texture);
+
+    // BOTH warnings fired, and they are named: the disagreement, and the restore
+    expect(said.some((t) => t.includes('class disagreement') && t.includes('wet') && t.includes('relict')),
+      `the disagreement must name BOTH classes — got ${JSON.stringify(said)}`).toBe(true);
+    expect(said.some((t) => t.includes('without a solved sea')),
+      `the restore must say so — got ${JSON.stringify(said)}`).toBe(true);
+    disposeLabBake(s);
+    expect(u.uSeaLevel.value).toBe(0.31);
   }, 120000);
 
   it('⭐ the WORKER post carries radiusEarth — without it the worker defaults R = 1 and every body binds at strength 1.0', () => {

@@ -445,7 +445,7 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
     carveCube.update(part.valleyGeo);
     carveSlot.value = carveCube.texture;
 
-    if (!record.rivers.admitted || !part.ribbonGeo) return;   // relict: the route + the cube, no water, no sea
+    if (!record.rivers.admitted || part.classAgrees === false || !part.ribbonGeo) return;   // relict: the route + the cube, no water, no sea
     const ribbon = makeRibbonMesh(part.ribbonGeo);
     ribbon.scale.setScalar(bodyRadiusOf(surface.geometry) * RIBBON_LIFT);
     ribbon.visible = !_riversOff;
@@ -465,6 +465,7 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
     if (!riverHalf || !b.marginHeight || !b.marginGrad) return null;
     return {
       strength: b.strength, restore: b.restore, routed: !!b.routed, seaLevel: b.seaLevel ?? null,
+      classAgrees: true,   // the sync bundle IS this host's own dispatch — one `fluvialClassOf` call, no seam to disagree across
       reliefGeo: buildHeightCubeGeometry({ mesh: b.mesh, height: b.marginHeight, grad: b.marginGrad }),
       craterGeo: buildHeightCubeGeometry({ mesh: b.mesh, height: b.craterOverlay, grad: b.craterGrad }),
       valleyGeo: b.valleyGeo || null, ribbonGeo: b.ribbonGeo || null,
@@ -473,11 +474,24 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
   /** The worker payload → the same shape. The province seam (pos/wgt/idx/…) is untouched above it. */
   const partFromPayload = (p) => {
     if (!riverHalf || !p.relief) return null;
+    // ⛔ THE TWO ENDS OF THE TRANSPORT MUST AGREE ON THE CLASS, AND A DISAGREEMENT IS LOUD. The host
+    // classes the body here from `condition` (`fluvialClassOf`, driver pack #9) and the worker classes
+    // it again inside `buildLabBundleForBody` from the condition it was POSTED. If those two ever
+    // answer differently — a condition mangled in the structured clone, two pack versions across a
+    // stale worker chunk — the host would admit a body whose payload carries `sea: null`, write no
+    // level, and leave the −1 attach deferred standing FOR THE LIFE OF THE BODY: an ocean that never
+    // arrives, with nothing red anywhere. So the ribbon and the sea are withheld (`classAgrees`) and
+    // the guard at the end of `bakeFromResult` gives the pack's sea back.
+    const classAgrees = p.fluvialClass === fluvialClass;
+    if (!classAgrees && typeof console !== 'undefined') {
+      console.warn(`[lab bake] fluvial class disagreement — the host says '${fluvialClass}', the worker payload says '${p.fluvialClass}'; ribbon and sea withheld`);
+    }
     const reliefGeo = heightGeometryFromArrays(p.relief, {
       position: new THREE.BufferAttribute(p.relief.pos, 3), index: new THREE.BufferAttribute(p.relief.idx, 1),
     });
     return {
       strength: p.strength, restore: p.restore, routed: !!p.routed, seaLevel: p.sea ? p.sea.seaLevel : null,
+      classAgrees,
       reliefGeo,
       craterGeo: heightGeometryFromArrays(p.crater, { position: reliefGeo.getAttribute('position'), index: reliefGeo.getIndex() }),
       valleyGeo: p.valley ? valleyGeometryFromArrays(p.valley) : null,
@@ -504,6 +518,16 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
     if (part) bindRiverHalf(renderer, part);
     record.baked = true; record.bakes++; record.bakeMs = now() - t0;   // the WHOLE frame, all four cubes
     result = null;
+    // ⛔ A WET BODY MAY NOT LEAVE THIS FRAME STILL AT −1. Attach deferred `uSeaLevel` so the sea would
+    // arrive WITH the rivers; `record.baked` makes the hook return early on every later frame, so a
+    // bake that SUCCEEDED without writing a level (a payload whose `sea` is null, a class the two ends
+    // of the transport disagree on) would strand the −1 for the life of the body — the shoreline
+    // silently gone, and nothing red. The failure path already had this guard; the success path did
+    // not, and that asymmetry is what the final review found.
+    if (record.rivers.admitted && record.rivers.seaLevel == null) {
+      restorePackSea();
+      if (typeof console !== 'undefined') console.warn('[lab bake] wet body baked without a solved sea — pack sea restored');
+    }
   };
 
   /** ⛔ THE SYNC DISPATCH FOLLOWS THE MATERIAL. Routing costs 100-170 ms on top of the dispatch, and

@@ -170,7 +170,7 @@ describe('registration 4 — every drivers module is in the runtime PACKS array'
     // This proves the walker sees the subject, which the green above cannot.
     const allUnregistered = unregisteredDrivers(DRIVERS_DIR, []);
     expect(allUnregistered.map((v) => v.module).sort()).toEqual(
-      ['craterDeck', 'fluvialDeck', 'giantDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics'],   // ⭐ NINE SINCE 2026-09-02 — `fluvialDeck` joined the tree. This answer GROWS as packs are added, which is the property that keeps the control from going vacuous; the title still says eight, so it is corrected below.
+      ['craterDeck', 'fluvialDeck', 'giantDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics'],   // ⭐ NINE SINCE 2026-09-02 — `fluvialDeck` joined the tree. This answer GROWS as packs are added, which is the property that keeps the control from going vacuous.
     );
   });
 

@@ -135,6 +135,7 @@ export function buildProvinceForBody({ condition, macroSeed = 0, T_eq = null }, 
 // pack #9). wet ∪ relict route; airless bodies do not (intent.md decision 4: every consumer of the
 // carve cube is zero on that class by the pack, so the cube would be read ×0). They still get the
 // relief and crater arrays, because those are gated by the crossover, not by the fluvial class.
+// ⛔ AND THE RIBBON IS NARROWER STILL — `wet` alone, the ADMITTED half. See the gate at its call site.
 //
 // DELIBERATE NON-GOALS: no cube, no renderer, no texture — this file stays loadable in a Worker and
 // headless (labBakeHost.js owns the GPU half). No cache across bodies. No tunable of its own.
@@ -215,7 +216,16 @@ export function buildLabBundleForBody({ condition, macroSeed = 0, T_eq = null, r
     const pEff = paramsForRadius(DEFAULT_PARAMS, radiusEarth, widthSeedFactor(macroSeed, DEFAULT_PARAMS));  // :702-703
     const routedGraph = routeAndOrder({ mesh, height: marginHeight, grad: marginGrad, isOcean, params: DEFAULT_PARAMS });  // :704 — BASE
     out.seaLevel = seaLevel; out.isOcean = isOcean; out.oceanCount = oceanCount; out.routedGraph = routedGraph;
-    out.ribbonGeo = buildRibbonGeometry({ mesh, routed: routedGraph, params: pEff });                 // :706 — pEff
+    // ⛔ THE RIBBON IS THE WET HALF ONLY (final review #11, 2026-09-02). route() builds it on every
+    // routed body because the LAB routes ONE body at a time behind a global toggle; here the class is
+    // per body, and labBakeHost's `bindRiverHalf` returns before the ribbon on anything but `wet`
+    // (intent.md decision 4 — a relict body has no water). Building it anyway ran a full
+    // buildRibbonGeometry, transferred three more buffers and rebuilt the geometry on the main thread
+    // for 64 of the 68 routed bodies, to produce a mesh nothing parents, binds or draws.
+    // ⛔ THE SEA SOLVE AND THE ROUTE STAY ON EVERY ROUTED BODY, and that is not symmetry for its own
+    // sake: `computeOcean` is the router's outlet condition (:698 feeds :704), and a relict body's
+    // F13 outflow and F12 mouths read the carve cube's B and G channels, which `valleyGeo` carries.
+    if (fluvialClass === 'wet') out.ribbonGeo = buildRibbonGeometry({ mesh, routed: routedGraph, params: pEff });   // :706 — pEff
     out.valleyGeo = buildValleyGeometry({ mesh, routed: routedGraph, isOcean, params: pEff });        // :709 — pEff
   }
   out.routeMs = now() - t0;

@@ -28,6 +28,11 @@ import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';
 import { deriveUniforms } from '../src/worldengine/base/labCore.js';
+// ⭐ §H's imports (2026-09-02, the final review's ruling #1). The seam being measured is the LAB's, so
+// both arms are reached through the LAB's own modules: `driver-presets.js` is the root module the lab
+// imports at world-engine-lab.html:1941, and `deriveConditionVector` is the seam :2136 now goes through.
+import { DRIVER_PRESETS, PRESET_NAMES, drawPresetConditions, drawPresetRadius } from '../driver-presets.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { PACKS, selectPacks, applyDriverPacks, gatesFor } from '../src/worldengine/drivers/index.js';
 import { buildLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 import { labPackCtx, setLabGasBodiesOverride } from '../src/objects/Planet.js';
@@ -529,5 +534,150 @@ describe('§F — the erosion key: ROOT-0 fix 1 at its third reader, and the reg
     for (const rel of ['src/worldengine/base/labCore.js', 'src/worldengine/base/baseStep.js']) {
       expect(read(rel), rel).toContain('?.erosion ?? d.surfaceHistory?.erosionLevel ?? 0');
     }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// §H — ⭐⭐ THE `_fp` → `_dp` SEAM, MEASURED AND PINNED. What the LAB renders now against what it
+// rendered before this workstream moved the block into a pack.
+//
+// WHY THIS BLOCK EXISTS. Contract AC-0's first draft claimed the lab's own presets were "byte-identical
+// before and after the move (the pack-contract golden pattern)". THAT CLAIM IS FALSE, and the whole-branch
+// review is what found it. The lab's block read the FROZEN preset for its volatiles —
+// world-engine-lab.html:2145 `const _vol = _clamp01((_fp.composition?.volatileFraction ?? 0) * 2.0);`
+// with `_fp = DRIVER_PRESETS[driverUI.preset]` (:2127) — which is seed-DEAF. The pack reads them off the
+// CONDITION VECTOR, which is the per-seed draw `_dp` (:1941 `drawPresetConditions`), because that is the
+// seam the other seven packs already use and the one pack #2's call site (:2074) measured and ruled on.
+// So the move DID change the lab's rendered values, on purpose, and the ruling was KEEP `_dp` and DECLARE
+// the delta with its numbers rather than revert. This block is that declaration, executable.
+//
+// ⛔ THE TWO ARMS, AND WHY THE `_fp` ARM IS THE LAB'S OLD EXPRESSION RATHER THAN `pack(deriveConditionVector(_fp, …))`.
+// "What the lab rendered before" is not "the pack run on a vector built from the frozen preset": the old
+// block took `_stab` / `_rain` / `_g` from `u = deriveUniforms(_dp)` (:1943, :2129) and ONLY the volatiles,
+// erosion and atmosphere from `_fp`. Building a whole condition vector out of `_fp` would also swap T_eq
+// and density, move `liquidStability` with them, and measure a seam nobody ever crossed — MEASURED: that
+// construction answers 12 combos and a Rocky seed-0 mask of 0.222, neither of which the lab ever drew.
+// The arms below therefore share ONE `u` and differ in ONE input, which is exactly the change that shipped.
+// `_stab` / `_rain` / `_g` are consequently bit-identical across the arms BY CONSTRUCTION — stated plainly
+// so nobody reads it as a measurement that could have come out otherwise.
+//
+// ⛔ AND ONE MORE MOVER, WHICH IS NOT THE VOLATILES SEAM AND IS RECORDED SEPARATELY: `uFluvialDepth`
+// reads `_g`, and the CONDITION VECTOR carries the radius-AWARE surface gravity while the block's own
+// `deriveUniforms(_dp)` bundle is radius-BLIND. That is the conversion world-engine-lab.html:1964 already
+// made for the bulk relief envelope and the gravity readout ("both were radius-deaf until this line
+// changed") and that pack #2's [G] A/B exists to show; F11's depth joins it here. Counted below against
+// the block's own `u`, so the two seams are never added together into one misleading number.
+//
+// ⚠ SEEDS 0-3 AND ALL 18 PRESETS = 72 COMBOS. `drawPresetConditions` returns the preset UNMODIFIED for
+// the 7 NAMED_BODY and 4 CONDITION_DRAW_EXCLUDED presets, so 44 of the 72 cannot move by construction —
+// which is a property of the draw, not a weakness of the sample, and the record names it.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+describe('§H — the `_fp` → `_dp` seam: the lab’s own rendered values, before and after, measured', () => {
+  const H_SEEDS = [0, 1, 2, 3];
+
+  /**
+   * The lab's F14 block as it stood BEFORE driver pack #9 — world-engine-lab.html:2131/:2145-2147 at
+   * 8bb8e1c, transcribed. `u` is the block's own bundle; `fp` is the FROZEN preset it read volatiles from.
+   */
+  const preMoveF14 = (fp, u) => {
+    const stab = u.liquidStability;                                        // :2129
+    const wet = stab > 0.15;                                               // :2131
+    const vol = clamp01((fp.composition?.volatileFraction ?? 0) * 2.0);    // :2145 — ⛔ off `_fp`
+    const seaCoverage = wet ? clamp01(stab * vol) : 0.0;                   // :2146
+    return { wet, seaCoverage, seaLevel: wet && seaCoverage > 0.0 ? -0.2 + 0.5 * seaCoverage : -1.0 };
+  };
+
+  it('11 of 72 preset × seed combos MOVE, every one of them wet, and volatileFraction is the sole mover', () => {
+    const rows = [];
+    let movers = 0, wetCombos = 0, drawn = 0, depthMovers = 0;
+    for (const preset of PRESET_NAMES) {
+      for (const seed of H_SEEDS) {
+        const fp = DRIVER_PRESETS[preset];
+        const dp = drawPresetConditions(preset, seed);
+        const R = drawPresetRadius(preset, seed);
+        const uPreset = deriveUniforms(dp);                                // the lab's own bundle (:1943)
+        const cv = deriveConditionVector(dp, uPreset, R);                  // the seam :2136 goes through
+        const u = deriveUniforms(cv);                                      // what the PACK derives from
+        const got = fluvialDeckPack(cv, CTX).drivers;
+        const was = preMoveF14(fp, u);
+        if (dp !== fp) drawn++;
+        if (was.wet) wetCombos++;
+        const moved = got.uLiquidMask !== was.seaCoverage || got.uSeaLevel !== was.seaLevel;
+        if (moved) movers++;
+        // the OTHER seam, counted apart: F11 depth against the block's OWN radius-blind bundle
+        const depthWas = 0.08 + 0.10 * uPreset.precipitation + 0.04 * clamp01(uPreset.surfaceGravity);
+        if (depthWas !== got.uFluvialDepth) depthMovers++;
+        rows.push({ preset, seed, drawn: dp !== fp, wet: was.wet, moved,
+          uLiquidMask: { fp: was.seaCoverage, dp: got.uLiquidMask },
+          seaLevel: { fp: was.seaLevel, dp: got.uSeaLevel },
+          volatileFraction: { fp: fp.composition?.volatileFraction ?? 0, dp: dp.composition?.volatileFraction ?? 0 },
+          fluvialDepth: { fp: depthWas, dp: got.uFluvialDepth },
+          stabShared: u.liquidStability, rainShared: u.precipitation });
+      }
+    }
+    writeFileSync(join(TMP, 'fluvial-seam-delta.json'), JSON.stringify({
+      combos: rows.length, presets: PRESET_NAMES.length, seeds: H_SEEDS,
+      movingCombos: movers, wetCombos, drawnCombos: drawn, fluvialDepthMovers: depthMovers,
+      note: 'MEASURED 2026-09-02. The `_fp` arm is the lab\'s pre-pack expression (world-engine-lab.html:2145-2147 at 8bb8e1c) on the block\'s own deriveUniforms bundle; the `_dp` arm is driver pack #9 on deriveConditionVector(_dp, u, R). Sole mover of uLiquidMask/seaLevel: composition.volatileFraction, drawn +-S_VOL (0.30). fluvialDepthMovers is a SEPARATE seam: the condition vector\'s radius-AWARE surfaceGravity vs the block\'s radius-blind one (the :1964 / pack-#2 [G] conversion).',
+      moved: rows.filter((r) => r.moved),
+      all: rows,
+    }, null, 2));
+
+    // ── THE PIN ──
+    expect(rows.length, '18 presets x 4 seeds').toBe(72);
+    expect(PRESET_NAMES.length).toBe(18);
+    expect(movers, 'the moving-combo count is the DECLARED delta in contract AC-0 — if it changes, the declaration is stale').toBe(11);
+    // every mover is WET, which is the whole shape of the claim: `_vol` only reaches a rendered value
+    // through `_seaCoverage`, and `_seaCoverage` is 0 on anything not wet.
+    for (const r of rows.filter((x) => x.moved)) {
+      expect(r.wet, `${r.preset}/${r.seed} moved but is not wet`).toBe(true);
+      expect(r.volatileFraction.dp, `${r.preset}/${r.seed}: the sole mover must be volatileFraction`).not.toBe(r.volatileFraction.fp);
+      expect(r.drawn, `${r.preset}/${r.seed}: a combo can only move if its preset is DRAWN`).toBe(true);
+    }
+    // …and nothing that is NOT wet moved, stated as its own assertion rather than left to the loop above
+    expect(rows.filter((r) => !r.wet && r.moved).length).toBe(0);
+
+    // ── THE WORKED EXAMPLE THE CONTRACT AND THE PLAN QUOTE, to the digits they quote ──
+    const rocky0 = rows.find((r) => r.preset === 'Rocky (Earthlike)' && r.seed === 0);
+    expect(rocky0.uLiquidMask.fp.toFixed(5)).toBe('0.29536');
+    expect(rocky0.uLiquidMask.dp.toFixed(5)).toBe('0.37207');
+    expect(rocky0.seaLevel.fp.toFixed(5)).toBe('-0.05232');
+    expect(rocky0.seaLevel.dp.toFixed(5)).toBe('-0.01396');
+    // the direction matters to Max: the lab's Rocky shoreline is WETTER than it was, not drier
+    expect(rocky0.uLiquidMask.dp).toBeGreaterThan(rocky0.uLiquidMask.fp);
+
+    // ── NON-VACUITY: the sample can move at all, and most of it cannot ──
+    // 44 of the 72 are NAMED_BODY or CONDITION_DRAW_EXCLUDED, which `drawPresetConditions` returns
+    // unmodified — so `drawn` is what the seam could possibly touch, and it is a real subset.
+    expect(drawn).toBe(28);
+    expect(wetCombos).toBeGreaterThan(movers);   // wet-but-unmoved combos exist (the locked presets)
+
+    // ── THE SECOND SEAM, RECORDED NOT HEADLINED ──
+    expect(depthMovers, 'F11 depth moves too, on the radius-aware g — a different seam, counted apart').toBe(24);
+  });
+
+  it('CONTROL: the seam measurement can FAIL — feeding the `_dp` arm `_fp`’s volatiles collapses it to zero movers', () => {
+    // A delta that would report 11 no matter what is not a measurement. Rebuild the `_dp` arm with the
+    // FROZEN preset's volatileFraction spliced back in and demand every mover disappear — which is also
+    // the exact revert the ruling declined, executed, so its cost is on the record rather than asserted.
+    let movers = 0;
+    for (const preset of PRESET_NAMES) {
+      for (const seed of H_SEEDS) {
+        const fp = DRIVER_PRESETS[preset];
+        const dp = drawPresetConditions(preset, seed);
+        const R = drawPresetRadius(preset, seed);
+        const uPreset = deriveUniforms(dp);
+        const cv = deriveConditionVector(dp, uPreset, R);
+        const reverted = { ...cv, composition: { ...(cv.composition || {}), volatileFraction: fp.composition?.volatileFraction ?? 0 } };
+        const got = fluvialDeckPack(reverted, CTX).drivers;
+        // ⚠ THE `_fp` ARM READS THE REVERTED VECTOR'S OWN BUNDLE, and that is not bookkeeping:
+        // `liquidStability` ITSELF depends on volatileFraction, so a bundle taken from the unreverted
+        // vector would leave `_stab` moving and this control would report 4 movers for a reason that
+        // has nothing to do with `_vol`. Measured — the first draft of this control did exactly that.
+        const was = preMoveF14(fp, deriveUniforms(reverted));
+        if (got.uLiquidMask !== was.seaCoverage || got.uSeaLevel !== was.seaLevel) movers++;
+      }
+    }
+    expect(movers, 'with `_fp`\'s volatiles restored the two arms must agree everywhere — otherwise the 11 above is measuring something else').toBe(0);
   });
 });

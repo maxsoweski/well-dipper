@@ -31,8 +31,12 @@
 //          relief: { pos, hgt, grd, idx },
 //          crater: { hgt, grd },                                — shares relief's pos/idx (see below)
 //          sea:    { seaLevel, oceanCount } | null,
-//          valley: { pos, aDepth, aMouth, aOrder, idx } | null,
-//          ribbon: { pos, col, idx } | null }
+//          valley: { pos, aDepth, aMouth, aOrder, idx } | null,   — null on an AIRLESS body (not routed)
+//          ribbon: { pos, col, idx } | null }                     — null on airless AND on RELICT: the
+//                                                                   bundle builds a ribbon only for
+//                                                                   `wet`, the admitted half, so there
+//                                                                   is none to post on the other 64 of
+//                                                                   68 routed bodies (2026-09-02).
 //        { id, ok: false, error }
 //
 // ⛔ WHY THE CRATER GEOMETRY POSTS ONLY hgt/grd. The relief and crater cubes are the SAME sphere —
@@ -99,6 +103,12 @@ self.onmessage = (ev) => {
         vIdx = b.valleyGeo.getIndex().array;
       msg.valley = { pos: vPos, aDepth: vDepth, aMouth: vMouth, aOrder: vOrder, idx: vIdx };
       transfer.push(vPos.buffer, vDepth.buffer, vMouth.buffer, vOrder.buffer, vIdx.buffer);
+    }
+    // ⛔ THE RIBBON RIDES ITS OWN PRESENCE TEST, NOT `b.routed`. The bundle builds a ribbon for `wet`
+    // only (provinceDispatch.js, the gate at :706's call site), so on the 64 relict bodies of the
+    // 68 routed ones `b.ribbonGeo` is undefined and `ribbon` posts null — which is what the host
+    // already treats as "no water here". Reading `b.ribbonGeo` under `if (b.routed)` would throw.
+    if (b.ribbonGeo) {
       // the ribbon's `normal` attribute is NOT posted: computeVertexNormals() rebuilds it from
       // position + index on the host in microseconds, and MeshBasicMaterial never reads it.
       const ribPos = attr(b.ribbonGeo, 'position'), ribCol = attr(b.ribbonGeo, 'color'),

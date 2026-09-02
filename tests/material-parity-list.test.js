@@ -453,7 +453,9 @@ describe('2. the collapse in per-body variation', () => {
     // 1 distinct (a plain-moon record carries no tilt key of either spelling). On the 852 planets
     // they are 17, 2 and 852 distinct respectively. The moon-half figures are in this leg's report
     // rather than folded into this pooled number, because the pooled number would hide them.
-    // ⭐⭐ AND EIGHT MORE 2026-09-02, `fluvialDeck` (72 -> 80): uSeaLevel, uLiquidMask, uCoastStrength,
+    // ⭐⭐ AND EIGHT MORE 2026-09-02, `fluvialDeck` (72 -> 80 — ⛔ SUPERSEDED THE SAME DAY by the
+    // 72 -> 82 note directly below, which is the count this array actually holds; kept because it
+    // names WHICH eight arrived first): uSeaLevel, uLiquidMask, uCoastStrength,
     // uDeltaDensity, uFluvialActivity, uFluvialDepth, uFluvialMeander, uOutflowActivity. Every one was
     // written by NOTHING before this commit, so each read one value on every body in the corpus.
     // ⭐⭐ AND ALL TEN VARY, WHICH THEY DID NOT IN THIS PACK'S FIRST DRAFT — 72 -> 82. `uOutflowDensity`
@@ -495,8 +497,15 @@ describe('2. the collapse in per-body variation', () => {
       'uWeatheredColor',
       // ⭐⭐ THE THREE NAMES B4-1 ADDS, AND THEY ARE THIS BLOCK'S ENTIRE CLAIM — `uStarColor1` VARYING PER BODY on the lab material is exactly the thing ledger P-01 said was lost ("every swapped body renders under implicit white light"). ⛔ NOTE WHICH TWO OF THE FIVE DID **NOT** JOIN, because that is the control: `uStarBrightness1` is a literal 1.0 on every primary StarSystemGenerator draws, so it is constant BY CONSTRUCTION and a build in which it started varying would mean the generator moved, not the port; and `uLightDir2` is constructed at (0,0,0) on every body and only ever written by the PER-FRAME seam (src/main.js copies it inside its binary branch), so this construction-time pass cannot see it and must not pretend to — P-02's direction half is fenced at the seam instead, in tests/lab-shader-perframe-seam.test.js.
     ]);
-    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 79 of the 79 uniforms the seven writing
-    // packs emit vary per body (53 of 55 before B3 leg 3 added `solidFeatures`' fourteen new names,
+    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 76 of the 80 uniforms the seven writing
+    // packs emit vary per body — ⭐⭐ COUNTED, NOT INHERITED (2026-09-02, the whole-branch review). This
+    // sentence said "79 of the 79" and BOTH halves were wrong after driver pack #9: `written` is 80
+    // names, `labVarying` is 82, and the residue below is FOUR, not zero. The three numbers do not
+    // reconcile by subtraction and are not supposed to: `labVarying` carries six names NO pack writes
+    // (uBodyRadius, uLightDir, uStarBrightness2, uStarColor1, uStarColor2, uThermalDir), so
+    // 80 written − 4 residue = 76 written-and-varying, and 82 − 76 = the six. Every figure here is off
+    // the arrays in this file, counted on 2026-09-02.
+    // (53 of 55 before B3 leg 3 added `solidFeatures`' fourteen new names,
     // all fourteen of which vary, so the residue below is UNCHANGED — a new write that did not vary
     // would have grown it, and that is exactly the difference between wiring a law and wiring a
     // constant. ⭐ THAT TEST IS WHY `solidFeatures` REFUSES SEVEN MORE NAMES it could have written:
@@ -521,12 +530,16 @@ describe('2. the collapse in per-body variation', () => {
       // written-and-constant — a wire that landed on a DEAD INPUT, the third of the three ways a name
       // reaches this list and the only one that is a defect. The input was erosion, read under the lab
       // spelling while the game writes `erosionLevel`; ROOT-0 fix 1's two-spelling read closed it and
-      // both names moved into `labVarying` above. ⛔ THE RESIDUE IS BACK TO THREE, and it is back
-      // because the defect was fixed, not because the assertion was loosened.
+      // both names moved into `labVarying` above. ⛔ THE RESIDUE IS FOUR, NOT THREE — this line said
+      // "BACK TO THREE" and the assertion one line below it already listed four names (2026-09-02, the
+      // whole-branch review). Two of the three went back to `labVarying` when the erosion read was
+      // fixed and `uSeaLevel` arrived by the DEFERRAL route in the same commit, so the residue never
+      // returned to three. It is four because the defect was fixed AND a new deferral landed, not
+      // because the assertion was loosened.
       .toEqual(['uEjectaLump', 'uSeaLevel', 'uTermStrength', 'uTerraceCount']);   // ⭐⭐ AND `uSeaLevel` JOINED ON 2026-09-02 BY THE FOURTH ROUTE — DEFERRAL, not a dead law, not a collapsed population and not a dead input. The lab bake host takes the slot to −1 at mount and the router writes the solved level on the body's first draw (see the note on `labVarying` above). ⛔ HOW TO TELL IT FROM A DYING WIRE, because that is what this list normally means: the write still exists and is gated elsewhere — tests/river-bake-host.test.js AC-7 bakes a wet body and asserts the solved sea lands on this slot. A name in this residue with NO such gate anywhere is the defect this list is for.
   });
 
-  it('the seven writing packs emit 79 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
+  it('the seven writing packs emit 80 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
     // If the pack stops writing the band deck, G-01/G-04/G-07's "carried" ruling is false. Pinned as
     // a SET OF NAMES, not a length — Step 4 measured that a count-preserving permutation is
     // byte-identical to every instrument this program owns.
@@ -542,10 +555,14 @@ describe('2. the collapse in per-body variation', () => {
     // same shape leg 1 had, and the check that this pack collides with nothing: an overlap with an
     // existing writer would have shown up here as a union that grew by less than fourteen, and in
     // `applyDriverPacks` as a throw.
-    // ⭐ 69 -> 79 ON 2026-09-02. `fluvialDeck` declares ten names and NOT ONE was written by any pack
+    // ⭐ 70 -> 80 ON 2026-09-02. `fluvialDeck` declares ten names and NOT ONE was written by any pack
     // before this commit, so the union grows by exactly its contract set — the same shape leg 1 and leg
     // 3 had, and the check that this pack collides with nothing: an overlap would show up here as a
     // union that grew by less than ten, and in `applyDriverPacks` as a throw.
+    // ⛔ THIS LINE SAID "69 -> 79" AND BOTH ENDS WERE ONE LOW (corrected 2026-09-02, the whole-branch
+    // review). The array below is 80 names counted, all ten of the pack's are in it, so the pre-pack
+    // union was 70. The count is not asserted — membership is (see the note above) — which is exactly
+    // why a wrong number could sit in the prose while the test stayed green.
     expect(LEDGER.written).toEqual([
       'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM',
