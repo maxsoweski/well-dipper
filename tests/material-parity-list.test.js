@@ -456,12 +456,13 @@ describe('2. the collapse in per-body variation', () => {
     // ⭐⭐ AND EIGHT MORE 2026-09-02, `fluvialDeck` (72 -> 80): uSeaLevel, uLiquidMask, uCoastStrength,
     // uDeltaDensity, uFluvialActivity, uFluvialDepth, uFluvialMeander, uOutflowActivity. Every one was
     // written by NOTHING before this commit, so each read one value on every body in the corpus.
-    // ⛔ TWO OF THE TEN THIS PACK WRITES ARE ABSENT AND THE ABSENCE IS THE MEASUREMENT, NOT AN
-    // OVERSIGHT: `uOutflowDensity` and `uStrandStrength` are written-and-CONSTANT (they join the
-    // residue below). Both are functions of erosion alone, and the lab's block reads erosion as a raw
-    // `.erosion` while the game writes `erosionLevel` — so both are 0 on 124/124 solid bodies. The
-    // whole measurement and its counterfactual are in tests/driver-pack-fluvialdeck.test.js §F. This
-    // list is exactly the instrument that would have hidden it behind a count.
+    // ⭐⭐ AND ALL TEN VARY, WHICH THEY DID NOT IN THIS PACK'S FIRST DRAFT — 72 -> 82. `uOutflowDensity`
+    // and `uStrandStrength` are functions of erosion alone, and the raw transcription of the lab's
+    // block read `.erosion` while the game writes `erosionLevel`, so both were written-and-CONSTANT at
+    // 0 on 124/124 solid bodies and sat in the residue below. ROOT-0 fix 1's two-spelling read landed
+    // in the pack (tests/driver-pack-fluvialdeck.test.js §F) and they now vary on 66 and 122 bodies.
+    // ⛔ THIS LIST IS THE INSTRUMENT THAT CAUGHT IT: a wire that lands on a dead input is invisible to
+    // every count and to the pack's own laws, and shows up here and only here as written-and-constant.
     expect(LEDGER.labVarying).toEqual([
       'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM',
@@ -476,11 +477,11 @@ describe('2. the collapse in per-body variation', () => {
       'uFrostLocked', 'uFrostMaxCoverage', 'uGlacialFlowVigor', 'uGlacialStrength',
       'uIcenessMix', 'uJetFestoon', 'uJetShearTurb', 'uJetSpeed',
       'uJetStrength', 'uLightDir', 'uLimbColor', 'uLimbExponent',
-      'uLimbStrength', 'uLiquidMask', 'uMacroOffset', 'uNoiseScale', 'uOutflowActivity', 'uPerturb',
+      'uLimbStrength', 'uLiquidMask', 'uMacroOffset', 'uNoiseScale', 'uOutflowActivity', 'uOutflowDensity', 'uPerturb',
       'uPlanetTempEq', 'uPldStrength', 'uPolarMode', 'uPolarPhase',
       'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint', 'uSeaLevel', 'uSedColor', 'uShieldStratoMix',
-      'uStarBrightness2', 'uStarColor1', 'uStarColor2', 'uTermColor',
+      'uStarBrightness2', 'uStarColor1', 'uStarColor2', 'uStrandStrength', 'uTermColor',
       // ⭐⭐ `uTermStrength` LEFT THIS LIST ON 2026-08-21 AND THE DIRECTION IS THE WHOLE POINT — a name
       // leaving `labVarying` normally means a wire died, and here it means one landed. The lab used
       // to write TWO values across the corpus: 0.15 on the 163 solid bodies `solidOptics` claimed,
@@ -494,7 +495,7 @@ describe('2. the collapse in per-body variation', () => {
       'uWeatheredColor',
       // ⭐⭐ THE THREE NAMES B4-1 ADDS, AND THEY ARE THIS BLOCK'S ENTIRE CLAIM — `uStarColor1` VARYING PER BODY on the lab material is exactly the thing ledger P-01 said was lost ("every swapped body renders under implicit white light"). ⛔ NOTE WHICH TWO OF THE FIVE DID **NOT** JOIN, because that is the control: `uStarBrightness1` is a literal 1.0 on every primary StarSystemGenerator draws, so it is constant BY CONSTRUCTION and a build in which it started varying would mean the generator moved, not the port; and `uLightDir2` is constructed at (0,0,0) on every body and only ever written by the PER-FRAME seam (src/main.js copies it inside its binary branch), so this construction-time pass cannot see it and must not pretend to — P-02's direction half is fenced at the seam instead, in tests/lab-shader-perframe-seam.test.js.
     ]);
-    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 77 of the 79 uniforms the seven writing
+    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 79 of the 79 uniforms the seven writing
     // packs emit vary per body (53 of 55 before B3 leg 3 added `solidFeatures`' fourteen new names,
     // all fourteen of which vary, so the residue below is UNCHANGED — a new write that did not vary
     // would have grown it, and that is exactly the difference between wiring a law and wiring a
@@ -515,13 +516,14 @@ describe('2. the collapse in per-body variation', () => {
       // the lab's two values (0.15 solid / factory 0 gas) collapsed to the game's single 0.15.
       // ⛔ A NAME ENTERING THIS LIST IS NORMALLY A WIRE DYING. Here it is a wire landing, and the
       // way to tell them apart is the GAME side: `gameVarying` has never held this name either.
-      // ⭐⭐ AND TWO MORE JOINED ON 2026-09-02, BY A THIRD ROUTE AGAIN — and this is the honest place
-      // for them. `uOutflowDensity` and `uStrandStrength` are written by `fluvialDeck` and constant
-      // because their input is, not because their law is: both are functions of erosion alone, and the
-      // transcribed reader spells it `.erosion` while the game writes `erosionLevel`. So this is a wire
-      // that landed on a DEAD INPUT — the third of the three ways a name reaches this list, and the only
-      // one that is a defect. tests/driver-pack-fluvialdeck.test.js §F carries the measurement.
-      .toEqual(['uEjectaLump', 'uOutflowDensity', 'uStrandStrength', 'uTermStrength', 'uTerraceCount']);
+      // ⭐⭐ TWO NAMES JOINED THIS LIST ON 2026-09-02 AND LEFT IT AGAIN THE SAME DAY, WHICH IS THE MOST
+      // USEFUL THING THIS RESIDUE HAS DONE. `uOutflowDensity` and `uStrandStrength` arrived
+      // written-and-constant — a wire that landed on a DEAD INPUT, the third of the three ways a name
+      // reaches this list and the only one that is a defect. The input was erosion, read under the lab
+      // spelling while the game writes `erosionLevel`; ROOT-0 fix 1's two-spelling read closed it and
+      // both names moved into `labVarying` above. ⛔ THE RESIDUE IS BACK TO THREE, and it is back
+      // because the defect was fixed, not because the assertion was loosened.
+      .toEqual(['uEjectaLump', 'uTermStrength', 'uTerraceCount']);
   });
 
   it('the seven writing packs emit 79 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {

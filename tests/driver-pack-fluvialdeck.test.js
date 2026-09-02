@@ -1,4 +1,4 @@
-// tests/driver-pack-fluvialdeck.test.js — DRIVER PACK #8, `fluvialDeck`: the lab's F11/F12/F13/F14/F20
+// tests/driver-pack-fluvialdeck.test.js — DRIVER PACK #9, `fluvialDeck`: the lab's F11/F12/F13/F14/F20
 // derivation (world-engine-lab.html:2127-2167) as ONE law both front-ends call.
 // docs/WORKSTREAMS/wire-river-router-lab-into-game/ task 3, 2026-09-02.
 //
@@ -70,7 +70,7 @@ const ss = (e0, e1, x) => { const t = clamp01((x - e0) / (e1 - e0)); return t * 
 // §C — THE LAB'S FORMULAS, TRANSCRIBED INDEPENDENTLY from world-engine-lab.html:2127-2167 (at 8bb8e1c)
 // and evaluated on the SAME condition the pack is handed. This is the only block that could catch a
 // re-derivation, so it is written from the lab text and NOT from the pack's source.
-//   :2128 `const _erosion = _fp.surfaceHistory?.erosion ?? 0;`
+//   :2128 `const _erosion = _fp.surfaceHistory?.erosion ?? 0;`   (+ ROOT-0 fix 1's second spelling — see §F)
 //   :2129 `const _stab = u.liquidStability, _rain = u.precipitation, _g = u.surfaceGravity;`
 //   :2131 `const _wet = _stab > 0.15;`
 //   :2135 `const _hadLiquid = !!(_fp.atmosphere && _fp.atmosphere.retained !== false);`
@@ -95,7 +95,11 @@ const ss = (e0, e1, x) => { const t = clamp01((x - e0) / (e1 - e0)); return t * 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 function labBlock(cond) {
   const u = deriveUniforms(cond);
-  const erosion = cond.surfaceHistory?.erosion ?? 0;
+  // ⭐ THE ONE LINE THAT IS NOT THE LAB'S CHARACTER-FOR-CHARACTER: ROOT-0 fix 1's two-spelling read,
+  // copied verbatim from src/worldengine/base/labCore.js:646 — the fix the lab's fluvial block never
+  // got. §F pins it and reds on a single-spelling regression; transcribing the raw read here instead
+  // would make §C agree with the pack for the wrong reason.
+  const erosion = cond.surfaceHistory?.erosion ?? cond.surfaceHistory?.erosionLevel ?? 0;
   const stab = u.liquidStability, rain = u.precipitation, g = u.surfaceGravity;
   const wet = stab > 0.15;
   const hadLiquid = !!(cond.atmosphere && cond.atmosphere.retained !== false);
@@ -234,14 +238,20 @@ describe('§D — gates, membership, collision, registration', () => {
     // real change rather than a re-statement of the value.
     expect(want.deltaDensity).toBeGreaterThan(0);
     expect(want.coastStrength).toBe(1);
-    // ⛔ THE THIRD ROW IS VACUOUS ON THIS CORPUS AND IS MADE NON-VACUOUS BY HAND, because
-    // `outflowDensity` is 0 on 124 of 124 solid bodies — see §F, which pins WHY. A gate row asserted
-    // only where the value is already zero proves nothing, so the outflow gate is exercised on a
-    // condition carrying the erosion the lab's F13 ramp needs.
+    // ⭐ THE THIRD ROW IS LIVE ON REAL BODIES SINCE THE EROSION FIX (§F): 66 of the 124 solid bodies
+    // carry a non-zero outflow, where the raw single-spelling read left 0 and this row provable only
+    // on a hand-built condition. Both are asserted — the corpus one because it is the population that
+    // ships, the built one because it pins the RAMP's shape at three points the corpus need not hit.
+    const outflowBodies = solids().filter((x) => labBlock(x.cond).outflowDensity > 0);
+    expect(outflowBodies.length).toBe(66);
+    for (const x of outflowBodies) {
+      const xd = fluvialDeckPack(x.cond, CTX).drivers;
+      expect(resolveDriver('uOutflowDensity', xd.uOutflowDensity, CTX), `${x.seed}/${x.kind}`).toBe(labBlock(x.cond).outflowDensity);
+      expect(resolveDriver('uOutflowDensity', xd.uOutflowDensity, { ...CTX, gates: { ...CTX.gates, outflow: false } }), `${x.seed}/${x.kind}`).toBe(0);
+    }
     const relictish = { ...b.cond, surfaceHistory: { erosion: 0.5 } };
     const rd = fluvialDeckPack(relictish, CTX).drivers;
     expect(resolveDriver('uOutflowDensity', rd.uOutflowDensity, CTX)).toBe(ss(0.3, 0.45, 0.5));
-    expect(resolveDriver('uOutflowDensity', rd.uOutflowDensity, { ...CTX, gates: { ...CTX.gates, outflow: false } })).toBe(0);
     expect(ss(0.3, 0.45, 0.5)).toBe(1);
   });
 
@@ -336,9 +346,10 @@ describe('§D — gates, membership, collision, registration', () => {
     const c = { wet: 0, relict: 0, airless: 0 };
     for (const b of solids()) c[fluvialClassOf(b.cond)]++;
     expect(c.wet + c.relict + c.airless).toBe(124);
-    // MEASURED 2026-09-02 over the 24 rocky-* seeds: 4 wet, 0 relict, 120 airless. The RELICT COUNT
-    // IS ZERO AND THAT IS NOT A PROPERTY OF THE UNIVERSE — see §F.
-    expect(c).toEqual({ wet: 4, relict: 0, airless: 120 });
+    // MEASURED 2026-09-02 over the 24 rocky-* seeds, WITH ROOT-0 fix 1's two-spelling erosion read
+    // (§F): 4 wet, 64 relict, 56 airless. Under the raw single-spelling read the same corpus answered
+    // 4 / 0 / 120 — the relict class was empty and F13/F20 were dark on every body.
+    expect(c).toEqual({ wet: 4, relict: 64, airless: 56 });
     // vitest hides console.info on a passing test, so the record goes to a FILE.
     writeFileSync(join(TMP, 'fluvial-classes.json'), JSON.stringify({ solid: 124, gas: BODIES.length - 124, classes: c }, null, 2));
   });
@@ -391,43 +402,73 @@ describe('§E — the module itself: closure, mirror shape, entry shape', () => 
 });
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
-// §F — ⛔⛔ THE EROSION KEY. A MEASURED DEFECT THIS PACK TRANSCRIBES RATHER THAN REPAIRS.
+// §F — ⭐⭐ THE EROSION KEY. ROOT-0 FIX 1, APPLIED TO ITS THIRD READER, PINNED HERE.
 //
-// The lab's block reads erosion as a RAW `.erosion` — world-engine-lab.html:2128
-// `const _erosion = _fp.surfaceHistory?.erosion ?? 0;` — and this pack transcribes that faithfully.
-// On LAB presets that is correct: driver-presets.js writes `erosion`. On a GAME condition it is not:
+// The lab's block reads a RAW `.erosion` — world-engine-lab.html:2128
+// `const _erosion = _fp.surfaceHistory?.erosion ?? 0;`. On LAB presets that is correct:
+// driver-presets.js writes `erosion`. On a GAME condition it is not:
 // src/generation/PhysicsEngine.js:832 `erosionLevel: erosion,` writes the OTHER spelling, and
 // src/worldengine/port/conditionFromBody.js forwards the game's own key untranslated (deliberately —
 // its comment records the whole history).
 //
-// ⭐ ROOT-0 fix 1 (B1, 2026-08-20) taught BOTH known readers both spellings —
+// ⭐ ROOT-0 fix 1 (B1, 2026-08-20) taught BOTH readers known at the time both spellings —
 // src/worldengine/base/labCore.js:646 and src/worldengine/base/baseStep.js:38, each
-// `d.surfaceHistory?.erosion ?? d.surfaceHistory?.erosionLevel ?? 0`, lab spelling winning. The lab's
-// FLUVIAL BLOCK IS A THIRD READER OF THE SAME QUANTITY AND IT WAS MISSED. Moving the block into a
-// pack is what makes the miss visible, because the pack is the first thing to run that law on a game
-// body.
+// `d.surfaceHistory?.erosion ?? d.surfaceHistory?.erosionLevel ?? 0`, lab spelling winning. THE LAB'S
+// FLUVIAL BLOCK WAS A THIRD READER OF THE SAME QUANTITY AND IT WAS MISSED. Moving the block into a
+// pack is what made the miss visible, because the pack is the first thing to run that law on a game
+// body — so the fix lands in the pack, in the same expression, verbatim.
 //
-// WHAT IT COSTS, MEASURED ON THIS CORPUS RATHER THAN PREDICTED (2026-09-02, 124 solid bodies):
+// WHAT IT MOVED, MEASURED ON THIS CORPUS RATHER THAN PREDICTED (2026-09-02, 124 solid bodies):
 //   · `surfaceHistory.erosion`      is defined on   2 / 124   and reads 0 on both
 //   · `surfaceHistory.erosionLevel` is defined on 122 / 124   and runs 0 … 1, median 0.529
-//   · AS TRANSCRIBED:      wet 4 · relict   0 · airless 120;  uOutflowDensity != 0 on   0 bodies
-//   · WITH A DUAL READ:    wet 4 · relict  64 · airless  56;  uOutflowDensity != 0 on  66 bodies
-//   · uStrandStrength (F20 paleo-strandlines) is 0 on 124/124 as transcribed, non-zero on 122 with a
-//     dual read.
-// So F13 outflow channels and F20 strandlines contribute NOTHING on any game body today, and
-// intent.md decision 4's relict class — "relict bodies get the route" — admits ZERO bodies.
+//   · SINGLE SPELLING (the raw lab line): wet 4 · relict  0 · airless 120; outflow non-zero   0;
+//     strand non-zero   0
+//   · DUAL SPELLING   (what ships):       wet 4 · relict 64 · airless  56; outflow non-zero  66;
+//     strand non-zero 122
+// F13 outflow channels and F20 paleo-strandlines were DARK on every game body and are now live on 66
+// and 122 of them; intent.md decision 4's relict class goes from ZERO bodies to 64.
 //
-// ⛔ WHY IT IS NOT FIXED HERE. It is a one-clause change with a VISIBLE consequence on 64 bodies, and
-// this is a wiring commit whose whole discipline is that the law is transcribed and not re-derived. A
-// pack that quietly read a different key than the block it replaced would be exactly the silent
-// disagreement the one-pipeline fence exists to prevent. It is surfaced as a decision instead.
-//
-// ⛔ THESE ASSERTIONS ARE A RATCHET ON A KNOWN DEFECT, NOT A CLAIM THAT ZERO IS CORRECT. The day the
-// reader is fixed they RED, by design, and the fix is to re-record the numbers here with the ruling
-// that moved them — not to loosen the bound.
+// ⛔ THESE ASSERTIONS RED ON A SINGLE-SPELLING REGRESSION, WHICH IS THE WHOLE POINT OF THE BLOCK. The
+// second `??` is one keystroke from deletion and its loss is SILENT — every other suite in this file
+// would stay green, because a hard 0 is a legal erosion. The three arms are: the reader itself, driven
+// on synthetic conditions; the corpus numbers; and the CONTROL that recomputes the raw read and
+// demands it DISAGREE, so the fix cannot become a no-op unnoticed.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
-describe('§F — the erosion key: the transcribed reader is measured, and the counterfactual with it', () => {
-  it('the game spells it `erosionLevel`; the transcribed `.erosion` read is therefore 0 on every body', () => {
+describe('§F — the erosion key: ROOT-0 fix 1 at its third reader, and the regression that must red', () => {
+  // A minimal solid condition. Built rather than taken from the corpus so the ONLY thing varying
+  // between the arms is the surfaceHistory key.
+  const withHistory = (sh) => ({
+    ...BODIES.find((b) => compositionClass(b.cond) !== 'gas' && b.cond.atmosphere && b.cond.atmosphere.retained !== false).cond,
+    surfaceHistory: sh,
+  });
+
+  it('the reader takes EITHER spelling, and the LAB spelling wins where both exist', () => {
+    // The three cases ROOT-0 fix 1's own comment names, driven rather than read.
+    expect(fluvialDeckPack(withHistory({ erosion: 0.6 }), CTX).meta.erosion).toBe(0.6);
+    expect(fluvialDeckPack(withHistory({ erosionLevel: 0.6 }), CTX).meta.erosion).toBe(0.6);
+    expect(fluvialDeckPack(withHistory({ erosion: 0.6, erosionLevel: 0.2 }), CTX).meta.erosion).toBe(0.6);
+    expect(fluvialDeckPack(withHistory({}), CTX).meta.erosion).toBe(0);
+    // ⛔ THE REGRESSION ARM: with ONLY the game's spelling present, a single-spelling reader answers 0
+    // and everything downstream goes quiet. This is the assertion that reds if the second `??` is
+    // deleted, and it is stated on the OUTPUTS as well as the input, because a hard 0 is legal.
+    const gameOnly = fluvialDeckPack(withHistory({ erosionLevel: 0.5 }), CTX);
+    expect(gameOnly.meta.erosion, 'the second spelling was dropped — ROOT-0 fix 1 regressed').toBe(0.5);
+    expect(gameOnly.meta.fluvialClass).toBe('relict');
+    expect(gameOnly.meta.outflowDensity).toBe(ss(0.3, 0.45, 0.5));
+    expect(gameOnly.meta.strandStrength).toBe(0.5);
+  });
+
+  it('⛔ NO LAB PRESET MOVES: a lab-shaped condition answers exactly what it answered before', () => {
+    // The fix's stated price. driver-presets.js writes `erosion`, which still wins, so the lab's own
+    // fourteen presets are byte-identical across the change — the movement is entirely game-side.
+    for (const e of [0, 0.2, 0.4, 0.6, 1.0]) {
+      const labShaped = withHistory({ erosion: e });
+      const raw = e;   // what the single-spelling read would have returned on this same condition
+      expect(fluvialDeckPack(labShaped, CTX).meta.erosion, `erosion ${e}`).toBe(raw);
+    }
+  });
+
+  it('the corpus: the game spells it `erosionLevel`, and 122 of 124 bodies now carry a real erosion', () => {
     let hasErosion = 0, hasErosionLevel = 0, erosionNonZero = 0;
     for (const b of solids()) {
       const sh = b.cond.surfaceHistory || {};
@@ -437,38 +478,56 @@ describe('§F — the erosion key: the transcribed reader is measured, and the c
     }
     expect(hasErosion).toBe(2);
     expect(hasErosionLevel).toBe(122);
-    expect(erosionNonZero, 'if this is non-zero the reader was fixed — re-record §F, do not loosen it').toBe(0);
+    expect(erosionNonZero, 'under the raw single-spelling read this was 0 — see the block header').toBe(122);
   });
 
-  it('so F13 outflow and F20 strandlines are dark on every solid body — recorded, not asserted as right', () => {
+  it('so F13 outflow and F20 strandlines are LIVE on the corpus, and the counts are recorded', () => {
+    let outflowNonZero = 0, strandNonZero = 0;
     for (const b of solids()) {
       const d = fluvialDeckPack(b.cond, CTX).drivers;
-      expect(resolveDriver('uOutflowDensity', d.uOutflowDensity, CTX), `${b.seed}/${b.kind}`).toBe(0);
-      expect(resolveDriver('uStrandStrength', d.uStrandStrength, CTX), `${b.seed}/${b.kind}`).toBe(0);
+      if (resolveDriver('uOutflowDensity', d.uOutflowDensity, CTX) > 0) outflowNonZero++;
+      if (resolveDriver('uStrandStrength', d.uStrandStrength, CTX) > 0) strandNonZero++;
     }
+    expect(outflowNonZero).toBe(66);
+    expect(strandNonZero).toBe(122);
   });
 
-  it('THE COUNTERFACTUAL, computed rather than guessed: a dual read moves 64 bodies to relict', () => {
-    // The same block, with labCore.js:646's own two-spelling read substituted for the lab block's
-    // raw one. Nothing here changes what ships; it prices the decision.
-    const cls = { wet: 0, relict: 0, airless: 0 };
-    let outflowNonZero = 0, strandNonZero = 0;
+  it('CONTROL: the fix is LOAD-BEARING — the raw read gives a DIFFERENT answer on this corpus', () => {
+    // A fix whose presence changes nothing is indistinguishable from its absence. Recompute what the
+    // untouched lab line would have said on the same bodies and demand it disagree, by a counted
+    // margin rather than "somewhere".
+    const shipped = { wet: 0, relict: 0, airless: 0 };
+    const raw = { wet: 0, relict: 0, airless: 0 };
+    let disagreements = 0;
     for (const b of solids()) {
       const u = deriveUniforms(b.cond);
       const sh = b.cond.surfaceHistory || {};
-      const erosion = sh.erosion ?? sh.erosionLevel ?? 0;
+      const rawErosion = sh.erosion ?? 0;                       // the untouched world-engine-lab.html:2128
       const wet = u.liquidStability > 0.15;
       const hadLiquid = !!(b.cond.atmosphere && b.cond.atmosphere.retained !== false);
-      cls[wet ? 'wet' : ((hadLiquid && erosion > 0) ? 'relict' : 'airless')]++;
-      if ((wet || (hadLiquid && erosion > 0)) && ss(0.3, 0.45, erosion) > 0) outflowNonZero++;
-      if (clamp01(erosion) > 0) strandNonZero++;
+      const rawCls = wet ? 'wet' : ((hadLiquid && rawErosion > 0) ? 'relict' : 'airless');
+      const cls = fluvialClassOf(b.cond);
+      shipped[cls]++; raw[rawCls]++;
+      if (cls !== rawCls) disagreements++;
     }
-    expect(cls).toEqual({ wet: 4, relict: 64, airless: 56 });
-    expect(outflowNonZero).toBe(66);
-    expect(strandNonZero).toBe(122);
+    expect(shipped).toEqual({ wet: 4, relict: 64, airless: 56 });
+    expect(raw).toEqual({ wet: 4, relict: 0, airless: 120 });
+    expect(disagreements, 'the two readers agree everywhere — the fix has become a no-op').toBe(64);
     writeFileSync(join(TMP, 'fluvial-erosion-key.json'), JSON.stringify({
-      asTranscribed: { wet: 4, relict: 0, airless: 120, outflowNonZero: 0, strandNonZero: 0 },
-      ifDualSpellingRead: { ...cls, outflowNonZero, strandNonZero },
+      shipped: { ...shipped, outflowNonZero: 66, strandNonZero: 122, note: 'ROOT-0 fix 1 two-spelling read' },
+      rawSingleSpelling: { ...raw, outflowNonZero: 0, strandNonZero: 0, note: 'the untouched world-engine-lab.html:2128' },
+      bodiesThatChangedClass: disagreements,
     }, null, 2));
+  });
+
+  it('CONTROL: the expression itself is the one ROOT-0 fix 1 wrote, character for character', () => {
+    // The behavioural arms above could all be satisfied by a hand-rolled equivalent that drifts from
+    // the two readers it is supposed to match. This pins the SHAPE, so the three stay one law.
+    const EXPR = '?.erosion ?? condition.surfaceHistory?.erosionLevel ?? 0';
+    expect(read('src/worldengine/drivers/fluvialDeck.js')).toContain(EXPR);
+    // …and the two readers it copies still carry theirs, or this file is now the odd one out.
+    for (const rel of ['src/worldengine/base/labCore.js', 'src/worldengine/base/baseStep.js']) {
+      expect(read(rel), rel).toContain('?.erosion ?? d.surfaceHistory?.erosionLevel ?? 0');
+    }
   });
 });

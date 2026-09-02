@@ -179,12 +179,12 @@ describe('AC-0 (determinism) — the moved router core + GPU bakers introduce NO
 // asserted here is that the game's condition reaches the derivation unmangled and the values land on
 // the material.
 //
-// ⛔⛔ THE RELICT ARM IS VACUOUS ON THIS CORPUS AND IS MADE NON-VACUOUS BY HAND. Measured 2026-09-02:
-// 0 of 124 solid bodies class as `relict`, because the lab's block reads erosion as a raw `.erosion`
-// (world-engine-lab.html:2128) and the game writes `erosionLevel` (PhysicsEngine.js:832) — the one
-// erosion reader ROOT-0 fix 1 (B1) missed. tests/driver-pack-fluvialdeck.test.js §F carries the whole
-// measurement and the counterfactual. Asserting the relict law only where no body reaches it would be
-// a green that means nothing, so the ramp is exercised on a condition that carries the erosion.
+// ⭐⭐ THE RELICT ARM IS LIVE ON REAL BODIES, AND IT WAS NOT UNTIL THE EROSION KEY WAS FIXED. The lab's
+// block reads a raw `.erosion` (world-engine-lab.html:2128) while the game writes `erosionLevel`
+// (PhysicsEngine.js:832) — the third reader ROOT-0 fix 1 (B1, 2026-08-20) missed. The pack IS that
+// reader now and carries the fix, so the corpus splits 4 wet / 64 relict / 56 airless where the raw
+// read gave 4 / 0 / 120 and this arm could only be driven on a hand-built condition.
+// tests/driver-pack-fluvialdeck.test.js §F pins the reader and reds on a single-spelling regression.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 const SEEDS = Array.from({ length: 24 }, (_, i) => `rocky-${i}`);
 function corpus() {
@@ -224,11 +224,15 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
     expect(solid).toBe(124);
     expect(gas).toBe(32);
     expect(counts.wet + counts.relict + counts.airless).toBe(124);
-    expect(counts).toEqual({ wet: 4, relict: 0, airless: 120 });
+    expect(counts).toEqual({ wet: 4, relict: 64, airless: 56 });
+    // ⛔ THE RELICT CLASS MUST BE NON-EMPTY, stated on its own line rather than left inside the triple:
+    // it was 0 before the erosion key was fixed, and a regression there would put it back to 0 while
+    // every other arm in this file stayed green.
+    expect(counts.relict, 'the relict class is empty — the erosion reader regressed (see §F)').toBeGreaterThan(0);
     // vitest hides console.info on a passing test, so the AC-1 record goes to a FILE.
     writeFileSync(join(process.env.TMPDIR || tmpdir(), 'river-corpus.json'), JSON.stringify({
       seeds: SEEDS.length, bodies: RIVER_BODIES.length, solid, gas, classes: counts,
-      note: 'relict is 0 because the lab block reads surfaceHistory.erosion and the game writes erosionLevel — see driver-pack-fluvialdeck.test.js §F',
+      note: 'measured WITH ROOT-0 fix 1 two-spelling erosion read; the raw single-spelling lab line gave 4 / 0 / 120 — see driver-pack-fluvialdeck.test.js §F',
     }, null, 2));
   });
 
@@ -253,8 +257,19 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
     expect(n, 'the corpus must contain wet bodies or this arm is vacuous').toBe(4);
   });
 
-  it('AIRLESS bodies carry the zeros and the −1 — the family is OFF, not defaulted', () => {
-    let n = 0;
+  it('AIRLESS bodies have every MASTER off — and the two ungated terms that are not zero are inert', () => {
+    // ⛔ THE ASSERTION IS ON THE MASTERS, AND THAT IS THE LAB'S STRUCTURE RATHER THAN A LOOSENING.
+    // Each family's shader pass early-outs on its own master — uCoastStrength, uOutflowDensity,
+    // uDeltaDensity and uSeaLevel === -1 (src/worldengine/shaders/uniforms.js:334-343) — so those four
+    // being off deletes F12, F13, F14 and F20 byte-identically on this class.
+    // ⚠ MEASURED 2026-09-02, AND IT CORRECTED THE FIRST DRAFT OF THIS TEST: `uFluvialActivity` and
+    // `uStrandStrength` are NON-ZERO on all 56 airless bodies. Both are `clamp01(erosion)` in the lab's
+    // own block (world-engine-lab.html:2136 and :2157) with NO atmosphere gate on them, and since the
+    // erosion key was fixed an airless body carries a real erosion. They are inert — F20's strandlines
+    // sit behind uCoastStrength 0, and F11's activity does nothing with uFluvialDensity pinned to 0 and
+    // uOutflowDensity 0 — but they are NOT zero, and asserting that they were would have been asserting
+    // a law the lab does not have.
+    let n = 0, morphologyLive = 0;
     for (const b of RIVER_BODIES) {
       if (compositionClass(b.cond) === 'gas' || fluvialClassOf(b.cond) !== 'airless') continue;
       const { u, res } = composed(b);
@@ -264,33 +279,56 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
       expect(u.uCoastStrength.value, `${b.seed}/${b.kind}`).toBe(0);
       expect(u.uDeltaDensity.value, `${b.seed}/${b.kind}`).toBe(0);
       expect(u.uOutflowDensity.value, `${b.seed}/${b.kind}`).toBe(0);
-      expect(u.uStrandStrength.value, `${b.seed}/${b.kind}`).toBe(0);
+      // an airless body is airless BECAUSE it held no atmosphere — the class's own definition, driven
+      expect(fluvialDeckPack(b.cond, { displayRadiusEarth: 1, gates: { deltas: true, coast: true, outflow: true } }).meta.hadLiquid,
+        `${b.seed}/${b.kind}`).toBe(false);
+      if (u.uStrandStrength.value > 0 && u.uFluvialActivity.value > 0) morphologyLive++;
       n++;
     }
-    expect(n).toBe(120);
+    expect(n).toBe(56);
+    expect(morphologyLive, 'the two ungated clamp01(erosion) terms — recorded, not asserted as right').toBe(56);
   });
 
-  it('RELICT bodies take the 0.30→0.45 outflow ramp and no sea — exercised on a built condition', () => {
-    // The class is EMPTY on the generated corpus (see the block header), so the law is driven on a
-    // condition assembled from a real body plus the erosion the game already computes under its own
-    // key. The ramp values are the lab's: 0.30 → 0, 0.375 → 0.5, 0.45 → 1.
-    const base = RIVER_BODIES.find((b) => compositionClass(b.cond) === 'gas' ? false : fluvialClassOf(b.cond) === 'airless'
-      && b.cond.atmosphere && b.cond.atmosphere.retained !== false);
-    expect(base, 'the corpus must contain an atmosphere-bearing dry body').toBeTruthy();
-    for (const erosion of [0.2, 0.35, 0.5]) {
-      const cond = { ...base.cond, surfaceHistory: { ...(base.cond.surfaceHistory || {}), erosion } };
-      expect(fluvialClassOf(cond)).toBe('relict');
-      const material = buildLabPlanetMaterial({ bodyRadius: 1 }).material;
-      applyDriverPacks(material, cond, labPackCtx(base.d, cond, null));
-      expect(material.uniforms.uOutflowDensity.value, `erosion ${erosion}`).toBe(ss(0.3, 0.45, erosion));
-      expect(material.uniforms.uSeaLevel.value, `erosion ${erosion}`).toBe(-1);
-      expect(material.uniforms.uCoastStrength.value, `erosion ${erosion}`).toBe(0);
-      expect(material.uniforms.uStrandStrength.value, `erosion ${erosion}`).toBe(clamp01(erosion));
-      // the lab's relict density branch: 0.4 x erosion, carried in meta because the uniform is pinned
-      expect(fluvialDeckPack(cond, { displayRadiusEarth: 1, gates: { deltas: true, coast: true, outflow: true } }).meta.fluvialDensity)
-        .toBe(0.4 * clamp01(erosion));
+  it('RELICT bodies take the lab’s 0.30→0.45 outflow ramp and no sea — over the REAL corpus', () => {
+    // ⭐ DRIVEN ON THE 64 GENERATED BODIES, not on a fixture. Each body's own erosion is read back off
+    // the pack's meta and the ramp recomputed here from the lab's constants, so the assertion is the
+    // AC's — "relict bodies carry uOutflowDensity by the lab's 0.30→0.45 erosion ramp and
+    // fluvialDensity = 0.4·erosion" — evaluated on the population it is about.
+    const packCtx = { displayRadiusEarth: 1, gates: { deltas: true, coast: true, outflow: true } };
+    let n = 0, ramped = 0;
+    for (const b of RIVER_BODIES) {
+      if (compositionClass(b.cond) === 'gas' || fluvialClassOf(b.cond) !== 'relict') continue;
+      const { u, res } = composed(b);
+      const meta = fluvialDeckPack(b.cond, packCtx).meta;
+      expect(res.applied, `${b.seed}/${b.kind}`).toContain('fluvialDeck');
+      expect(meta.erosion, `${b.seed}/${b.kind}`).toBeGreaterThan(0);
+      expect(u.uOutflowDensity.value, `${b.seed}/${b.kind}`).toBe(ss(0.3, 0.45, meta.erosion));
+      expect(u.uStrandStrength.value, `${b.seed}/${b.kind}`).toBe(clamp01(meta.erosion));
+      expect(meta.fluvialDensity, `${b.seed}/${b.kind}`).toBe(0.4 * clamp01(meta.erosion));
+      // …and a relict body holds NO standing sea: the lab's F14 gate is `_wet`, which it is not.
+      expect(u.uSeaLevel.value, `${b.seed}/${b.kind}`).toBe(-1);
+      expect(u.uCoastStrength.value, `${b.seed}/${b.kind}`).toBe(0);
+      expect(u.uLiquidMask.value, `${b.seed}/${b.kind}`).toBe(0);
+      if (u.uOutflowDensity.value > 0) ramped++;
+      n++;
     }
-    // NON-VACUITY of the ramp itself: the three points are genuinely different answers.
+    expect(n, 'the relict class must be populated — see the block header').toBe(64);
+    // NON-VACUITY, with the honest number rather than the hoped-for one. All 64 clear the ramp's 0.30
+    // foot — MEASURED erosion range on this class is 0.325 … 1.0 — so `ramped` is 64, not a subset.
+    // ⚠ AND THE RAMP SATURATES: 60 of the 64 sit at exactly 1.0 because their erosion is at or above
+    // 0.45, so this population carries TWO distinct outflow values rather than a spread. The lab's
+    // stated intent for F13 is that megafloods are "SINGULAR catastrophic events … RARER"
+    // (world-engine-lab.html:2158-2162); on the game's erosion distribution the 0.30→0.45 window is
+    // too low to deliver that. Recorded here rather than silently re-tuned — the window is the lab's
+    // number and re-choosing it is a rendering decision, not a wiring one.
+    expect(ramped).toBe(64);
+    const outflowValues = new Set();
+    for (const b of RIVER_BODIES) {
+      if (compositionClass(b.cond) === 'gas' || fluvialClassOf(b.cond) !== 'relict') continue;
+      outflowValues.add(composed(b).u.uOutflowDensity.value);
+    }
+    expect(outflowValues.size, 'a single value would mean the ramp is a constant on this population').toBe(2);
+    expect(outflowValues.has(1)).toBe(true);
     expect(ss(0.3, 0.45, 0.2)).toBe(0);
     expect(ss(0.3, 0.45, 0.35)).toBeGreaterThan(0);
     expect(ss(0.3, 0.45, 0.5)).toBe(1);

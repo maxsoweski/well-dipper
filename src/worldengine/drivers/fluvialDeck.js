@@ -1,6 +1,6 @@
 // src/worldengine/drivers/fluvialDeck.js
 // ─────────────────────────────────────────────────────────────────────────────
-// DRIVER PACK #8 — THE FLUVIAL DECK. docs/WORKSTREAMS/wire-river-router-lab-into-game/, 2026-09-02.
+// DRIVER PACK #9 — THE FLUVIAL DECK. docs/WORKSTREAMS/wire-river-router-lab-into-game/, 2026-09-02.
 //
 //     fluvialDeckPack(condition, ctx) -> { drivers, attributes, meta }
 //
@@ -66,26 +66,33 @@
 // so it is the whole of `fluvialDeckDirectDrivers`'s output — derived by SUBTRACTION from the binding
 // below, never listed. It must stay a PLAIN NUMBER: the lab's read-back assigns the complement raw.
 //
-// ⛔⛔ THE EROSION KEY — A DEFECT THIS FILE TRANSCRIBES RATHER THAN REPAIRS, MEASURED NOT PREDICTED.
-// The lab's block reads a RAW `.erosion` (world-engine-lab.html:2128) and so does this file. On lab
-// presets that is right — driver-presets.js writes `erosion`. On a GAME condition it is not:
-// src/generation/PhysicsEngine.js:832 `erosionLevel: erosion,` writes the other spelling and the port
-// forwards the game's own key untranslated. ROOT-0 fix 1 (B1, 2026-08-20) taught BOTH known readers
-// both spellings — src/worldengine/base/labCore.js:646 and src/worldengine/base/baseStep.js:38, each
-// `d.surfaceHistory?.erosion ?? d.surfaceHistory?.erosionLevel ?? 0` — and the lab's FLUVIAL BLOCK IS
-// A THIRD READER THAT WAS MISSED. Moving it here is what makes the miss visible, because this is the
-// first thing to run that law on a game body.
-// MEASURED over the 24 rocky-* seeds (124 solid bodies), 2026-09-02:
+// ⭐⭐ THE EROSION KEY — ROOT-0 FIX 1 APPLIED TO ITS THIRD READER, MEASURED NOT PREDICTED. This is
+// the ONE place this file does not copy the lab line character-for-character, and the departure is
+// the repo's own established seam fix rather than a new law.
+// THE DEFECT: the lab's block reads a raw `.erosion` (world-engine-lab.html:2128) while the game
+// writes the other spelling — src/generation/PhysicsEngine.js:832 `erosionLevel: erosion,` — and
+// src/worldengine/port/conditionFromBody.js forwards the game's own key untranslated (deliberately;
+// its comment carries the whole history). ROOT-0 fix 1 (B1, 2026-08-20) taught BOTH readers known at
+// the time both spellings — src/worldengine/base/labCore.js:646 and src/worldengine/base/baseStep.js:38,
+// each `d.surfaceHistory?.erosion ?? d.surfaceHistory?.erosionLevel ?? 0` under the header "TWO
+// SPELLINGS OF ONE QUANTITY", lab spelling winning where both exist so no preset moves. THE LAB'S
+// FLUVIAL BLOCK WAS A THIRD READER AND IT WAS MISSED. Moving the block here is what made the miss
+// visible, because this pack is the first thing to run that law on a game body — so the fix lands
+// here, in the same expression, verbatim.
+// MEASURED over the 24 rocky-* seeds (124 solid bodies), 2026-09-02, before and after the fix:
 //   · `surfaceHistory.erosion` is defined on 2/124 (reading 0 on both); `erosionLevel` on 122/124,
-//     running 0 … 1 with median 0.529.
-//   · AS TRANSCRIBED:   wet 4 · relict  0 · airless 120;   uOutflowDensity non-zero on  0 bodies.
-//   · WITH A DUAL READ: wet 4 · relict 64 · airless  56;   uOutflowDensity non-zero on 66 bodies.
-//   · `uStrandStrength` is 0 on 124/124 as transcribed, non-zero on 122 with a dual read.
-// So F13 outflow channels and F20 paleo-strandlines are DARK on every game body today, and the
-// workstream's relict class (intent.md decision 4 — "relict bodies get the route") admits ZERO. It is
-// a one-clause change with a visible consequence on 64 bodies, which makes it a rendering decision
-// and not a wiring commit's to make silently. §F of this pack's suite pins every number above and
-// REDS the day the reader is fixed, so the repair cannot land unrecorded.
+//     running 0 … 1 with median 0.529. After the fix, 122/124 bodies carry a non-zero erosion.
+//   · SINGLE SPELLING (the raw transcription): wet 4 · relict  0 · airless 120;
+//     uOutflowDensity non-zero on  0 bodies; uStrandStrength non-zero on   0.
+//   · DUAL SPELLING (what ships):              wet 4 · relict 64 · airless  56;
+//     uOutflowDensity non-zero on 66 bodies; uStrandStrength non-zero on 122.
+// So F13 outflow channels and F20 paleo-strandlines were DARK on every game body under the raw read
+// and are live on 66 and 122 of them under this one, and the workstream's relict class (intent.md
+// decision 4 — "relict bodies get the route") goes from admitting ZERO bodies to admitting 64.
+// ⛔ NO LAB PRESET MOVES: driver-presets.js writes `erosion`, which still wins, so the lab's own
+// fourteen presets answer exactly what they answered before. The change is entirely on the game side,
+// where the old answer was a hard 0 for a quantity two-thirds of the way up its range.
+// §F of this pack's suite pins the DUAL read and REDS on a single-spelling regression.
 //
 // ⛔ DELIBERATE NON-GOALS, each one a decision rather than an omission:
 //   1. NO per-body ocean-fraction law. `seaCoverage` here is the lab's `stability x volatile budget`
@@ -132,7 +139,13 @@ const ss = (e0, e1, x) => { const tt = clamp01((x - e0) / (e1 - e0)); return tt 
 function derive(condition) {
   const u = deriveUniforms(condition);
   // world-engine-lab.html:2128 `const _erosion = _fp.surfaceHistory?.erosion ?? 0;`   (⛔ off the CONDITION here — see the header's seam note)
-  const erosion = condition.surfaceHistory?.erosion ?? 0;
+  // ⭐⭐ AND WITH ROOT-0 FIX 1'S SECOND SPELLING, WHICH IS THE ONE PLACE THIS FILE DOES NOT COPY THE
+  // LAB LINE CHARACTER-FOR-CHARACTER. The expression is verbatim from the two readers that already
+  // carry the fix — src/worldengine/base/labCore.js:646 and src/worldengine/base/baseStep.js:38, both
+  // `d.surfaceHistory?.erosion ?? d.surfaceHistory?.erosionLevel ?? 0` under the header "TWO SPELLINGS
+  // OF ONE QUANTITY". The lab spelling still WINS where both exist, so no lab preset moves. See the
+  // header block for the measurement this closes.
+  const erosion = condition.surfaceHistory?.erosion ?? condition.surfaceHistory?.erosionLevel ?? 0;
   // world-engine-lab.html:2129 `const _stab = u.liquidStability, _rain = u.precipitation, _g = u.surfaceGravity;`
   const stab = u.liquidStability, rain = u.precipitation, g = u.surfaceGravity;
   // world-engine-lab.html:2131 `const _wet = _stab > 0.15;` — F11's EXISTENCE GATE, and the workstream's
