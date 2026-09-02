@@ -220,8 +220,11 @@ describe('relief height cube — (5) no-RNG static guard on the new tectonic + r
     expect(block).not.toMatch(/Date\.now/);
   });
 
-  it('computeAdjGradient (planet-lod-rivers.js) uses no Math.random / Date.now', () => {
-    const src = readFileSync(fileURLToPath(new URL('../planet-lod-rivers.js', import.meta.url)), 'utf8');
+  // RE-POINTED 2026-09-02: computeAdjGradient moved byte-verbatim to src/worldengine/rivers/router.js
+  // (docs/WORKSTREAMS/wire-river-router-lab-into-game/). Only the FILE this scan reads changed; the
+  // assertions and the slice bounds are the ones it has always had.
+  it('computeAdjGradient (src/worldengine/rivers/router.js) uses no Math.random / Date.now', () => {
+    const src = readFileSync(fileURLToPath(new URL('../src/worldengine/rivers/router.js', import.meta.url)), 'utf8');
     const i0 = src.indexOf('export function computeAdjGradient');
     const i1 = src.indexOf('\n}', i0);
     expect(i0).toBeGreaterThan(-1);

@@ -80,11 +80,24 @@ describe('AC3 — U is a swappable interface (carrier.height + accum), no source
   });
 
   it('no source-specific branch exists in routeAndOrder / the carve operand (grep guard)', () => {
-    const src = readFileSync(fileURLToPath(new URL('../planet-lod-rivers.js', import.meta.url)), 'utf8');
+    // RE-POINTED 2026-09-02: routeAndOrder moved byte-verbatim to src/worldengine/rivers/router.js
+    // (docs/WORKSTREAMS/wire-river-router-lab-into-game/); perNodeIncision and applyIncision stayed with
+    // route(). Only WHICH FILE each name is sliced out of changed — the denylist regex is untouched.
+    // ⚠ The `expect(s)` line is NEW and is a LIVENESS PROBE, not a relaxation: `indexOf` returns -1 for a
+    // name that is not in the file it is read from, and `src.slice(-1, e)` is '' — so a scan pointed at the
+    // wrong file would go on PASSING while guarding nothing. That is exactly what this move would have
+    // done silently. The probe makes a mis-pointed scan RED instead of vacuous.
+    const SRC_OF = {
+      routeAndOrder: '../src/worldengine/rivers/router.js',
+      perNodeIncision: '../planet-lod-rivers.js',
+      applyIncision: '../planet-lod-rivers.js',
+    };
     // isolate the two functions and assert they reference neither the plate source nor a regime discriminator.
-    const slice = (name) => { const s = src.indexOf('export function ' + name); const e = src.indexOf('\nexport function ', s + 1); return src.slice(s, e < 0 ? undefined : e); };
+    const slice = (src, name) => { const s = src.indexOf('export function ' + name); const e = src.indexOf('\nexport function ', s + 1); return src.slice(s, e < 0 ? undefined : e); };
     for (const fn of ['routeAndOrder', 'perNodeIncision', 'applyIncision']) {
-      const body = slice(fn);
+      const src = readFileSync(fileURLToPath(new URL(SRC_OF[fn], import.meta.url)), 'utf8');
+      expect(src.indexOf('export function ' + fn), `${fn} is not defined in ${SRC_OF[fn]} — the scan is vacuous`).toBeGreaterThanOrEqual(0);
+      const body = slice(src, fn);
       expect(body).not.toMatch(/plate|archetype|isEarthlike|writePlateUplift|U source|upliftField/i);
     }
   });
