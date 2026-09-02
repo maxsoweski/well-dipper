@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { assignBodyName } from '../util/scene-naming.js';
-import { MOON_ROTATION_DEFAULT_DEG_PER_SEC } from '../core/CelestialTime.js'; import { Planet } from './Planet.js'; import { conditionFromBody } from '../worldengine/port/conditionFromBody.js'; import { updateLabPlanetMaterial } from '../rendering/LabPlanetMaterial.js'; import { POSTERIZE_QUANTUM } from '../rendering/posterizeLevels.js';  // ⛔ RIDES THIS LINE: Planet.js does not import Moon.js, so there is no cycle — but a new import LINE shifts every cited line below it.
+import { MOON_ROTATION_DEFAULT_DEG_PER_SEC } from '../core/CelestialTime.js'; import { Planet } from './Planet.js'; import { conditionFromBody } from '../worldengine/port/conditionFromBody.js'; import { updateLabPlanetMaterial } from '../rendering/LabPlanetMaterial.js'; import { POSTERIZE_QUANTUM } from '../rendering/posterizeLevels.js'; import { disposeProvinceBake } from '../rendering/bake/labBakeHost.js';   // ⛔ RIDES THIS LINE: Planet.js does not import Moon.js, so there is no cycle — but a new import LINE shifts every cited line below it. · ⭐ 2026-09-01 — the province cube's release; the attach itself happens inside Planet._createLabSurface, which this file already calls. RIDES THIS LINE.
 
 /**
  * Moon — a small sphere that orbits a parent planet.
@@ -701,6 +701,6 @@ export class Moon {
 
   dispose() {
     this.mesh.geometry.dispose();
-    this.mesh.material.dispose();
+    this.mesh.material.dispose(); disposeProvinceBake(this.mesh);   // ⭐ 2026-09-01 — releases the province cube render target (no-op on a legacy material). RIDES THIS LINE.
   }
 }

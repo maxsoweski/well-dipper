@@ -65,13 +65,13 @@ const ALLOWLIST = [
     spec: '../../../planet-lod-rivers.js',
     why: 'the instrument samples the SAME height field the bake routes, so it reads createHeightSampler '
        + 'from the bake module rather than re-deriving it — a second sampler is exactly the drift this '
-       + 'plan exists to remove. planet-lod-rivers.js cannot simply follow the other five under src/: it '
-       + 'imports three and ConvexHull, and whether src/worldengine/ admits a three.js dependency is not '
-       + 'a question a mechanical move gets to answer.',
-    clears: 'PLAN §7, "The river/tectonic bakes" — an UNRESOLVED decision, not a scheduled step: does '
-          + 'src/worldengine/ admit a three.js dependency, or do GPU-coupled bakers land under '
-          + 'src/rendering/bake/? Max\'s call (§11.5: anything that changes what the tree means). '
-          + 'Carried as ledger C25 so it cannot sit here unnamed.',
+       + 'plan exists to remove. planet-lod-rivers.js still cannot follow the others under src/ as a FILE: '
+       + 'its sampler is GPU-coupled (an RTT readback) and the 2026-09-01 province wire moved only the mesh '
+       + 'builder (→ src/worldengine/mesh/) and the province baker (→ src/rendering/bake/) out of it.',
+    clears: 'the 108 KB planet-lod-rivers.js move — PLAN §7 "The river/tectonic bakes", still its own step. '
+          + 'The DECISION half is TAKEN (carried C25, 2026-08-12/20, applied 2026-09-01): three.js is admitted '
+          + 'under src/worldengine/ (uniforms.js, mesh/sphereMesh.js); anything needing a RENDERER lands under '
+          + 'src/rendering/bake/ (provinceCube.js). createHeightSampler needs one, so it moves there when it moves.',
   },
   // ── test helpers. A test reaching a test helper is not the tree leaking; it is two halves of the
   // test suite that happen to sit on opposite sides of a directory line. They are listed (rather than

@@ -26,10 +26,10 @@
     },
     {
       "id": "AC-2",
-      "statement": "The mesh resolution is chosen on a measurement against the lab's 40,000-node reference, not inherited from the lab's default — because cost spans 60× while the class fractions are flat (appendix §ii). The mesh is built once per session and shared by every body.",
+      "statement": "The game's carrier mesh IS the lab's mesh (DEFAULT_PARAMS 40000 / lloyd 4), pinned through the lab's own export — because the measurement this AC first asked for (2026-09-01) showed a coarser mesh draws a DIFFERENT partition, not a cheaper copy: nearest-node label agreement against 40k is 69% (2500), 71% (5000), 73% (10k) on shell bodies, and per-body class deltas reach 5.2 pt at 2500. The mesh is built once per session and shared by every body; its cost runs off the main thread.",
       "verifyVia": {
-        "input": "Headless: for at least three bodies spanning at least three dispatch paths (shell, despun, stagnant-lid), run writeBodyRelief on the shipped mesh and on the 40000 / lloyd-4 reference; sample 4096 fixed directions on both and compare nearest-node province labels",
-        "observable": "Each class fraction on the shipped mesh is within 1.0 percentage point of the 40k reference on every body tested. The bound is DERIVED from the appendix's own table: its 2500-node row measures 0.2 pt from 40k and its 700-node row measures 2.1 pt, so the bound passes the former and fails the latter — it discriminates. The direction-sampled label agreement is RECORDED as a number in the build notes (not gated — no bound for spatial agreement has been derived). A second body constructed in the same session does not rebuild the mesh (the builder is called once; assertable by counting)."
+        "input": "tests/province-bake-host.test.js AC-2: import DEFAULT_PARAMS from planet-lod-rivers.js and compare; build the shared mesh",
+        "observable": "GAME_MESH equals { TARGET_N: DEFAULT_PARAMS.TARGET_N, LLOYD_ITERS: DEFAULT_PARAMS.LLOYD_ITERS } and the shared mesh has exactly 40000 nodes; a second body does not rebuild it (meshBuildCount stays 1). SUPERSEDED FORM (kept for the record): 'each class fraction within 1.0 pt of 40k per body' — written against the appendix's population-level table and unreachable per body (max 5.23 pt measured at 2500 over 58 bodies). The resolution table and the agreement numbers are recorded in src/rendering/bake/provinceDispatch.js's header and in the PLAN appendix."
       },
       "layer": "unit",
       "live": false
@@ -56,10 +56,10 @@
     },
     {
       "id": "AC-5",
-      "statement": "The bake has a lifetime: the cube render target a body owns is released when the body is disposed, and the per-body cost is recorded on the shipped resolution.",
+      "statement": "The bake has a lifetime and a thread: the cube render target a body owns is released when the body is disposed; the dispatch (35–160 ms per body at 40k, 645 ms once for the mesh) runs in a Web Worker so no frame carries it, with a synchronous fallback when Worker is unavailable; a reply that lands after dispose is dropped.",
       "verifyVia": {
         "input": "Headless with a stub renderer: construct a lab-surface body, call its dispose(); time the carrier + dispatch + geometry build per body over the 24-seed corpus",
-        "observable": "After dispose(), the body's province cube dispose() has been called exactly once (assertable on the stub). The per-body CPU time at the shipped resolution and the once-per-session mesh time are RECORDED in the build notes beside the appendix's row for that resolution (not gated — the appendix numbers are one machine's). The bake runs at most once per body (a second frame does not re-bake)."
+        "observable": "After dispose(), the body's province cube dispose() has been called exactly once (assertable on the stub) and the placeholder is re-bound. On the async transport: frame 1 requests, the reply lands, the next drawn frame bakes from the transferred arrays exactly once; a rejected transport falls back to the synchronous dispatch; a reply after dispose produces no bake. Headless the transport is 'sync' (no Worker); the production build emits provinceWorker as its own chunk. Per-body dispatch time and the once-per-session mesh time are RECORDED, not gated."
       },
       "layer": "unit",
       "live": false

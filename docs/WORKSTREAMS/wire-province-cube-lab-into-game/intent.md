@@ -23,8 +23,8 @@ back: *"I'm back home so let's proceed"* (2026-09-01).
 
 ⭐ **Correction to the 2026-09-01 handoff, measured 2026-09-01 evening:** it said the sphere mesh
 builder and the province cube baker were *"neither written; both are small."* Both are WRITTEN —
-`buildIrregularSphere` at `planet-lod-rivers.js:410` and `createProvinceCube` / `bakeProvinceCube` /
-`PROVINCE_CUBE_SIZE` at `planet-lod-tectonic.js:377-460`. They live in root lab modules that nothing
+`buildIrregularSphere` at `planet-lod-rivers.js` line 410 and `createProvinceCube` / `bakeProvinceCube` /
+`PROVINCE_CUBE_SIZE` at `planet-lod-tectonic.js` lines 377–460 (both at `dbe17e5`, before the move). They live in root lab modules that nothing
 under `src/` may import (`tests/src-boundary-fence.test.js`). **This is a move-and-wire, not a build**,
 which is exactly the shape `feedback_wire-dont-shoestring` says to check for first.
 
@@ -39,6 +39,9 @@ which is exactly the shape `feedback_wire-dont-shoestring` says to check for fir
   qualification is recorded, not fixed here.)
 - **The mesh resolution is chosen on a measurement against the lab's 40,000-node reference**, not
   inherited from the lab's default, because cost spans 60× while the class fractions are flat.
+  ⭐ **MEASURED 2026-09-01, and the answer is the lab's own mesh.** A coarser mesh draws a *different*
+  partition (69–73% label agreement with 40k on shell bodies), so anything else would be a lab/game
+  divergence declared at birth. The game runs 40k / 4 and pays the cost in a Web Worker instead.
 - In the running game, on a procedural system, flipping province colour off and on **visibly changes
   the ground** of a solid body — and today it changes nothing.
 - ⭐ **Nothing else about the universe moves.** Same planets, same moons, same seeds, same uniforms;

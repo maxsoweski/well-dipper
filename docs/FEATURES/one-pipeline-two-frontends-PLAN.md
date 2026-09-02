@@ -129,7 +129,7 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 Wiring queue (b) or (c) first manufactures a failure nobody can attribute:
 
 - **(a) Wire‑and‑it‑works** — ⛔⛔ **EMPTY as of 2026-08-28, and this line is why the queue was trusted.** It listed F2/F22/F23/F29 (already wired), F24/F25/F31b (queue (b), blocked on `aStorm`) and **F3 — which the VERY NEXT LINE correctly places in queue (c)**. A build session reads this line first, so the contradiction shipped as a work order. MEASURED: `planetData.atmosphere` is falsy on **0 of 800** planets over seeds 1–200 and `atmosphere.physics.retained === false` on **0 of 800**, so `uRayBrightness ≡ 0` and `height.glsl.js:2191 if (uRayBrightness <= 0.0) return 0.0;` returns before any pixel. Palette/iceness: visible half wired, `uCratonColor` → (b), `uBioGround*` → (c).
-- **(b) Wire‑and‑it‑needs‑a‑bake** — F11/F12 (river router), F27/F28 (storm slice — the `uStorm*` UNIFORM family, still out), and `uCratonColor`, blocked on the province cube (`LabPlanetMaterial.js:84`; producer is lab-only). ⭐ **`aStorm` LEFT THIS QUEUE 2026-08-28** — all four gas attributes now bake in `giantDeck.js:307-309`, and F24/F25/F31b went with it.  ⭐⭐ **THE PROVINCE CUBE IS MEASURED END-TO-END AS OF 2026-08-28 — the prerequisite is GONE and the value is QUALIFIED. Do not scope `uCratonColor` without reading the appendix at the END of this file (§ THE PROVINCE CUBE, MEASURED).**
+- **(b) Wire‑and‑it‑needs‑a‑bake** — F11/F12 (river router), F27/F28 (storm slice — the `uStorm*` UNIFORM family, still out), and `uCratonColor`, blocked on the province cube (`LabPlanetMaterial.js:84`; producer is lab-only). ⭐ **`aStorm` LEFT THIS QUEUE 2026-08-28** — all four gas attributes now bake in `giantDeck.js:307-309`, and F24/F25/F31b went with it.  ⭐⭐ **THE PROVINCE CUBE IS MEASURED END-TO-END AS OF 2026-08-28 — the prerequisite is GONE and the value is QUALIFIED. Do not scope `uCratonColor` without reading the appendix at the END of this file (§ THE PROVINCE CUBE, MEASURED).** ⭐⭐ **`uCratonColor` LEFT THIS QUEUE 2026-09-01 — THE PROVINCE CUBE IS BAKED IN THE GAME.** The lab's own mesh builder moved to `src/worldengine/mesh/sphereMesh.js` and its own baker to `src/rendering/bake/provinceCube.js` (both byte-verbatim, both imported back by the root modules); `src/rendering/bake/labBakeHost.js` runs the lab's dispatch for every admitted solid body over the lab's 40k mesh — in a Web Worker (`provinceWorker.js`) — and binds `uProvinceCube` on the body's first draw. Measured and recorded in **§ THE PROVINCE CUBE, WIRED** at the END of this file. Queue (b) is now F11/F12 and F27/F28 only.
 - **(c) Wire‑and‑it‑renders‑nothing until world‑gen work lands** — ~8 features whose inputs are degenerate today: `uRayBrightness ≡ 0` because `hasAtmo` is true on 100% of bodies; `uFacetStrength ≡ 0` because `conditionFromPlanet.js`'s `atmosphereFromPlanet` only nulls atmosphere on `if (phys.retained === false) return null;`, which never happens; `habGate ≡ 0`; `airlessnessOf ≡ 0`. **These must not be measured through the renderer.**
 
 ---
@@ -945,3 +945,67 @@ Neither is written; both are small.
 
 ⚠ **The C25 split is "needs a renderer" vs "does not", NOT "rivers.js vs tectonic.js".** Only
 `createProvinceCube` needs one. Reading C25 as a file-level rule sends the mesh builder to the wrong layer.
+
+
+## § THE PROVINCE CUBE, WIRED — addendum, 2026-09-01
+
+⛔ Appended at EOF for the reason the appendix above gives: an insertion shifts every line-anchored citation below it.
+Workstream: `docs/WORKSTREAMS/wire-province-cube-lab-into-game/` (contract + intent). Suite: `tests/province-bake-host.test.js`.
+
+### (i) The appendix's "still missing" pieces were not missing — they were unreachable
+
+`buildIrregularSphere` was at `planet-lod-rivers.js` line 410 (at `dbe17e5`); `createProvinceCube` / `bakeProvinceCube` / `PROVINCE_CUBE_SIZE` at
+`planet-lod-tectonic.js` lines 377–460 (at `dbe17e5`). Both lived in root modules the boundary fence keeps out of `src/`. So the job was a MOVE, under
+carried C25, not a build: the mesh builder (three-coupled, GPU-free) → `src/worldengine/mesh/sphereMesh.js`; the baker
+(WebGLCubeRenderTarget + CubeCamera) → `src/rendering/bake/provinceCube.js`. Byte-verbatim, diffed against HEAD; the root modules
+import both back and re-export them, so the lab and ~60 suites keep their import path (the `bodyRelief.js` precedent).
+The boundary fence's root-module allowlist is still exactly one entry — rivers.js still supplies `createHeightSampler`.
+
+### (ii) Resolution is NOT a free parameter for the PATTERN — measured, and the answer is the lab's mesh
+
+Appendix (ii) showed class FRACTIONS flat from 2500 nodes up and asked for the spatial pattern to be verified against 40k.
+Verified over the 24 `rocky-*` seeds (58 solid bodies in the first pass, moons; nearest-node label agreement at 4096 fixed directions):
+
+| mesh | shell agree (n=45) | despun agree (n=8) | volcanic (n=4) | per-body max class Δ | ms/body shell | mesh once |
+|---|---|---|---|---|---|---|
+| 2500 / 3 | 69.4% (min 65.6) | 84.6% | 70.4% | 5.23 pt | 3.7 | 48 ms |
+| 5000 / 3 | 71.2% | 86.2% | 77.2% | 7.35 pt | 6.5 | 29 ms |
+| 10000 / 3 | 73.4% | 89.0% | 81.3% | 3.54 pt | 12.4 | 85 ms |
+| **40000 / 4** (the lab's) | reference | reference | reference | — | **51** (stagnant-lid 162) | **645 ms** |
+
+Population means stay within 0.74 pt on the shell path at every resolution — the appendix's finding holds — but the *partition*
+a coarser mesh draws is a different one, because `writeProvince`'s relaxation is in node units. Any mesh but the lab's would put a
+different craton/basin map in the game than in the lab for the same body: a divergence declared at birth. **The game runs 40000 / 4**,
+pinned to `DEFAULT_PARAMS` through the lab's own export (AC-2), and AC-1's byte-identity is therefore exact rather than circular.
+⚠ The first AC-2 draft gated *per-body* class deltas at 1.0 pt off the appendix's *population* table; it was unreachable (max 5.23 pt)
+and is superseded in the contract — the population-vs-per-body confusion is recorded there so it is not re-derived.
+
+### (iii) The cost moved off the main thread, not off the bill
+
+At 40k the dispatch is 35–160 ms per body and 645 ms once for the mesh. `src/rendering/bake/provinceWorker.js` builds the mesh and runs
+every body's dispatch in a Web Worker; the main thread receives the cube geometry as three transferable typed arrays (~1.9 MB, zero-copy)
+and spends ~1–3 ms rendering six 128² faces on the body's next drawn frame. Frame 1 of a body posts the request; the frame after the reply
+bakes; a reply after dispose is dropped; a failed worker falls back to the synchronous dispatch. Headless there is no Worker and the
+transport is `sync`. The production build emits `provinceWorker-*.js` as its own chunk (verified `npm run build`, 152 kB).
+
+### (iv) The corpus, re-measured through the game's own mount inputs
+
+156 bodies over the 24 seeds — **124 solid / 32 gas, all 156 admitted** — matching appendix (iii) exactly once the planet RECORD
+(`entry.planetData`) is passed rather than the entry (the stamps live on the record; passing the entry refuses every planet — measured).
+Every admitted solid body: a province with every node labelled; every gas body: none; every two-class body is a despun one (appendix (iii)
+re-derived). Byte-identical to `writeBodyRelief` reached through `planet-lod-rivers.js` on the same inputs and mesh.
+
+### (v) Gates at the wire
+
+Instrument B 8/8 · Instrument C exit 0, zero delta · citation fence 850/850 · boundary / one-pipeline / base-sphere / height-cube /
+grain-cube fences green · `tests/province-bake-host.test.js` 18/18. **Instrument A reports 19 NEWLY RED — every one of them fails
+identically on a clean checkout of HEAD** (agent-camera-api 6, relief-octave-lod-ramp 5, port-condition-contract 3,
+lab-shader-perframe-seam 1, gas-body-lab-material 6e/uOctaves 1, driver-pack-giantdeck GATE 5 [a git object `4e864bc` absent from this
+clone] 1, world-engine-l0-plumbing 2): the recorded baseline predates them and was itself recorded from a dirty tree. Not re-blessed here —
+naming what moved is the re-bless's job, and none of it is this wire's.
+
+### (vi) Deliberately NOT done here — logged
+
+- **Despun bodies are body-blind on province** (appendix (iii)) → `mvp-spine-lab-quality-backlog.md`, a row in the lab's generative model.
+- The relief, crater and river-carve cubes ride the SAME carrier path now built; each is its own increment.
+- The 108 KB `planet-lod-rivers.js` file move: still its own step (§7); only the 54-line mesh builder left it here.

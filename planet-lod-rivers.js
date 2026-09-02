@@ -55,6 +55,7 @@ import { deriveReliefBudget } from './src/worldengine/base/reliefBudget.js';   /
 import { writeLidResponseSphere, isUnbrokenLidPath } from './src/worldengine/base/lidResponse.js';
 import { interpenetration } from './src/worldengine/base/interpenetration.js';
 import { writeBodyRelief, DEFAULT_GRAIN_DRIVERS } from './src/worldengine/dispatch/bodyRelief.js';   // MOVED 2026-08-28: the production relief dispatch is three-free and the game needs it — imported BACK here so the lab and ~40 suites keep this import path (the featureScale.js precedent).
+import { buildIrregularSphere } from './src/worldengine/mesh/sphereMesh.js';   // MOVED 2026-09-01: the carrier mesh builder, byte-verbatim; the game needs it for the province cube bake — imported BACK here and re-exported at its old location so every existing caller keeps this path.
 
 // ⭐ RE-EXPORTED, NOT RE-DECLARED. Every existing caller imports these two from this module; the
 // definitions now live in src/worldengine/dispatch/bodyRelief.js and this line is the only thing keeping
@@ -374,59 +375,13 @@ export const ROUTER_MAIN = `
 export const HEIGHT_FRAG = HEIGHT_GLSL + ROUTER_MAIN;
 
 // ───────────── irregular sphere mesh (Fibonacci + Lloyd + spherical Delaunay) ─────────────
-function fibonacciSphere(n) {
-  const pts = new Array(n);
-  const ga = Math.PI * (3 - Math.sqrt(5));
-  for (let i = 0; i < n; i++) {
-    const y = 1 - (2 * i + 1) / n;
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    const phi = i * ga;
-    pts[i] = new THREE.Vector3(Math.cos(phi) * r, y, Math.sin(phi) * r);
-  }
-  return pts;
-}
-function sphericalDelaunay(points) {
-  for (let i = 0; i < points.length; i++) points[i].__i = i;
-  const hull = new ConvexHull().setFromPoints(points);
-  const faces = [];
-  for (const f of hull.faces) {
-    const a = f.edge.head().point.__i;
-    const b = f.edge.next.head().point.__i;
-    const c = f.edge.next.next.head().point.__i;
-    faces.push([a, b, c]);
-  }
-  return faces;
-}
-function buildAdjacency(N, faces) {
-  const adjSet = Array.from({ length: N }, () => new Set());
-  for (const [a, b, c] of faces) {
-    adjSet[a].add(b); adjSet[a].add(c);
-    adjSet[b].add(a); adjSet[b].add(c);
-    adjSet[c].add(a); adjSet[c].add(b);
-  }
-  return adjSet.map(s => Array.from(s));
-}
-// Returns { verts:[[x,y,z]…], faces:[[a,b,c]…], adj:[[…neighbours]…] } — terrain-independent.
-export function buildIrregularSphere(targetN, lloydIters) {
-  let points = fibonacciSphere(targetN);
-  for (let it = 0; it < lloydIters; it++) {
-    const faces = sphericalDelaunay(points);
-    const adj = buildAdjacency(points.length, faces);
-    const moved = new Array(points.length);
-    const c = new THREE.Vector3();
-    for (let i = 0; i < points.length; i++) {
-      c.copy(points[i]);
-      for (const nb of adj[i]) c.add(points[nb]);
-      c.normalize();
-      moved[i] = c.clone();
-    }
-    points = moved;
-  }
-  const faces = sphericalDelaunay(points);
-  const verts = points.map(p => [p.x, p.y, p.z]);
-  const adj = buildAdjacency(verts.length, faces);
-  return { verts, faces, adj };
-}
+// MOVED 2026-09-01 to src/worldengine/mesh/sphereMesh.js, BYTE-VERBATIM (fibonacciSphere,
+// sphericalDelaunay, buildAdjacency, buildIrregularSphere), so the GAME can build the carrier the
+// province cube is baked from — nothing under src/ may import this root module. Imported back and
+// RE-EXPORTED below so the lab and ~60 test suites keep `import { buildIrregularSphere } from
+// './planet-lod-rivers.js'` (the bodyRelief.js precedent, df6818c). three-coupled but GPU-free ⇒
+// src/worldengine/, not src/rendering/bake/ (carried C25: "needs a renderer" vs "does not").
+export { buildIrregularSphere };
 
 // ═══════════════════ REAL HEIGHT via RTT readback (THE coupling) ═══════════════════
 // Pack the N mesh vertex unit-directions as a point cloud whose clip-space xy hits one texel
