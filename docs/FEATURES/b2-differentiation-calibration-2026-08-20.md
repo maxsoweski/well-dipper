@@ -269,7 +269,7 @@ factory 4.0 on the lab material. Ruled at `docs/FEATURES/step6-parity-ledger.md:
 half, `carried`), whose cell carries the gas half in prose on P-15's precedent.
 
 ⚠ **AND THE GAS HALF IS NOT A SUBJECT ON P-15'S OWN LIST, WHICH THIS DOCUMENT SAYS RATHER THAN LETS
-THE CROSS-REFERENCE IMPLY.** `tests/material-parity-list.test.js:540` pins every measured subject to
+THE CROSS-REFERENCE IMPLY.** `tests/material-parity-list.test.js:553` pins every measured subject to
 exactly ONE row, so `uNoiseScale` cannot appear in P-15's subject list while it is P-10's. The gas
 half therefore exists as **reasoned evidence in two cells and in no machine-checked ruling column** —
 a real gap, named here, and the honest form of it is: the ruling that *is* machine-checked is P-10's

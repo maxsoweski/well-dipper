@@ -127,9 +127,16 @@ lab's `route()` bakes — the grain cube (`uTectonicGrainCube`) is then one more
 
 ## Risks named up front
 
-- **VRAM:** 50.3 MB per routed body (carve cube) + 6.3 MB per solid body (relief + crater) + 0.8 MB
-  (province). A procedural system with five wet bodies drawn ≈ 280 MB of cube maps. Fine on Max's desktop
-  GPU; unknown on the phone (the mobile pass is live). Recorded; Max's phone is the only instrument.
+- **VRAM:** 50.3 MB per routed body (carve cube) + 3.1 + 3.1 MB per solid body (relief + crater) + 0.8 MB
+  (province) — so **57.3 MB per ROUTED body and 7.0 MB per further solid one**. ⭐⭐ CORRECTED 2026-09-02
+  (the whole-branch review): this line said "five **wet** bodies ≈ 280 MB", and ROUTED is wet ∪ relict —
+  the carve cube binds on both, and relict is 64 of the 68 routed bodies. MEASURED over the 24-seed
+  corpus (`tests/river-bake-host.test.js` → `$TMPDIR/river-corpus.json` `perSystem`): 68 routed bodies
+  across the 21 seeds that route anything (3 route none), i.e. **3.24 routed bodies per routing system,
+  2.83 per seed, max 5**. Per procedural system that is **≈ 204 MB mean** over the routing systems,
+  ≈ 179 MB over all 24 seeds, and **≈ 300 MB on the worst measured system** (`rocky-4` and `rocky-14`:
+  5 routed + 2 further solid). Fine on Max's desktop GPU; unknown on the phone (the mobile pass is live).
+  Recorded; Max's phone is the only instrument.
 - **Cold cost per body** in the worker: 35–160 ms dispatch + ~100–170 ms route (the dendritic AC7
   numbers at 40k) + geometry; the main thread renders six 1024² faces once. Recorded, not gated.
 - **A wet body whose crossover is exactly 0** (R ≤ 0.25 or ≥ 4 R⊕ by the lab's law) would route on a

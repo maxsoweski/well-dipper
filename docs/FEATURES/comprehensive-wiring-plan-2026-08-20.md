@@ -387,7 +387,7 @@ named** · **ledger P-10 SPLIT and re-ruled**: the `noiseScale`/`uNoiseScale` ha
 measured evidence; a new `noiseDetail` row → `accepted-loss` on the **P-08 precedent**, because it has no
 lab counterpart and therefore fails §2's `blocking` test. **M-09 → `carried`** (its evidence already
 records that `noiseDetail` has no moon-side equivalent, so it splits clean) · ⛔ three rulings only —
-`deferred` is not a legal fourth and `tests/material-parity-list.test.js:772` reddened on it inside one
+`deferred` is not a legal fourth and `tests/material-parity-list.test.js:789` reddened on it inside one
 run the last time a session tried; a deferral lives in EVIDENCE · Instrument E paired shot on a named
 body with a same-session liveness pair · **then Max's UAT — the quad, his eyes.**
 
@@ -1062,7 +1062,7 @@ B2–B7 need no further question. ⛔ **Counter-move unchanged: the Phase-5 exec
 - **P-10 and P-14 carry residues that cannot legally become `carried`** — `noiseDetail` has *"no lab
   counterpart at all"* and `uDispDomainScale` has no producer. Both fail §2's `blocking` test and belong with
   P-06/P-08/P-09. **Split them; the P-08 precedent makes it an agent correction.** ⛔ Do not invent a fourth
-  verdict: the last session that tried reddened `tests/material-parity-list.test.js:772` inside one run.
+  verdict: the last session that tried reddened `tests/material-parity-list.test.js:789` inside one run.
 - **P-12, P-13 and P-14's evidence carries a pre-Step-10a denominator** (*"103/103"*) against a subject set the
   fourth pack widened past 163. → B0 item 7.
 - **P-13's mechanism claim is stale** — `db1cf51` forwarded all three offsets and `ROCKY_SURFACE_UNIFORMS`

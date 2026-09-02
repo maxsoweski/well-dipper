@@ -334,13 +334,13 @@ because neither the selector nor the strength law exists. Meanwhile §2's `accep
 fires, on its second clause ("a producer the plan has already fenced out of pack #1"), because PLAN §7
 fences the physics-authoring job by name. **Two of the three definitions fire at once and §2 does not
 arbitrate.** That gap is §2's. Inventing an arbitration silently is the same class of move as the
-invented fourth ruling that `tests/material-parity-list.test.js:772` caught in one run, so nobody
+invented fourth ruling that `tests/material-parity-list.test.js:789` caught in one run, so nobody
 invented one.
 
 ### ⚠ The existing closure fence is blind to this row
 
 `'uBandStrength'` is **already** a member of the pinned `LEDGER.written` set
-(`tests/material-parity-list.test.js:459-461`), because it is written on every gas body. So a
+(`tests/material-parity-list.test.js:461-463`), because it is written on every gas body. So a
 `P-04`-style containment assertion is green **today, with R-07 fully open**. Any future closure claim
 needs a new per-branch assertion on the *field* — not the gate — or it will be a green test asserting
 nothing.

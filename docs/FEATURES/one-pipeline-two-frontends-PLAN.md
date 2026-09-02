@@ -74,14 +74,14 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 | F10 | Ridged / grooved icy terrain | ✅ | ❌ | |
 | **F11** | **River networks** | ✅ | **✅** | the dendritic overlay (`createRiverOverlay`); the .00014 measured the RETIRED worm-trail carve — mvp-spine-lab-quality-backlog.md:87 `uFluvialDensity`. Wired 2026-09-02, live pair pending |
 | **F12** | **Deltas & alluvial fans** | ✅ | **✅** | gates on `uDeltaDensity` AND the carve cube's mouth channel; both driven 2026-09-02 |
-| F13 | Outflow channels | ✅ | ❌ | |
-| F14 | Lakes & seas | ✅ | ❌ R | game has ocean type + islands |
+| **F13** | **Outflow channels** | ✅ | **✅** | driven by pack #9 + the same bake 2026-09-02 (`uOutflowDensity`/`uOutflowActivity`, and the carve cube's B channel the shader reads them against); live on 66 of 124 corpus bodies once ROOT-0 fix 1's erosion spelling landed — it was dark on all of them under the raw read. ⚠ live pair pending; ⚠ QB-23, the ramp saturates on 60 of 64 relict bodies |
+| **F14** | **Lakes & seas** | ✅ | **✅** | driven by pack #9 + the same bake 2026-09-02 (`uSeaLevel` + `uLiquidMask`; on a wet body the router's histogram solve wins at bake — intent.md decision 3). game has ocean type + islands (`❌ R` — the game-own parallel still to delete). ⚠ live pair pending |
 | F15 | Dunes & wind forms | ✅ | ❌ | |
 | F16 | Dust mantles | ✅ | ❌ | |
 | F17 | Glacial landforms | ✅ | ❌ | |
 | F18 | Sublimation landscapes | ✅ | ❌ | |
 | F19 | Mass‑wasting deposits | ⚠️ **inert** | ❌ | measured .00006 |
-| F20 | Coastlines | ✅ | ❌ | |
+| **F20** | **Coastlines** | ✅ | **✅** | driven by pack #9 + the same bake 2026-09-02 (`uCoastStrength` + `uStrandStrength`, gated on F14's sea; the host writes coast 1.0 with the solved level). strandlines live on 122 of 124 corpus bodies after the erosion-spelling fix, 0 before it. ⚠ live pair pending |
 | F21 | Karst / dissolution | ✅ | ❌ | |
 | **F22** | **Polar caps & frost** | ✅ | **✅** | ⭐ ALREADY WIRED — the row was stale, not the code. `solidFeaturesPack` is in the frozen runtime registry (`src/worldengine/drivers/index.js:240`) and the game reaches it through `applyDriverPacks` at `src/objects/Planet.js:2035`; the uniforms are declared in the SHARED bag (`src/worldengine/shaders/uniforms.js`), not in `Planet.js`. MEASURED 2026-08-28 over 60 seeds / 229 planets: `solidFeatures` claims 138, and `uFrostMaxCoverage` is non-zero on **45 of 138** with **46 distinct values**, range 0→1. |
 | **F23** | **Snowline boundary** | ✅ | **✅** | Same wire as F22 — one `solidFeaturesPack` call, consumed by `pldBands` (`src/worldengine/shaders/height.glsl.js:3195`). ⚠ NOT separately measured: F22 is the arm I put a number on; F23 is inferred from riding the same pack. Confirm before quoting it alone. |
@@ -118,11 +118,11 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 
 ### Honest headline
 
-- **Through the world engine, in both lab and game: 13 of 53 (24.5%)** — complete (8): F2, F22, F23, F24, F25, F29, F34, F51. Partial (5): F3, F31b, F35, F53. ⭐ UPDATED 2026-08-28 (second revision that day): F24/F25 closed when the `aStorm` bake landed. ✅ F24/F25 are UAT-CLOSED by Max on 2026-08-28, on an in-game A/B at 2.4 body radii. ⛔ ENUMERATED BY F-ID ON PURPOSE — the bare arithmetic has now gone stale twice. ⭐ 2026-09-02: **the PROVINCE CUBE (`uCratonColor` / `uFreshColor` / `uSedColor` by history) is SHIPPED in the game** (Max UAT 2026-09-02 — "it does read as a crust and coheres", `ccee0d1`; record: § THE PROVINCE CUBE, WIRED at EOF). It is a queue-(b) UNIFORM wire, not an F-row, so the F-id count above is unchanged by it — do not bump the arithmetic for it. ⭐⭐ 2026-09-02, SECOND ENTRY THAT DAY: **F11 and F12 ARE WIRED** — their rows above are re-scored ✅/✅ and the record is **§ THE RIVER ROUTER, WIRED** at the END of this file. These two ARE F-rows, so by this list's own rule the count moves to **15 of 53 (28.3%)** — complete (10): F2, **F11**, **F12**, F22, F23, F24, F25, F29, F34, F51; partial (5) unchanged. ⚠ **SCORED ON THE WIRE, NOT ON A PICTURE:** the live A/B pair (contract AC-4 relief, AC-5 rivers) is PENDING and no game body has been seen with a river on it. ⚠ The two bullets below (lab-only tally; "never observed rendering anywhere", which still lists F11/F12 as inert) are NOT re-derived here — enumerate from the table, never from those totals.
+- **Through the world engine, in both lab and game: 13 of 53 (24.5%)** — complete (8): F2, F22, F23, F24, F25, F29, F34, F51. Partial (5): F3, F31b, F35, F53. ⭐ UPDATED 2026-08-28 (second revision that day): F24/F25 closed when the `aStorm` bake landed. ✅ F24/F25 are UAT-CLOSED by Max on 2026-08-28, on an in-game A/B at 2.4 body radii. ⛔ ENUMERATED BY F-ID ON PURPOSE — the bare arithmetic has now gone stale twice. ⭐ 2026-09-02: **the PROVINCE CUBE (`uCratonColor` / `uFreshColor` / `uSedColor` by history) is SHIPPED in the game** (Max UAT 2026-09-02 — "it does read as a crust and coheres", `ccee0d1`; record: § THE PROVINCE CUBE, WIRED at EOF). It is a queue-(b) UNIFORM wire, not an F-row, so the F-id count above is unchanged by it — do not bump the arithmetic for it. ⭐⭐ 2026-09-02, SECOND ENTRY THAT DAY: **F11 and F12 ARE WIRED** — their rows above are re-scored ✅/✅ and the record is **§ THE RIVER ROUTER, WIRED** at the END of this file. These two ARE F-rows, so by this list's own rule the count moves to **15 of 53 (28.3%)** — complete (10): F2, **F11**, **F12**, F22, F23, F24, F25, F29, F34, F51; partial (5) unchanged. ⚠ **SCORED ON THE WIRE, NOT ON A PICTURE:** the live A/B pair (contract AC-4 relief, AC-5 rivers) is PENDING and no game body has been seen with a river on it. ⚠ The two bullets below (lab-only tally; "never observed rendering anywhere") are NOT re-derived here — enumerate from the table, never from those totals. ⭐⭐ **RE-COUNTED 2026-09-02, THIRD ENTRY THAT DAY (the whole-branch review): 18 of 53 (34.0%)** — complete (13): F2, **F11**, **F12**, **F13**, **F14**, **F20**, F22, F23, F24, F25, F29, F34, F51; partial (5) unchanged. The first pass scored only F11/F12 because those are the rows the workstream is NAMED after, but **driver pack #9 is one law answering FIVE features** and the same bake carries all of them — `uOutflowDensity`/`uOutflowActivity` (F13), `uSeaLevel`/`uLiquidMask` (F14), `uCoastStrength`/`uStrandStrength` (F20) — so three more rows were wired in the same commits and left unscored. ⚠ **STILL SCORED ON THE WIRE, NOT ON A PICTURE**, for all five: the live pair is pending. ⚠ And the "never observed rendering anywhere" bullet below IS re-derived on this pass (10 → 8) because it named F11/F12 by ID; the lab-only tally is not.
 - **Lab‑only: 47.** Of those, 23 have a game‑own parallel to delete (`❌ R`) and 23 have nothing in the game at all. ⚠ The previous `48 / 22 / 26` predates F51 and did not sum against the table's own rows; these three are counted off the GAME column directly.
 - **Game‑only: 1** (F52).
 - **UNKNOWN: 1** (F26 — resolve the doc/ID question; do not guess).
-- **Never observed rendering anywhere: 10** — F44–F49 blocked, F11/F12/F19 inert, F36 unverified.
+- **Never observed rendering anywhere: 8** — F44–F49 blocked, F19 inert, F36 unverified. ⭐ 2026-09-02: F11/F12 left this bullet when they were wired (and F13/F14/F20 with them), so the count drops 10 → 8. ⚠ "Never observed RENDERING" is still true of all five in the GAME — the live A/B pair is pending — but they are no longer INERT, which is what this bullet is counting; the distinction is the whole reason the row notes say "live pair pending" rather than "shipped".
 
 ### Three queues, not one
 
@@ -1062,13 +1062,13 @@ Without the two-spelling read, F13 outflow and F20 coasts are dark on every body
 
 ### (iii) One message per body, and what it costs
 
-The province wire's transport was EXTENDED, not duplicated. provinceDispatch.js:174 `buildLabBundleForBody` builds a body's whole
+The province wire's transport was EXTENDED, not duplicated. provinceDispatch.js:175 `buildLabBundleForBody` builds a body's whole
 bundle and `src/rendering/bake/provinceWorker.js` runs it off the main thread: **ONE request and ONE reply per body**, carrying the
 province, relief and crater arrays and — on routed bodies — the carve valley and ribbon arrays as well, all transferred, every buffer
 distinct. A reply after dispose is dropped; a failed worker falls back to the synchronous path; headless there is no Worker and the
 transport reads `sync`. The production build emits `provinceWorker-*.js` as its own chunk.
 
-labBakeHost.js:344 `attachLabBake` and labBakeHost.js:599 `disposeLabBake` (the `attachProvinceBake` / `disposeProvinceBake` aliases
+labBakeHost.js:344 `attachLabBake` and labBakeHost.js:623 `disposeLabBake` (the `attachProvinceBake` / `disposeProvinceBake` aliases
 are kept, so `Planet.js` and `Moon.js` are untouched) bind, per body:
 
 - **every solid body** — the relief and crater cubes, at `uReliefBakeStrength = bakeReliefCrossover(visScaleOf(R))` and
@@ -1093,8 +1093,13 @@ and `_labRelief`.
 
 Excluding the cube renders, which happen on the main thread on the body's next drawn frame.
 **VRAM, DERIVED from the cube sizes and formats rather than measured:** province 0.8 MB + relief 3.1 + crater 3.1 on every solid body,
-plus carve 50.3 on a routed one = **57.3 MB per routed body**. ⚠ Recorded, never gated — and the phone is the instrument that number
-belongs to, which is an open item and not an agent-closable one.
+plus carve 50.3 on a routed one = **57.3 MB per routed body**, and **7.0 MB per further solid one**. ⭐⭐ AND THE FIGURE THAT MATTERS IS PER
+SYSTEM, NOT PER BODY, because a system's bodies bake as you fly through it: MEASURED over the 24-seed corpus (`tests/river-bake-host.test.js`
+→ `$TMPDIR/river-corpus.json` `perSystem`) there are **68 routed bodies across the 21 seeds that route anything** (3 route none), i.e.
+**3.24 routed bodies per routing system, 2.83 per seed, max 5** — so **≈ 204 MB mean** per routing system, ≈ 179 MB averaged over all 24
+seeds, and **≈ 300 MB on the worst measured system** (`rocky-4` and `rocky-14`, 5 routed + 2 further solid). ⛔ ROUTED IS wet ∪ relict, and
+64 of the 68 are RELICT: an earlier draft of this arithmetic scoped it per WET body and landed about four times low. ⚠ Recorded, never
+gated — and the phone is the instrument that number belongs to, which is an open item and not an agent-closable one.
 
 ### (iv) The corpus, and what the router actually produced
 
@@ -1120,6 +1125,12 @@ allowlist still exactly one entry. Full suite 20 failing / 8 files, identical to
 
 ### (vi) Deliberately NOT done here — logged
 
+- ⭐⭐ **THE LAB'S OWN FLUVIAL VALUES MOVED, ON PURPOSE, AND THE DELTA IS DECLARED RATHER THAN REVERTED.** Driver pack #9 reads volatiles off
+  the per-seed draw `_dp` (the `:2075` seam every other pack uses) where the block it replaced read the frozen preset `_fp`, so **11 of 72
+  preset × seed combos move** — all of them wet, sole mover `composition.volatileFraction` ±S_VOL; Rocky (Earthlike) seed 0 `uLiquidMask`
+  0.295 → 0.372 and `seaLevel` −0.052 → −0.014, i.e. the lab's Rocky shoreline is wetter than it was. `uFluvialDepth` moves on 24 of 72 by a
+  SECOND and different seam (the condition vector's radius-aware gravity against the block's radius-blind one — the `:1964` conversion).
+  Pinned by `tests/driver-pack-fluvialdeck.test.js` §H; contract AC-0 carries the declaration.
 - **A 35 % ocean on every wet world** → **QB-21**. The router's target is a lab UI constant, not a condition → coverage law.
 - **Per-body river admission is unauthored in the lab** → **QB-22**. The lab has a global toggle; the game admits a body on the F11
   existence gate (`liquidStability > 0.15`) for ribbon, carve and sea alike.
