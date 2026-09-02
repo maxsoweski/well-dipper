@@ -27,14 +27,14 @@ measured .00014 / .00015"* (`one-pipeline-two-frontends-PLAN.md:75-76`). `mvp-sp
 corrects that: the .00014 measures `uFluvialDensity`, which the lab pins to 0 on purpose — the OLD
 worm-trail carve is RETIRED; the dendritic overlay IS the river feature. The .00015 is a missing-bake
 artefact: deltas gate on the carve cube's mouth channel, so a measurement taken without the river bake
-reads zero. F11/F12 in the game = `createRiverOverlay.route()` (`planet-lod-rivers.js:1295`) and
+reads zero. F11/F12 in the game = `createRiverOverlay.route()` (`planet-lod-rivers.js:602`) and
 everything it feeds.
 
 ## What the lab does that the game must — the DOES table (feedback_worldengine-does-unlocks-map)
 
 | DOES (output) | driver | player sees |
 |---|---|---|
-| relief cube `uReliefBakeCube` (R = height, GBA = gradient) + crater cube `uCraterBakeCube` | `writeBodyRelief` → `carrier.height`, margin-composited by `compositeMargins` (`planet-lod-rivers.js:241`: shelf + craters); bound at `uReliefBakeStrength = 1.0 × bakeReliefCrossover(visScaleOf(radiusEarth))` | the body's macro relief IS the lab's history-derived body (plate / shell / volcanic / stagnant-lid) on Earth-sized bodies, blending to the analytic body as size departs 1 R⊕ — the lab's own blend for that body; craters ride through the fade |
+| relief cube `uReliefBakeCube` (R = height, GBA = gradient) + crater cube `uCraterBakeCube` | `writeBodyRelief` → `carrier.height`, margin-composited by `compositeMargins` (`src/worldengine/rivers/router.js:178`: shelf + craters); bound at `uReliefBakeStrength = 1.0 × bakeReliefCrossover(visScaleOf(radiusEarth))` | the body's macro relief IS the lab's history-derived body (plate / shell / volcanic / stagnant-lid) on Earth-sized bodies, blending to the analytic body as size departs 1 R⊕ — the lab's own blend for that body; craters ride through the fade |
 | carve cube `uRiverCarveMap` R (valley depth) | `routeAndOrder` (`:602`, priority-flood D∞ + Horton–Strahler) → `buildValleyGeometry` (`:916`, stream-power depth by order) | V-valleys with darkened floors along the REAL drainage (F11 carve) |
 | carve cube G (mouth strength ∝ drainage) | sea-mouth nodes weighted by `accum` | deltas and fans at the real mouths, bigger rivers bigger deltas (F12); coast bites at mouths (F20) |
 | carve cube B (Strahler order) | the routed graph | the megaflood outflow on the real trunk (F13) |
@@ -63,7 +63,7 @@ lab's `route()` bakes — the grain cube (`uTectonicGrainCube`) is then one more
   (`uSeaLevel` −1, undriven: `src/worldengine/shaders/uniforms.js:334`). **"The right amount of
   ocean/lakes for the planet … not a puddle or a drowned world."**
 - **The terrain a body shows is the terrain its rivers were routed on.** The lab's rule (`route()`
-  `planet-lod-rivers.js:1381`, fenced by `tests/relief-router-repoint.test.js`): ONE field → ONE cube →
+  `planet-lod-rivers.js:688`, fenced by `tests/relief-router-repoint.test.js`): ONE field → ONE cube →
   both consumers, gated by the same strength. So the relief and crater cubes ride along, at the lab's own
   blend for that body.
 - **Every solid body gets the fluvial family's drivers from its condition**; gas bodies none; today every

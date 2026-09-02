@@ -66,9 +66,9 @@ const ALLOWLIST = [
     why: 'the instrument samples the SAME height field the bake routes, so it reads createHeightSampler '
        + 'from the bake module rather than re-deriving it — a second sampler is exactly the drift this '
        + 'plan exists to remove. planet-lod-rivers.js still cannot follow the others under src/ as a FILE: '
-       + 'its sampler is GPU-coupled (an RTT readback) and the 2026-09-01 province wire moved only the mesh '
-       + 'builder (→ src/worldengine/mesh/) and the province baker (→ src/rendering/bake/) out of it.',
-    clears: 'the 108 KB planet-lod-rivers.js move — PLAN §7 "The river/tectonic bakes", still its own step. '
+       + 'its sampler is GPU-coupled (an RTT readback). The 2026-09-01 province wire moved out the mesh builder '
+       + '(→ src/worldengine/mesh/) and the province baker, and the 2026-09-02 router wire the router core (→ src/worldengine/rivers/) and the carve + height cube bakers (→ src/rendering/bake/).',
+    clears: 'the remaining 59 KB of planet-lod-rivers.js — PLAN §7 "The river/tectonic bakes", still its own step. '
           + 'The DECISION half is TAKEN (carried C25, 2026-08-12/20, applied 2026-09-01): three.js is admitted '
           + 'under src/worldengine/ (uniforms.js, mesh/sphereMesh.js); anything needing a RENDERER lands under '
           + 'src/rendering/bake/ (provinceCube.js). createHeightSampler needs one, so it moves there when it moves.',

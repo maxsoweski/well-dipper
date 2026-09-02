@@ -175,7 +175,7 @@ export function buildGrainCubeGeometry({ mesh, strikeWorld, grainMag, regime }) 
 
 // ── createGrainCube({ renderer, size }) — LIVE/GPU baker (mirrors createCarveCubeMap) ───────────
 // T7 (plan §D2): rasterize buildGrainCubeGeometry into a HalfFloat cube via a CubeCamera at the
-// origin — the exact lifecycle createCarveCubeMap (planet-lod-rivers.js:716) uses, so the grain bake
+// origin — the exact lifecycle createCarveCubeMap (src/rendering/bake/carveCube.js:35-82) uses, so the grain bake
 // rides the same once-per-body cadence (T8 calls update() inside route()). The planet shader reads it
 // with one textureCube(uTectonicGrainCube, normalize(vPos)) → world strike (RG), grainMag (B),
 // regime (A). NEEDS a WebGL renderer ⇒ exercised LIVE on :9223, not headless (see liveDeferred).

@@ -707,7 +707,7 @@ were ported from the lab and fenced at max delta 0 in `fd2fdd4`.
 ## LAYER 4 — the bakes — `TODO` ✅ **PRICED 2026-08-05 — IT IS NO LONGER THE UNPRICED RISK**
 
 ⭐ **THE PROBE THIS FILE BUDGETED AT "A DAY" TOOK UNDER AN HOUR, HEADLESS, IN NODE.** `route()` is a
-plain ES module function (`planet-lod-rivers.js:1449`, inside `createRiverOverlay` at `:1382`). It
+plain ES module function (`planet-lod-rivers.js:602`, inside `createRiverOverlay` at `:535`). It
 touches no DOM and no canvas; its only GPU coupling is `renderer.render` / `readRenderTargetPixels`,
 both stubbable. ⛔ **`tests/ws4-grain-bake-host.test.js:19` states as fact that "route() cannot run
 headless." That is false and is probably where the "a day" budget came from — fix it in place.**
@@ -730,7 +730,7 @@ across overlays.** That is the layer-4 architecture decision, and this file neve
 ⚠ **`route()` cost is FLAT in radius** (111–138 ms over a 30× radius span) because the mesh is
 global; `radiusEarth` feeds only the ribbon/valley WIDTH law. **The radius sweep this file
 prescribed was the wrong probe.** The real radius dependence is a **BRANCH**:
-`planet-lod-rivers.js:1419` `const bakedOn` gates the router's height source on `uReliefBakeStrength > 0`, and the
+`planet-lod-rivers.js:681` `const bakedOn` gates the router's height source on `uReliefBakeStrength > 0`, and the
 lab rewrites that uniform every frame as `grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis)`
 (`world-engine-lab.html:4941`) with `sVis = radiusEarth^0.5` — **exactly 0 for radiusEarth ≤ 0.25 or
 ≥ 4.0.** On that branch `route()` calls `sampler.read()`: a 200×200 RGBA-float RTT running the full

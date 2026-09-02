@@ -14,7 +14,7 @@
     (MaxEquation, blendSrc=OneFactor, blendDst=OneFactor), WITHOUT cross-channel
     corruption, ESPECIALLY at confluences where multiple valley strips overlap?
 
-    This replicates production's createCarveCubeMap (planet-lod-rivers.js:685-726)
+    This replicates production's createCarveCubeMap (src/rendering/bake/carveCube.js:35-82)
     EXACTLY — same RT format (HalfFloatType/RGBAFormat/1024/LinearFilter/no-mips),
     same blend state, same DoubleSide/depthTest:false, same clear(0x000000,0) —
     but rasterizes a SMALL SYNTHETIC controlled scene with hand-set per-vertex
@@ -60,7 +60,7 @@
 
     // ════════════════════════════════════════════════════════════════════════
     // 1. PRODUCTION-IDENTICAL cube, but frag writes 3 packed channels.
-    //    Mirrors createCarveCubeMap (planet-lod-rivers.js:685-726) field-for-field.
+    //    Mirrors createCarveCubeMap (src/rendering/bake/carveCube.js:35-82) field-for-field.
     //    The ONLY intentional divergence from the SHIPPED frag is the multi-channel
     //    write — which is precisely the production change AC2 will make. Everything
     //    that governs correctness (RT format, blend equation/factors, depthTest,
