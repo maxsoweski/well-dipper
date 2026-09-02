@@ -1,0 +1,106 @@
+{
+  "workstream": "wire-province-cube-lab-into-game",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance: the sphere mesh builder and the province cube baker are ONE shared module each under src/, imported by BOTH front-ends — not a hand-copy into the game. The lab keeps working because the root modules import the moved code back and re-export it (the bodyRelief precedent, df6818c).",
+      "verifyVia": {
+        "input": "grep the repo for the four moved symbols; run tests/src-boundary-fence.test.js and tests/one-pipeline-fence.test.js",
+        "observable": "buildIrregularSphere (+ fibonacciSphere, sphericalDelaunay, buildAdjacency) is DEFINED exactly once, under src/worldengine/mesh/; createProvinceCube, bakeProvinceCube, buildProvinceCubeGeometry and PROVINCE_CUBE_SIZE are DEFINED exactly once, under src/rendering/bake/. planet-lod-rivers.js and planet-lod-tectonic.js import them back and re-export them, so world-engine-lab.html and every existing test keep their import paths. The boundary fence is green with its root-module allowlist still EXACTLY ONE entry (fieldSampler → rivers, which still needs createHeightSampler). one-pipeline-fence is green and IMPORT_BACK_DEBT does not grow."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-1",
+      "statement": "Every solid body the world engine already renders gets its province from the SAME dispatch the lab runs; gas bodies get none. Today zero game bodies carry a province array.",
+      "verifyVia": {
+        "input": "Headless: build the game-side carrier (conditionFromBody → shared mesh → makeSphereField → writeBodyRelief with the game's macroSeed) over the 24 rocky-* seeds the appendix measured (156 bodies: 124 solid / 32 gas), planets and moons",
+        "observable": "Before: 0 of 156 bodies carry a province array. After: every admitted non-gas body carries one with EVERY node labelled 0/1/2 (coverage 100%); every gas body carries none. For each solid body the array is BYTE-IDENTICAL to writeBodyRelief run from the lab's own import path on the same condition + macroSeed + mesh — the check is that the game's inputs reach the dispatch unmangled. The three-class vs two-class split is reported against the appendix's 97 / 27 shape and any difference is explained by name."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-2",
+      "statement": "The mesh resolution is chosen on a measurement against the lab's 40,000-node reference, not inherited from the lab's default — because cost spans 60× while the class fractions are flat (appendix §ii). The mesh is built once per session and shared by every body.",
+      "verifyVia": {
+        "input": "Headless: for at least three bodies spanning at least three dispatch paths (shell, despun, stagnant-lid), run writeBodyRelief on the shipped mesh and on the 40000 / lloyd-4 reference; sample 4096 fixed directions on both and compare nearest-node province labels",
+        "observable": "Each class fraction on the shipped mesh is within 1.0 percentage point of the 40k reference on every body tested. The bound is DERIVED from the appendix's own table: its 2500-node row measures 0.2 pt from 40k and its 700-node row measures 2.1 pt, so the bound passes the former and fails the latter — it discriminates. The direction-sampled label agreement is RECORDED as a number in the build notes (not gated — no bound for spatial agreement has been derived). A second body constructed in the same session does not rebuild the mesh (the builder is called once; assertable by counting)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-3",
+      "statement": "In the running game, on a procedural system, flipping province colour off and on visibly changes the ground of a solid body — and today it changes nothing, because the placeholder makes the province term inert on every body.",
+      "verifyVia": {
+        "input": "chrome-devtools: _lab.spawnProceduralSystem(<seed>) (never Sol), frame an admitted solid body, take a screenshot at uProvinceColorMix 0.65, set it to 0.0 on the same body with the same camera, take a second screenshot; repeat on a gas body as the control",
+        "observable": "Before the wire: the two screenshots are pixel-identical on every body. After: on an admitted solid body the surface's uProvinceCube.value is a real CubeTexture (not the labSamplerPlaceholders cube) and the two screenshots DIFFER on the body's pixels; on the gas-body control they remain identical. SABOTAGE ARM: re-bind the placeholder on the solid body and confirm the pair returns to identical — a cube that is created but never reaches the material must not be able to pass. Screenshots, never readPixels on the default framebuffer (handoff 2026-09-01 trap 6)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-4",
+      "statement": "Nothing else about the universe moves. Same planets, same moons, same seeds, same uniforms; all four instruments stay where they are; the lab still renders its own province.",
+      "verifyVia": {
+        "input": "npm run check:instruments (always with vitest --dir tests); the lab loaded in Chrome after the move",
+        "observable": "Instrument A's failure set is IDENTICAL to the standing baseline (8 files / 20 tests, all other lanes'). Instrument B 8/8. Instrument C exit 0, zero delta over its bodies × uniforms. Citation fence exit 0 with CHECKED not lower than before (a green BROKEN==0 cannot tell 'every ref resolves' from 'no ref was read'). No planetData key-set change (the two shapes stay 36-key and 34-key). The lab's route() still bakes its province cube through the re-exported symbols and renders a partitioned ground on a solid preset."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-5",
+      "statement": "The bake has a lifetime: the cube render target a body owns is released when the body is disposed, and the per-body cost is recorded on the shipped resolution.",
+      "verifyVia": {
+        "input": "Headless with a stub renderer: construct a lab-surface body, call its dispose(); time the carrier + dispatch + geometry build per body over the 24-seed corpus",
+        "observable": "After dispose(), the body's province cube dispose() has been called exactly once (assertable on the stub). The per-body CPU time at the shipped resolution and the once-per-session mesh time are RECORDED in the build notes beside the appendix's row for that resolution (not gated — the appendix numbers are one machine's). The bake runs at most once per body (a second frame does not re-bake)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-6",
+      "statement": "Flying in on a rocky or icy body of a procedural system with the A/B key, the ground reads as kinds of crust — ancient shield, deformation belt, sediment basin — rather than one tone, and it coheres with the rest of the surface.",
+      "verifyVia": {
+        "input": "Max opens the live build on a procedural system, approaches a solid body, and flips the province A/B key while moving",
+        "observable": "Max's holistic judgment. Never driven or PASSed by an agent; always deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "planet-lod-rivers.js:377-430 — fibonacciSphere / sphericalDelaunay / buildAdjacency / buildIrregularSphere. three-coupled (Vector3, ConvexHull), GPU-free. Moves to src/worldengine/mesh/ (its own layer, like dispatch/: base/ writers take a carrier and never build one, and the base suite's comments record base/ as three-free).",
+      "planet-lod-tectonic.js:377-460 — PROVINCE_CUBE_SIZE, buildProvinceCubeGeometry, createProvinceCube, bakeProvinceCube. Genuinely GPU-coupled (WebGLCubeRenderTarget + CubeCamera). Moves to src/rendering/bake/ under carried C25.",
+      "src/worldengine/dispatch/bodyRelief.js writeBodyRelief(carrier, { bodyDrivers: { condition, ...neutral driver bundle }, macroSeed, heightSeed: 'e6:' + macroSeed, T_eq, locked }) — writes carrier.province. Already under src/ since df6818c.",
+      "src/worldengine/base/sphereField.js makeSphereField(mesh) — the carrier over the mesh.",
+      "src/worldengine/port/conditionFromBody.js — the game body's condition vector; labMacroSeed(d) in src/objects/Planet.js — the game body's seed (fnv1a of _systemSeed:_ordinal).",
+      "src/rendering/LabPlanetMaterial.js:84-135 ensureLabSamplers — creates the uProvinceCube slot with the 1×1 opaque-black placeholder; the bake overwrites its .value.",
+      "src/worldengine/shaders/planetShaders.glsl.js:566-576 — the read site, gated on provSum > 0.001; :593 vegWet reads provBasin.",
+      "docs/FEATURES/one-pipeline-two-frontends-PLAN.md § THE PROVINCE CUBE, MEASURED (:874-947) — the numbers every decision here rests on."
+    ],
+    "outputs": [
+      "src/objects/Planet.js _createLabSurface (:2023) — the single static mount site all three body routes share (planets, Moon.js:58, planet-class moons). The bake attaches here as ONE appended call on an existing line (the file is symbol-cited to :2251; line-count neutral edits only).",
+      "src/objects/Planet.js dispose() (:1999) — releases the cube.",
+      "src/rendering/bake/provinceCube.js (moved baker) and src/rendering/bake/labBakeHost.js (new: the game-side carrier path + onBeforeRender-time bake, the Reflector precedent for rendering inside onBeforeRender) — no renderer enters the pack tree.",
+      "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — queue (b) at :132 loses uCratonColor; the appendix gains the AC-2 / AC-5 measurements; the wiring headline moves.",
+      "docs/FEATURES/mvp-spine-lab-quality-backlog.md — gains the despun body-blindness row in the lab's own model.",
+      "tests/src-boundary-fence.test.js — its allowlist text updates to name the decision as TAKEN (C25 carried), entry count unchanged."
+    ],
+    "mustStayWorking": [
+      "Body identity and RNG order across the corpus — the bake runs at material-mount time, after generation, on its own seeded streams; it must consume no generator draw (AC-1 byte-identity and AC-4 Instrument B are the fences).",
+      "The pack contract: NO RENDERER IN THE CLOSURE (drivers/index.js:40). The bake host lives outside src/worldengine/drivers and src/worldengine/base; tests/gas-body-lab-material.test.js's closure scan must stay green.",
+      "The boundary fence's single root-module entry — moving the mesh builder does NOT remove it (rivers.js still supplies createHeightSampler to fieldSampler.js).",
+      "Citation-anchored files: src/objects/Planet.js, src/worldengine/drivers/index.js and tools/port-uniform-delta.mjs are edited line-count-neutral; planet-lod-rivers.js citations below :377 are re-pointed POSITIONALLY in one pass (handoff 2026-09-01 trap 5) and the fence's CHECKED count must not fall.",
+      "The lab's own province rendering — world-engine-lab.html reaches the movers through the re-exports and must keep baking.",
+      "The E1 shadow audit (base/ writers stay E1-blind) — the new mesh module imports no computeE1; it lives outside base/ regardless.",
+      "The Sol exclusion — labPipelineAdmits gates by provenance before any of this runs; Sol bodies never reach the bake. Never measure this work on Sol."
+    ]
+  }
+}
