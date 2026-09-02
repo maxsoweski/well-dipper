@@ -107,5 +107,20 @@
     "commit": "ccee0d1",
     "uat": "Max, 2026-09-02: \"it does read as a crust and coheres; push\" — on rocky-6, first planet, key V while approaching, lane-A dev server :5175.",
     "date": "2026-09-02"
+  },
+  "scope": {
+    "paths": [
+      "src/worldengine/mesh/sphereMesh.js",
+      "src/rendering/bake/provinceCube.js",
+      "src/rendering/bake/provinceDispatch.js",
+      "src/rendering/bake/provinceWorker.js",
+      "src/rendering/bake/labBakeHost.js",
+      "src/objects/Planet.js",
+      "src/objects/Moon.js",
+      "planet-lod-rivers.js",
+      "planet-lod-tectonic.js",
+      "tests/province-bake-host.test.js",
+      "tests/src-boundary-fence.test.js"
+    ]
   }
 }
