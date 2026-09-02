@@ -1,0 +1,49 @@
+{
+  "workstream": "wire-province-cube-lab-into-game",
+  "commit": "ccee0d1",
+  "perLayer": {
+    "unit": "INSUFFICIENT",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Static/unit, fully closed. grep confirms exactly one canonical definition site each for the sphere-mesh symbols (src/worldengine/mesh/sphereMesh.js) and province-cube symbols (src/rendering/bake/provinceCube.js). Both root modules (planet-lod-rivers.js, planet-lod-tectonic.js) now only import-back + re-export, citing the bodyRelief/df6818c precedent verbatim; bodies confirmed gone from the root files, not duplicated. Boundary-fence allowlist is exactly one entry (createHeightSampler in fieldSampler.js, explicitly deferred). IMPORT_BACK_DEBT ledger is empty (frozen []) — did not grow. Ran tests/src-boundary-fence.test.js + tests/one-pipeline-fence.test.js: 84/84 pass, including negative-check and control-non-vacuousness assertions."
+    },
+    {
+      "id": "AC-1",
+      "result": "PASS",
+      "evidence": "tests/province-bake-host.test.js 18/18 pass. Corpus matches the appendix exactly (156 bodies, 124 solid/32 gas). Every admitted solid body gets full labelled coverage via the real writeBodyRelief dispatch (8.7s of genuine compute, not stubbed); gas bodies get none. Three-class/two-class split (97/27) matches the appendix exactly. Byte-identical to writeBodyRelief reached through the lab's own import path for sampled bodies. Boundary/one-pipeline fences also pass (42/42). One minor, explained discrepancy: the finer relief-path histogram (27 vs appendix's 59 for 'despun') differs because it's counted over only the 124 solid bodies here vs. the appendix's full-corpus accounting — not part of what AC-1 actually gates."
+    },
+    {
+      "id": "AC-2",
+      "result": "PASS",
+      "evidence": "tests/province-bake-host.test.js AC-2 block: GAME_MESH deep-equals {TARGET_N,LLOYD_ITERS} pulled from the lab's own DEFAULT_PARAMS export, both equal {40000,4}; shared mesh has exactly 40000 verts. Liveness probe run: sabotaged GAME_MESH to {2500,3} in provinceDispatch.js, test correctly failed with a clear diff, then restored clean — assertion is live, not vacuous. Noted (not a defect against the AC): GAME_MESH is a hand-written literal pinned to DEFAULT_PARAMS only at test time, not import time, so a future DEFAULT_PARAMS edit would silently diverge until this test is rerun."
+    },
+    {
+      "id": "AC-3",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration/live — no browser was driven this pass. Code mechanism read and looks correct: attachProvinceBake hooks a real cube onto solid bodies only (gas bodies structurally excluded via provinceAppliesTo), the shader gates the whole craton/orogen/basin mix on provSum>0.001 which the 1x1 black placeholder always zeroes, and the sabotage arm (mesh.userData.wd.lab.province.dispose()) is directly reachable to restore the placeholder for an A/B. Headless prerequisites pass clean (40/40 across province-bake-host.test.js + src-boundary-fence.test.js). But the actual required evidence — a live before/after screenshot pair showing a solid body's ground visibly change and a gas body's staying byte-identical — was not captured. This is the live-integration check still owed."
+    },
+    {
+      "id": "AC-4",
+      "result": "INSUFFICIENT",
+      "evidence": "npm run check:instruments run at HEAD. Instrument A drift (8 files) matches the AC's stated file count exactly, and causation was directly proven: reran the same 7 newly-red files at ccee0d1's parent commit (0ec48c7) and got identical failures — the drift pre-exists this diff and belongs to other already-merged lanes, not to province-cube wiring. Instrument B (body-identity fence) 8/8 exact match. Instrument C uniform-delta: 0 moved across 57 uniforms x 633 bodies, exact match. Citation fence: 850 checked, unchanged vs. the parent commit, all resolve. One real, flagged (not hidden) mismatch: the AC's own text says '20' newly-red tests; actual count is 19 (22 total drift entries including 3 no-longer-red). Additionally, the Chrome-lab visual leg of the AC's verifyVia.input (loading world-engine-lab.html and confirming a partitioned ground) was not driven — only a headless proxy (province-bake-host suite) stood in for it."
+    },
+    {
+      "id": "AC-5",
+      "result": "PASS",
+      "evidence": "tests/province-bake-host.test.js 18/18 pass, covering every clause: sync bake-once-on-first-frame, async request/resolve/next-frame-bake sequencing, rejected-transport sync fallback, a late async reply after dispose being dropped, dispose releasing the cube exactly once (idempotent second call), and the shared mesh built exactly once across bodies. Real-mount tests confirm Planet._createLabSurface attaches the hook on solid bodies and installs none on gas bodies. npm run build confirms provinceWorker ships as its own chunk (152.14 kB). Regression check found one failure in gas-body-lab-material.test.js, confirmed via parent-commit rerun to be pre-existing and unrelated to this diff (matches the commit message's own disclosure). Working tree restored clean after the parent-commit comparison."
+    },
+    {
+      "id": "AC-6",
+      "result": "deferred-to-max",
+      "evidence": "UAT — never agent-judged. Static pass confirms the mechanism is wired: a bare V key (labBakeHost.js) toggles uProvinceColorMix between 0.65 and 0.0 on any material carrying a real (non-placeholder) province cube, fed by the moved provinceCube/provinceDispatch/provinceWorker pipeline mounted at Planet._createLabSurface. Both the commit message and the handoff doc explicitly mark AC-6 as pending Max's own judgment; no test suite applies."
+    }
+  ],
+  "overall": "INSUFFICIENT — unit and integration layers each have one open item; UAT deferred to Max",
+  "summaryForMax": "wire-province-cube-lab-into-game @ ccee0d1: 4 of 6 objective ACs are clean PASS (AC-0 one home per moved symbol; AC-1 province byte-identical to the lab over 156 bodies; AC-2 mesh pinned to the lab's DEFAULT_PARAMS with a sabotage-proven check; AC-5 bake-once / dispose-once / shared-mesh-once on both transports, worker ships as its own chunk). Open: AC-3 the live before/after screenshot pair (working-Claude, chrome-devtools, needs the dev server); AC-4 the AC text said 20 standing reds and the measured count is 19 (corrected in the contract at 2911d98; the lab-visual leg still to drive). Max's gate AC-6: fly to a rocky or icy body, tap V, judge whether the ground reads as kinds of crust.",
+  "_provenance": "wf_019a676a-ed6 · mode full · liveBranch main · 2026-09-01 · 27 agents. The workflow returns the verdict as structured output; this file was written from that result by working-Claude. AC-4's '20 vs 19' finding was corrected in contract.json at 2911d98 after this run; the live legs of AC-3 and AC-4 are the next action."
+}
