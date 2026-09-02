@@ -3,7 +3,7 @@
 > ⚠ **IN-REPO ON PURPOSE** (`/tmp` does not survive a WSL restart).
 > ⛔ Supersedes `handoff-2026-09-01b-province-cube-wired-live-check-next.md` for the WORLD-ENGINE lane; that file's §3 traps still hold and are re-listed below.
 
-**Branch** `feature/world-engine-production-L1` · **Repo** `~/projects/well-dipper` (lane A, **NOT** master) · **HEAD `a737ffd (+ the close-out docs commit that carries this handoff)`**, clean, **NOT pushed** past `3dded82` (Max confirms pushes per branch).
+**Branch** `feature/world-engine-production-L1` · **Repo** `~/projects/well-dipper` (lane A, **NOT** master) · **HEAD `a737ffd (+ the close-out docs commit that carries this handoff)`**, clean, **PUSHED 2026-09-02 — origin at `08946b7` (+ this handoff commit)**; later pushes are confirmed per batch.
 ⛔ ~700 untracked PNGs are normal. NEVER `git add -A`. ⚠ ALWAYS `npx vitest run --dir tests` (the root config collects nested worktrees and vendor kits: 685 files vs 195).
 ⛔ **Two repos, diverged** — `~/projects/well-dipper-trunk` is `master` and deploys; it has all the mobile code and none of this.
 
@@ -70,6 +70,18 @@
 
 - He greenlit the contract with "Greenlight and go with your recommendations" — the three scoping decisions (rivers on by default; the lab's 35 % ocean; the relief cubes riding along) are his by that word. Three NEW calls are his and sit in `NOW.md`: the 35 % ocean on every wet world (QB-21), F13 outflow saturating (QB-23), only 4 wet worlds in 24 systems.
 - Push cadence unchanged: lane A pushes are confirmed per branch; ⛔ never push `master`.
+
+## 6. SESSION RECORD — the 2026-09-02 build session (for the agent that continues)
+
+**How this was built:** `dev-collab-scope` → the plan `docs/superpowers/plans/2026-09-02-wire-river-router-lab-into-game.md` (8 tasks) → `superpowers:subagent-driven-development` (fresh implementer + task review per task, one fix round each on Tasks 1/3/4/5, a whole-branch review, one fix wave, one scoped re-review) → the `verify-workstream` workflow twice (`dcdd431`, then `a737ffd` = the verdict) → the close-out commit `08946b7`. **Every controller ruling, deferred minor, and parked finding is in the SDD ledger** `.superpowers/sdd/2026-09-02-wire-river-router-lab-into-game/progress.md` (git-ignored; `git clean -fdx` destroys it — the rulings are also listed in `git log 3dded82..08946b7` messages and in the contract's amended clauses). The per-task reports and review packages sit beside it. The ledger's `Ruling:` lines are exhaustive; read them before re-deciding anything.
+
+**Pushed 2026-09-02:** origin `feature/world-engine-production-L1` at `08946b7` (+ this handoff commit), Max's word: *"push; let's /handoff to a fresh session and continue"*.
+
+**Max's answers this session:** greenlit the contract as scoped (*"Greenlight and go with your recommendations"* — rivers on by default, the lab's 35 % ocean, relief cubes riding along); push confirmed. **Still open, carried in `NOW.md` OPEN FOR MAX:** F13 outflow saturating on 60 of 64 relict worlds (recommendation: pass for now, judge on a relict world); only 4 wet worlds in 24 systems (recommendation: pass for now, lab-model row).
+
+**The next session's sequence, in order:** (1) Max starts lane A's server (`scripts/dev.sh` from `~/projects/well-dipper`); Claude launches Chrome:9223 (sandbox OFF). (2) Drive §4 on `rocky-14`'s moon: AC-4 (`U`), AC-5 (`J`), sabotage arms, controls; also load the lab once (AC-6's lab-in-Chrome clause) and look at one relict body. (3) Record the pixel counts in PLAN addendum (vii) + the contract; `verify-workstream` with `mode:"light"` at that commit; write `verdict.json` from the result (the script returns it, it does not write the file); contract → `verified`, `VERIFIED_PENDING_MAX <sha>`. (4) Max's walk (AC-8). (5) On his word: contract `shipped` + `FEATURES.md` row (Rule 3) + `NOW.md` + push. Then `rm -rf .superpowers/sdd/2026-09-02-wire-river-router-lab-into-game` (the git history is the record).
+
+**If the live pair does NOT differ:** check, in order, `surface.userData.wd.lab.bake.transport` (`'sync'` = the worker chunk failed to load: `vite.config.js` base `/well-dipper/` in dev), `.baked`, `.rivers.class` (must be `'wet'` on the moon), `.rivers.admitted`, the `[lab bake]` console warnings (class disagreement / pack sea restored), then the ribbon's seat (buried vs absent — `bodyRadius × 1.0014` over the game's `SphereGeometry(r, 96, 48)`).
 
 ## Suggested skills
 - **`superpowers:verification-before-completion`** — the live pair is the half of this wire nobody has seen.
