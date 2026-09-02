@@ -165,12 +165,12 @@ describe('registration 4 — every drivers module is in the runtime PACKS array'
     expect(orphanEntries).toEqual([]);
   });
 
-  it('CONTROL: the scan is non-vacuous — it reads the REAL drivers tree, all eight of them', () => {
+  it('CONTROL: the scan is non-vacuous — it reads the REAL drivers tree, all nine of them', () => {
     // Pass an EMPTY registration list against the real tree: every module must then be reported.
     // This proves the walker sees the subject, which the green above cannot.
     const allUnregistered = unregisteredDrivers(DRIVERS_DIR, []);
     expect(allUnregistered.map((v) => v.module).sort()).toEqual(
-      ['craterDeck', 'giantDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics'],
+      ['craterDeck', 'fluvialDeck', 'giantDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics'],   // ⭐ NINE SINCE 2026-09-02 — `fluvialDeck` joined the tree. This answer GROWS as packs are added, which is the property that keeps the control from going vacuous; the title still says eight, so it is corrected below.
     );
   });
 

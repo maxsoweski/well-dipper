@@ -1,6 +1,6 @@
 // tests/river-bake-host.test.js — docs/WORKSTREAMS/wire-river-router-lab-into-game/ (AC-0 … AC-3, AC-7).
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
@@ -21,6 +21,17 @@ import { createCarveCubeMap as carveViaLab } from '../planet-lod-rivers.js';
 import { createHeightCube as heightCubeViaLab, bakeHeightCube as bakeHeightViaLab, buildHeightCubeGeometry as heightGeoViaLab, RELIEF_CUBE_SIZE as RELIEF_VIA_LAB } from '../planet-lod-tectonic.js';
 import { createCarveCubeMap } from '../src/rendering/bake/carveCube.js';
 import { createHeightCube, bakeHeightCube, buildHeightCubeGeometry, RELIEF_CUBE_SIZE } from '../src/rendering/bake/heightCube.js';
+// ⭐ TASK 3 (2026-09-02) — AC-1's imports. The fluvial derivation left world-engine-lab.html:2123-2167
+// for a driver pack, so AC-1's subject is now a module both front-ends call rather than a block only
+// the lab could run.
+import { tmpdir } from 'node:os';
+import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
+import { compositionClass } from '../src/worldengine/base/e1Regime.js';
+import { labPackCtx, labMacroSeed, setLabGasBodiesOverride } from '../src/objects/Planet.js';
+import { applyDriverPacks } from '../src/worldengine/drivers/index.js';
+import { buildLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
+import { fluvialClassOf, fluvialDeckPack } from '../src/worldengine/drivers/fluvialDeck.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
@@ -153,5 +164,163 @@ describe('AC-0 (determinism) — the moved router core + GPU bakers introduce NO
       expect(planted, `${rel}: a planted Date.now must be seen`).toMatch(/Date\.now/);
       expect(planted, `${rel}: a planted Math.random must be seen`).toMatch(/Math\.random/);
     }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// AC-1 — every solid body the world engine renders gets the fluvial family from its condition, by
+// the lab's own derivation; gas bodies get none. Before this workstream all ten uniforms held their
+// factory default on every game body (src/worldengine/shaders/uniforms.js:311 uFluvialDensity 0,
+// :334 uSeaLevel -1, :338 uCoastStrength 0, :343 uOutflowDensity 0).
+//
+// ⚠ THIS BLOCK DRIVES THE REAL COMPOSITION POINT, not the pack in isolation: `applyDriverPacks` onto
+// a material built by `buildLabPlanetMaterial`, with the ctx the GAME passes (`labPackCtx`). The
+// pack's own laws are gated to the last bit in tests/driver-pack-fluvialdeck.test.js §C; what is
+// asserted here is that the game's condition reaches the derivation unmangled and the values land on
+// the material.
+//
+// ⛔⛔ THE RELICT ARM IS VACUOUS ON THIS CORPUS AND IS MADE NON-VACUOUS BY HAND. Measured 2026-09-02:
+// 0 of 124 solid bodies class as `relict`, because the lab's block reads erosion as a raw `.erosion`
+// (world-engine-lab.html:2128) and the game writes `erosionLevel` (PhysicsEngine.js:832) — the one
+// erosion reader ROOT-0 fix 1 (B1) missed. tests/driver-pack-fluvialdeck.test.js §F carries the whole
+// measurement and the counterfactual. Asserting the relict law only where no body reaches it would be
+// a green that means nothing, so the ramp is exercised on a condition that carries the erosion.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+const SEEDS = Array.from({ length: 24 }, (_, i) => `rocky-${i}`);
+function corpus() {
+  const out = [];
+  for (const seed of SEEDS) {
+    const sys = StarSystemGenerator.generate(seed, null);
+    for (const e of sys.planets) {
+      // ⚠ A planet in `sys.planets` is an ENTRY wrapping `planetData` — pass the entry and every
+      // provenance-keyed read is wrong (handoff 2026-09-01b trap 1).
+      out.push({ seed, kind: 'planet', d: e.planetData || e });
+      for (const m of (e.moons || [])) out.push({ seed, kind: m.isPlanetMoon ? 'planet-moon' : 'moon', d: m });
+    }
+  }
+  for (const b of out) b.cond = conditionFromBody(b.d);
+  return out;
+}
+let RIVER_BODIES = null;
+const bodyOf = (b) => ({ condition: b.cond, macroSeed: labMacroSeed(b.d), T_eq: b.cond.T_eq });
+beforeAll(() => { setLabGasBodiesOverride(true); RIVER_BODIES = corpus(); });
+
+describe('AC-1 — the fluvial family reaches every solid body from its condition, and no gas body', () => {
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const ss = (e0, e1, x) => { const t = clamp01((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
+  const composed = (b) => {
+    const material = buildLabPlanetMaterial({ bodyRadius: b.d.radius ?? 1 }).material;
+    const res = applyDriverPacks(material, b.cond, labPackCtx(b.d, b.cond, null));
+    return { u: material.uniforms, res };
+  };
+
+  it('every solid body is classed wet / relict / airless and the counts are RECORDED', () => {
+    const counts = { wet: 0, relict: 0, airless: 0 };
+    let solid = 0, gas = 0;
+    for (const b of RIVER_BODIES) {
+      if (compositionClass(b.cond) === 'gas') { gas++; continue; }
+      solid++; counts[fluvialClassOf(b.cond)]++;
+    }
+    expect(solid).toBe(124);
+    expect(gas).toBe(32);
+    expect(counts.wet + counts.relict + counts.airless).toBe(124);
+    expect(counts).toEqual({ wet: 4, relict: 0, airless: 120 });
+    // vitest hides console.info on a passing test, so the AC-1 record goes to a FILE.
+    writeFileSync(join(process.env.TMPDIR || tmpdir(), 'river-corpus.json'), JSON.stringify({
+      seeds: SEEDS.length, bodies: RIVER_BODIES.length, solid, gas, classes: counts,
+      note: 'relict is 0 because the lab block reads surfaceHistory.erosion and the game writes erosionLevel — see driver-pack-fluvialdeck.test.js §F',
+    }, null, 2));
+  });
+
+  it('WET bodies carry a live sea: uSeaLevel !== -1, uLiquidMask > 0, uCoastStrength 1', () => {
+    let n = 0;
+    for (const b of RIVER_BODIES) {
+      if (compositionClass(b.cond) === 'gas' || fluvialClassOf(b.cond) !== 'wet') continue;
+      const { u, res } = composed(b);
+      expect(res.applied, `${b.seed}/${b.kind}`).toContain('fluvialDeck');
+      expect(u.uSeaLevel.value, `${b.seed}/${b.kind}`).not.toBe(-1);
+      expect(u.uLiquidMask.value, `${b.seed}/${b.kind}`).toBeGreaterThan(0);
+      expect(u.uCoastStrength.value, `${b.seed}/${b.kind}`).toBe(1);
+      expect(u.uDeltaDensity.value, `${b.seed}/${b.kind}`).toBeGreaterThan(0);
+      expect(u.uFluvialActivity.value, `${b.seed}/${b.kind}`).toBe(1);
+      // ⛔ AND THE DENSITY UNIFORM STAYS 0 — the lab pins it every frame (:5518, the retired
+      // worm-trail). The density travels as meta; asserted so the pack cannot quietly start writing it.
+      expect(u.uFluvialDensity.value, `${b.seed}/${b.kind}`).toBe(0);
+      expect(fluvialDeckPack(b.cond, { displayRadiusEarth: 1, gates: { deltas: true, coast: true, outflow: true } }).meta.fluvialDensity)
+        .toBeGreaterThan(0);
+      n++;
+    }
+    expect(n, 'the corpus must contain wet bodies or this arm is vacuous').toBe(4);
+  });
+
+  it('AIRLESS bodies carry the zeros and the −1 — the family is OFF, not defaulted', () => {
+    let n = 0;
+    for (const b of RIVER_BODIES) {
+      if (compositionClass(b.cond) === 'gas' || fluvialClassOf(b.cond) !== 'airless') continue;
+      const { u, res } = composed(b);
+      expect(res.applied, `${b.seed}/${b.kind}`).toContain('fluvialDeck');
+      expect(u.uSeaLevel.value, `${b.seed}/${b.kind}`).toBe(-1);
+      expect(u.uLiquidMask.value, `${b.seed}/${b.kind}`).toBe(0);
+      expect(u.uCoastStrength.value, `${b.seed}/${b.kind}`).toBe(0);
+      expect(u.uDeltaDensity.value, `${b.seed}/${b.kind}`).toBe(0);
+      expect(u.uOutflowDensity.value, `${b.seed}/${b.kind}`).toBe(0);
+      expect(u.uStrandStrength.value, `${b.seed}/${b.kind}`).toBe(0);
+      n++;
+    }
+    expect(n).toBe(120);
+  });
+
+  it('RELICT bodies take the 0.30→0.45 outflow ramp and no sea — exercised on a built condition', () => {
+    // The class is EMPTY on the generated corpus (see the block header), so the law is driven on a
+    // condition assembled from a real body plus the erosion the game already computes under its own
+    // key. The ramp values are the lab's: 0.30 → 0, 0.375 → 0.5, 0.45 → 1.
+    const base = RIVER_BODIES.find((b) => compositionClass(b.cond) === 'gas' ? false : fluvialClassOf(b.cond) === 'airless'
+      && b.cond.atmosphere && b.cond.atmosphere.retained !== false);
+    expect(base, 'the corpus must contain an atmosphere-bearing dry body').toBeTruthy();
+    for (const erosion of [0.2, 0.35, 0.5]) {
+      const cond = { ...base.cond, surfaceHistory: { ...(base.cond.surfaceHistory || {}), erosion } };
+      expect(fluvialClassOf(cond)).toBe('relict');
+      const material = buildLabPlanetMaterial({ bodyRadius: 1 }).material;
+      applyDriverPacks(material, cond, labPackCtx(base.d, cond, null));
+      expect(material.uniforms.uOutflowDensity.value, `erosion ${erosion}`).toBe(ss(0.3, 0.45, erosion));
+      expect(material.uniforms.uSeaLevel.value, `erosion ${erosion}`).toBe(-1);
+      expect(material.uniforms.uCoastStrength.value, `erosion ${erosion}`).toBe(0);
+      expect(material.uniforms.uStrandStrength.value, `erosion ${erosion}`).toBe(clamp01(erosion));
+      // the lab's relict density branch: 0.4 x erosion, carried in meta because the uniform is pinned
+      expect(fluvialDeckPack(cond, { displayRadiusEarth: 1, gates: { deltas: true, coast: true, outflow: true } }).meta.fluvialDensity)
+        .toBe(0.4 * clamp01(erosion));
+    }
+    // NON-VACUITY of the ramp itself: the three points are genuinely different answers.
+    expect(ss(0.3, 0.45, 0.2)).toBe(0);
+    expect(ss(0.3, 0.45, 0.35)).toBeGreaterThan(0);
+    expect(ss(0.3, 0.45, 0.5)).toBe(1);
+  });
+
+  it('GAS bodies get NONE of it: fluvialDeck is skipped and the material keeps its −1', () => {
+    let n = 0;
+    for (const b of RIVER_BODIES) {
+      if (compositionClass(b.cond) !== 'gas') continue;
+      const { u, res } = composed(b);
+      expect(res.skipped, `${b.seed}/${b.kind}`).toContain('fluvialDeck');
+      expect(res.applied, `${b.seed}/${b.kind}`).not.toContain('fluvialDeck');
+      expect(u.uSeaLevel.value, `${b.seed}/${b.kind}`).toBe(-1);
+      expect(u.uLiquidMask.value, `${b.seed}/${b.kind}`).toBe(0);
+      n++;
+    }
+    expect(n).toBe(32);
+  });
+
+  it('the derivation is the pack’s, reached through the composition point — the ctx is the GAME’s', () => {
+    // The seam AC-1 names: "the game's condition reaches the derivation unmangled". Driven by
+    // comparing the composed material against the pack called directly on the same condition, with
+    // the gate map the registry supplies rather than one written here.
+    const wet = RIVER_BODIES.find((b) => compositionClass(b.cond) !== 'gas' && fluvialClassOf(b.cond) === 'wet');
+    const direct = fluvialDeckPack(wet.cond, { ...labPackCtx(wet.d, wet.cond, null), gates: { deltas: true, coast: true, outflow: true } });
+    const { u } = composed(wet);
+    expect(u.uSeaLevel.value).toBe(direct.drivers.uSeaLevel);
+    expect(u.uLiquidMask.value).toBe(direct.drivers.uLiquidMask);
+    expect(u.uFluvialDepth.value).toBe(direct.drivers.uFluvialDepth);
+    expect(u.uFluvialMeander.value).toBe(direct.drivers.uFluvialMeander);
+    expect(bodyOf(wet).condition).toBe(wet.cond);
   });
 });

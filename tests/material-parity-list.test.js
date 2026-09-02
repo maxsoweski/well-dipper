@@ -453,23 +453,33 @@ describe('2. the collapse in per-body variation', () => {
     // 1 distinct (a plain-moon record carries no tilt key of either spelling). On the 852 planets
     // they are 17, 2 and 852 distinct respectively. The moon-half figures are in this leg's report
     // rather than folded into this pooled number, because the pooled number would hide them.
+    // ⭐⭐ AND EIGHT MORE 2026-09-02, `fluvialDeck` (72 -> 80): uSeaLevel, uLiquidMask, uCoastStrength,
+    // uDeltaDensity, uFluvialActivity, uFluvialDepth, uFluvialMeander, uOutflowActivity. Every one was
+    // written by NOTHING before this commit, so each read one value on every body in the corpus.
+    // ⛔ TWO OF THE TEN THIS PACK WRITES ARE ABSENT AND THE ABSENCE IS THE MEASUREMENT, NOT AN
+    // OVERSIGHT: `uOutflowDensity` and `uStrandStrength` are written-and-CONSTANT (they join the
+    // residue below). Both are functions of erosion alone, and the lab's block reads erosion as a raw
+    // `.erosion` while the game writes `erosionLevel` — so both are 0 on 124/124 solid bodies. The
+    // whole measurement and its counterfactual are in tests/driver-pack-fluvialdeck.test.js §F. This
+    // list is exactly the instrument that would have hidden it behind a count.
     expect(LEDGER.labVarying).toEqual([
       'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM',
       'uBandPhaseJet', 'uBandRough', 'uBandS2', 'uBandSEq',
       'uBandStrength', 'uBandTint', 'uBandWarp', 'uBioGroundColor',
-      'uBioGroundCover', 'uBodyRadius', 'uChaosRaftJitter', 'uCoarseCut', 'uCraterAmp',
+      'uBioGroundCover', 'uBodyRadius', 'uChaosRaftJitter', 'uCoarseCut', 'uCoastStrength', 'uCraterAmp',
       'uCraterComplexD', 'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation',
-      'uCraterScale', 'uCratonColor', 'uCryoActivity', 'uDetailOffset',
+      'uCraterScale', 'uCratonColor', 'uCryoActivity', 'uDeltaDensity', 'uDetailOffset',
       'uEdificeMaxHeight', 'uEjectaAmp', 'uEjectaRampart', 'uEjectaStrength',
+      'uFluvialActivity', 'uFluvialDepth', 'uFluvialMeander',
       'uFreshColor', 'uFrostAlbedo', 'uFrostCondensationT', 'uFrostLatitudeBias',
       'uFrostLocked', 'uFrostMaxCoverage', 'uGlacialFlowVigor', 'uGlacialStrength',
       'uIcenessMix', 'uJetFestoon', 'uJetShearTurb', 'uJetSpeed',
       'uJetStrength', 'uLightDir', 'uLimbColor', 'uLimbExponent',
-      'uLimbStrength', 'uMacroOffset', 'uNoiseScale', 'uPerturb',
+      'uLimbStrength', 'uLiquidMask', 'uMacroOffset', 'uNoiseScale', 'uOutflowActivity', 'uPerturb',
       'uPlanetTempEq', 'uPldStrength', 'uPolarMode', 'uPolarPhase',
       'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
-      'uPolarStrength', 'uPolarTint', 'uSedColor', 'uShieldStratoMix',
+      'uPolarStrength', 'uPolarTint', 'uSeaLevel', 'uSedColor', 'uShieldStratoMix',
       'uStarBrightness2', 'uStarColor1', 'uStarColor2', 'uTermColor',
       // ⭐⭐ `uTermStrength` LEFT THIS LIST ON 2026-08-21 AND THE DIRECTION IS THE WHOLE POINT — a name
       // leaving `labVarying` normally means a wire died, and here it means one landed. The lab used
@@ -484,7 +494,7 @@ describe('2. the collapse in per-body variation', () => {
       'uWeatheredColor',
       // ⭐⭐ THE THREE NAMES B4-1 ADDS, AND THEY ARE THIS BLOCK'S ENTIRE CLAIM — `uStarColor1` VARYING PER BODY on the lab material is exactly the thing ledger P-01 said was lost ("every swapped body renders under implicit white light"). ⛔ NOTE WHICH TWO OF THE FIVE DID **NOT** JOIN, because that is the control: `uStarBrightness1` is a literal 1.0 on every primary StarSystemGenerator draws, so it is constant BY CONSTRUCTION and a build in which it started varying would mean the generator moved, not the port; and `uLightDir2` is constructed at (0,0,0) on every body and only ever written by the PER-FRAME seam (src/main.js copies it inside its binary branch), so this construction-time pass cannot see it and must not pretend to — P-02's direction half is fenced at the seam instead, in tests/lab-shader-perframe-seam.test.js.
     ]);
-    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 67 of the 69 uniforms the six writing
+    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 77 of the 79 uniforms the seven writing
     // packs emit vary per body (53 of 55 before B3 leg 3 added `solidFeatures`' fourteen new names,
     // all fourteen of which vary, so the residue below is UNCHANGED — a new write that did not vary
     // would have grown it, and that is exactly the difference between wiring a law and wiring a
@@ -505,10 +515,16 @@ describe('2. the collapse in per-body variation', () => {
       // the lab's two values (0.15 solid / factory 0 gas) collapsed to the game's single 0.15.
       // ⛔ A NAME ENTERING THIS LIST IS NORMALLY A WIRE DYING. Here it is a wire landing, and the
       // way to tell them apart is the GAME side: `gameVarying` has never held this name either.
-      .toEqual(['uEjectaLump', 'uTermStrength', 'uTerraceCount']);
+      // ⭐⭐ AND TWO MORE JOINED ON 2026-09-02, BY A THIRD ROUTE AGAIN — and this is the honest place
+      // for them. `uOutflowDensity` and `uStrandStrength` are written by `fluvialDeck` and constant
+      // because their input is, not because their law is: both are functions of erosion alone, and the
+      // transcribed reader spells it `.erosion` while the game writes `erosionLevel`. So this is a wire
+      // that landed on a DEAD INPUT — the third of the three ways a name reaches this list, and the only
+      // one that is a defect. tests/driver-pack-fluvialdeck.test.js §F carries the measurement.
+      .toEqual(['uEjectaLump', 'uOutflowDensity', 'uStrandStrength', 'uTermStrength', 'uTerraceCount']);
   });
 
-  it('the six writing packs emit 69 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
+  it('the seven writing packs emit 79 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
     // If the pack stops writing the band deck, G-01/G-04/G-07's "carried" ruling is false. Pinned as
     // a SET OF NAMES, not a length — Step 4 measured that a count-preserving permutation is
     // byte-identical to every instrument this program owns.
@@ -524,23 +540,28 @@ describe('2. the collapse in per-body variation', () => {
     // same shape leg 1 had, and the check that this pack collides with nothing: an overlap with an
     // existing writer would have shown up here as a union that grew by less than fourteen, and in
     // `applyDriverPacks` as a throw.
+    // ⭐ 69 -> 79 ON 2026-09-02. `fluvialDeck` declares ten names and NOT ONE was written by any pack
+    // before this commit, so the union grows by exactly its contract set — the same shape leg 1 and leg
+    // 3 had, and the check that this pack collides with nothing: an overlap would show up here as a
+    // union that grew by less than ten, and in `applyDriverPacks` as a throw.
     expect(LEDGER.written).toEqual([
       'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM',
       'uBandPhaseJet', 'uBandRough', 'uBandS2', 'uBandSEq',
       'uBandStrength', 'uBandTint', 'uBandWarp', 'uBioGroundColor',
-      'uBioGroundCover', 'uChaosRaftJitter', 'uCoarseCut', 'uCraterAmp', 'uCraterComplexD',
+      'uBioGroundCover', 'uChaosRaftJitter', 'uCoarseCut', 'uCoastStrength', 'uCraterAmp', 'uCraterComplexD',
       'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation', 'uCraterScale',
-      'uCratonColor', 'uCryoActivity', 'uDetailOffset', 'uEdificeMaxHeight',
+      'uCratonColor', 'uCryoActivity', 'uDeltaDensity', 'uDetailOffset', 'uEdificeMaxHeight',
       'uEjectaAmp', 'uEjectaLump', 'uEjectaRampart', 'uEjectaStrength',
+      'uFluvialActivity', 'uFluvialDepth', 'uFluvialMeander',
       'uFreshColor', 'uFrostAlbedo', 'uFrostCondensationT', 'uFrostLatitudeBias',
       'uFrostLocked', 'uFrostMaxCoverage', 'uGlacialFlowVigor', 'uGlacialStrength',
       'uIcenessMix', 'uJetFestoon', 'uJetShearTurb', 'uJetSpeed',
       'uJetStrength', 'uLimbColor', 'uLimbExponent', 'uLimbStrength',
-      'uMacroOffset', 'uNoiseScale', 'uPerturb', 'uPlanetTempEq',
+      'uLiquidMask', 'uMacroOffset', 'uNoiseScale', 'uOutflowActivity', 'uOutflowDensity', 'uPerturb', 'uPlanetTempEq',
       'uPldStrength', 'uPolarMode', 'uPolarPhase', 'uPolarPole',
       'uPolarR0', 'uPolarRing', 'uPolarSides', 'uPolarStrength',
-      'uPolarTint', 'uSedColor', 'uShieldStratoMix', 'uTermColor',
+      'uPolarTint', 'uSeaLevel', 'uSedColor', 'uShieldStratoMix', 'uStrandStrength', 'uTermColor',
       'uTermStrength', 'uTermWidth', 'uTerraceCount', 'uVolcanismStrength',
       'uWeatheredColor',
     ]);

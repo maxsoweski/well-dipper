@@ -56,7 +56,7 @@ import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
 import { SOLID_OPTICS_ENTRY } from './solidOptics.js';
 import { CRATER_DECK_ENTRY } from './craterDeck.js';
-import { SOLID_FEATURES_ENTRY } from './solidFeatures.js'; import { GIANT_SURFACE_ENTRY } from './giantSurface.js';   // ⛔ TWO import STATEMENTS ON ONE LINE, ON PURPOSE. Fifteen live symbol-anchored refs point INTO this file by line — src/worldengine/drivers/limbDeck.js:173 `import plus one array element at` is one of them — so a new line here reds fifteen citations as some other block's failure. The same discipline world-engine-lab.html:188 keeps.
+import { SOLID_FEATURES_ENTRY } from './solidFeatures.js'; import { GIANT_SURFACE_ENTRY } from './giantSurface.js'; import { FLUVIAL_DECK_ENTRY } from './fluvialDeck.js';   // ⛔ TWO import STATEMENTS ON ONE LINE, ON PURPOSE. Fifteen live symbol-anchored refs point INTO this file by line — src/worldengine/drivers/limbDeck.js:173 `import plus one array element at` is one of them — so a new line here reds fifteen citations as some other block's failure. The same discipline world-engine-lab.html:188 keeps.
 import {
   writePackUniforms, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';
@@ -264,7 +264,7 @@ export const PACKS = Object.freeze([
   // the three domain offsets stop 343 gas-class bodies sharing one relief domain. The palette seven
   // change VALUES ONLY — the deck replaces the ground albedo at mask 1.0 — and giantSurface.js's
   // header carries the measurement rather than leaving it to be rediscovered as a bug.
-  GIANT_SURFACE_ENTRY,
+  GIANT_SURFACE_ENTRY, FLUVIAL_DECK_ENTRY,   // ⭐ fluvialDeck RIDES THIS LINE, APPENDED NOT INSERTED — this file is line-cited (limbDeck.js:173 and fourteen others point INTO it by line), so a new line here reds fifteen citations as some other block's failure. The same discipline the two-import line 59 keeps. ⛔ IT MOVES NO BODY BETWEEN MATERIALS: its predicate is character-identical to rockySurface's, solidOptics' and solidFeatures', all three of which already claim every body it claims, so the `packs.length > 0` admission term cannot flip and no census is re-pinned. ⛔ AND IT COLLIDES WITH NOTHING: all ten names it writes (uFluvialActivity, uFluvialDepth, uFluvialMeander, uSeaLevel, uLiquidMask, uDeltaDensity, uCoastStrength, uStrandStrength, uOutflowDensity, uOutflowActivity) were written by NO pack before this commit — asserted by name lookup over real pack outputs across a generated corpus in tests/driver-pack-fluvialdeck.test.js, not by reading `applies` lines side by side. ⚠ THE NUMBER IS AMBIGUOUS AND IS RECORDED RATHER THAN FIXED: the workstream brief and the lab's read-back comment call this `driver pack #8`, and `giantSurface` above carries that same label in this file. The labels are prose; the ENTRY ORDER is the fact. Renumbering giantSurface would rot the symbol-anchored citations in giantSurface.js and in tests/one-pipeline-fence.test.js.
 ]);
 
 /** The entries whose predicate claims this condition, in array order. */
