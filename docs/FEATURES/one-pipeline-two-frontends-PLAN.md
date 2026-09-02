@@ -118,7 +118,7 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 
 ### Honest headline
 
-- **Through the world engine, in both lab and game: 13 of 53 (24.5%)** — complete (8): F2, F22, F23, F24, F25, F29, F34, F51. Partial (5): F3, F31b, F35, F53. ⭐ UPDATED 2026-08-28 (second revision that day): F24/F25 closed when the `aStorm` bake landed. ✅ F24/F25 are UAT-CLOSED by Max on 2026-08-28, on an in-game A/B at 2.4 body radii. ⛔ ENUMERATED BY F-ID ON PURPOSE — the bare arithmetic has now gone stale twice.
+- **Through the world engine, in both lab and game: 13 of 53 (24.5%)** — complete (8): F2, F22, F23, F24, F25, F29, F34, F51. Partial (5): F3, F31b, F35, F53. ⭐ UPDATED 2026-08-28 (second revision that day): F24/F25 closed when the `aStorm` bake landed. ✅ F24/F25 are UAT-CLOSED by Max on 2026-08-28, on an in-game A/B at 2.4 body radii. ⛔ ENUMERATED BY F-ID ON PURPOSE — the bare arithmetic has now gone stale twice. ⭐ 2026-09-02: **the PROVINCE CUBE (`uCratonColor` / `uFreshColor` / `uSedColor` by history) is SHIPPED in the game** (Max UAT 2026-09-02 — "it does read as a crust and coheres", `ccee0d1`; record: § THE PROVINCE CUBE, WIRED at EOF). It is a queue-(b) UNIFORM wire, not an F-row, so the F-id count above is unchanged by it — do not bump the arithmetic for it.
 - **Lab‑only: 47.** Of those, 23 have a game‑own parallel to delete (`❌ R`) and 23 have nothing in the game at all. ⚠ The previous `48 / 22 / 26` predates F51 and did not sum against the table's own rows; these three are counted off the GAME column directly.
 - **Game‑only: 1** (F52).
 - **UNKNOWN: 1** (F26 — resolve the doc/ID question; do not guess).

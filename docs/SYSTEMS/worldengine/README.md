@@ -54,6 +54,8 @@ relief writer through a 9-way rule chain, then runs the V2-4 shared-substrate po
 - `src/worldengine/instrument/fieldSampler.js`
 - `src/worldengine/instrument/sweep.js`
 - `src/worldengine/instrument/laws.js`
+- `src/worldengine/dispatch/bodyRelief.js`
+- `src/worldengine/mesh/sphereMesh.js`
 
 *(Bare paths per Rule 14 — `doc-graph.js` parses this list strictly. What each module is:
 regime selection = e1Regime/adaptL0/baseStep/mathutil/verify; relief writers =

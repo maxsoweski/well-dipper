@@ -4,11 +4,11 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ▶ 2026-09-01 (late) — ⭐⭐ **THE PROVINCE CUBE IS IN THE GAME.** ▶ NEXT = MAX'S A/B ON KEY `V` — the live pair and the lab leg are DONE (2026-09-01 late).
+> ## ✅ 2026-09-02 — ⭐⭐ **THE PROVINCE CUBE IS SHIPPED** (Max UAT 2026-09-02 — "it does read as a crust and coheres"). ▶ NEXT = Max picks the lane's next item (F11/F12 river router rides the new carrier path; F27/F28 storm uniforms) — nothing is scoped.
 >
 > **Handoff: [`FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md`](FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md).**
 > HEAD `ccee0d1` on `feature/world-engine-production-L1` (lane A, `~/projects/well-dipper`), tree clean, **NOT pushed**.
-> Workstream `WORKSTREAMS/wire-province-cube-lab-into-game/` — contract **`verified`** — every objective AC PASS (AC-3 driven live: 3,540 px differ, body only; sabotage + gas control clean); **only AC-6 (Max) open. `VERIFIED_PENDING_MAX ccee0d1`.**
+> Workstream `WORKSTREAMS/wire-province-cube-lab-into-game/` — contract **`verified`** — every objective AC PASS (AC-3 driven live: 3,540 px differ, body only; sabotage + gas control clean); **AC-6 PASSED on Max's words 2026-09-02; contract `shipped`, pushed to origin.**
 >
 > ⛔ **TWO REPOS, DIVERGED.** `~/projects/well-dipper-trunk` = `master` (deploys; all mobile work). This branch has the province wire and the planning docs and NONE of the mobile code. Read `FEATURES/mobile-fixes-live-on-master-2026-08-28.md` before any merge.
 >
@@ -20,7 +20,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 >
 > ### ⭐ OPEN FOR MAX
 > 1. ~~Start the dev server~~ DONE — `scripts/dev.sh` (`cd ~/projects/well-dipper && npm run dev -- --port 5175`. Chrome:9223 is launched by Claude.
-> 2. **The A/B (AC-6):** on a procedural system, approach a rocky or icy body — a SHELL-path one (three classes; a despun body only moves its basins) — and tap `V` while moving: does the ground read as kinds of crust (shield / belt / basin) rather than one tone? ⚠ In ORRERY bodies are hidden; fly (HELM) or frame first.
+> 2. ~~The A/B (AC-6)~~ PASSED 2026-09-02 on rocky-6's first planet. ▶ **Pick the lane's next item** — recommendation: F11/F12 (the river router), because the province wire just built the carrier path it rides.
 > 3. Everything below this block is HISTORY as of 2026-09-01; the 2026-08-21 block's open question (`uDispDomainScale` 3.333 → 1.0) is still unruled.
 >
 > ⛔ **Symbol-less refs point INTO this file** (`NOW.md:256/1020/1160/1172/2145` from four docs). This block REPLACED the 2026-08-21 block at the SAME line count for that reason; the 08-21 facts live in `FEATURES/handoff-2026-08-21-b7-shipped-next-b6.md`.

@@ -1,4 +1,4 @@
-# Handoff 2026-09-01b — ▶ THE PROVINCE CUBE IS IN THE GAME · NEXT = LIVE PAIR, THEN MAX'S A/B ON `V`
+# Handoff 2026-09-01b — ✅ THE PROVINCE CUBE IS SHIPPED (Max UAT 2026-09-02) · the lane's next item is NOT scoped — ask Max
 
 > ⚠ **IN-REPO ON PURPOSE** (the handoff skill says OS temp; `/tmp` does not survive a WSL restart — it cost a session on 2026-08-25).
 > ⛔ Supersedes `handoff-2026-09-01-mobile-pass-shipped-helm-look-live.md` for the WORLD-ENGINE lane only; that file's mobile facts and its §3 traps still hold.
@@ -19,7 +19,7 @@
 | AC-3 | LIVE: same body, same camera, `uProvinceColorMix` 0.65 vs 0 → pixels differ + sabotage arm + gas control | ✅ **DRIVEN 2026-09-01 late** — 3,540 px differ, ALL inside the body; placeholder re-bound ⇒ identical to OFF; gas body 0 px. See §4 |
 | AC-4 | nothing else moves: A / B / C / citations · the lab still bakes | ✅ B 8/8 · C zero delta · 850/850 · A: 19 reds all pre-existing at HEAD (§3) · **lab leg DRIVEN**: `_lab.provinceProbe()` on Rocky (Earthlike) = 26,818 / 3,041 / 10,141 over 40,000 nodes, η² 0.52 pass |
 | AC-5 | bake once on first drawn frame, dispose once, worker transport + sync fallback, late reply dropped | ✅ |
-| AC-6 | **Max:** flying in on a rocky/icy body, tap `V` — does the ground read as kinds of crust? | ⏳ **Max's — THE ONLY OPEN ITEM. Contract `verified`; `VERIFIED_PENDING_MAX` at `ccee0d1`** |
+| AC-6 | **Max:** flying in on a rocky/icy body, tap `V` — does the ground read as kinds of crust? | ✅ **Max UAT 2026-09-02 — "it does read as a crust and coheres"** — rocky-6, first planet, key V while approaching. Contract `shipped`. |
 
 Instrument E-style back-link: `surface.userData.wd.lab.province` carries `{attached, transport, baked, path, ms, bakeMs, nodes, fractions, …}` per body. `globalThis._labProvince.{toggle,set,count,transport,meshBuilds,meshMs}` is the dev API.
 
@@ -44,7 +44,7 @@ Instrument E-style back-link: `surface.userData.wd.lab.province` carries `{attac
 5. ⚠ **The citation fence reads `file.js:NNN-MMM` in PROSE as a live ref** and flags it PAST-EOF once the file shrinks. Historical ranges are written "`file.js` lines N–M (at `<sha>`)".
 6. ⚠ **The dev-server hook matches the server command's text ANYWHERE in a Bash command** — including inside a heredoc that is only writing a doc, and inside an `echo` label. Write such docs with the Write tool, or assemble the string from parts.
 
-## 4. ▶ NEXT — Max's A/B (AC-6). The live pair (AC-3) and the lab leg (AC-4) are DONE — record below
+## 4. ✅ DONE — Max's A/B (AC-6) passed 2026-09-02; the live pair (AC-3) and the lab leg (AC-4) are recorded below. ▶ NEXT for the lane: nothing is scoped — the remaining queue-(b) items are F11/F12 (river router, rides this carrier path) and F27/F28 (storm uniforms); Max picks.
 
 **Needs Max** (only he may start servers): in `~/projects/well-dipper`, the dev server on lane A's port — `npm run dev -- --port 5175`. Chrome:9223 launch is Claude's (`chrome-devtools-9223-launch` memory: `"/mnt/c/Program Files/Google/Chrome/Application/chrome.exe" --remote-debugging-port=9223 --user-data-dir="C:\temp\chrome-mcp-filmstrip" <url>` via interop, sandbox OFF — it worked 2026-09-01).
 
