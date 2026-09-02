@@ -1,5 +1,6 @@
 # Handoff 2026-09-02 — ⭐ THE RIVER ROUTER (F11/F12) IS BUILT + FENCE-GREEN · the LIVE PAIR is the next item (needs Max's server) · then Max's UAT
 
+> ⛔⛔ **SUPERSEDED 2026-09-02 (session 2) by `handoff-2026-09-02b-live-pair-measured-max-uat-next.md`.** The live pair IS driven. ⚠ Two facts in this file are WRONG and are corrected there: (1) the corpus is **2 wet / 66 relict / 56 airless**, not 4 / 64 / 56 — both corpus builders read a planet-class moon through its wrapper entry (trap 3), where `T_eq` defaults to 288 K; (2) **rocky-14's 0.948 R⊕ moon is RELICT (409 K), not wet** — "one body does both A/Bs" does not exist in the corpus. The traps in §3 still hold.
 > ⚠ **IN-REPO ON PURPOSE** (`/tmp` does not survive a WSL restart).
 > ⛔ Supersedes `handoff-2026-09-01b-province-cube-wired-live-check-next.md` for the WORLD-ENGINE lane; that file's §3 traps still hold and are re-listed below.
 

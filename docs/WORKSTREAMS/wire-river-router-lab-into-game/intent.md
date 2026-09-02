@@ -130,7 +130,7 @@ lab's `route()` bakes — the grain cube (`uTectonicGrainCube`) is then one more
 - **VRAM:** 50.3 MB per routed body (carve cube) + 3.1 + 3.1 MB per solid body (relief + crater) + 0.8 MB
   (province) — so **57.3 MB per ROUTED body and 7.0 MB per further solid one**. ⭐⭐ CORRECTED 2026-09-02
   (the whole-branch review): this line said "five **wet** bodies ≈ 280 MB", and ROUTED is wet ∪ relict —
-  the carve cube binds on both, and relict is 64 of the 68 routed bodies. MEASURED over the 24-seed
+  the carve cube binds on both, and relict is 66 of the 68 routed bodies (re-measured 2026-09-02 session 2: 2 wet, not 4 — two planet-moons were being read through their wrapper entry). MEASURED over the 24-seed
   corpus (`tests/river-bake-host.test.js` → `$TMPDIR/river-corpus.json` `perSystem`): 68 routed bodies
   across the 21 seeds that route anything (3 route none), i.e. **3.24 routed bodies per routing system,
   2.83 per seed, max 5**. Per procedural system that is **≈ 204 MB mean** over the routing systems,

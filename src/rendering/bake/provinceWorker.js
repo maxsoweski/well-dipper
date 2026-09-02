@@ -105,7 +105,7 @@ self.onmessage = (ev) => {
       transfer.push(vPos.buffer, vDepth.buffer, vMouth.buffer, vOrder.buffer, vIdx.buffer);
     }
     // ⛔ THE RIBBON RIDES ITS OWN PRESENCE TEST, NOT `b.routed`. The bundle builds a ribbon for `wet`
-    // only (provinceDispatch.js, the gate at :706's call site), so on the 64 relict bodies of the
+    // only (provinceDispatch.js, the gate at :706's call site), so on the 66 relict bodies of the
     // 68 routed ones `b.ribbonGeo` is undefined and `ribbon` posts null — which is what the host
     // already treats as "no water here". Reading `b.ribbonGeo` under `if (b.routed)` would throw.
     if (b.ribbonGeo) {

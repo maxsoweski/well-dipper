@@ -74,7 +74,7 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 | F10 | Ridged / grooved icy terrain | ✅ | ❌ | |
 | **F11** | **River networks** | ✅ | **✅** | the dendritic overlay (`createRiverOverlay`); the .00014 measured the RETIRED worm-trail carve — mvp-spine-lab-quality-backlog.md:87 `uFluvialDensity`. Wired 2026-09-02, live pair pending |
 | **F12** | **Deltas & alluvial fans** | ✅ | **✅** | gates on `uDeltaDensity` AND the carve cube's mouth channel; both driven 2026-09-02 |
-| **F13** | **Outflow channels** | ✅ | **✅** | driven by pack #9 + the same bake 2026-09-02 (`uOutflowDensity`/`uOutflowActivity`, and the carve cube's B channel the shader reads them against); live on 66 of 124 corpus bodies once ROOT-0 fix 1's erosion spelling landed — it was dark on all of them under the raw read. ⚠ live pair pending; ⚠ QB-23, the ramp saturates on 60 of 64 relict bodies |
+| **F13** | **Outflow channels** | ✅ | **✅** | driven by pack #9 + the same bake 2026-09-02 (`uOutflowDensity`/`uOutflowActivity`, and the carve cube's B channel the shader reads them against); live on 68 of 124 corpus bodies (re-measured 2026-09-02 session 2) once ROOT-0 fix 1's erosion spelling landed — it was dark on all of them under the raw read. ⚠ live pair pending; ⚠ QB-23, the ramp saturates on 60 of 64 relict bodies |
 | **F14** | **Lakes & seas** | ✅ | **✅** | driven by pack #9 + the same bake 2026-09-02 (`uSeaLevel` + `uLiquidMask`; on a wet body the router's histogram solve wins at bake — intent.md decision 3). game has ocean type + islands (`❌ R` — the game-own parallel still to delete). ⚠ live pair pending |
 | F15 | Dunes & wind forms | ✅ | ❌ | |
 | F16 | Dust mantles | ✅ | ❌ | |
@@ -1098,13 +1098,13 @@ SYSTEM, NOT PER BODY, because a system's bodies bake as you fly through it: MEAS
 → `$TMPDIR/river-corpus.json` `perSystem`) there are **68 routed bodies across the 21 seeds that route anything** (3 route none), i.e.
 **3.24 routed bodies per routing system, 2.83 per seed, max 5** — so **≈ 204 MB mean** per routing system, ≈ 179 MB averaged over all 24
 seeds, and **≈ 300 MB on the worst measured system** (`rocky-4` and `rocky-14`, 5 routed + 2 further solid). ⛔ ROUTED IS wet ∪ relict, and
-64 of the 68 are RELICT: an earlier draft of this arithmetic scoped it per WET body and landed about four times low. ⚠ Recorded, never
+66 of the 68 are RELICT (re-measured 2026-09-02 session 2, see (vii)): an earlier draft of this arithmetic scoped it per WET body and landed about four times low. ⚠ Recorded, never
 gated — and the phone is the instrument that number belongs to, which is an open item and not an agent-closable one.
 
 ### (iv) The corpus, and what the router actually produced
 
 24 `rocky-*` seeds, 156 bodies through the game's own mount inputs (the planet RECORD, never the entry) — **124 solid / 32 gas**, the
-same population the province wire measured. By the pack's own gates: **wet 4 · relict 64 · airless 56.**
+same population the province wire measured. By the pack's own gates: **wet 2 · relict 66 · airless 56.** ⛔ CORRECTED 2026-09-02 (session 2): the first record read **4 · 64 · 56** because both corpus builders passed a PLANET-CLASS moon (an ENTRY wrapping `planetData`, trap 3) straight to `conditionFromBody`, where its T_eq defaulted to 288 K; read through `planetData` as the game does, rocky-14 p0m0 (0.948 R⊕, 409 K) and rocky-15 p0m1 (0.354 R⊕, 455 K) are RELICT. The two wet bodies are rocky-2 p4 (0.446 R⊕, carbon) and rocky-4 p5 (0.449 R⊕, carbon).
 
 **Routed = wet ∪ relict = 68 of 124 solid bodies; the 56 airless ones are not routed** — every consumer of the carve cube is zero on
 them by the pack, so routing one would be a bake nobody could see. On every wet body the dendritic contract's structural metrics hold:
@@ -1134,7 +1134,7 @@ allowlist still exactly one entry. Full suite 20 failing / 8 files, identical to
 - **A 35 % ocean on every wet world** → **QB-21**. The router's target is a lab UI constant, not a condition → coverage law.
 - **Per-body river admission is unauthored in the lab** → **QB-22**. The lab has a global toggle; the game admits a body on the F11
   existence gate (`liquidStability > 0.15`) for ribbon, carve and sea alike.
-- **F13's outflow ramp saturates on the game's generator** → **QB-23**. 60 of 64 relict bodies sit at `uOutflowDensity` 1.0.
+- **F13's outflow ramp saturates on the game's generator** → **QB-23**. 62 of 66 relict bodies sit at `uOutflowDensity` 1.0 (re-measured 2026-09-02 session 2; was recorded as 60 of 64).
 - **The grain cube** (`uTectonicGrainCube`) — one more array in the same message now that the transport carries five. Its own increment.
 - **The view-dependent close-approach patch** (`docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18`, still `building`) — different
   scope, and not what "wire the lab's router" means.
@@ -1148,11 +1148,9 @@ allowlist still exactly one entry. Full suite 20 failing / 8 files, identical to
   wrong line reads as freshly verified. ⭐ **The structural fix is to ADMIT those carriers**, which turns a silent rot into a red gate —
   the same §11.3.4 move that closed B3's five unregistered modules.
 
-### (vii) The live pair: PENDING
+### (vii) The live pair: the drive as specified — ✅ DRIVEN 2026-09-02 (session 2), results in (viii)
 
-⛔ **Nothing in this wire has been seen in a browser** — including the lab, after its own import-line edit. AC-4 and AC-5 are the two
-integration criteria and BOTH ARE OPEN, waiting on lane A's dev server, which is Max's to start. The drive is the contract's, quoted
-rather than re-derived:
+The drive is the contract's, quoted rather than re-derived (kept verbatim; the measured record is (viii) below):
 
 - **AC-4, relief A/B.** chrome-devtools on lane A's server, never Sol: spawn a `rocky-*` system, freeze, frame a solid body whose
   `condition.radiusEarth` is within 0.7–1.4, wait for its bake record to read `baked`, screenshot; set `uReliefBakeStrength` to 0 and
@@ -1166,3 +1164,39 @@ rather than re-derived:
 Then AC-8, which is Max's alone and which no agent may pass: flying in on a wet rocky or icy world with `J` and `U` — do the rivers run
 in straight sections and branch like trees into a sea that looks right, with the deltas at the real mouths and the valleys the planet's
 own terrain?
+
+### (viii) The live pair: MEASURED — 2026-09-02 (session 2)
+
+**Rig.** Lane A's server (`scripts/dev.sh`, :5175) + Chrome:9223, a CLEAN page load before every measured pair (`feedback_reload-before-browser-measurement`), `freezeFrame()` FIRST then `frameBody`, page-level chrome-devtools screenshots (the compositor path — never `readPixels`), diffed two ways: `scripts/shot-diff.mjs` with the `_lab.shotState()` sidecar and an ON/ON floor pair, and a pngjs per-pixel count (threshold 2/255) that uses the sidecar's disc to count pixels OUTSIDE the body. Shots live in the session scratchpad and are not committed; every number below is reproducible from the drive in (vii).
+
+**⛔ What the live check found FIRST — the corpus record was wrong, and the wire was not.** The scripted body (`rocky-14`'s 0.948 R⊕ moon) came up **RELICT** live (T_eq 409 K), not wet. Root cause, confirmed headless: a PLANET-CLASS moon in `e.moons` is an ENTRY wrapping `planetData` (trap 3), exactly like a planet in `sys.planets`; both corpus builders (`tests/river-bake-host.test.js`, `tests/driver-pack-fluvialdeck.test.js`) passed the wrapper to `conditionFromBody`, where `T_eq` defaulted to **288 K** and the greenhouse read 310 K — wet. The game reads `planetData` (379 K raw → 409 K). Fixed in both builders (`m.isPlanetMoon ? (m.planetData || m) : m`) and RE-MEASURED: **wet 2 · relict 66 · airless 56** (routed still 68); raw single-spelling read 2 / 0 / 122, 66 disagreements; erosion carried on **124 of 124** (the "2 of 124 without" were the two wrappers); outflow non-zero on **68**; strandlines on **124**; the F13 ramp saturates on **62 of 66** relict (QB-23; was 60 of 64). **The two wet bodies in the whole 24-seed corpus are `rocky-2` p4 (0.446 R⊕, carbon, 110 K) and `rocky-4` p5 (0.449 R⊕, carbon, 87 K)** — there is NO wet body in the relief A/B's 0.7–1.4 R⊕ window, so "one body does both A/Bs" does not exist and the pair runs on two bodies. Every doc that carried 4 / 64 / 56 is corrected in this commit; the province suite's builder has the same wrapper read but the province bake does not read `T_eq` (not re-measured here — logged, see the handoff).
+
+**⛔ ORRERY trap, sharpened.** After `spawnProceduralSystem` the orrery ARRIVAL ZOOM runs for a few seconds; a `frameBody` issued inside it leaves the body's group `visible: false` and nothing bakes (`onBeforeRender` never fires). A SECOND `frameBody` after the zoom settles (≈ 5 s post-spawn) makes the group visible and the bake follows: request → worker reply → bind on the next frame. Reproduced on both systems this session (2 tries each).
+
+**AC-4 — relief A/B on `rocky-14` p0m0 `body.planet.64b466`** (planet-class moon, 0.948 R⊕, relict, `path: shell`), 3 radii, disc r 213 px. Baked via the worker in 82.2 ms (route 62.5 ms); `uReliefBakeStrength` 0.9956 / `uCraterBakeRestore` 0.0044; relief + crater cubes are the record's own 256 px render-target cubes (uniform `.value === record.relief.cube.texture`), the carve cube the record's 1024 px one; VRAM per the record 0.79 + 3.15 + 3.15 + 50.3 MB.
+
+| arm | differing px (of 1,138,556) | max Δ | outside the disc | reading |
+|---|---|---|---|---|
+| ON vs OFF (`_labRelief.toggle()`) | **124,960** (10.98 % frame; bbox (462,210)–(886,633) = the disc) | 91 | 0 | DIFFERS on the body and nowhere else ✅ |
+| floor ON vs ON | 0 | 0 | 0 | the capture path moves nothing |
+| sabotage: 1×1 black placeholder relief + crater cubes at the live strength, vs OFF | 130,340 | 49 | 0 | a THIRD state (see below) |
+| sabotage vs ON | 132,473 | 82 | 0 | the cube's content is what the strength reads ✅ |
+| gas control `body.planet.e050b0` (sub-neptune, no relief slot) ON vs OFF | 0 | 0 | — | identical ✅ |
+
+⚠ **The sabotage arm is NOT the OFF frame, and cannot be.** The lab's crossover mixes analytic·(1−s) with cube·s; a zero cube at s≈1 is a *flattened* body, neither the baked one nor the analytic one with its craters restored. The contract clause "with the placeholder re-bound the pair returns to identical" was written on the province wire's MIX-KNOB model (a zero cube × any mix = the mix-0 picture) and does not transfer to a strength-weighted crossover. The arm still does its job — a cube that never reached the material could not move 132k pixels — and the contract's AC-4 is AMENDED (dated, in place) to "sabotage ≠ ON and ≠ OFF".
+
+**AC-5 — rivers A/B on `rocky-4` p5 `body.planet.8ad228`** (carbon, 0.449 R⊕, WET, 87 K, `path: shell`), 3 radii, disc r 213 px. Baked via the worker in 146.8 ms (route 110.3 ms); `rivers: { class: 'wet', routed, admitted, seaLevel: 0.002788 }`. Uniforms: `uRiverCarveMap` = the record's 1024 px render-target cube; **`uSeaLevel` 0.002788 = `record.rivers.seaLevel`, not −1**; `uCoastStrength` 1; `uLiquidMask` 0.303; carve amounts 0.01 / 1.3 / 0.08 / 0.5, gate 0.18; `uReliefBakeStrength` 0.385. **The ribbon** is a child of the surface, visible, `scale` 0.0191713 = the `SphereGeometry(0.0191445, 96, 48)` radius × 1.0014, 56,028 vertices at unit radius 0.999–0.99902 ⇒ seated at 1.0004 r.
+
+| arm | differing px | max Δ | outside the disc | reading |
+|---|---|---|---|---|
+| ON vs OFF (`_labRivers.toggle()`) | **6,141** (0.54 % frame; 4.29 % of the disc; rim 3.77 %) | 227 | 0 | DIFFERS on the body and nowhere else ✅ |
+| floor ON vs ON | 0 | 0 | 0 | — |
+| ribbon hidden ALONE (real carve, amounts ON) vs ON | 2,103 | 227 | 0 | **the ribbon is visible, not buried** |
+| ribbon hidden alone vs OFF | 4,671 | 115 | 0 | the carve's own contribution |
+| sabotage: placeholder carve + ribbon hidden at the ON amounts, vs OFF | 228 (0.16 % of the disc) | 41 | 0 | ≈ identical — the amounts' cube-independent residual |
+| sabotage vs ON | 6,174 | 227 | 0 | the cube + ribbon are what ON reads ✅ |
+| airless control `body.moon.bf7dab` (rocky-4 p2m0, captured, 0.021 R⊕, lit) ON vs OFF | 0 | 0 | — | no ribbon child, 1 px placeholder carve, `uSeaLevel` −1, `uCoastStrength` 0 ✅ |
+
+**AC-6, the lab-in-Chrome clause.** `world-engine-lab.html` on the same server: 0 console errors / warnings on load; Rocky (Earthlike); `route()` bound carve 1024 / relief 256 / crater 256 / province 128 px render-target cubes; the *Rivers & valleys (F11)* title-bar toggle → ribbon visible (92,312 vertices), carve amounts 0.01 / 1.3 / 0.08 / 0.5 (= the game's `CARVE_AMOUNTS`), histogram sea 0.1045; rivers ON vs OFF **8,736 px**, max Δ 235.
+
+**What Max's walk is now** (AC-8, his alone): `rocky-4`, fly to its OUTER planet (p5, 0.449 R⊕, carbon) — it is one of the two wet worlds in the corpus — and tap `J` while moving; `U` on the same world moves the relief crossover at strength 0.385 (measured below). For the Earth-sized relief look, `rocky-14`'s big moon (relict: carve + outflow, no sea) is the body.

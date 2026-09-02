@@ -203,8 +203,8 @@ describe('AC-0 (determinism) — the moved router core + GPU bakers introduce NO
 // ⭐⭐ THE RELICT ARM IS LIVE ON REAL BODIES, AND IT WAS NOT UNTIL THE EROSION KEY WAS FIXED. The lab's
 // block reads a raw `.erosion` (world-engine-lab.html:2128) while the game writes `erosionLevel`
 // (PhysicsEngine.js:832) — the third reader ROOT-0 fix 1 (B1, 2026-08-20) missed. The pack IS that
-// reader now and carries the fix, so the corpus splits 4 wet / 64 relict / 56 airless where the raw
-// read gave 4 / 0 / 120 and this arm could only be driven on a hand-built condition.
+// reader now and carries the fix, so the corpus splits 2 wet / 66 relict / 56 airless where the raw
+// read gave 2 / 0 / 122 and this arm could only be driven on a hand-built condition.
 // tests/driver-pack-fluvialdeck.test.js §F pins the reader and reds on a single-spelling regression.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 const SEEDS = Array.from({ length: 24 }, (_, i) => `rocky-${i}`);
@@ -216,7 +216,7 @@ function corpus() {
       // ⚠ A planet in `sys.planets` is an ENTRY wrapping `planetData` — pass the entry and every
       // provenance-keyed read is wrong (handoff 2026-09-01b trap 1).
       out.push({ seed, kind: 'planet', d: e.planetData || e });
-      for (const m of (e.moons || [])) out.push({ seed, kind: m.isPlanetMoon ? 'planet-moon' : 'moon', d: m });
+      for (const m of (e.moons || [])) out.push({ seed, kind: m.isPlanetMoon ? 'planet-moon' : 'moon', d: m.isPlanetMoon ? { ...m.planetData, _systemSeed: m._systemSeed, _ordinal: `pm-${m._ordinal}` } : m });   // ⛔ a PLANET-CLASS moon is an ENTRY wrapping planetData too (trap 3; found by the 2026-09-02 live check): read through the wrapper its T_eq defaults to 288 K and it classes wet. The game mounts the INNER record with the provenance stamps copied on (src/main.js:7757 `_systemSeed: systemData.seed, _ordinal: `pm-${moonData._ordinal}``) — mirrored here, minus the render-only fields
     }
   }
   for (const b of out) b.cond = conditionFromBody(b.d);
@@ -264,7 +264,7 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
     expect(solid).toBe(124);
     expect(gas).toBe(32);
     expect(counts.wet + counts.relict + counts.airless).toBe(124);
-    expect(counts).toEqual({ wet: 4, relict: 64, airless: 56 });
+    expect(counts).toEqual({ wet: 2, relict: 66, airless: 56 });
     // ⛔ THE RELICT CLASS MUST BE NON-EMPTY, stated on its own line rather than left inside the triple:
     // it was 0 before the erosion key was fixed, and a regression there would put it back to 0 while
     // every other arm in this file stayed green.
@@ -272,7 +272,7 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
     // vitest hides console.info on a passing test, so the AC-1 record goes to a FILE.
     writeFileSync(join(process.env.TMPDIR || tmpdir(), 'river-corpus.json'), JSON.stringify({
       seeds: SEEDS.length, bodies: RIVER_BODIES.length, solid, gas, classes: counts,
-      note: 'measured WITH ROOT-0 fix 1 two-spelling erosion read; the raw single-spelling lab line gave 4 / 0 / 120 — see driver-pack-fluvialdeck.test.js §F',
+      note: 'measured WITH ROOT-0 fix 1 two-spelling erosion read; the raw single-spelling lab line gave 2 / 0 / 122 — see driver-pack-fluvialdeck.test.js §F',
     }, null, 2));
   });
 
@@ -294,7 +294,7 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
         .toBeGreaterThan(0);
       n++;
     }
-    expect(n, 'the corpus must contain wet bodies or this arm is vacuous').toBe(4);
+    expect(n, 'the corpus must contain wet bodies or this arm is vacuous').toBe(2);
   });
 
   it('AIRLESS bodies have every MASTER off — and the two ungated terms that are not zero are inert', () => {
@@ -330,7 +330,7 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
   });
 
   it('RELICT bodies take the lab’s 0.30→0.45 outflow ramp and no sea — over the REAL corpus', () => {
-    // ⭐ DRIVEN ON THE 64 GENERATED BODIES, not on a fixture. Each body's own erosion is read back off
+    // ⭐ DRIVEN ON THE 66 GENERATED BODIES, not on a fixture. Each body's own erosion is read back off
     // the pack's meta and the ramp recomputed here from the lab's constants, so the assertion is the
     // AC's — "relict bodies carry uOutflowDensity by the lab's 0.30→0.45 erosion ramp and
     // fluvialDensity = 0.4·erosion" — evaluated on the population it is about.
@@ -352,7 +352,7 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
       if (u.uOutflowDensity.value > 0) ramped++;
       n++;
     }
-    expect(n, 'the relict class must be populated — see the block header').toBe(64);
+    expect(n, 'the relict class must be populated — see the block header').toBe(66);
     // NON-VACUITY, with the honest number rather than the hoped-for one. All 64 clear the ramp's 0.30
     // foot — MEASURED erosion range on this class is 0.325 … 1.0 — so `ramped` is 64, not a subset.
     // ⚠ AND THE RAMP SATURATES: 60 of the 64 sit at exactly 1.0 because their erosion is at or above
@@ -361,7 +361,7 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
     // (world-engine-lab.html:2158-2162); on the game's erosion distribution the 0.30→0.45 window is
     // too low to deliver that. Recorded here rather than silently re-tuned — the window is the lab's
     // number and re-choosing it is a rendering decision, not a wiring one.
-    expect(ramped).toBe(64);
+    expect(ramped).toBe(66);
     const outflowValues = new Set();
     for (const b of RIVER_BODIES) {
       if (compositionClass(b.cond) === 'gas' || fluvialClassOf(b.cond) !== 'relict') continue;
@@ -657,7 +657,7 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
         if (!reached) badDrain++;
       }
     }
-    expect(routed).toBe(68);          // wet 4 + relict 64 (AC-1's split)
+    expect(routed).toBe(68);          // wet 2 + relict 66 (AC-1's split)
     expect(notRouted).toBe(56);
     expect(orphan).toBe(0);
     expect(uphill).toBe(0);
@@ -671,7 +671,7 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
     expect(oceanFracMax).toBeLessThan(0.36);
     // MEASURED and recorded rather than asserted as a law: exactly one routed body composites.
     expect(composited).toBe(1);
-    expect(wetNetworks.length, 'the R_b / maxStrahler record is empty — AC-2 asks for it on every wet body').toBe(4);
+    expect(wetNetworks.length, 'the R_b / maxStrahler record is empty — AC-2 asks for it on every wet body').toBe(2);
     // ⭐ THE PER-SYSTEM ROUTED COUNT, for the VRAM arithmetic the contract and the PLAN quote. The
     // per-BODY figure (57.3 MB routed / 7.0 MB solid) is what a body costs; what a phone allocates is
     // a whole SYSTEM's worth at once, so the distribution over systems is the number that matters and

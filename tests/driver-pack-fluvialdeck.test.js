@@ -58,7 +58,7 @@ function corpus() {
     const sys = StarSystemGenerator.generate(seed, null);
     for (const e of sys.planets) {
       out.push({ seed, kind: 'planet', d: e.planetData || e });
-      for (const m of (e.moons || [])) out.push({ seed, kind: 'moon', d: m });
+      for (const m of (e.moons || [])) out.push({ seed, kind: m.isPlanetMoon ? 'planet-moon' : 'moon', d: m.isPlanetMoon ? { ...m.planetData, _systemSeed: m._systemSeed, _ordinal: `pm-${m._ordinal}` } : m });   // ⛔ a PLANET-CLASS moon is an ENTRY wrapping planetData too (trap 3; found by the 2026-09-02 live check): read through the wrapper its T_eq defaults to 288 K and it classes wet. The game mounts the INNER record with the provenance stamps copied on (src/main.js:7757 `_systemSeed: systemData.seed, _ordinal: `pm-${moonData._ordinal}``) — mirrored here, minus the render-only fields
     }
   }
   for (const b of out) b.cond = conditionFromBody(b.d);
@@ -243,12 +243,12 @@ describe('§D — gates, membership, collision, registration', () => {
     // real change rather than a re-statement of the value.
     expect(want.deltaDensity).toBeGreaterThan(0);
     expect(want.coastStrength).toBe(1);
-    // ⭐ THE THIRD ROW IS LIVE ON REAL BODIES SINCE THE EROSION FIX (§F): 66 of the 124 solid bodies
+    // ⭐ THE THIRD ROW IS LIVE ON REAL BODIES SINCE THE EROSION FIX (§F): 68 of the 124 solid bodies
     // carry a non-zero outflow, where the raw single-spelling read left 0 and this row provable only
     // on a hand-built condition. Both are asserted — the corpus one because it is the population that
     // ships, the built one because it pins the RAMP's shape at three points the corpus need not hit.
     const outflowBodies = solids().filter((x) => labBlock(x.cond).outflowDensity > 0);
-    expect(outflowBodies.length).toBe(66);
+    expect(outflowBodies.length).toBe(68);
     for (const x of outflowBodies) {
       const xd = fluvialDeckPack(x.cond, CTX).drivers;
       expect(resolveDriver('uOutflowDensity', xd.uOutflowDensity, CTX), `${x.seed}/${x.kind}`).toBe(labBlock(x.cond).outflowDensity);
@@ -352,9 +352,9 @@ describe('§D — gates, membership, collision, registration', () => {
     for (const b of solids()) c[fluvialClassOf(b.cond)]++;
     expect(c.wet + c.relict + c.airless).toBe(124);
     // MEASURED 2026-09-02 over the 24 rocky-* seeds, WITH ROOT-0 fix 1's two-spelling erosion read
-    // (§F): 4 wet, 64 relict, 56 airless. Under the raw single-spelling read the same corpus answered
-    // 4 / 0 / 120 — the relict class was empty and F13/F20 were dark on every body.
-    expect(c).toEqual({ wet: 4, relict: 64, airless: 56 });
+    // (§F): 2 wet, 66 relict, 56 airless (re-measured 2026-09-02 after the planet-moon wrapper fix — the two "wet" planet-moons were reading a 288 K default T_eq). Under the raw single-spelling read the same corpus answered
+    // 2 / 0 / 122 — the relict class was empty and F13/F20 were dark on every body.
+    expect(c).toEqual({ wet: 2, relict: 66, airless: 56 });
     // vitest hides console.info on a passing test, so the record goes to a FILE.
     writeFileSync(join(TMP, 'fluvial-classes.json'), JSON.stringify({ solid: 124, gas: BODIES.length - 124, classes: c }, null, 2));
   });
@@ -426,9 +426,9 @@ describe('§E — the module itself: closure, mirror shape, entry shape', () => 
 // WHAT IT MOVED, MEASURED ON THIS CORPUS RATHER THAN PREDICTED (2026-09-02, 124 solid bodies):
 //   · `surfaceHistory.erosion`      is defined on   2 / 124   and reads 0 on both
 //   · `surfaceHistory.erosionLevel` is defined on 122 / 124   and runs 0 … 1, median 0.529
-//   · SINGLE SPELLING (the raw lab line): wet 4 · relict  0 · airless 120; outflow non-zero   0;
+//   · SINGLE SPELLING (the raw lab line): wet 2 · relict  0 · airless 122; outflow non-zero   0;
 //     strand non-zero   0
-//   · DUAL SPELLING   (what ships):       wet 4 · relict 64 · airless  56; outflow non-zero  66;
+//   · DUAL SPELLING   (what ships):       wet 2 · relict 66 · airless  56; outflow non-zero  68;
 //     strand non-zero 122
 // F13 outflow channels and F20 paleo-strandlines were DARK on every game body and are now live on 66
 // and 122 of them; intent.md decision 4's relict class goes from ZERO bodies to 64.
@@ -473,7 +473,7 @@ describe('§F — the erosion key: ROOT-0 fix 1 at its third reader, and the reg
     }
   });
 
-  it('the corpus: the game spells it `erosionLevel`, and 122 of 124 bodies now carry a real erosion', () => {
+  it('the corpus: the game spells it `erosionLevel`, and 124 of 124 bodies now carry a real erosion', () => {
     let hasErosion = 0, hasErosionLevel = 0, erosionNonZero = 0;
     for (const b of solids()) {
       const sh = b.cond.surfaceHistory || {};
@@ -481,9 +481,9 @@ describe('§F — the erosion key: ROOT-0 fix 1 at its third reader, and the reg
       if (sh.erosionLevel !== undefined) hasErosionLevel++;
       if (fluvialDeckPack(b.cond, CTX).meta.erosion !== 0) erosionNonZero++;
     }
-    expect(hasErosion).toBe(2);
-    expect(hasErosionLevel).toBe(122);
-    expect(erosionNonZero, 'under the raw single-spelling read this was 0 — see the block header').toBe(122);
+    expect(hasErosion).toBe(0);
+    expect(hasErosionLevel).toBe(124);
+    expect(erosionNonZero, 'under the raw single-spelling read this was 0 — see the block header').toBe(124);
   });
 
   it('so F13 outflow and F20 strandlines are LIVE on the corpus, and the counts are recorded', () => {
@@ -493,8 +493,8 @@ describe('§F — the erosion key: ROOT-0 fix 1 at its third reader, and the reg
       if (resolveDriver('uOutflowDensity', d.uOutflowDensity, CTX) > 0) outflowNonZero++;
       if (resolveDriver('uStrandStrength', d.uStrandStrength, CTX) > 0) strandNonZero++;
     }
-    expect(outflowNonZero).toBe(66);
-    expect(strandNonZero).toBe(122);
+    expect(outflowNonZero).toBe(68);
+    expect(strandNonZero).toBe(124);
   });
 
   it('CONTROL: the fix is LOAD-BEARING — the raw read gives a DIFFERENT answer on this corpus', () => {
@@ -515,11 +515,11 @@ describe('§F — the erosion key: ROOT-0 fix 1 at its third reader, and the reg
       shipped[cls]++; raw[rawCls]++;
       if (cls !== rawCls) disagreements++;
     }
-    expect(shipped).toEqual({ wet: 4, relict: 64, airless: 56 });
-    expect(raw).toEqual({ wet: 4, relict: 0, airless: 120 });
-    expect(disagreements, 'the two readers agree everywhere — the fix has become a no-op').toBe(64);
+    expect(shipped).toEqual({ wet: 2, relict: 66, airless: 56 });
+    expect(raw).toEqual({ wet: 2, relict: 0, airless: 122 });
+    expect(disagreements, 'the two readers agree everywhere — the fix has become a no-op').toBe(66);
     writeFileSync(join(TMP, 'fluvial-erosion-key.json'), JSON.stringify({
-      shipped: { ...shipped, outflowNonZero: 66, strandNonZero: 122, note: 'ROOT-0 fix 1 two-spelling read' },
+      shipped: { ...shipped, outflowNonZero: 68, strandNonZero: 124, note: 'ROOT-0 fix 1 two-spelling read' },
       rawSingleSpelling: { ...raw, outflowNonZero: 0, strandNonZero: 0, note: 'the untouched world-engine-lab.html:2128' },
       bodiesThatChangedClass: disagreements,
     }, null, 2));

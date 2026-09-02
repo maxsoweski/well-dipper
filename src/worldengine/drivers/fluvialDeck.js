@@ -82,9 +82,9 @@
 // MEASURED over the 24 rocky-* seeds (124 solid bodies), 2026-09-02, before and after the fix:
 //   · `surfaceHistory.erosion` is defined on 2/124 (reading 0 on both); `erosionLevel` on 122/124,
 //     running 0 … 1 with median 0.529. After the fix, 122/124 bodies carry a non-zero erosion.
-//   · SINGLE SPELLING (the raw transcription): wet 4 · relict  0 · airless 120;
+//   · SINGLE SPELLING (the raw transcription): wet 2 · relict  0 · airless 122;
 //     uOutflowDensity non-zero on  0 bodies; uStrandStrength non-zero on   0.
-//   · DUAL SPELLING (what ships):              wet 4 · relict 64 · airless  56;
+//   · DUAL SPELLING (what ships):              wet 2 · relict 66 · airless  56;
 //     uOutflowDensity non-zero on 66 bodies; uStrandStrength non-zero on 122.
 // So F13 outflow channels and F20 paleo-strandlines were DARK on every game body under the raw read
 // and are live on 66 and 122 of them under this one, and the workstream's relict class (intent.md
