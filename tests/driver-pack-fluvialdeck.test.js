@@ -558,8 +558,10 @@ describe('§F — the erosion key: ROOT-0 fix 1 at its third reader, and the reg
 // and density, move `liquidStability` with them, and measure a seam nobody ever crossed — MEASURED: that
 // construction answers 12 combos and a Rocky seed-0 mask of 0.222, neither of which the lab ever drew.
 // The arms below therefore share ONE `u` and differ in ONE input, which is exactly the change that shipped.
-// `_stab` / `_rain` / `_g` are consequently bit-identical across the arms BY CONSTRUCTION — stated plainly
-// so nobody reads it as a measurement that could have come out otherwise.
+// `_stab` / `_rain` / `_g` are consequently bit-identical across THESE arms BY CONSTRUCTION — stated
+// plainly so nobody reads it as a measurement that could have come out otherwise. That scoping matters:
+// it does NOT mean surfaceGravity is bit-identical, full stop — the OTHER seam below (radius-aware vs
+// the block's radius-blind read) is a raw surfaceGravity difference on 44 of 72 combos, counted apart.
 //
 // ⛔ AND ONE MORE MOVER, WHICH IS NOT THE VOLATILES SEAM AND IS RECORDED SEPARATELY: `uFluvialDepth`
 // reads `_g`, and the CONDITION VECTOR carries the radius-AWARE surface gravity while the block's own
