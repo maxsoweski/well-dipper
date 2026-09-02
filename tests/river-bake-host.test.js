@@ -624,23 +624,58 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
   }, 600000);
 
   it('AC-7 RECORDED — the three timed bodies (one wet, one relict, one airless) on the REAL 40000/4 carrier', () => {
+    // ⛔ BEST-OF-3 WITH THE SPREAD, NOT ONE SHOT — and the reason is a defect this test already
+    // caused once. A single timing was recorded here, quoted in a report, and then OVERWRITTEN by
+    // the next run of the same file under full-suite load: the artifact said 210.3 / 191.6 ms where
+    // the prose said 115.1 / 93.1, and the conclusion drawn from the prose ("under intent.md's
+    // ~100-170 ms route band") was reversed by the file. A one-shot timing on a machine running 195
+    // test files in parallel measures the contention, not the bake. So each body is built THREE
+    // times and BOTH the best (the least-contended sample, the honest floor for a frame budget) and
+    // the full min/max spread are written — a reader can see how noisy the measurement was instead
+    // of having to trust one number.
+    //
+    // ⚠ EVEN SO, THESE ARE FLOOR NUMBERS FROM A HEADLESS NODE RUN, not a frame budget. What the
+    // browser pays is this plus the six cube-face renders on the main thread, and a full-suite run
+    // of this same file measures ~1.5-2x these values purely from parallel-worker contention. The
+    // recorded `run` field says which kind of run produced them.
     const mesh = sharedCarrierMesh();
+    const RUNS = 3;
     const timings = [];
     for (const cls of ['wet', 'relict', 'airless']) {
       const b = RIVER_BODIES.find((x) => compositionClass(x.cond) !== 'gas' && fluvialClassOf(x.cond) === cls);
       expect(b, `the corpus has no ${cls} body`).toBeTruthy();
-      const got = buildLabBundleForBody(bodyOf(b), mesh);
-      expect(got.fluvialClass).toBe(cls);
-      expect(got.marginHeight.length).toBe(40000);
-      timings.push({ cls, seed: b.seed, kind: b.kind, radiusEarth: +b.cond.radiusEarth.toFixed(4),
-        dispatchMs: +got.ms.toFixed(1), routeMs: +got.routeMs.toFixed(1), totalMs: +(got.ms + got.routeMs).toFixed(1),
-        strength: got.strength, routed: got.routed,
-        channelCount: got.routedGraph ? got.routedGraph.channelCount : null,
-        ribbonVerts: got.ribbonGeo ? got.ribbonGeo.getAttribute('position').count : 0,
-        valleyVerts: got.valleyGeo ? got.valleyGeo.getAttribute('position').count : 0 });
+      const dispatch = [], route = [], total = [];
+      let last = null;
+      for (let k = 0; k < RUNS; k++) {
+        const got = buildLabBundleForBody(bodyOf(b), mesh);
+        expect(got.fluvialClass).toBe(cls);
+        expect(got.marginHeight.length).toBe(40000);
+        // the three runs must be the SAME BAKE — if they were not, "best of 3" would be picking a
+        // cheapest among different pieces of work rather than a least-contended sample of one.
+        if (last) {
+          expect(bytes(got.marginHeight), `${cls}: run ${k} is not the same bake as run 0`).toEqual(bytes(last.marginHeight));
+          expect(got.routed ? got.routedGraph.channelCount : null).toBe(last.routed ? last.routedGraph.channelCount : null);
+        }
+        last = got;
+        dispatch.push(got.ms); route.push(got.routeMs); total.push(got.ms + got.routeMs);
+      }
+      const one = (a) => ({ best: +Math.min(...a).toFixed(1), worst: +Math.max(...a).toFixed(1),
+        samples: a.map((x) => +x.toFixed(1)) });
+      timings.push({ cls, seed: b.seed, kind: b.kind, radiusEarth: +b.cond.radiusEarth.toFixed(4), runs: RUNS,
+        dispatchMs: one(dispatch), routeMs: one(route), totalMs: one(total),
+        strength: last.strength, routed: last.routed,
+        channelCount: last.routedGraph ? last.routedGraph.channelCount : null,
+        ribbonVerts: last.ribbonGeo ? last.ribbonGeo.getAttribute('position').count : 0,
+        valleyVerts: last.valleyGeo ? last.valleyGeo.getAttribute('position').count : 0 });
     }
-    recordCorpus({ timedBodies: timings, meshBuildMsNote: 'the 40000/4 carrier is built once per session (measured ~640 ms) and is NOT in these numbers' });
-    for (const t of timings) { expect(t.dispatchMs).toBeGreaterThan(0); expect(t.routeMs).toBeGreaterThan(0); }
+    recordCorpus({ timedBodies: timings,
+      timingNote: 'best-of-3 per body per phase, with the full spread; `best` is the least-contended sample. ' +
+        'A one-shot number here was overwritten by the next run once — hence 3 runs and the spread. ' +
+        'These are headless-node FLOOR numbers: the browser adds six cube-face renders on the main thread, ' +
+        'and this same file under full-suite parallelism measures ~1.5-2x from worker contention.',
+      run: 'single-file (`npx vitest run --dir tests tests/river-bake-host.test.js`)',
+      meshBuildMsNote: 'the 40000/4 carrier is built once per session (measured ~640 ms) and is NOT in these numbers' });
+    for (const t of timings) { expect(t.dispatchMs.best).toBeGreaterThan(0); expect(t.routeMs.best).toBeGreaterThan(0); }
   }, 600000);
 
   it('the WORKER carries the whole bundle in ONE message, with every transferred buffer listed exactly once', async () => {
