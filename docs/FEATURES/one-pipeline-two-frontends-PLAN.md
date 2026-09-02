@@ -72,8 +72,8 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 | F8 | Lava plains & flows | ✅ | ❌ R | game has lava cracks |
 | F9 | Chaos / disrupted terrain | ✅ | ❌ | |
 | F10 | Ridged / grooved icy terrain | ✅ | ❌ | |
-| F11 | River networks | ⚠️ **inert** | ❌ | measured .00014 while drivers derive `fluvialActivity` 1.0 |
-| F12 | Deltas & alluvial fans | ⚠️ **inert** | ❌ | measured .00015 |
+| **F11** | **River networks** | ✅ | **✅** | the dendritic overlay (`createRiverOverlay`); the .00014 measured the RETIRED worm-trail carve — mvp-spine-lab-quality-backlog.md:87 `uFluvialDensity`. Wired 2026-09-02, live pair pending |
+| **F12** | **Deltas & alluvial fans** | ✅ | **✅** | gates on `uDeltaDensity` AND the carve cube's mouth channel; both driven 2026-09-02 |
 | F13 | Outflow channels | ✅ | ❌ | |
 | F14 | Lakes & seas | ✅ | ❌ R | game has ocean type + islands |
 | F15 | Dunes & wind forms | ✅ | ❌ | |
@@ -118,7 +118,7 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 
 ### Honest headline
 
-- **Through the world engine, in both lab and game: 13 of 53 (24.5%)** — complete (8): F2, F22, F23, F24, F25, F29, F34, F51. Partial (5): F3, F31b, F35, F53. ⭐ UPDATED 2026-08-28 (second revision that day): F24/F25 closed when the `aStorm` bake landed. ✅ F24/F25 are UAT-CLOSED by Max on 2026-08-28, on an in-game A/B at 2.4 body radii. ⛔ ENUMERATED BY F-ID ON PURPOSE — the bare arithmetic has now gone stale twice. ⭐ 2026-09-02: **the PROVINCE CUBE (`uCratonColor` / `uFreshColor` / `uSedColor` by history) is SHIPPED in the game** (Max UAT 2026-09-02 — "it does read as a crust and coheres", `ccee0d1`; record: § THE PROVINCE CUBE, WIRED at EOF). It is a queue-(b) UNIFORM wire, not an F-row, so the F-id count above is unchanged by it — do not bump the arithmetic for it.
+- **Through the world engine, in both lab and game: 13 of 53 (24.5%)** — complete (8): F2, F22, F23, F24, F25, F29, F34, F51. Partial (5): F3, F31b, F35, F53. ⭐ UPDATED 2026-08-28 (second revision that day): F24/F25 closed when the `aStorm` bake landed. ✅ F24/F25 are UAT-CLOSED by Max on 2026-08-28, on an in-game A/B at 2.4 body radii. ⛔ ENUMERATED BY F-ID ON PURPOSE — the bare arithmetic has now gone stale twice. ⭐ 2026-09-02: **the PROVINCE CUBE (`uCratonColor` / `uFreshColor` / `uSedColor` by history) is SHIPPED in the game** (Max UAT 2026-09-02 — "it does read as a crust and coheres", `ccee0d1`; record: § THE PROVINCE CUBE, WIRED at EOF). It is a queue-(b) UNIFORM wire, not an F-row, so the F-id count above is unchanged by it — do not bump the arithmetic for it. ⭐⭐ 2026-09-02, SECOND ENTRY THAT DAY: **F11 and F12 ARE WIRED** — their rows above are re-scored ✅/✅ and the record is **§ THE RIVER ROUTER, WIRED** at the END of this file. These two ARE F-rows, so by this list's own rule the count moves to **15 of 53 (28.3%)** — complete (10): F2, **F11**, **F12**, F22, F23, F24, F25, F29, F34, F51; partial (5) unchanged. ⚠ **SCORED ON THE WIRE, NOT ON A PICTURE:** the live A/B pair (contract AC-4 relief, AC-5 rivers) is PENDING and no game body has been seen with a river on it. ⚠ The two bullets below (lab-only tally; "never observed rendering anywhere", which still lists F11/F12 as inert) are NOT re-derived here — enumerate from the table, never from those totals.
 - **Lab‑only: 47.** Of those, 23 have a game‑own parallel to delete (`❌ R`) and 23 have nothing in the game at all. ⚠ The previous `48 / 22 / 26` predates F51 and did not sum against the table's own rows; these three are counted off the GAME column directly.
 - **Game‑only: 1** (F52).
 - **UNKNOWN: 1** (F26 — resolve the doc/ID question; do not guess).
@@ -129,7 +129,7 @@ The planned‑feature list is closed and countable: **F1–F53** (58 rows with F
 Wiring queue (b) or (c) first manufactures a failure nobody can attribute:
 
 - **(a) Wire‑and‑it‑works** — ⛔⛔ **EMPTY as of 2026-08-28, and this line is why the queue was trusted.** It listed F2/F22/F23/F29 (already wired), F24/F25/F31b (queue (b), blocked on `aStorm`) and **F3 — which the VERY NEXT LINE correctly places in queue (c)**. A build session reads this line first, so the contradiction shipped as a work order. MEASURED: `planetData.atmosphere` is falsy on **0 of 800** planets over seeds 1–200 and `atmosphere.physics.retained === false` on **0 of 800**, so `uRayBrightness ≡ 0` and `height.glsl.js:2191 if (uRayBrightness <= 0.0) return 0.0;` returns before any pixel. Palette/iceness: visible half wired, `uCratonColor` → (b), `uBioGround*` → (c).
-- **(b) Wire‑and‑it‑needs‑a‑bake** — F11/F12 (river router), F27/F28 (storm slice — the `uStorm*` UNIFORM family, still out), and `uCratonColor`, blocked on the province cube (`LabPlanetMaterial.js:84`; producer is lab-only). ⭐ **`aStorm` LEFT THIS QUEUE 2026-08-28** — all four gas attributes now bake in `giantDeck.js:307-309`, and F24/F25/F31b went with it.  ⭐⭐ **THE PROVINCE CUBE IS MEASURED END-TO-END AS OF 2026-08-28 — the prerequisite is GONE and the value is QUALIFIED. Do not scope `uCratonColor` without reading the appendix at the END of this file (§ THE PROVINCE CUBE, MEASURED).** ⭐⭐ **`uCratonColor` LEFT THIS QUEUE 2026-09-01 — THE PROVINCE CUBE IS BAKED IN THE GAME.** The lab's own mesh builder moved to `src/worldengine/mesh/sphereMesh.js` and its own baker to `src/rendering/bake/provinceCube.js` (both byte-verbatim, both imported back by the root modules); `src/rendering/bake/labBakeHost.js` runs the lab's dispatch for every admitted solid body over the lab's 40k mesh — in a Web Worker (`provinceWorker.js`) — and binds `uProvinceCube` on the body's first draw. Measured and recorded in **§ THE PROVINCE CUBE, WIRED** at the END of this file. Queue (b) is now F11/F12 and F27/F28 only.
+- **(b) Wire‑and‑it‑needs‑a‑bake** — F11/F12 (river router), F27/F28 (storm slice — the `uStorm*` UNIFORM family, still out), and `uCratonColor`, blocked on the province cube (`LabPlanetMaterial.js:84`; producer is lab-only). ⭐ **`aStorm` LEFT THIS QUEUE 2026-08-28** — all four gas attributes now bake in `giantDeck.js:307-309`, and F24/F25/F31b went with it.  ⭐⭐ **THE PROVINCE CUBE IS MEASURED END-TO-END AS OF 2026-08-28 — the prerequisite is GONE and the value is QUALIFIED. Do not scope `uCratonColor` without reading the appendix at the END of this file (§ THE PROVINCE CUBE, MEASURED).** ⭐⭐ **`uCratonColor` LEFT THIS QUEUE 2026-09-01 — THE PROVINCE CUBE IS BAKED IN THE GAME.** The lab's own mesh builder moved to `src/worldengine/mesh/sphereMesh.js` and its own baker to `src/rendering/bake/provinceCube.js` (both byte-verbatim, both imported back by the root modules); `src/rendering/bake/labBakeHost.js` runs the lab's dispatch for every admitted solid body over the lab's 40k mesh — in a Web Worker (`provinceWorker.js`) — and binds `uProvinceCube` on the body's first draw. Measured and recorded in **§ THE PROVINCE CUBE, WIRED** at the END of this file. Queue (b) is now F11/F12 and F27/F28 only. ⭐⭐ **F11/F12 LEFT THIS QUEUE 2026-09-02 — THE RIVER ROUTER IS BAKED IN THE GAME.** The lab's router, ribbon and valley builders and sea-level solver moved to `src/worldengine/rivers/` and its carve and height-cube bakers to `src/rendering/bake/` (byte-verbatim, imported back by the root modules, `route()` untouched); the fluvial derivation became driver pack #9 (`src/worldengine/drivers/fluvialDeck.js`), and `attachLabBake` now rides the SAME worker message to bind `uReliefBakeCube` / `uCraterBakeCube` on every solid body and `uRiverCarveMap` + the ribbon child + the solved `uSeaLevel` on routed ones. Measured and recorded in **§ THE RIVER ROUTER, WIRED** at the END of this file. ⚠ The live A/B pair is PENDING — the wire is gate-green, not eye-checked. **Queue (b) is now F27/F28 only.**
 - **(c) Wire‑and‑it‑renders‑nothing until world‑gen work lands** — ~8 features whose inputs are degenerate today: `uRayBrightness ≡ 0` because `hasAtmo` is true on 100% of bodies; `uFacetStrength ≡ 0` because `conditionFromPlanet.js`'s `atmosphereFromPlanet` only nulls atmosphere on `if (phys.retained === false) return null;`, which never happens; `habGate ≡ 0`; `airlessnessOf ≡ 0`. **These must not be measured through the renderer.**
 
 ---
@@ -1009,3 +1009,149 @@ naming what moved is the re-bless's job, and none of it is this wire's.
 - **Despun bodies are body-blind on province** (appendix (iii)) → `mvp-spine-lab-quality-backlog.md`, a row in the lab's generative model.
 - The relief, crater and river-carve cubes ride the SAME carrier path now built; each is its own increment.
 - The 108 KB `planet-lod-rivers.js` file move: still its own step (§7); only the 54-line mesh builder left it here.
+
+
+## § THE RIVER ROUTER, WIRED — addendum, 2026-09-02
+
+⛔ Appended at EOF for the reason the two appendices above give: an insertion shifts every line-anchored citation below it.
+Workstream: `docs/WORKSTREAMS/wire-river-router-lab-into-game/` (contract + intent). Suites: `tests/river-bake-host.test.js`
+(AC-0/1/2/3/7) and `tests/driver-pack-fluvialdeck.test.js`. Every number below was measured in this branch.
+
+### (i) A MOVE, not a build — the router was unreachable, not missing
+
+Queue (b) read F11/F12 as "wire-and-it-needs-a-bake". What it needed FIRST was what the province cube needed: the lab's own functions
+live in root modules the boundary fence keeps out of `src/`, so the game could not import them. Under carried C25 — **needs a renderer
+vs does not**, never "rivers.js vs tectonic.js" — five moves, all byte-verbatim and diffed against `3dded82`:
+
+| moved | to | why there |
+|---|---|---|
+| `routeAndOrder`, `computeOcean`, `computeAdjGradient`, `compositeMargins`, `paramsForRadius` + the two width factors, `DEFAULT_PARAMS` | `src/worldengine/rivers/router.js` | three-coupled, GPU-free |
+| `buildRibbonGeometry`, `buildValleyGeometry` | `src/worldengine/rivers/ribbon.js` | three-coupled, GPU-free |
+| `solveSeaLevel` | `src/worldengine/rivers/seaLevel.js` | pure |
+| `createCarveCubeMap` | `src/rendering/bake/carveCube.js` | `WebGLCubeRenderTarget` + `CubeCamera` |
+| `RELIEF_CUBE_SIZE`, `buildHeightCubeGeometry`, `createHeightCube`, `bakeHeightCube` | `src/rendering/bake/heightCube.js` | same |
+
+The root modules import them back and re-export, so the lab and every existing suite keep their import path (the `bodyRelief.js` /
+`sphereMesh.js` precedent). `planet-lod-rivers.js` shrank **1478 → 785** lines; `planet-lod-tectonic.js` to **254**.
+
+⭐ **`route()` did NOT move.** It is the lab's ORCHESTRATION, and its strength-0 sampler fallback is fenced by
+`tests/relief-router-repoint.test.js`; the game reproduces the sequence in the worker and the host rather than importing it.
+⭐ **`createHeightSampler` did not move either, on purpose.** It is the boundary fence's ONE root-module allowlist entry and the
+count is still exactly one — only that entry's prose changed, to name what is left in `planet-lod-rivers.js` after the move.
+
+### (ii) Driver pack #9, and the erosion spelling that decided the corpus
+
+`src/worldengine/drivers/fluvialDeck.js` is the lab's own derivation, moved: the F11/F12/F13/F14/F20 scalars, **ten uniforms**, and
+**three gates** (`deltas`, `coast`, `outflow`) — the lab's four ✓ checkboxes minus lakes. `uSeaLevel` is emitted **ungated**, because
+an off gate resolves to +0 and 0 is a sea at the datum, not the absence of one. `uFluvialDensity` is **not emitted at all**: the lab
+pins it every frame at world-engine-lab.html:5518 `uFluvialDensity` (the retired worm-trail), so the pack carries the density as `meta`
+and the lab's slider answers from there. The lab reads the pack back at world-engine-lab.html:2136 `fluvialDeckPack`, with the twelve
+replaced assignment lines neutralised in place — the file holds at 6559 lines (§10 line-stability).
+
+⭐⭐ **ROOT-0 fix 1 at its THIRD reader, and it is what makes the corpus non-empty.** The lab's block read `surfaceHistory.erosion`;
+game bodies carry `erosionLevel` (labCore.js:646 `erosionLevel` and baseStep.js:38 `erosionLevel` already read both spellings). The
+pack reads both, lab spelling winning where both exist. Measured over the 24 `rocky-*` seeds — 156 bodies, **124 solid / 32 gas**:
+
+| the read | wet | relict | airless |
+|---|---|---|---|
+| **both spellings (shipped)** | **4** | **64** | **56** |
+| `erosion` only (the lab's text, unrepaired) | 4 | **0** | **120** |
+
+Without the two-spelling read, F13 outflow and F20 coasts are dark on every body in the game. `uOutflowDensity` comes out non-zero on
+**66** bodies and `uStrandStrength` on **122**.
+
+### (iii) One message per body, and what it costs
+
+The province wire's transport was EXTENDED, not duplicated. provinceDispatch.js:174 `buildLabBundleForBody` builds a body's whole
+bundle and `src/rendering/bake/provinceWorker.js` runs it off the main thread: **ONE request and ONE reply per body**, carrying the
+province, relief and crater arrays and — on routed bodies — the carve valley and ribbon arrays as well, all transferred, every buffer
+distinct. A reply after dispose is dropped; a failed worker falls back to the synchronous path; headless there is no Worker and the
+transport reads `sync`. The production build emits `provinceWorker-*.js` as its own chunk.
+
+labBakeHost.js:344 `attachLabBake` and labBakeHost.js:599 `disposeLabBake` (the `attachProvinceBake` / `disposeProvinceBake` aliases
+are kept, so `Planet.js` and `Moon.js` are untouched) bind, per body:
+
+- **every solid body** — the relief and crater cubes, at `uReliefBakeStrength = bakeReliefCrossover(visScaleOf(R))` and
+  `uCraterBakeRestore = 1 − that`: the lab's own two laws with the lab's own display-scale input;
+- **every routed body** — the carve cube;
+- **wet bodies only** — the ribbon as a child of the surface (scale `bodyRadius × 1.0014`, so it co-rotates and the far hemisphere
+  occludes it), the histogram-solved sea (`uSeaLevel` = the solved level, `uCoastStrength` 1), and the lab's own carve amounts.
+
+⭐ **The sea arrives WITH the rivers.** `uSeaLevel` is −1 at attach and only a successful wet bake writes a level, so no body shows an
+ocean the router did not solve; a failed wet bake gives the pack's sea back rather than leaving the material half-dressed. Every render
+target is owned by the body's record from allocation, so dispose releases each cube, the ribbon's geometry and material and the child
+link exactly once. Keys: **`J`** rivers A/B and **`U`** relief A/B, beside the province wire's **`V`**; dev APIs `globalThis._labRivers`
+and `_labRelief`.
+
+**Timings — full 40k mesh, headless CPU floor, best-of-3 (worst), ms per body:**
+
+| class | dispatch | route | total |
+|---|---|---|---|
+| wet | 57.6 (94.5) | 57.2 (97.9) | **120.9 (192.4)** |
+| relict | 32.6 (37.0) | 56.1 (63.0) | **89.9 (100.0)** |
+| airless | 46.8 (50.9) | 3.4 (6.2) | **50.2 (57.1)** |
+
+Excluding the cube renders, which happen on the main thread on the body's next drawn frame.
+**VRAM, DERIVED from the cube sizes and formats rather than measured:** province 0.8 MB + relief 3.1 + crater 3.1 on every solid body,
+plus carve 50.3 on a routed one = **57.3 MB per routed body**. ⚠ Recorded, never gated — and the phone is the instrument that number
+belongs to, which is an open item and not an agent-closable one.
+
+### (iv) The corpus, and what the router actually produced
+
+24 `rocky-*` seeds, 156 bodies through the game's own mount inputs (the planet RECORD, never the entry) — **124 solid / 32 gas**, the
+same population the province wire measured. By the pack's own gates: **wet 4 · relict 64 · airless 56.**
+
+**Routed = wet ∪ relict = 68 of 124 solid bodies; the 56 airless ones are not routed** — every consumer of the carve cube is zero on
+them by the pack, so routing one would be a bake nobody could see. On every wet body the dendritic contract's structural metrics hold:
+**0 orphan channel nodes, 0 uphill receivers, 0 undrained channel nodes**, and the solved ocean fraction lands **0.347–0.354** against
+the router's 0.35 target. **0 wet bodies have a relief crossover of 0** — the expected answer, since wetness needs a retained
+atmosphere and the crossover only vanishes on very small or very large bodies; 41 solid bodies in the corpus DO sit at strength 0 and
+every one of them is a small moon. **Only 1 of the 68 routed bodies composites passive margins**, which is appendix (iv)'s <1 % plate
+rate arriving unchanged.
+
+### (v) Gates at the wire
+
+**Instrument A: 20 failing tests across 8 files, IDENTICALLY on a clean worktree of the parent `2e39f36` and on HEAD — set-difference
+empty.** The suite grew 3695 → 3761 tests: the two new files. **Instrument B 8/8.** **Instrument C exit 0, 0 of 57 uniforms moved over
+633 bodies** — ⚠ the fluvial family is not in C's basis, so that zero is EXPECTED and is not evidence about this wire.
+**Citation fence 850/850, PAST-EOF 3 → 0, BROKEN 8 → 0.** Boundary, one-pipeline and lab-shader-sampler fences green, with the boundary
+allowlist still exactly one entry. Full suite 20 failing / 8 files, identical to the baseline. `tests/river-bake-host.test.js` and
+`tests/driver-pack-fluvialdeck.test.js` green.
+
+### (vi) Deliberately NOT done here — logged
+
+- **A 35 % ocean on every wet world** → **QB-21**. The router's target is a lab UI constant, not a condition → coverage law.
+- **Per-body river admission is unauthored in the lab** → **QB-22**. The lab has a global toggle; the game admits a body on the F11
+  existence gate (`liquidStability > 0.15`) for ribbon, carve and sea alike.
+- **F13's outflow ramp saturates on the game's generator** → **QB-23**. 60 of 64 relict bodies sit at `uOutflowDensity` 1.0.
+- **The grain cube** (`uTectonicGrainCube`) — one more array in the same message now that the transport carries five. Its own increment.
+- **The view-dependent close-approach patch** (`docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18`, still `building`) — different
+  scope, and not what "wire the lab's router" means.
+- **`createHeightSampler` stays a root module** — the boundary fence's one allowlist entry. Moving it is its own decision, never a
+  side effect of this one.
+- **The 108 KB `planet-lod-rivers.js` file move** — still its own step (§7). This wire took 693 lines out of it and left the rest.
+- ⭐⭐ **44 line-anchored refs into the two shrunk root files are now PAST-EOF, and the fence cannot see them.** The two files lost
+  ~700 lines between them; ~220 refs across the tree point into them and 45 now point past the end. The citation fence holds 3 of
+  those, because the other carriers — archived June/July workstream BUILD-PLANs, evidence dossiers, research briefs — are not in
+  `CITE_SOURCES`. Every fence-visible one was repaired; the rest were deliberately NOT stamped, because a ref repaired to a second
+  wrong line reads as freshly verified. ⭐ **The structural fix is to ADMIT those carriers**, which turns a silent rot into a red gate —
+  the same §11.3.4 move that closed B3's five unregistered modules.
+
+### (vii) The live pair: PENDING
+
+⛔ **Nothing in this wire has been seen in a browser** — including the lab, after its own import-line edit. AC-4 and AC-5 are the two
+integration criteria and BOTH ARE OPEN, waiting on lane A's dev server, which is Max's to start. The drive is the contract's, quoted
+rather than re-derived:
+
+- **AC-4, relief A/B.** chrome-devtools on lane A's server, never Sol: spawn a `rocky-*` system, freeze, frame a solid body whose
+  `condition.radiusEarth` is within 0.7–1.4, wait for its bake record to read `baked`, screenshot; set `uReliefBakeStrength` to 0 and
+  `uCraterBakeRestore` to 1 on that material at the same camera, screenshot, restore. Control: a gas body, or a solid body whose
+  crossover is 0. Sabotage: re-bind the placeholder cube at the live strength. The pair must DIFFER on the body's pixels and nowhere
+  else; the control must stay identical; the sabotage must return the pair to identical.
+- **AC-5, rivers A/B.** Same server and system: frame a body whose record reads `wet` and `baked`; screenshot with rivers ON, flip OFF
+  (ribbon hidden, `uRiverCarveStrength` / `Floor` / `Depth` / `Rough` 0) at the same camera, screenshot, restore. Control: an airless
+  body under the same flip. Sabotage: re-bind the placeholder carve cube AND hide the ribbon at the ON amounts.
+
+Then AC-8, which is Max's alone and which no agent may pass: flying in on a wet rocky or icy world with `J` and `U` — do the rivers run
+in straight sections and branch like trees into a sea that looks right, with the deltas at the real mouths and the valleys the planet's
+own terrain?

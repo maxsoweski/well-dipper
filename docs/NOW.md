@@ -4,24 +4,24 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ✅ 2026-09-02 — ⭐⭐ **THE PROVINCE CUBE IS SHIPPED** (Max UAT 2026-09-02 — "it does read as a crust and coheres"). ▶ NEXT = **F11/F12, THE RIVER ROUTER** (Max's choice 2026-09-02, *"Both recs sound good"*) — scope it in a FRESH session with `dev-collab-scope`; it rides the carrier path this wire built.
+> ## 🔧 2026-09-02 — ⭐⭐ **THE RIVER ROUTER IS BUILT AND FENCE-GREEN** (F11/F12), at `f7af7d8` + this docs commit. ▶ NEXT = **THE LIVE PAIR** (contract AC-4 relief A/B, AC-5 rivers A/B) — it needs lane A's dev server, and **nothing in this wire has been seen in a browser yet**, the lab included.
 >
-> **Handoff: [`FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md`](FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md).**
-> HEAD `ccee0d1` on `feature/world-engine-production-L1` (lane A, `~/projects/well-dipper`), tree clean, **NOT pushed**.
-> Workstream `WORKSTREAMS/wire-province-cube-lab-into-game/` — contract **`verified`** — every objective AC PASS (AC-3 driven live: 3,540 px differ, body only; sabotage + gas control clean); **AC-6 PASSED on Max's words 2026-09-02; contract `shipped`, pushed to origin.**
+> **Record: [`FEATURES/one-pipeline-two-frontends-PLAN.md`](FEATURES/one-pipeline-two-frontends-PLAN.md) § THE RIVER ROUTER, WIRED (at EOF)** — every number, and the exact drive for the pair. Workstream `WORKSTREAMS/wire-river-router-lab-into-game/` — contract **`verifying`**.
+> On `feature/world-engine-production-L1` (lane A, `~/projects/well-dipper`), **NOT pushed**. The province cube is HISTORY now: shipped `ccee0d1`, Max UAT 2026-09-02 — *"it does read as a crust and coheres"*.
+> ⛔ **TWO REPOS, DIVERGED.** `~/projects/well-dipper-trunk` = `master` (deploys; all mobile work). This branch has the province + river wires and the planning docs and NONE of the mobile code. Read `FEATURES/mobile-fixes-live-on-master-2026-08-28.md` before any merge.
 >
-> ⛔ **TWO REPOS, DIVERGED.** `~/projects/well-dipper-trunk` = `master` (deploys; all mobile work). This branch has the province wire and the planning docs and NONE of the mobile code. Read `FEATURES/mobile-fixes-live-on-master-2026-08-28.md` before any merge.
+> **What landed — the lab's own functions, moved byte-verbatim and imported back by the root modules, `route()` untouched:** `routeAndOrder` / `computeOcean` / `computeAdjGradient` / `compositeMargins` / `paramsForRadius` / `DEFAULT_PARAMS` → `src/worldengine/rivers/router.js`; `buildRibbonGeometry` + `buildValleyGeometry` → `rivers/ribbon.js`; `solveSeaLevel` → `rivers/seaLevel.js`; `createCarveCubeMap` → `src/rendering/bake/carveCube.js`; the height-cube family → `bake/heightCube.js`. `planet-lod-rivers.js` 1478 → 785 lines.
+> **Driver pack #9** `src/worldengine/drivers/fluvialDeck.js` — F11/F12/F13/F14/F20, ten uniforms, three gates, read back by the lab. ⭐ It carries ROOT-0 fix 1's TWO erosion spellings at a third reader; without that the corpus reads 4 wet / 0 relict / 120 airless and F13 + F20 are dark on every body in the game.
+> **One worker message per body** now carries province + relief + crater + carve + ribbon arrays; `attachLabBake` binds relief + crater cubes on every solid body, the carve cube on routed ones, and the ribbon child + the solved sea + the lab's carve amounts on wet ones. Keys **`J`** rivers A/B and **`U`** relief A/B, beside the province wire's **`V`**.
+> **Corpus (24 `rocky-*` seeds, 156 bodies, 124 solid / 32 gas):** wet **4** · relict **64** · airless **56**; routed = wet ∪ relict = **68**. On every wet body: 0 orphan nodes, 0 uphill receivers, 0 undrained channels, ocean fraction 0.347–0.354 against a 0.35 target. VRAM 57.3 MB per routed body (derived, not measured).
+> **Costs, best-of-3 (worst) ms/body, off the main thread:** wet 120.9 (192.4) · relict 89.9 (100.0) · airless 50.2 (57.1). The build emits `provinceWorker-*.js` as its own chunk.
 >
-> **What landed (`ccee0d1`):** the lab's mesh builder → `src/worldengine/mesh/sphereMesh.js`; the lab's baker → `src/rendering/bake/provinceCube.js` (both byte-verbatim, imported back by the root modules); `provinceDispatch.js` (the lab's `writeBodyRelief` over the shared 40k carrier) · `provinceWorker.js` (that dispatch off the main thread) · `labBakeHost.js` (attach at `Planet._createLabSurface`, bake on first drawn frame after the reply, release on dispose). Key `V` = A/B (`uProvinceColorMix` 0.65 ↔ 0).
-> ⭐ **Mesh = the lab's 40000 / 4, by measurement:** a coarser mesh draws a *different* partition (69–73% label agreement), so anything else is a lab/game divergence. Cost (35–160 ms/body, 645 ms once) lives in the worker.
-> **Corpus:** 156 bodies / 124 solid / 32 gas, all admitted; every solid body gets a fully-labelled province byte-identical to the lab's path; gas none. QB-20 logs the despun body-blindness (the lab's model, not this wire).
->
-> **Gates:** province suite 18/18 · B 8/8 · C zero delta · citations 850/850 · boundary/one-pipeline green · build emits the worker chunk. **Instrument A: 19 newly red, ALL pre-existing at HEAD** (verified on a clean worktree). Baseline is stale; not re-blessed.
+> **Gates:** `river-bake-host` + `driver-pack-fluvialdeck` suites green · B 8/8 · C 0 of 57 over 633 bodies (⚠ the fluvial family is outside C's basis — expected, NOT evidence) · citations 850/850, PAST-EOF 3→0, BROKEN 8→0 · boundary / one-pipeline / sampler fences green. **Instrument A: 20 failing / 8 files, IDENTICAL on a clean worktree of `2e39f36` and on HEAD** (set-difference empty; the suite grew 3695 → 3761 tests).
 >
 > ### ⭐ OPEN FOR MAX
-> 1. ~~Start the dev server~~ DONE — `scripts/dev.sh` (`cd ~/projects/well-dipper && npm run dev -- --port 5175`. Chrome:9223 is launched by Claude.
-> 2. ~~The A/B (AC-6)~~ PASSED 2026-09-02 on rocky-6's first planet. ▶ Next item CHOSEN: F11/F12 the river router, in a fresh session (handoff §4 has the reading order). Nothing waits on Max.
-> 3. Everything below this block is HISTORY as of 2026-09-01; the 2026-08-21 block's open question (`uDispDomainScale` 3.333 → 1.0) is still unruled.
+> 1. Start the dev server — `scripts/dev.sh` (`cd ~/projects/well-dipper && npm run dev -- --port 5175`. Chrome:9223 is launched by Claude. **Nothing else here can move until it is up.**
+> 2. Then, once the pair is driven: fly toward a wet rocky world in a `rocky-*` system and tap **`J`** and **`U`** *while moving* — **"do the rivers sit in their own valleys and drain into a sea that looks right, with deltas at the mouths?"** That is AC-8, it is yours alone, and no agent passes it.
+> 3. Three calls that are yours, all recorded and none of them blocking: **QB-21** — every wet world gets the same 35 % ocean, because the router's target is a lab UI constant; **QB-23** — F13's outflow ramp saturates, so 60 of 64 relict worlds render a megaflood; and **only 4 of 124 corpus bodies come out wet** under the lab's own gate — is ~3 % the density you want rivers at?
 >
 > ⛔ **Symbol-less refs point INTO this file** (`NOW.md:256/1020/1160/1172/2145` from four docs). This block REPLACED the 2026-08-21 block at the SAME line count for that reason; the 08-21 facts live in `FEATURES/handoff-2026-08-21-b7-shipped-next-b6.md`.
 

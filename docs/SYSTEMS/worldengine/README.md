@@ -60,6 +60,12 @@ relief writer through a 9-way rule chain, then runs the V2-4 shared-substrate po
 - `src/rendering/bake/provinceDispatch.js` (scope: game-side bake)
 - `src/rendering/bake/provinceWorker.js` (scope: game-side bake)
 - `src/rendering/bake/labBakeHost.js` (scope: game-side bake)
+- `src/worldengine/rivers/router.js`
+- `src/worldengine/rivers/ribbon.js`
+- `src/worldengine/rivers/seaLevel.js`
+- `src/rendering/bake/carveCube.js` (scope: game-side bake)
+- `src/rendering/bake/heightCube.js` (scope: game-side bake)
+- `src/worldengine/drivers/fluvialDeck.js` (scope: driver pack)
 
 *(Bare paths per Rule 14 — `doc-graph.js` parses this list strictly. What each module is:
 regime selection = e1Regime/adaptL0/baseStep/mathutil/verify; relief writers =
@@ -79,7 +85,15 @@ metric-exact drainage & boundary density, band count), stats (mean±SEM, weighte
 three-valued PASS/FAIL/**UNRESOLVABLE** law verdicts), sampling (sphere geometry + the physical /
 angular reporting frames), fieldSampler (live float-RTT readback via the rivers `createHeightSampler`),
 sweep (N values × M seeds response curves + pre-flight ensemble sizing) — records in
-[`nonvisual-analysis-channel`](../../WORKSTREAMS/nonvisual-analysis-channel-2026-07-24/).)*
+[`nonvisual-analysis-channel`](../../WORKSTREAMS/nonvisual-analysis-channel-2026-07-24/);
+**mesh/ + rivers/ + bake/** = the lab's own pipeline, moved under `src/` so BOTH front-ends import one
+copy — the irregular-sphere carrier (2026-09-01), then the dendritic router, the ribbon/valley builders
+and the histogram sea-level solver (2026-09-02) — plus the GPU-coupled cube bakers (province, relief +
+crater, river carve) and the one host that attaches them to a game body and releases them on dispose.
+Records in [§ THE PROVINCE CUBE, WIRED / § THE RIVER ROUTER, WIRED](../../FEATURES/one-pipeline-two-frontends-PLAN.md).
+⚠ **`src/worldengine/drivers/` is claimed here for `fluvialDeck.js` ONLY.** `index.js` and the other eight
+packs are in NO system's `Module(s)` list — `npm run doc-rot` reports them as unclaimed-src, and closing
+that is its own pass, not a wire's.)*
 
 ## Tier(s) served
 
