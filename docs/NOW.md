@@ -4,52 +4,52 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ▶ 2026-08-21 (late) — ⭐⭐ **B7 SHIPPED. THE WORLD ENGINE REACHES A PLAYER.** ▶ NEXT = MAX'S TERRAIN-SCALE RULING, THEN B6.
+> ## ▶ 2026-09-01 (late) — ⭐⭐ **THE PROVINCE CUBE IS IN THE GAME.** ▶ NEXT = the live before/after pair (needs the dev server + debug Chrome), then MAX'S A/B ON KEY `V`.
 >
-> **Handoff: [`FEATURES/handoff-2026-08-21-b7-shipped-next-b6.md`](FEATURES/handoff-2026-08-21-b7-shipped-next-b6.md).**
-> HEAD `08c2521`, tree clean, **pushed** (remote 0/0, verified by `git ls-remote`).
+> **Handoff: [`FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md`](FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md).**
+> HEAD `ccee0d1` on `feature/world-engine-production-L1` (lane A, `~/projects/well-dipper`), tree clean, **NOT pushed**.
+> Workstream `WORKSTREAMS/wire-province-cube-lab-into-game/` — contract `building`; AC-0/1/2/4/5 green headless, AC-3 (live) and AC-6 (Max) open.
 >
-> `LAB_GAS_BODIES_DEFAULT` is **true**: 846 of 852 generated planets and 632 moons render through the
-> world engine. The parity ledger has **zero `blocking` rows** in both channels. ⛔ Step 12's "delete the
-> fallbacks" half is **STRUCK** — measured live, Sol renders 39 bodies and ZERO are swapped, so
-> `GAS_BODY` is Jupiter/Saturn/Uranus/Neptune's renderer, permanently. It is not a fallback.
+> ⛔ **TWO REPOS, DIVERGED.** `~/projects/well-dipper-trunk` = `master` (deploys; all mobile work). This branch has the province wire and the planning docs and NONE of the mobile code. Read `FEATURES/mobile-fixes-live-on-master-2026-08-28.md` before any merge.
 >
-> ⚠ **The Chrome dev window was buggy and must be RELAUNCHED** before any browser work.
-> ⛔ **Max does not use the browser console — drive it yourself via chrome-devtools.** His
-> `wd.labGasBodies` key is CLEARED (removed, not `'0'`); ⛔ do not set it to `'0'`, that now OUTRANKS the
-> shipped default and pins him to the legacy look.
+> **What landed (`ccee0d1`):** the lab's mesh builder → `src/worldengine/mesh/sphereMesh.js`; the lab's baker → `src/rendering/bake/provinceCube.js` (both byte-verbatim, imported back by the root modules); `provinceDispatch.js` (the lab's `writeBodyRelief` over the shared 40k carrier) · `provinceWorker.js` (that dispatch off the main thread) · `labBakeHost.js` (attach at `Planet._createLabSurface`, bake on first drawn frame after the reply, release on dispose). Key `V` = A/B (`uProvinceColorMix` 0.65 ↔ 0).
+> ⭐ **Mesh = the lab's 40000 / 4, by measurement:** a coarser mesh draws a *different* partition (69–73% label agreement), so anything else is a lab/game divergence. Cost (35–160 ms/body, 645 ms once) lives in the worker.
+> **Corpus:** 156 bodies / 124 solid / 32 gas, all admitted; every solid body gets a fully-labelled province byte-identical to the lab's path; gas none. QB-20 logs the despun body-blindness (the lab's model, not this wire).
 >
-> ▶ **The one open question:** `uDispDomainScale` went `3.333 → 1.0` with the flip — terrain features
-> render ~3.3x larger and nobody ruled that number. Max's eyes, one-line revert. Handoff §1.
->
-> ### EIGHT LEDGER ROWS CLOSED
-> **B3** P-05 aurora · P-11's non-gas half · P-14's crater half · R-07 venus banding (130 bodies)
-> **B4** P-01 star colour · P-02 second star · P-03 shadows/F52 · S-01 the rollup
->
-> ⭐ **`src/objects/Planet.js` auto-merged** across two concurrent lanes editing the same uniform
-> literal ~47 lines apart, because both held it at **2304 lines** with same-line edits. Keep it there.
->
-> ### ⛔ THREE `blocking` ROWS REMAIN, AND THEY ARE ONE PROBLEM
-> **P-11 (gas half), P-12, P-13** — all the GAS HALF. `rockySurface`'s predicate is `!== 'gas'`, so
-> **343 of 852** bodies get no limb/terminator optics, no palette endmembers, no noise offsets.
-> `giantDeck` must write them. ⛔ **The plan predicted B0 would close P-12/P-13. It did not** — do not
-> trust its precondition table; count `| blocking |` in the ledger yourself.
-> ⭐ The gap reaches MOONS: *Daiben* is a planet-class moon routed down the gas path.
->
-> ### GATES at `0604d13` — all measured, none inherited
-> Instrument A **31** failing, md5 `982b5bdf5812e9d5f72c59270bd5f781` · Instrument C **exit 0, zero
-> delta** (55 uniforms × 633 bodies) · Instrument D **28/28** · citations **785**, exit 0.
-> ⛔ **Both baselines were re-recorded today** (`b505869`, `3166084`) after Instrument C's capture was
-> found **100+ commits stale** — no gate in this lane was readable before that. Commit messages
-> enumerate everything blessed.
+> **Gates:** province suite 18/18 · B 8/8 · C zero delta · citations 850/850 · boundary/one-pipeline green · build emits the worker chunk. **Instrument A: 19 newly red, ALL pre-existing at HEAD** (verified on a clean worktree). Baseline is stale; not re-blessed.
 >
 > ### ⭐ OPEN FOR MAX
-> 1. **Gas-half block** — greenlit (option B), nothing waiting on him.
-> 2. **Pigment contract** awaits his greenlight — `WORKSTREAMS/world-engine-star-driven-pigment-2026-08-21/`.
->    The four palette families are his to author, as a live A/B flipped while flying.
-> 3. **Token economy** stands until Tuesday 2026-08-25. Ultracode OFF.
+> 1. **Start the dev server** so the live pair (AC-3) can run — `cd ~/projects/well-dipper && npm run dev -- --port 5175`. Chrome:9223 is launched by Claude.
+> 2. **The A/B (AC-6):** on a procedural system, approach a rocky or icy body and tap `V` while moving — does the ground read as kinds of crust (shield / belt / basin) rather than one tone?
+> 3. Everything below this block is HISTORY as of 2026-09-01; the 2026-08-21 block's open question (`uDispDomainScale` 3.333 → 1.0) is still unruled.
 >
-> ⛔ **Symbol-less refs point INTO this file** (`NOW.md:256/1020/1160/1172/2145` from four docs). They are UNCHECKED by the citation fence by construction, so a line-count change here breaks them SILENTLY. This block is padded to preserve the file length for exactly that reason.
+> ⛔ **Symbol-less refs point INTO this file** (`NOW.md:256/1020/1160/1172/2145` from four docs). This block REPLACED the 2026-08-21 block at the SAME line count for that reason; the 08-21 facts live in `FEATURES/handoff-2026-08-21-b7-shipped-next-b6.md`.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 > ## ✅ 2026-08-18 — **B4 COMMITTED · BINARY PLANETS SCOPED · BINARY-STAR DEFECTS FIXED + UAT-PASSED.** ▶ NEXT = amend B4 with the binary line item, then B5.
 >
