@@ -388,6 +388,14 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
     seaSlot.value = -1;
   }
 
+  /** Give the pack's `uSeaLevel` / `uCoastStrength` back. The host borrowed them; it did not author
+   *  them. Used by BOTH the failure path and dispose, because the −1 must never outlive the attempt
+   *  to replace it. A no-op on any body that was never admitted (both values stay null). */
+  const restorePackSea = () => {
+    if (record.rivers.packSeaLevel != null && seaSlot) seaSlot.value = record.rivers.packSeaLevel;
+    if (record.rivers.packCoastStrength != null && coastSlot) coastSlot.value = record.rivers.packCoastStrength;
+  };
+
   const body = { condition, macroSeed, T_eq, radiusEarth };
   const makeProvinceCube = deps.createProvinceCube || deps.createCube || createProvinceCube;
   const makeHeightCube = deps.createHeightCube || createHeightCube;
@@ -397,11 +405,17 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
   let result = null;   // { built } from the sync path, or { payload } from the worker
 
   // ── the bake frame, in the lab's order: province → relief → crater → carve → ribbon ──
+  // ⛔ THE RECORD TAKES OWNERSHIP AT ALLOCATION, NOT AT SUCCESS. `dispose()` releases everything the
+  // record HOLDS and nothing else, so a cube created and then lost to a throw inside `update()` would
+  // be an unreachable WebGLCubeRenderTarget (50.3 MB on the carve one) that no path can ever free —
+  // and the catch in `onBeforeRender` records `failed` without releasing anything. Every
+  // `create → record → update` below is in that order for this reason. `bytes` goes with the
+  // assignment because the target's VRAM is real from allocation, whether or not it ever gets filled.
   const bindProvince = (renderer, fill) => {
     const cube = makeProvinceCube({ renderer, size: PROVINCE_CUBE_SIZE });
+    record.cube = cube; record.bytes.province = cubeBytes(PROVINCE_CUBE_SIZE);
     fill(cube);
     slot.value = cube.texture;
-    record.cube = cube; record.bytes.province = cubeBytes(PROVINCE_CUBE_SIZE);
     LIVE.add(material);
     if (_abOff && uniforms.uProvinceColorMix) {   // arrived mid-A/B: match the others
       const u = uniforms.uProvinceColorMix; if (u._provinceLiveMix == null) u._provinceLiveMix = u.value; u.value = 0.0;
@@ -413,13 +427,13 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
    */
   const bindRiverHalf = (renderer, part) => {
     const reliefCube = makeHeightCube({ renderer, size: RELIEF_CUBE_SIZE });
+    record.relief.cube = reliefCube; record.bytes.relief = cubeBytes(RELIEF_CUBE_SIZE);
     reliefCube.update(part.reliefGeo);
     const craterCube = makeHeightCube({ renderer, size: RELIEF_CUBE_SIZE });
+    record.relief.craterCube = craterCube; record.bytes.crater = cubeBytes(RELIEF_CUBE_SIZE);
     craterCube.update(part.craterGeo);
     reliefSlot.value = reliefCube.texture; craterSlot.value = craterCube.texture;
-    record.relief.cube = reliefCube; record.relief.craterCube = craterCube;
     record.relief.strength = part.strength; record.relief.restore = part.restore;
-    record.bytes.relief = cubeBytes(RELIEF_CUBE_SIZE); record.bytes.crater = cubeBytes(RELIEF_CUBE_SIZE);
     if (uniforms.uReliefBakeStrength) uniforms.uReliefBakeStrength._labBakedStrength = part.strength;
     if (uniforms.uCraterBakeRestore) uniforms.uCraterBakeRestore._labBakedRestore = part.restore;
     applyReliefWeights(uniforms, !_reliefOff);   // a body that bakes mid-A/B matches the others
@@ -427,9 +441,9 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
 
     if (!part.routed || !part.valleyGeo) return;   // an airless body: no route, no carve cube to bind
     const carveCube = makeCarveCube({ renderer, size: DEFAULT_PARAMS.CARVE_CUBE_SIZE });
+    record.rivers.carveCube = carveCube; record.bytes.carve = cubeBytes(DEFAULT_PARAMS.CARVE_CUBE_SIZE);
     carveCube.update(part.valleyGeo);
     carveSlot.value = carveCube.texture;
-    record.rivers.carveCube = carveCube; record.bytes.carve = cubeBytes(DEFAULT_PARAMS.CARVE_CUBE_SIZE);
 
     if (!record.rivers.admitted || !part.ribbonGeo) return;   // relict: the route + the cube, no water, no sea
     const ribbon = makeRibbonMesh(part.ribbonGeo);
@@ -522,6 +536,12 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
       if (result) bakeFromResult(renderer);
     } catch (e) {
       record.failed = String((e && e.message) || e);
+      // ⛔ A FAILED BAKE MUST NOT LEAVE A WET BODY WITH NO OCEAN. Attach took `uSeaLevel` to −1 so the
+      // sea could arrive WITH the rivers; `record.failed` makes this hook return early on every later
+      // frame, so a bake that died before writing the solved level would leave the −1 standing until
+      // dispose — the shoreline VANISHING, which is the exact defect the deferral exists to prevent.
+      // The carve amounts stay at 0: no valley was rasterized, so nothing may gouge.
+      if (record.rivers.seaLevel == null) restorePackSea();
       if (typeof console !== 'undefined') console.warn('[lab bake] failed; placeholders kept —', record.failed);
     }
   };
@@ -546,9 +566,7 @@ export function attachLabBake(surface, { condition, macroSeed = 0, T_eq = null, 
     if (reliefSlot && reliefSlot.value !== placeholders.relief) reliefSlot.value = placeholders.relief;
     if (craterSlot && craterSlot.value !== placeholders.crater) craterSlot.value = placeholders.crater;
     if (carveSlot && carveSlot.value !== placeholders.carve) carveSlot.value = placeholders.carve;
-    // the pack's sea, given back — this host borrowed it, it did not author it
-    if (record.rivers.packSeaLevel != null && seaSlot) seaSlot.value = record.rivers.packSeaLevel;
-    if (record.rivers.packCoastStrength != null && coastSlot) coastSlot.value = record.rivers.packCoastStrength;
+    restorePackSea();                            // the pack's sea, given back
     if (uniforms.uReliefBakeStrength) { uniforms.uReliefBakeStrength.value = 0; delete uniforms.uReliefBakeStrength._labBakedStrength; }
     if (uniforms.uCraterBakeRestore) { uniforms.uCraterBakeRestore.value = 0; delete uniforms.uCraterBakeRestore._labBakedRestore; }
     // the four gouging amounts back to 0. NOT through `applyCarveAmounts`, which also writes the

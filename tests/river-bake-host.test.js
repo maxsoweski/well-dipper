@@ -1,5 +1,5 @@
 // tests/river-bake-host.test.js — docs/WORKSTREAMS/wire-river-router-lab-into-game/ (AC-0 … AC-3, AC-7).
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -37,7 +37,7 @@ import { fluvialClassOf, fluvialDeckPack } from '../src/worldengine/drivers/fluv
 // message. The LAB side of every comparison comes through `../planet-lod-rivers.js` (aliased `…ViaLab`
 // above), so AC-2 compares the game's bundle against route()'s own sequence re-read through the lab's
 // import path rather than against a second copy of it living in this file.
-import { buildLabBundleForBody, sharedCarrierMesh, bodyDriversFromCondition } from '../src/rendering/bake/provinceDispatch.js';
+import { buildLabBundleForBody, sharedCarrierMesh, bodyDriversFromCondition, provinceFractions } from '../src/rendering/bake/provinceDispatch.js';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere } from '../src/worldengine/mesh/sphereMesh.js';
 import { writeBodyRelief as writeBodyReliefViaLab, DEFAULT_GRAIN_DRIVERS as GRAIN_VIA_LAB } from '../planet-lod-rivers.js';
@@ -51,7 +51,7 @@ import {
   attachLabBake, disposeLabBake, provinceRecordOf, toggleRiversAB, toggleReliefAB,
   attachProvinceBake, disposeProvinceBake,
 } from '../src/rendering/bake/labBakeHost.js';
-import { PROVINCE_CUBE_SIZE } from '../src/rendering/bake/provinceCube.js';
+import { PROVINCE_CUBE_SIZE, buildProvinceCubeGeometry } from '../src/rendering/bake/provinceCube.js';
 import { bodyRadiusOf } from '../src/rendering/LabPlanetMaterial.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -887,6 +887,44 @@ describe('AC-7 — one request, one bake frame, four cubes + the ribbon, dispose
     return b;
   };
   const eqBytes = (a, b) => Buffer.from(a.buffer, a.byteOffset, a.byteLength).equals(Buffer.from(b.buffer, b.byteOffset, b.byteLength));
+
+  /**
+   * A bundle, as `provinceWorker.js` posts it. ⛔ TRANSCRIBED FROM THAT HANDLER, not invented: same
+   * keys, same order, same attribute extraction, `crater` carrying ONLY hgt/grd because the two
+   * height cubes are the same sphere and posting the crater's own position/index would be a duplicate
+   * buffer (and listing one buffer twice in a transfer list throws DataCloneError in the browser).
+   *
+   * WHY THIS EXISTS. The worker is the transport the BROWSER takes; headless there is no Worker, so
+   * without a payload of this exact shape the four `*GeometryFromArrays` rebuilders in the host —
+   * every attribute name they spell, the crater's sharing of the relief's position/index, and the
+   * `p.sea.seaLevel` unwrap — are executed by nothing at all. `driveWorker` above proves the worker
+   * PRODUCES this shape; this proves the host CONSUMES it.
+   */
+  const attrOf = (g, n) => g.getAttribute(n).array;
+  const workerPayloadOf = (b, id = 1) => {
+    const provGeo = buildProvinceCubeGeometry({ mesh: b.mesh, province: b.province });
+    const reliefGeo = buildHeightCubeGeometry({ mesh: b.mesh, height: b.marginHeight, grad: b.marginGrad });
+    const craterGeo = buildHeightCubeGeometry({ mesh: b.mesh, height: b.craterOverlay, grad: b.craterGrad });
+    const msg = {
+      id, ok: true,
+      pos: attrOf(provGeo, 'position'), wgt: attrOf(provGeo, 'aProv'), idx: provGeo.getIndex().array,
+      nodes: b.province.length, path: b.relief && b.relief.path, ms: b.ms,
+      fractions: provinceFractions(b.province),
+      fluvialClass: b.fluvialClass, routed: b.routed, strength: b.strength, restore: b.restore,
+      routeMs: b.routeMs,
+      relief: { pos: attrOf(reliefGeo, 'position'), hgt: attrOf(reliefGeo, 'aHeight'), grd: attrOf(reliefGeo, 'aGrad'), idx: reliefGeo.getIndex().array },
+      crater: { hgt: attrOf(craterGeo, 'aHeight'), grd: attrOf(craterGeo, 'aGrad') },
+      sea: null, valley: null, ribbon: null,
+    };
+    if (b.routed) {
+      msg.sea = { seaLevel: b.seaLevel, oceanCount: b.oceanCount };
+      msg.valley = { pos: attrOf(b.valleyGeo, 'position'), aDepth: attrOf(b.valleyGeo, 'aDepth'),
+        aMouth: attrOf(b.valleyGeo, 'aMouth'), aOrder: attrOf(b.valleyGeo, 'aOrder'), idx: b.valleyGeo.getIndex().array };
+      // the ribbon's `normal` is NOT posted — the host rebuilds it with computeVertexNormals()
+      msg.ribbon = { pos: attrOf(b.ribbonGeo, 'position'), col: attrOf(b.ribbonGeo, 'color'), idx: b.ribbonGeo.getIndex().array };
+    }
+    return msg;
+  };
   const tick = () => new Promise((r) => setTimeout(r, 0));
 
   afterEach(() => { toggleRiversAB(false); toggleReliefAB(false); });
@@ -1110,6 +1148,123 @@ describe('AC-7 — one request, one bake frame, four cubes + the ribbon, dispose
     expect(u.uReliefBakeStrength.value).toBe(rec.relief.strength);
     expect(u.uCraterBakeRestore.value).toBe(rec.relief.restore);
     disposeLabBake(s);
+  }, 120000);
+
+  it('⭐ ASYNC on the WORKER SHAPE: the four geometry rebuilders run, and the crater cube rides the relief\'s position + index', async () => {
+    const b = pick('wet'); const s = fakeSurface({ packSea: 0.31, packCoast: 1 });
+    const sm = seams(); const m = small();
+    const bundle = buildLabBundleForBody(bodyOf(b), m);
+    const payload = workerPayloadOf(bundle);
+    const rec = attachLabBake(s, bodyOf(b), { ...sm.deps, compute: () => tick().then(() => payload) });
+    s.onBeforeRender({});
+    expect(rec.pending).toBe(true);
+    await tick(); await tick();
+    s.onBeforeRender({});
+    const u = s.material.uniforms;
+    expect(rec.baked).toBe(true); expect(rec.routeMs).toBe(payload.routeMs);
+    expect(sm.prov.length).toBe(1); expect(sm.hgt.length).toBe(2); expect(sm.carve.length).toBe(1);
+
+    // ── which texture is in which slot, and which arrays each cube was rebuilt from ──
+    expect(u.uProvinceCube.value).toBe(sm.prov[0].texture);
+    expect(u.uRiverCarveMap.value).toBe(sm.carve[0].texture);
+    const reliefCube = sm.hgt.find((c) => eqBytes(c.lastGeo.getAttribute('aHeight').array, bundle.marginHeight));
+    const craterCube = sm.hgt.find((c) => eqBytes(c.lastGeo.getAttribute('aHeight').array, bundle.craterOverlay));
+    expect(reliefCube, 'no height cube was fed the composited relief').toBeTruthy();
+    expect(craterCube, 'no height cube was fed the crater overlay').toBeTruthy();
+    expect(reliefCube).not.toBe(craterCube);
+    expect(u.uReliefBakeCube.value).toBe(reliefCube.texture);
+    expect(u.uCraterBakeCube.value).toBe(craterCube.texture);
+    expect(eqBytes(reliefCube.lastGeo.getAttribute('aGrad').array, bundle.marginGrad)).toBe(true);
+    expect(eqBytes(craterCube.lastGeo.getAttribute('aGrad').array, bundle.craterGrad)).toBe(true);
+    // ⭐ ZERO-COPY: the posted array IS the attribute's array, not a copy of it
+    expect(reliefCube.lastGeo.getAttribute('position').array).toBe(payload.relief.pos);
+    expect(reliefCube.lastGeo.getAttribute('aHeight').array).toBe(payload.relief.hgt);
+    expect(craterCube.lastGeo.getAttribute('aHeight').array).toBe(payload.crater.hgt);
+    // ⭐ AND THE SHARING THE PAYLOAD DEPENDS ON: the crater cube reuses the relief's OWN attribute
+    // objects, because the worker posts one copy of a sphere both cubes are drawn on.
+    expect(craterCube.lastGeo.getAttribute('position')).toBe(reliefCube.lastGeo.getAttribute('position'));
+    expect(craterCube.lastGeo.getIndex()).toBe(reliefCube.lastGeo.getIndex());
+
+    // ── the carve footprint's three channels, spelled the way createCarveCubeMap reads them ──
+    const carveGeo = sm.carve[0].lastGeo;
+    for (const n of ['aDepth', 'aMouth', 'aOrder']) expect(carveGeo.getAttribute(n), n).toBeTruthy();
+    expect(carveGeo.getAttribute('aDepth').array).toBe(payload.valley.aDepth);
+    expect(carveGeo.getIndex().array).toBe(payload.valley.idx);
+
+    // ── the ribbon, rebuilt from three arrays with its normals recomputed here ──
+    const ribbon = rec.rivers.ribbon;
+    expect(s.children[0]).toBe(ribbon);
+    expect(ribbon.geometry.getAttribute('position').array).toBe(payload.ribbon.pos);
+    expect(ribbon.geometry.getAttribute('color').array).toBe(payload.ribbon.col);
+    expect(ribbon.geometry.getIndex().array).toBe(payload.ribbon.idx);
+    expect(ribbon.geometry.getAttribute('normal'), 'the worker does not post normals; the host must recompute them').toBeTruthy();
+    expect(ribbon.geometry.getAttribute('normal').count).toBe(ribbon.geometry.getAttribute('position').count);
+
+    // ── the sea, unwrapped from `payload.sea` and not from a top-level key ──
+    expect(u.uSeaLevel.value).toBe(payload.sea.seaLevel);
+    expect(rec.rivers.seaLevel).toBe(payload.sea.seaLevel);
+    expect(u.uCoastStrength.value).toBe(1);
+    expect(u.uRiverCarveStrength.value).toBe(0.01);
+    expect(u.uReliefBakeStrength.value).toBe(payload.strength);
+    expect(u.uCraterBakeRestore.value).toBe(payload.restore);
+    disposeLabBake(s);
+    expect(sm.all().map((c) => c.disposes)).toEqual([1, 1, 1, 1]);
+  }, 120000);
+
+  it('⭐ a bake that THROWS still HOLDS every target it allocated, so dispose can release them', () => {
+    // ⛔ THE LEAK THIS GATES: a cube is a WebGLCubeRenderTarget the moment it is created (50.3 MB on
+    // the carve one). `dispose()` releases what the record HOLDS and nothing else, and the catch in
+    // `onBeforeRender` records `failed` without releasing anything — so a cube created and then lost
+    // to a throw inside `update()` would be unreachable for the life of the page.
+    const b = pick('wet'); const s = fakeSurface({ packSea: 0.31, packCoast: 1 }); const ph = placeholdersOf(s);
+    const sm = seams(); const m = small();
+    const boom = (args) => { const c = sm.deps.createHeightCube(args); c.update = () => { throw new Error('relief bake exploded'); }; return c; };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let rec;
+    try {
+      rec = attachLabBake(s, bodyOf(b), { ...sm.deps, createHeightCube: boom, compute: (body) => buildLabBundleForBody(body, m) });
+      s.onBeforeRender({});
+    } finally { warn.mockRestore(); }
+    expect(rec.failed).toMatch(/relief bake exploded/);
+    expect(rec.baked).toBe(false);
+    // the province cube bound before the throw, and the relief target was allocated at it
+    expect(rec.cube).toBe(sm.prov[0]);
+    expect(rec.relief.cube).toBe(sm.hgt[0]);
+    expect(sm.hgt.length).toBe(1);                       // the crater cube was never reached
+    expect(rec.relief.craterCube).toBe(null); expect(rec.rivers.carveCube).toBe(null);
+    expect(rec.bytes.relief).toBe(cubeBytes(RELIEF_CUBE_SIZE));   // allocated ⇒ its VRAM is real
+    expect(rec.bytes.crater).toBe(0);
+
+    disposeLabBake(s);
+    expect(sm.prov[0].disposes).toBe(1);
+    expect(sm.hgt[0].disposes).toBe(1);                  // ⭐ the half-baked target IS released
+    expect(s.material.uniforms.uProvinceCube.value).toBe(ph.prov);
+    expect(s.material.uniforms.uReliefBakeCube.value).toBe(ph.relief);
+  }, 120000);
+
+  it('⭐ a bake that THROWS on a WET body gives the pack\'s sea back — the shoreline must not vanish', () => {
+    // ⛔ `record.failed` makes the hook return early on every later frame, so the −1 attach wrote
+    // would stand for the life of the body. That is the defect the deferral exists to prevent.
+    const b = pick('wet'); const s = fakeSurface({ packSea: 0.31, packCoast: 1 });
+    const sm = seams(); const m = small();
+    const boom = (args) => { const c = sm.deps.createHeightCube(args); c.update = () => { throw new Error('relief bake exploded'); }; return c; };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let rec;
+    try {
+      rec = attachLabBake(s, bodyOf(b), { ...sm.deps, createHeightCube: boom, compute: (body) => buildLabBundleForBody(body, m) });
+      expect(s.material.uniforms.uSeaLevel.value).toBe(-1);        // attach deferred it
+      s.onBeforeRender({}); s.onBeforeRender({});                  // and the hook is now dead
+    } finally { warn.mockRestore(); }
+    const u = s.material.uniforms;
+    expect(rec.failed).toBeTruthy(); expect(rec.rivers.seaLevel).toBe(null);
+    expect(u.uSeaLevel.value).toBe(0.31);
+    expect(u.uCoastStrength.value).toBe(1);
+    // …and nothing gouges: no valley was ever rasterized
+    expect(u.uRiverCarveStrength.value).toBe(0); expect(u.uRiverCarveFloor.value).toBe(0);
+    expect(u.uRiverCarveDepth.value).toBe(0); expect(u.uRiverCarveRough.value).toBe(0);
+    expect(s.children.length).toBe(0);
+    disposeLabBake(s);
+    expect(u.uSeaLevel.value).toBe(0.31);                          // and dispose leaves it there
   }, 120000);
 
   it('⭐ the WORKER post carries radiusEarth — without it the worker defaults R = 1 and every body binds at strength 1.0', () => {
