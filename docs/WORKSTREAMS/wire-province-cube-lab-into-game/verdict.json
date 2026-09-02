@@ -2,8 +2,8 @@
   "workstream": "wire-province-cube-lab-into-game",
   "commit": "ccee0d1",
   "perLayer": {
-    "unit": "INSUFFICIENT",
-    "integration": "INSUFFICIENT",
+    "unit": "PASS",
+    "integration": "PASS",
     "uat": "deferred-to-max"
   },
   "perAC": [
@@ -24,13 +24,13 @@
     },
     {
       "id": "AC-3",
-      "result": "INSUFFICIENT",
-      "evidence": "Integration/live — no browser was driven this pass. Code mechanism read and looks correct: attachProvinceBake hooks a real cube onto solid bodies only (gas bodies structurally excluded via provinceAppliesTo), the shader gates the whole craton/orogen/basin mix on provSum>0.001 which the 1x1 black placeholder always zeroes, and the sabotage arm (mesh.userData.wd.lab.province.dispose()) is directly reachable to restore the placeholder for an A/B. Headless prerequisites pass clean (40/40 across province-bake-host.test.js + src-boundary-fence.test.js). But the actual required evidence — a live before/after screenshot pair showing a solid body's ground visibly change and a gas body's staying byte-identical — was not captured. This is the live-integration check still owed."
+      "result": "PASS",
+      "evidence": "LIVE, driven by working-Claude via chrome-devtools on the lane-A dev server (:5175) at 6ca8acb+, 2026-09-01 evening. _lab.spawnProceduralSystem('rocky-3') (4 planets, orrery mode); bodies are HIDDEN in orrery until framed, so the first-draw hook fired only after _lab.frameBody({kind:'planet',p:0},{radii:6}) — then transport 'worker', dispatch 74.7 ms in the worker, path 'despun', cube bound with 16.9 ms of main-thread work on the next frame. Frame frozen (_lab.freezeFrame: 12 clocks pinned, grain 0) BEFORE framing — the first attempt framed then froze and the body dropped out of view, producing four pixel-identical shots of an empty frame; a forced red/green/blue palette probe exposed the vacuous instrument (0 differing pixels vs a frame with no body) and, re-framed, showed red craton and blue basin regions on the body — the cube is baked, bound and read. THE PAIR (real palette, same body, same frozen camera): uProvinceColorMix 0.65 vs 0 → 3,540 differing pixels of 1,138,556, ALL inside the body's bounding box (579,320)-(776,524), none outside; max channel delta 17 (this body is despun: craton == weathered, so only its basins lighten). SABOTAGE ARM: 1×1 placeholder re-bound with mix 0.65 → pixel-identical to the mix-0 shot (0 differing) and differs from the mix-0.65 shot by exactly the same 3,540 pixels. GAS CONTROL: body.planet.26e35a framed, its own uProvinceColorMix 0.65 → 0: 0 differing pixels. Screenshots (not readPixels): scratchpad province-A2-p0-on / B2-p0-off / S2-p0-placeholder / G1-G2 gas / P2 rgb-probe. Frame thawed and mixes restored afterwards."
     },
     {
       "id": "AC-4",
-      "result": "INSUFFICIENT",
-      "evidence": "npm run check:instruments run at HEAD. Instrument A drift (8 files) matches the AC's stated file count exactly, and causation was directly proven: reran the same 7 newly-red files at ccee0d1's parent commit (0ec48c7) and got identical failures — the drift pre-exists this diff and belongs to other already-merged lanes, not to province-cube wiring. Instrument B (body-identity fence) 8/8 exact match. Instrument C uniform-delta: 0 moved across 57 uniforms x 633 bodies, exact match. Citation fence: 850 checked, unchanged vs. the parent commit, all resolve. One real, flagged (not hidden) mismatch: the AC's own text says '20' newly-red tests; actual count is 19 (22 total drift entries including 3 no-longer-red). Additionally, the Chrome-lab visual leg of the AC's verifyVia.input (loading world-engine-lab.html and confirming a partitioned ground) was not driven — only a headless proxy (province-bake-host suite) stood in for it."
+      "result": "PASS",
+      "evidence": "npm run check:instruments run at HEAD. Instrument A drift (8 files) matches the AC's stated file count exactly, and causation was directly proven: reran the same 7 newly-red files at ccee0d1's parent commit (0ec48c7) and got identical failures — the drift pre-exists this diff and belongs to other already-merged lanes, not to province-cube wiring. Instrument B (body-identity fence) 8/8 exact match. Instrument C uniform-delta: 0 moved across 57 uniforms x 633 bodies, exact match. Citation fence: 850 checked, unchanged vs. the parent commit, all resolve. One real, flagged (not hidden) mismatch: the AC's own text says '20' newly-red tests; actual count is 19 (22 total drift entries including 3 no-longer-red). Additionally, the Chrome-lab visual leg of the AC's verifyVia.input (loading world-engine-lab.html and confirming a partitioned ground) was not driven — only a headless proxy (province-bake-host suite) stood in for it. ⭐ CLOSED LIVE by working-Claude 2026-09-01 evening: (1) the '20 vs 19' number was corrected in the contract at 2911d98 with the worktree measurement; (2) the lab leg was driven on the same dev server — world-engine-lab.html loaded on Rocky (Earthlike), route() ran twice (grainBakeCount 2 / reliefBakeCount 2; the province bake rides the same route() call), and _lab.provinceProbe() read a real three-class partition over all 40,000 nodes through the moved code: craton 26,818 / orogen 3,041 / basin 10,141 (67.0 / 7.6 / 25.4 %), contiguity 0.996, association η² 0.524 vs null p99 0.030 (pass, control rejected). The lab renders its planet; console carries one unrelated 404 (recorded in the handoff)."
     },
     {
       "id": "AC-5",
@@ -43,7 +43,7 @@
       "evidence": "UAT — never agent-judged. Static pass confirms the mechanism is wired: a bare V key (labBakeHost.js) toggles uProvinceColorMix between 0.65 and 0.0 on any material carrying a real (non-placeholder) province cube, fed by the moved provinceCube/provinceDispatch/provinceWorker pipeline mounted at Planet._createLabSurface. Both the commit message and the handoff doc explicitly mark AC-6 as pending Max's own judgment; no test suite applies."
     }
   ],
-  "overall": "INSUFFICIENT — unit and integration layers each have one open item; UAT deferred to Max",
+  "overall": "PASS on every objective AC (unit + integration); UAT AC-6 deferred-to-max",
   "summaryForMax": "wire-province-cube-lab-into-game @ ccee0d1: 4 of 6 objective ACs are clean PASS (AC-0 one home per moved symbol; AC-1 province byte-identical to the lab over 156 bodies; AC-2 mesh pinned to the lab's DEFAULT_PARAMS with a sabotage-proven check; AC-5 bake-once / dispose-once / shared-mesh-once on both transports, worker ships as its own chunk). Open: AC-3 the live before/after screenshot pair (working-Claude, chrome-devtools, needs the dev server); AC-4 the AC text said 20 standing reds and the measured count is 19 (corrected in the contract at 2911d98; the lab-visual leg still to drive). Max's gate AC-6: fly to a rocky or icy body, tap V, judge whether the ground reads as kinds of crust.",
-  "_provenance": "wf_019a676a-ed6 · mode full · liveBranch main · 2026-09-01 · 27 agents. The workflow returns the verdict as structured output; this file was written from that result by working-Claude. AC-4's '20 vs 19' finding was corrected in contract.json at 2911d98 after this run; the live legs of AC-3 and AC-4 are the next action."
+  "_provenance": "wf_019a676a-ed6 · mode full · liveBranch main · 2026-09-01 · 27 agents. The workflow returns the verdict as structured output; this file was written from that result by working-Claude. AC-4's '20 vs 19' finding was corrected in contract.json at 2911d98 after this run; the live legs of AC-3 and AC-4 are the next action. AC-3 driven live by working-Claude after the run (see its evidence). AC-4 closed live by working-Claude after the run."
 }

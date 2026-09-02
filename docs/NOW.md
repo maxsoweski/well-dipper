@@ -4,11 +4,11 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ▶ 2026-09-01 (late) — ⭐⭐ **THE PROVINCE CUBE IS IN THE GAME.** ▶ NEXT = the live before/after pair (needs the dev server + debug Chrome), then MAX'S A/B ON KEY `V`.
+> ## ▶ 2026-09-01 (late) — ⭐⭐ **THE PROVINCE CUBE IS IN THE GAME.** ▶ NEXT = MAX'S A/B ON KEY `V` — the live pair and the lab leg are DONE (2026-09-01 late).
 >
 > **Handoff: [`FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md`](FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md).**
 > HEAD `ccee0d1` on `feature/world-engine-production-L1` (lane A, `~/projects/well-dipper`), tree clean, **NOT pushed**.
-> Workstream `WORKSTREAMS/wire-province-cube-lab-into-game/` — contract `building`; AC-0/1/2/4/5 green headless, AC-3 (live) and AC-6 (Max) open.
+> Workstream `WORKSTREAMS/wire-province-cube-lab-into-game/` — contract **`verified`** — every objective AC PASS (AC-3 driven live: 3,540 px differ, body only; sabotage + gas control clean); **only AC-6 (Max) open. `VERIFIED_PENDING_MAX ccee0d1`.**
 >
 > ⛔ **TWO REPOS, DIVERGED.** `~/projects/well-dipper-trunk` = `master` (deploys; all mobile work). This branch has the province wire and the planning docs and NONE of the mobile code. Read `FEATURES/mobile-fixes-live-on-master-2026-08-28.md` before any merge.
 >
@@ -19,8 +19,8 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > **Gates:** province suite 18/18 · B 8/8 · C zero delta · citations 850/850 · boundary/one-pipeline green · build emits the worker chunk. **Instrument A: 19 newly red, ALL pre-existing at HEAD** (verified on a clean worktree). Baseline is stale; not re-blessed.
 >
 > ### ⭐ OPEN FOR MAX
-> 1. **Start the dev server** so the live pair (AC-3) can run — `cd ~/projects/well-dipper && npm run dev -- --port 5175`. Chrome:9223 is launched by Claude.
-> 2. **The A/B (AC-6):** on a procedural system, approach a rocky or icy body and tap `V` while moving — does the ground read as kinds of crust (shield / belt / basin) rather than one tone?
+> 1. ~~Start the dev server~~ DONE — `scripts/dev.sh` (`cd ~/projects/well-dipper && npm run dev -- --port 5175`. Chrome:9223 is launched by Claude.
+> 2. **The A/B (AC-6):** on a procedural system, approach a rocky or icy body — a SHELL-path one (three classes; a despun body only moves its basins) — and tap `V` while moving: does the ground read as kinds of crust (shield / belt / basin) rather than one tone? ⚠ In ORRERY bodies are hidden; fly (HELM) or frame first.
 > 3. Everything below this block is HISTORY as of 2026-09-01; the 2026-08-21 block's open question (`uDispDomainScale` 3.333 → 1.0) is still unruled.
 >
 > ⛔ **Symbol-less refs point INTO this file** (`NOW.md:256/1020/1160/1172/2145` from four docs). This block REPLACED the 2026-08-21 block at the SAME line count for that reason; the 08-21 facts live in `FEATURES/handoff-2026-08-21-b7-shipped-next-b6.md`.

@@ -16,10 +16,10 @@
 | AC-0 | one pipeline: moved code defined once under `src/`, root modules re-export | ✅ `tests/province-bake-host.test.js` |
 | AC-1 | every admitted solid body gets its province from the lab's dispatch; gas none; byte-identical to the lab's path | ✅ 156 bodies / 124 solid / 32 gas |
 | AC-2 | the game's mesh IS the lab's (40000 / 4), pinned to `DEFAULT_PARAMS` | ✅ — **re-derived on measurement**, see §2 |
-| AC-3 | LIVE: same body, same camera, `uProvinceColorMix` 0.65 vs 0 → pixels differ (today: identical) + sabotage arm | ⏳ **needs the dev server + Chrome:9223** |
-| AC-4 | nothing else moves: A / B / C / citations | ✅ B 8/8 · C zero delta · 850/850 · **A: 19 newly red, all pre-existing at HEAD** (§3) |
+| AC-3 | LIVE: same body, same camera, `uProvinceColorMix` 0.65 vs 0 → pixels differ + sabotage arm + gas control | ✅ **DRIVEN 2026-09-01 late** — 3,540 px differ, ALL inside the body; placeholder re-bound ⇒ identical to OFF; gas body 0 px. See §4 |
+| AC-4 | nothing else moves: A / B / C / citations · the lab still bakes | ✅ B 8/8 · C zero delta · 850/850 · A: 19 reds all pre-existing at HEAD (§3) · **lab leg DRIVEN**: `_lab.provinceProbe()` on Rocky (Earthlike) = 26,818 / 3,041 / 10,141 over 40,000 nodes, η² 0.52 pass |
 | AC-5 | bake once on first drawn frame, dispose once, worker transport + sync fallback, late reply dropped | ✅ |
-| AC-6 | **Max:** flying in on a rocky/icy body, tap `V` — does the ground read as kinds of crust? | ⏳ **Max's** |
+| AC-6 | **Max:** flying in on a rocky/icy body, tap `V` — does the ground read as kinds of crust? | ⏳ **Max's — THE ONLY OPEN ITEM. Contract `verified`; `VERIFIED_PENDING_MAX` at `ccee0d1`** |
 
 Instrument E-style back-link: `surface.userData.wd.lab.province` carries `{attached, transport, baked, path, ms, bakeMs, nodes, fractions, …}` per body. `globalThis._labProvince.{toggle,set,count,transport,meshBuilds,meshMs}` is the dev API.
 
@@ -44,13 +44,25 @@ Instrument E-style back-link: `surface.userData.wd.lab.province` carries `{attac
 5. ⚠ **The citation fence reads `file.js:NNN-MMM` in PROSE as a live ref** and flags it PAST-EOF once the file shrinks. Historical ranges are written "`file.js` lines N–M (at `<sha>`)".
 6. ⚠ **The dev-server hook matches the server command's text ANYWHERE in a Bash command** — including inside a heredoc that is only writing a doc, and inside an `echo` label. Write such docs with the Write tool, or assemble the string from parts.
 
-## 4. ▶ NEXT — the live pair (AC-3), then Max's A/B (AC-6)
+## 4. ▶ NEXT — Max's A/B (AC-6). The live pair (AC-3) and the lab leg (AC-4) are DONE — record below
 
 **Needs Max** (only he may start servers): in `~/projects/well-dipper`, the dev server on lane A's port — `npm run dev -- --port 5175`. Chrome:9223 launch is Claude's (`chrome-devtools-9223-launch` memory: `"/mnt/c/Program Files/Google/Chrome/Application/chrome.exe" --remote-debugging-port=9223 --user-data-dir="C:\temp\chrome-mcp-filmstrip" <url>` via interop, sandbox OFF — it worked 2026-09-01).
 
 **Drive (chrome-devtools, never Sol):** open `http://localhost:5175/well-dipper/`; `_lab.spawnProceduralSystem('rocky-3')` (any `rocky-*` seed — every body admits); wait for `_labProvince.count() > 0` and check `_labProvince.transport()` reads `'worker'`; `_lab.frameBody(...)` a solid body (**read `resolvedBy` on the result**); screenshot; `_labProvince.set(0)`; screenshot; diff the two — MUST differ on the body. Control on a gas body: identical. Sabotage arm: bind the placeholder back (`surface.material.uniforms.uProvinceCube.value = <the 1×1 cube>`) and confirm identical. **Screenshots, never `readPixels`** (default framebuffer reads black). Then `_labProvince.set(0.65)`, navigate the tab to `about:blank` and hand to Max.
 
-**Max's walk:** procedural system, fly toward a rocky or icy body, tap `V` while moving. His question, in his frame: does the ground read as kinds of crust — shield / belt / basin — rather than one tone, and does it cohere with the rest of the surface. His answer closes AC-6; then `VERIFIED_PENDING_MAX` → Shipped on his word.
+### ⭐ THE LIVE DRIVE, 2026-09-01 late — what happened and what it cost to make it honest
+
+Dev server `:5175` (Max ran `scripts/dev.sh`), Chrome:9223 launched via interop with the sandbox OFF (worked first time).
+`_lab.spawnProceduralSystem('rocky-3')` → 4 planets, **orrery mode**. Transport `'worker'`.
+
+1. ⛔⛔ **In ORRERY the body GROUPS are `visible: false`**, so `onBeforeRender` never fires and nothing bakes — `count()` sat at 0 for 6 s. `_lab.frameBody({kind:'planet',p:0},{radii:6})` makes the group visible; the hook then fired: request → worker reply → bake on the next frame. **p0 (`body.planet.00e0df`, despun): dispatch 74.7 ms in the worker, 16.9 ms main-thread bake, craton 73.4 % / basin 26.6 %.** Bodies never drawn never bake — by design, and in orrery that is every body.
+2. ⛔⛔ **FREEZE FIRST, THEN FRAME** — the dev API says so and I did it backwards. Frame → freeze put the body back out of view, and the "pair" was FOUR PIXEL-IDENTICAL SHOTS OF AN EMPTY FRAME (0 differing pixels, which read as "the wire does nothing"). What exposed it: a forced palette probe (craton red, fresh green, sed blue, mix 1.0) — still 0 differing pixels ⇒ the instrument was vacuous (`feedback_identical-output-needs-a-liveness-probe`). Re-framed under the freeze, the same probe showed **red craton and blue basin regions on the body** — the cube is baked, bound and read.
+3. **THE HONEST PAIR** (real palette, frozen, framed): 0.65 vs 0 → **3,540 of 1,138,556 px differ, bbox (579,320)–(776,524) = the body, 0 outside, max channel Δ 17.** Sabotage: placeholder re-bound at mix 0.65 → **0 px vs the OFF shot**, the same 3,540 vs ON. Gas control `body.planet.26e35a`: its own mix 0.65 → 0 → **0 px**.
+4. ⚠ **Why Δ 17 is small, and what it means for Max's walk:** p0 is DESPUN — two-class, and its palette has `uCratonColor == uWeatheredColor`, so only the basins move (toward `uSedColor`). **For AC-6 put him on a SHELL-path body** (three classes; orogen paints `uFreshColor`). In `rocky-3`, p1 and p2 are solid and unbaked (never drawn); frame one and read `userData.wd.lab.province.path` before choosing — or use a seed whose planets are shell (the corpus is 45 shell / 8 despun / 4 volcanic / 1 stagnant among the 58 moons+planets measured).
+5. The lab, same server: Rocky (Earthlike) routes twice on load; `_lab.provinceProbe()` = 26,818 / 3,041 / 10,141 (67.0 / 7.6 / 25.4 %), contiguity 0.996, η² 0.524 vs null p99 0.030 — through `src/rendering/bake/provinceCube.js` and `src/worldengine/mesh/sphereMesh.js`, both visible in the lab's network log. The one console 404 is `favicon.ico`.
+6. Shots live in the session scratchpad only (`province-A2-p0-on / B2-p0-off / S2-p0-placeholder / G1-G2 gas / P2-rgb-probe.png`); the numbers above are the record. Frame thawed, mixes restored, tab parked on `about:blank`.
+
+**Max's walk:** procedural system, fly toward a rocky or icy body — a SHELL-path one, see item 4 above — and tap `V` while moving. His question, in his frame: does the ground read as kinds of crust — shield / belt / basin — rather than one tone, and does it cohere with the rest of the surface. His answer closes AC-6; then `VERIFIED_PENDING_MAX` → Shipped on his word.
 
 ⚠ **Expected in the live drive, not a defect:** province colour pops in a few hundred ms after a system spawns (the worker builds the 40k mesh once, 645 ms, then ~50 ms per body). If it NEVER appears: `_labProvince.transport()` — `'sync'` means the worker failed to load (check the console for the chunk 404; `vite.config.js` base is `/well-dipper/` in dev, `/` in build).
 
