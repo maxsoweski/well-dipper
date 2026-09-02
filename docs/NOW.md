@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ✅ 2026-09-02 — ⭐⭐ **THE PROVINCE CUBE IS SHIPPED** (Max UAT 2026-09-02 — "it does read as a crust and coheres"). ▶ NEXT = Max picks the lane's next item (F11/F12 river router rides the new carrier path; F27/F28 storm uniforms) — nothing is scoped.
+> ## ✅ 2026-09-02 — ⭐⭐ **THE PROVINCE CUBE IS SHIPPED** (Max UAT 2026-09-02 — "it does read as a crust and coheres"). ▶ NEXT = **F11/F12, THE RIVER ROUTER** (Max's choice 2026-09-02, *"Both recs sound good"*) — scope it in a FRESH session with `dev-collab-scope`; it rides the carrier path this wire built.
 >
 > **Handoff: [`FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md`](FEATURES/handoff-2026-09-01b-province-cube-wired-live-check-next.md).**
 > HEAD `ccee0d1` on `feature/world-engine-production-L1` (lane A, `~/projects/well-dipper`), tree clean, **NOT pushed**.
@@ -20,7 +20,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 >
 > ### ⭐ OPEN FOR MAX
 > 1. ~~Start the dev server~~ DONE — `scripts/dev.sh` (`cd ~/projects/well-dipper && npm run dev -- --port 5175`. Chrome:9223 is launched by Claude.
-> 2. ~~The A/B (AC-6)~~ PASSED 2026-09-02 on rocky-6's first planet. ▶ **Pick the lane's next item** — recommendation: F11/F12 (the river router), because the province wire just built the carrier path it rides.
+> 2. ~~The A/B (AC-6)~~ PASSED 2026-09-02 on rocky-6's first planet. ▶ Next item CHOSEN: F11/F12 the river router, in a fresh session (handoff §4 has the reading order). Nothing waits on Max.
 > 3. Everything below this block is HISTORY as of 2026-09-01; the 2026-08-21 block's open question (`uDispDomainScale` 3.333 → 1.0) is still unruled.
 >
 > ⛔ **Symbol-less refs point INTO this file** (`NOW.md:256/1020/1160/1172/2145` from four docs). This block REPLACED the 2026-08-21 block at the SAME line count for that reason; the 08-21 facts live in `FEATURES/handoff-2026-08-21-b7-shipped-next-b6.md`.
