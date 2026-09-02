@@ -25,7 +25,10 @@ import { bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube } from './pl
 // GPU baker, buildHeightCubeGeometry the pure geometry, bakeHeightCube the once-per-route wrapper.
 // The height DATA comes from the sphere-native E6 writer (writeHeightSphere) over the same carrier
 // the grain bake uses (makeSphereField). RELIEF_CUBE_SIZE = 256 (same class as GRAIN_CUBE_SIZE).
-import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_SIZE } from './planet-lod-tectonic.js';
+// ⭐ RE-POINTED 2026-09-02: this trio moved BYTE-VERBATIM to src/rendering/bake/heightCube.js (same
+// workstream/commit as the carve cube below). planet-lod-tectonic.js still re-exports it, so this line
+// could have stayed — it reads the new home directly because that is where the definitions now live.
+import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_SIZE } from './src/rendering/bake/heightCube.js';
 import { createProvinceCube, bakeProvinceCube, PROVINCE_CUBE_SIZE } from './planet-lod-tectonic.js';   // V2-4 province -> GPU: carries carrier.province (craton/orogen/basin) to the renderer as one-hot weights
 import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tectonic.js';
 import { writePlateUpliftSphere, driversToTune } from './src/worldengine/base/plates.js';
@@ -489,58 +492,13 @@ export function applyIncision(authored, incision) {
   return carved;
 }
 
-// Cube map of valley depth (R channel), rendered from the valley footprint geometry by a CubeCamera
-// at the origin. MAX blend + no depth test so the deepest valley wins where tributaries overlap; the
-// planet shader samples it as textureCube(map, normalize(vPos)).r — direction-keyed, so no equirect
-// seam or pole distortion, and rotation-invariant (object space) like every other combiner.
-export function createCarveCubeMap({ renderer, size = 1024 }) {
-  const cubeRT = new THREE.WebGLCubeRenderTarget(size, {
-    type: THREE.HalfFloatType, format: THREE.RGBAFormat,
-    minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false,
-  });
-  const mat = new THREE.ShaderMaterial({
-    glslVersion: null,
-    vertexShader: `
-      precision highp float;
-      attribute float aDepth;
-      attribute float aMouth;
-      attribute float aOrder;
-      varying float vDepth;
-      varying float vMouth;
-      varying float vOrder;
-      void main(){ vDepth = aDepth; vMouth = aMouth; vOrder = aOrder; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
-    `,
-    fragmentShader: `
-      precision highp float;
-      varying float vDepth;
-      varying float vMouth;
-      varying float vOrder;
-      void main(){ gl_FragColor = vec4(vDepth, vMouth, vOrder, 1.0); }
-    `,
-    side: THREE.DoubleSide,
-    depthTest: false, depthWrite: false,
-    blending: THREE.CustomBlending, blendEquation: THREE.MaxEquation,
-    blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
-  });
-  const cubeScene = new THREE.Scene();
-  const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
-  mesh.frustumCulled = false;
-  cubeScene.add(mesh);
-  const cubeCam = new THREE.CubeCamera(0.01, 3, cubeRT);
-  const _c = new THREE.Color();
-  function update(valleyGeo) {
-    mesh.geometry.dispose();
-    mesh.geometry = valleyGeo;
-    const prevTarget = renderer.getRenderTarget();
-    renderer.getClearColor(_c); const prevAlpha = renderer.getClearAlpha();
-    renderer.setClearColor(0x000000, 0);   // empty cube = depth 0 (no valley); MAX accumulates from 0
-    cubeCam.update(renderer, cubeScene);
-    renderer.setClearColor(_c, prevAlpha);
-    renderer.setRenderTarget(prevTarget);
-  }
-  function dispose() { cubeRT.dispose(); mat.dispose(); mesh.geometry.dispose(); }
-  return { texture: cubeRT.texture, update, dispose };
-}
+// ⭐ MOVED 2026-09-02 → src/rendering/bake/carveCube.js, BYTE-VERBATIM (createCarveCubeMap), for
+// docs/WORKSTREAMS/wire-river-router-lab-into-game/. GPU-coupled (WebGLCubeRenderTarget + CubeCamera
+// + a renderer in update()) ⇒ src/rendering/bake/ under carried C25, the provinceCube.js precedent —
+// nothing under src/ may import this root module. Imported back and RE-EXPORTED so createRiverOverlay's
+// ensureMesh() below and every existing caller keep this import path (the bodyRelief.js precedent).
+import { createCarveCubeMap } from './src/rendering/bake/carveCube.js';
+export { createCarveCubeMap };
 
 // ───────────── stats bundle (C1 height sanity + C2/AC5 network metrics) ─────────────
 export function buildStats({ routed, height, N, faces, seaLevel, oceanCount, ribGeo, label, totalMs }) {

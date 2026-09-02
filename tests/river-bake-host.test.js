@@ -14,6 +14,13 @@ import {
 } from '../src/worldengine/rivers/router.js';
 import { buildRibbonGeometry, buildValleyGeometry } from '../src/worldengine/rivers/ribbon.js';
 import { solveSeaLevel } from '../src/worldengine/rivers/seaLevel.js';
+// ⭐ TASK 2 (2026-09-02) — the two GPU bakers followed the router core out, to src/rendering/bake/
+// (GPU-coupled ⇒ that directory, per carried C25 and the provinceCube.js precedent). Same import-back
+// shape as above: the root modules keep their old import paths by re-exporting the SAME objects.
+import { createCarveCubeMap as carveViaLab } from '../planet-lod-rivers.js';
+import { createHeightCube as heightCubeViaLab, bakeHeightCube as bakeHeightViaLab, buildHeightCubeGeometry as heightGeoViaLab, RELIEF_CUBE_SIZE as RELIEF_VIA_LAB } from '../planet-lod-tectonic.js';
+import { createCarveCubeMap } from '../src/rendering/bake/carveCube.js';
+import { createHeightCube, bakeHeightCube, buildHeightCubeGeometry, RELIEF_CUBE_SIZE } from '../src/rendering/bake/heightCube.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
@@ -49,9 +56,25 @@ describe('AC-0 — one pipeline: the router core is defined once, under src/, an
     expect(DEFAULT_PARAMS.CARVE_CUBE_SIZE).toBe(1024);
     expect(DEFAULT_PARAMS.TARGET_OCEAN_FRACTION).toBe(0.35);
   });
+
+  it('the two GPU bakers are DEFINED exactly once under src/rendering/bake/ and re-exported by the root modules', () => {
+    const files = ['src/rendering/bake/carveCube.js', 'src/rendering/bake/heightCube.js', 'planet-lod-rivers.js', 'planet-lod-tectonic.js'].map((p) => [p, read(p)]);
+    const defs = (re) => files.filter(([, t]) => re.test(t)).map(([p]) => p);
+    expect(defs(/^export function createCarveCubeMap\(/m)).toEqual(['src/rendering/bake/carveCube.js']);
+    expect(defs(/^export function createHeightCube\(/m)).toEqual(['src/rendering/bake/heightCube.js']);
+    expect(defs(/^export function bakeHeightCube\(/m)).toEqual(['src/rendering/bake/heightCube.js']);
+    expect(defs(/^export function buildHeightCubeGeometry\(/m)).toEqual(['src/rendering/bake/heightCube.js']);
+    expect(defs(/^export const RELIEF_CUBE_SIZE\b/m)).toEqual(['src/rendering/bake/heightCube.js']);
+    expect(carveViaLab).toBe(createCarveCubeMap);
+    expect(heightCubeViaLab).toBe(createHeightCube);
+    expect(bakeHeightViaLab).toBe(bakeHeightCube);
+    expect(heightGeoViaLab).toBe(buildHeightCubeGeometry);
+    expect(RELIEF_VIA_LAB).toBe(RELIEF_CUBE_SIZE);
+    expect(RELIEF_CUBE_SIZE).toBe(256);
+  });
 });
 
-describe('AC-0 (determinism) — the moved router core introduces NO Math.random / Date.now', () => {
+describe('AC-0 (determinism) — the moved router core + GPU bakers introduce NO Math.random / Date.now', () => {
   // ⚠ THIS IS RE-POINTED COVERAGE, NOT NEW POLICY, and the gap it closes was made by the move itself.
   // tests/relief-router-repoint.test.js:101-105 asserts exactly this over planet-lod-rivers.js. Before
   // 2026-09-02 that file was 1478 lines and its subject INCLUDED routeAndOrder, compositeMargins,
@@ -73,24 +96,36 @@ describe('AC-0 (determinism) — the moved router core introduces NO Math.random
     .replace(/\/\*[\s\S]*?\*\//g, ' ')       // block comments
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1');   // line comments (avoid eating http:// — keep the char before //)
 
-  // [path, a declaration that must survive the strip]. The anchor is the NON-VACUITY probe: it is the
-  // same discipline as the swappable-uplift liveness probe — a strip that returned '' (or a path typo)
-  // would sail through both not.toMatch assertions while reading nothing at all.
+  // [path, a declaration that must survive the strip, the measured stripped-length floor]. The anchor is
+  // the NON-VACUITY probe: it is the same discipline as the swappable-uplift liveness probe — a strip
+  // that returned '' (or a path typo) would sail through both not.toMatch assertions while reading
+  // nothing at all.
+  //
+  // ⭐ TASK 2 (2026-09-02) added the two GPU bakers, which followed the router core out of the root
+  // modules in the same workstream and arrived with the SAME unenforced non-goal in their headers.
+  // Their floors are MEASURED, not inherited: stripped 1970 (carveCube) and 3067 (heightCube) chars,
+  // against 14138 / 9610 / 1132 for the router trio — so each carries its own bound rather than reusing
+  // the trio's 800, which for a 3067-char module would be a floor it could lose 74% of and still clear.
+  // The 0.3 ratio bound below is shared because it is measured to hold for all five (lowest is 0.352,
+  // heightCube — its header is long relative to a 122-line move).
   const MODULES = [
-    ['src/worldengine/rivers/router.js', 'export function routeAndOrder('],
-    ['src/worldengine/rivers/ribbon.js', 'export function buildValleyGeometry('],
-    ['src/worldengine/rivers/seaLevel.js', 'export function solveSeaLevel('],
+    ['src/worldengine/rivers/router.js', 'export function routeAndOrder(', 800],
+    ['src/worldengine/rivers/ribbon.js', 'export function buildValleyGeometry(', 800],
+    ['src/worldengine/rivers/seaLevel.js', 'export function solveSeaLevel(', 800],
+    ['src/rendering/bake/carveCube.js', 'export function createCarveCubeMap(', 1000],
+    ['src/rendering/bake/heightCube.js', 'export function bakeHeightCube(', 1500],
   ];
 
-  for (const [rel, anchor] of MODULES) {
+  for (const [rel, anchor, minChars] of MODULES) {
     it(`${rel} calls neither Math.random nor Date.now`, () => {
       const raw = read(rel);
       const code = stripComments(raw);
       // NON-VACUITY, both halves. Length class: the strip must leave a substantial module standing —
-      // measured 2026-09-02 at 14138 / 9610 / 1132 stripped chars, i.e. 38-65% of raw, so these bounds
-      // survive losing a third of each file. Anchor: the code it is supposed to be reading is in there.
+      // measured 2026-09-02 at 14138 / 9610 / 1132 / 1970 / 3067 stripped chars, i.e. 35-65% of raw, so
+      // each bound survives losing a third of its file. Anchor: the code it is supposed to be reading is
+      // in there.
       expect(code.length, `${rel}: the comment strip returned almost nothing — it is broken, not the module`)
-        .toBeGreaterThan(800);
+        .toBeGreaterThan(minChars);
       expect(code.length / raw.length, `${rel}: the strip ate the code, not just the comments`)
         .toBeGreaterThan(0.3);
       expect(code, `${rel}: the scan is not reading the module it names`).toContain(anchor);

@@ -176,9 +176,14 @@ describe('relief height cube — (4) bake-host wiring source-scan (planet-lod-ri
   it('imports the height writer + cube fns + carrier builder', () => {
     expect(riversSrc).toMatch(/import\s*\{[^}]*\bwriteHeightSphere\b[^}]*\}\s*from\s*['"]\.\/src\/worldengine\/base\/tectonic\.js['"]/);
     expect(riversSrc).toMatch(/import\s*\{[^}]*\bmakeSphereField\b[^}]*\}\s*from\s*['"]\.\/src\/worldengine\/base\/sphereField\.js['"]/);
-    expect(riversSrc).toMatch(/import\s*\{[^}]*\bcreateHeightCube\b[^}]*\}\s*from\s*['"]\.\/planet-lod-tectonic\.js['"]/);
-    expect(riversSrc).toMatch(/import\s*\{[^}]*\bbuildHeightCubeGeometry\b[^}]*\}\s*from\s*['"]\.\/planet-lod-tectonic\.js['"]/);
-    expect(riversSrc).toMatch(/import\s*\{[^}]*\bbakeHeightCube\b[^}]*\}\s*from\s*['"]\.\/planet-lod-tectonic\.js['"]/);
+    // RE-POINTED 2026-09-02: the HEIGHT cube trio moved byte-verbatim to src/rendering/bake/heightCube.js
+    // (docs/WORKSTREAMS/wire-river-router-lab-into-game/), so rivers.js imports it from its new home.
+    // Only the PATH in each regex changed — same three names, same import-statement shape, same file
+    // read. planet-lod-tectonic.js still re-exports the trio, which is what keeps the lab's own import
+    // working; this scan deliberately follows the DEFINITIONS rather than the compatibility shim.
+    expect(riversSrc).toMatch(/import\s*\{[^}]*\bcreateHeightCube\b[^}]*\}\s*from\s*['"]\.\/src\/rendering\/bake\/heightCube\.js['"]/);
+    expect(riversSrc).toMatch(/import\s*\{[^}]*\bbuildHeightCubeGeometry\b[^}]*\}\s*from\s*['"]\.\/src\/rendering\/bake\/heightCube\.js['"]/);
+    expect(riversSrc).toMatch(/import\s*\{[^}]*\bbakeHeightCube\b[^}]*\}\s*from\s*['"]\.\/src\/rendering\/bake\/heightCube\.js['"]/);
   });
 
   it('creates the height cube in ensureMesh() and exposes reliefTexture/reliefBakeCount getters', () => {
@@ -211,11 +216,23 @@ describe('relief height cube — (4) bake-host wiring source-scan (planet-lod-ri
 });
 
 describe('relief height cube — (5) no-RNG static guard on the new tectonic + rivers code', () => {
-  it('the new HEIGHT cube functions in planet-lod-tectonic.js use no Math.random / Date.now', () => {
-    const src = readFileSync(fileURLToPath(new URL('../planet-lod-tectonic.js', import.meta.url)), 'utf8');
+  // RE-POINTED 2026-09-02: the HEIGHT cube section moved byte-verbatim to src/rendering/bake/heightCube.js
+  // (docs/WORKSTREAMS/wire-river-router-lab-into-game/). Only the FILE this scan reads changed; the
+  // anchor, the slice bound and both denials are the ones it has always had.
+  // ⚠ The two `expect` lines after the slice are NEW and are LIVENESS PROBES, not a relaxation. `indexOf`
+  // returns -1 for a name absent from the file it is read from and `slice(-1)` is a ONE-character string,
+  // which sails through both not.toMatch assertions while guarding nothing — exactly what this move would
+  // have done silently had the pre-existing `toBeGreaterThan(-1)` not caught it. The bounds below make a
+  // mis-pointed or truncated scan RED rather than vacuous. MEASURED 2026-09-02: the sliced section is
+  // 5041 chars, so the 2500 floor below survives losing half of it and still reds on an empty slice.
+  it('the new HEIGHT cube functions (src/rendering/bake/heightCube.js) use no Math.random / Date.now', () => {
+    const src = readFileSync(fileURLToPath(new URL('../src/rendering/bake/heightCube.js', import.meta.url)), 'utf8');
     const i0 = src.indexOf('export const RELIEF_CUBE_SIZE');
     expect(i0).toBeGreaterThan(-1);
     const block = src.slice(i0);                 // the entire baked-relief section
+    expect(block.length, 'the sliced section is too small to be the baked-relief code — the scan is vacuous')
+      .toBeGreaterThan(2500);
+    expect(block, 'the scan is not reading the section it names').toContain('export function bakeHeightCube(');
     expect(block).not.toMatch(/Math\.random/);
     expect(block).not.toMatch(/Date\.now/);
   });
