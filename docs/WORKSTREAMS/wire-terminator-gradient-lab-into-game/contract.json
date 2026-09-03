@@ -2,7 +2,7 @@
   "workstream": "wire-terminator-gradient-lab-into-game",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verifying",
   "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
   "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — F35 row (§3 :99, ◑ 3/4 → ✅ 4/4, note filled in place: the 4th piece is uTermBypass, a display knob whose only consumer sits inside the uTermStrength > 0 block, so under the ruling it is a wired PRODUCER, not a rendering path in the game); the record goes in a '§ THE TERMINATOR, CONVERGED' addendum appended at EOF (§10: line-count-neutral below :24; 1256 lines at scoping); §7 gains one line naming F52 / the lighting engine as the terminator's owner",
   "ruling": "Max 2026-07-16 (planet-lod-lab-ux contract:6): 'We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway.' — APPLIED 2026-07-16 as a REVERSIBLE DEFAULTS amendment: 'removed from DEFAULT_DRESSING on all 13 presets … Manual toggle stays … (reversible-first designDecision: no code deletion, GUI/data change only)'. — Max 2026-08-22: 'the important thing here is the game and lab end up working the same.' — Max 2026-08-06: 'yes, the lighting engine needs to work for all objects in game.' — Max 2026-09-02: wire everything before developing anything (the lighting engine is parked). The asymmetry this wire creates is RECORDED, not claimed away: the lab keeps its reversible ✓ enabled toggle, the game gains no runtime equivalent, so the two front-ends agree at the lab's DEFAULT and diverge whenever that box is turned on.",
@@ -199,6 +199,16 @@
         "AC-2: the fixture and six test pins that hold terminator: true added to scope and enumerated; perturbation + non-empty controls added. AC-3: threshold ≥ 0.5 % of disc / max abs ≥ 8 (derived from the 0.0266 % scoping read), crescent mechanism via setCameraPose with litPctA 30–70 recorded, sidecar-declared ROI, admission flags, non-vacuous airless-moon control.",
         "Citations corrected: terminatorOptics.js:58 (not :52); index.js:64-87 (gatesFor :80, ALL_ON :77); scopingRead rewritten to one seed + what was not measured + the headless population from the fixture."
       ]
+    },
+    {
+      "date": "2026-09-03",
+      "by": "working-Claude at the live seam (after the AC-3 / AC-4 drive)",
+      "changes": [
+        "AC-3 gas control: the '≤ 5 % of circumference' outside guide was derived for the SOLID subject; the gas control read 9.7 % (130 px, all within 1.48 px) on a disc whose face moved 68 % — recorded, not waived; the gas clause is '> 0' and stays so.",
+        "AC-3 subject facts: p1's air is 0.5127 bar (the intent's '0.345-bar-class' was rocky-13 p2's figure); the airless control is p1m0 'Houm'; the gas control p2 'Paurosgara' (12.6 R⊕).",
+        "AC-4: the lab's persisted-blob restore warning (world-engine-lab.html:3294 getter-only `crater` readout) is a pre-existing cross-build effect, logged as a backlog row, not this wire's.",
+        "Recorded gotcha: gas termWidth settles ≈ 1.5 s after a preset change (debounced giantSurfaceLabState) now that :2505 is gone."
+      ]
     }
   ],
   "greenlight": {
@@ -213,5 +223,79 @@
     "build": "0a536d6",
     "branch": "worktree-agent-a7a81db245dc3b7b2 (opus builder in an isolated worktree from f0b93aa; the worktree arrived on master and was reset onto lane A before any work), merged into lane A after the F3 verdict",
     "note": "report at the session scratchpad f35-build-report.md"
+  },
+  "liveEvidence": {
+    "measuredAt": "2026-09-03",
+    "commit": "eb58ac9 (the merge; src byte-identical through 6d70d56 — the baseline commit touches tests/baseline only)",
+    "method": "lane A server :5175 + Chrome :9223, real navigation to ?system=rocky-2 after removing wd.labGasBodies, _autoNav stopped, freezeFrame() frozen + admissible, frameBody twice per subject at 3 radii, crescent by rotating about the body with setCameraPose where needed (litFraction read LAST), sidecar _lab.shotState({body, region:'disc'}) BEFORE each grab, compositor-path screenshots, scripts/shot-diff.mjs with OFF/OFF floors (no --region), the pngjs outside-silhouette counter; driven by an opus subagent, artifacts in the session scratchpad f35-live/",
+    "preflight": {
+      "registrySize": "8 = 6 planets + 2 moons, stable; record() non-null on every body; isLabPlanetMaterial and the flag true on every framing",
+      "air subject body.planet.22418e (rocky-2 p1, rocky, 0.5127 bar n2-o2)": {
+        "lawValue": 0.15,
+        "shipped": 0,
+        "uniformAtRest": 0,
+        "pack": "solidOptics"
+      },
+      "airless control body.moon.053b5c (rocky-2 p1m0 'Houm')": {
+        "lawValue": 0,
+        "shipped": 0,
+        "pack": "solidOptics"
+      },
+      "gas control body.planet.484409 (rocky-2 p2 'Paurosgara', the 12.6 R⊕ Saturnian)": {
+        "lawValue": 0.15,
+        "shipped": 0,
+        "pack": "giantSurface"
+      }
+    },
+    "AC-3": {
+      "p1 OFF→ON (lit 0.5035 at the frozen pose, no hunting; disc r 213.08)": {
+        "inside": 33435,
+        "insideFrac": 0.2344,
+        "maxAbs": 42,
+        "floor": 0,
+        "litPctA": 40.65,
+        "outside": {
+          "count": 13,
+          "maxPastEdgePx": 0.4,
+          "fracOfCircumference": 0.0097
+        },
+        "restoreVsOff": 0,
+        "bar": "≥ 0.5 % and max abs ≥ 8 — met by ≈ 880× the scoping pair's 0.0266 % at lit 0.98"
+      },
+      "airless moon OFF→ON (rotated to lit 0.5 so the terminator arc is on screen)": {
+        "inside": 0,
+        "outside": 0,
+        "floor": 0,
+        "litPctA": 43.49,
+        "record": "non-null, lawValue 0, shipped 0"
+      },
+      "gas p2 OFF→ON (lit 0.40)": {
+        "inside": 97073,
+        "insideFrac": 0.6806,
+        "maxAbs": 42,
+        "floor": 0,
+        "litPctA": 39.97,
+        "outside": {
+          "count": 130,
+          "maxPastEdgePx": 1.48,
+          "fracOfCircumference": 0.0971,
+          "note": "exceeds the 5 %-of-circumference guide written for the SOLID subject; every pixel inside the 1.5 px band on a disc whose face moved 68 % — recorded, not waived; AC-3 asks only > 0 on the gas control"
+        },
+        "restoreVsOff": 0
+      },
+      "census under ON": "6 air-bearing bodies at 0.15, 2 moons at 0 — the per-body law, never a literal",
+      "console": "0 errors; the known glGetProgramiv warning"
+    },
+    "AC-4": {
+      "page": "http://localhost:5175/well-dipper/world-engine-lab.html (real navigation; restored to ?system=rocky-2 after, thawed, everything OFF)",
+      "console": "0 errors / 0 warnings on a clean reload. First load: one `error` was the driver's own probe (`/src/...` 404 — the served path is `/well-dipper/src/...`) and one warning `[lodlab] scenario restore failed … Cannot set property crater` from the getter-only readout at world-engine-lab.html:3294 whose name sits in the persisted blob — a one-shot cross-build effect untouched by this diff; reload clean. Logged as a backlog row.",
+      "liveProbe": "state.terminatorEnabled === TERMINATOR_ENABLED (both false) at boot and after two setPreset calls (applyWorldDefaults ran) — read through the page's own module graph (`import('/well-dipper/src/worldengine/drivers/solidOptics.js')`)",
+      "enableGate": "Rocky: ✓ enabled turns uTermStrength 0 → 0.15 → 0",
+      "widths": "match termWidthFor(p) exactly: Rocky 0.12, Venus 0.29674090446109996, Jovian 0.30 (gas) after the :2505 deletion",
+      "bypass": "uTermBypass and uLimbBypass each 0 → 1 → 0",
+      "airless": "Moon/Mercury with the gate ON: strength stays 0",
+      "restored": "every control byte-identical (incl. planetRadiusEarth 0.8188630066346377)",
+      "gotcha": "after the :2505 deletion the GAS width is written only by the debounced giantSurfaceLabState — one frame after a preset change it still reads the previous body's width (0.06/0.12) and settles to 0.30 by ≈ 1.5 s; invisible while strength ships at 0, but any gas-width measurement must settle first"
+    }
   }
 }
