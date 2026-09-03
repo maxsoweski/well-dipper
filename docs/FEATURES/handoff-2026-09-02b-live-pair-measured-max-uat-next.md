@@ -1,5 +1,6 @@
 # Handoff 2026-09-02b — ⭐ THE RIVER ROUTER'S LIVE PAIR IS MEASURED (AC-4 / AC-5 / AC-6 lab clause) · the CORPUS RECORD was wrong and is corrected · NEXT = verdict re-run → `VERIFIED_PENDING_MAX` → Max's walk (AC-8)
 
+> ✅✅ **SHIPPED 2026-09-02 (session 2).** Verdict `1ee0219` at `5c952e3` (unit PASS · integration PASS); **Max's UAT on rocky-4's outer planet, his words: *"The rivers are not fully developed but the wiring appears to be working here. The wiring for U is also working."*** Read as: the WIRE is accepted; **"not fully developed" is the NEXT item and is unscoped until he names what he saw** (NOW.md OPEN FOR MAX 1). Contract `shipped` (+ `shipped.followUp`), FEATURES.md row added (Rule 3). ⚠ The `.superpowers/sdd/2026-09-02-wire-river-router-lab-into-game/` ledger is left in place (git-ignored); delete when convenient — the rulings are in the commit messages and the contract.
 > ⚠ **IN-REPO ON PURPOSE** (`/tmp` does not survive a WSL restart).
 > ⛔ Supersedes `handoff-2026-09-02-river-router-built-live-pair-next.md` for the WORLD-ENGINE lane. That file's §3 traps still hold; two of its FACTS were wrong and are corrected in §2 below.
 
