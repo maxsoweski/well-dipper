@@ -131,3 +131,10 @@ the enumerating agent.*
 | **QB-26** | **A terrestrial plain moon's atmosphere record is `{ color, strength }` with no physics** (`MoonGenerator.js:217-220`), so `conditionFromBody.js:381` refuses it and the condition reads AIRLESS while the generator's own erosion law (`MoonGenerator.js:300-301`, passing `moon.atmosphere != null`) treats the same moon as AIR-BEARING — one moon, two answers. | 0 such moons in the 24-seed corpus (56/56 airless moons have `atmosphere: null` outright); ~3 % of `_pickType` draws by `tests/moon-condition-contract.test.js:815-816`. | world generation (give terrestrial moons a physics record, or drop the visual-only wrapper) |
 
 Also recorded here, not a row: 42 of 124 solid corpus bodies (4 of the 56 airless) have NO crater schedule (`craterUniformsFrom` → `CRATERS_OFF`: rocky-13 p3m0 1.27 R⊕ and p4m0, rocky-14 p3m0, rocky-19 p0m0) — rays multiply the crater host, so the two biggest airless moons in the corpus cannot show one. That is the bombardment schedule's population, already the crater lane's.
+
+## Addendum 2026-09-03 (later) — logged at the F35 terminator convergence
+
+| # | row | measured | owner |
+|---|---|---|---|
+| **QB-27** | **The lab's persisted-blob restore warns `Cannot set property crater`** — the getter-only readout at `world-engine-lab.html:3294` has its name in the saved scenario blob, so a cross-build load tries to assign it. One-shot; a reload restores clean (0 errors / 0 warnings). | Seen once on the first load after the F35 merge; the diff touches neither :3294 nor the restore path. | lab UX (skip getter-only names on restore, or drop them from the blob) |
+| **QB-28** | **The gas `termWidth` settles ≈ 1.5 s after a preset change** — with the :2505 retype gone, `giantSurfaceLabState` (debounced, in `ensureNetworkRouted`) is the gas width's only writer, so one frame after a preset switch the slider still shows the previous body's width (0.06 / 0.12) before settling to 0.30. Invisible while `uTermStrength` ships at 0; any gas-width measurement must settle first. | Measured on the Jovian preset. | lab (write the width synchronously in `applyDrivers`, or accept and document) |
