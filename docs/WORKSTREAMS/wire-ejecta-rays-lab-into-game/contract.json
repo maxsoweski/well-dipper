@@ -2,7 +2,7 @@
   "workstream": "wire-ejecta-rays-lab-into-game",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verifying",
   "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
   "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — F3 row (§3 :67, ◑ 4/7 → ✅ 7/7); §7 'Queue (c)' bullet (:574) and the queue list (:133) annotated in place with the 2026-08-20 correction (r-rows-decision-packet-2026-08-20.md:441-444); docs/FEATURES/lab-pipeline-into-game-PLAN.md :398 and :403 (the plan of record MEMORY names) annotated the same way; the record goes in a '§ THE EJECTA RAYS, WIRED' addendum appended at EOF of one-pipeline-two-frontends-PLAN.md (§10: line-count-neutral below :24; 1256 lines at scoping). ⛔ The `conditionFromPlanet.js` SPELLING in the PLAN is left alone — 19 lines carry it, three are the rename's own record, and tools/port-uniform-delta.mjs pins it as a citation spelling.",
   "ruling": "Max 2026-09-02: 'I want to continue wiring up all the features from the world engine before we try to further develop any of them' — the ray law moves verbatim; the full-disk ray treatment and the cell-boundary truncation carry-forward are NOT this workstream's gate",
@@ -336,7 +336,24 @@
         "record": "deep-equal to visit 1, byte for byte (lawValue, packValue, uniformValue, density, rel)",
         "registrySize": "17 → 28 at capture: moons dispose through Moon.js:704, which never called unregisterRaysAB — a real instrument defect, FIXED at the build seam by a material 'dispose' listener in registerRaysAB (re-measured after the fix: see reApproachAfterFix)"
       },
-      "console": "0 errors; the known GL_INVALID_VALUE glGetProgramiv warning ×36; the boot log prints 'seed: system-0' while _systemData.seed and every sidecar read rocky-13 (a stale log label)"
+      "console": "0 errors; the known GL_INVALID_VALUE glGetProgramiv warning ×36; the boot log prints 'seed: system-0' while _systemData.seed and every sidecar read rocky-13 (a stale log label)",
+      "reApproachAfterFix": {
+        "commit": "76be09b",
+        "registrySize": "17 / 17 / 17 across a fresh load and two further spawnProceduralSystem('rocky-13') calls (= 6 planets + 11 moons, equal to an independently collected Set of mounted materials); was 17 → 28 before the fix",
+        "record": "m3 record() byte-identical to the visit-1 JSON at all three points"
+      }
+    },
+    "AC-5": {
+      "measuredAt": "2026-09-03",
+      "page": "http://localhost:5175/well-dipper/world-engine-lab.html (the same Chrome page, real navigation; restored to ?system=rocky-13 after)",
+      "console": "0 script errors, 0 warnings after load and after the run (only the dev-server connect lines, '[lodlab] scenario restored', one lil-gui a11y issue); no favicon 404 surfaced as a console message",
+      "handles": "window._lab = { state, uniforms, driverUI, applyDrivers, setPreset } (lab :5609); lil-gui classes are prefixed `lil-` (`.lil-controller` ×483, `.controller` ×0); the F3 folder's ✓ enabled checkbox lives in the folder TITLE; the 🎲 click target is the inner `.lil-widget > button` (clicking the outer `.lil-controller` div does nothing)",
+      "airless": "'Frozen (airless)' → state.rayBrightness 0.9; 'Moon/Mercury' → 0.95 — both = the law from the preset constants (erosion 0.1 / 0.05, atmosphere null); GUI sliders 6 and 8; uniforms uRayCount 6, uRaySharp 8",
+      "sliders": "ray count 6 → 11 → 6, sharpness 8 → 15 → 8; state and uniform follow each write and restore exactly",
+      "ejectaCheckbox": "gates uRayBrightness 0 ↔ 0.9 across three clicks while state.rayBrightness stays 0.9 (it gates the write, not the derivation)",
+      "reroll": "🎲 ×3 (radiusSeed 1 → 2922357105 → 2765364721 → 2145225130, radius redrawn each time); state.rayBrightness re-derives to 0.9 each time — unchanged by design: erosion is the preset's constant, a radius reroll does not redraw it (a changing value would mean the law had picked up a radius dependency)",
+      "air": "Rocky, Ocean, Venus → 0. Confound closed: setPreset runs applyWorldDefaults (resets the enables), so the first air read was doubly gated; with ✓ ejecta clicked ON on 'Rocky (Earthlike)' uRayBrightness is still 0 (its erosion 0.4 would give 0.6 ungated) — the law's air gate does the work",
+      "restored": "every control byte-identical to the persisted original ('Rocky (Earthlike)', ejectaEnabled false, 6 / 8, radiusSeed 1, planetRadiusEarth 0.8188630066346377)"
     }
   }
 }
