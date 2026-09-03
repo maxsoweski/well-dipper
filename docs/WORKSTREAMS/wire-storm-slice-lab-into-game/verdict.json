@@ -1,0 +1,63 @@
+{
+  "commit": "f9da55d",
+  "workstream": "wire-storm-slice-lab-into-game",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "One pipeline / registry / fence checks. Given finding confirmed PASS; independently re-ran tests/driver-pack-stormdeck.test.js at f9da55d myself: 27/27 green.",
+      "adversarialVotes": "1/1 sufficient (per input)"
+    },
+    {
+      "id": "AC-1",
+      "result": "PASS",
+      "evidence": "Covered by the same suite's 'AC-1' describe block (3 tests: corpus driver-map identity, nested-shape-is-stormDeck-only scan, the three writer controls). All pass in the 27/27 run I executed directly at f9da55d."
+    },
+    {
+      "id": "AC-2",
+      "result": "PASS",
+      "evidence": "Covered by 'AC-2' describe block (6 tests incl. the amended input/output-perturbation control, per amendment #2 in contract.json). All pass in the 27/27 run."
+    },
+    {
+      "id": "AC-3",
+      "result": "PASS",
+      "evidence": "Covered by 'AC-3' describe block (5 tests incl. the amended vigor-threshold-crossing control replacing the withdrawn 1K nudge, per amendment #3, and the extended icy/carbon direct calls). All pass in the 27/27 run."
+    },
+    {
+      "id": "AC-4",
+      "result": "PASS",
+      "evidence": "Covered by 'AC-4' describe block (4 tests: recorded distribution, pinned distinctness floor >=20 lat/lon, constant-seed control red, seed-identity remount). All pass in the 27/27 run."
+    },
+    {
+      "id": "AC-5",
+      "result": "PASS",
+      "evidence": "Headless half: 'AC-5 (headless half)' test in the same suite passes. Live half: contract.json liveEvidence (measured 2026-09-03 via chrome-devtools on lane A + Chrome :9223) records ON/OFF pixel diffs on two corpus bodies (14405px/5046px inside disc vs 1px/3px outside, i.e. sub-pixel edge AA), a 0 floor pair, a distinct sabotage state (26391/15 px vs on/off), a 0/0 solid-body control, identical re-approach readback, and readback==meta on both bodies. I confirmed by diff that ZERO production/runtime files (src/, world-engine-lab.html) changed between that measurement commit (378b352) and f9da55d — only contract.json, the test file, and the PLAN doc changed — so this live evidence remains valid unchanged at f9da55d and was not re-driven by me."
+    },
+    {
+      "id": "AC-6",
+      "result": "PASS",
+      "evidence": "Static half: 'AC-6 (static half)' 2 tests pass (disjoint emitted-name sets on gas vs solid). Instruments B and C both green live (`npm run check:instruments`: Instrument B 8/8 pass; Instrument C shipped-uniform delta ZERO, Exit 0; Instrument C citation fence 858/858 resolve, Exit 0 — matches the commit message's '858/858 again' claim). Instrument A (per-test-ID baseline) reported FAILED live, but I root-caused this as a FALSE POSITIVE: its recorded baseline file points to commit 2f7402f (a stale, dirty-tree snapshot from BEFORE this workstream even started, several commits before parent 520f2c0), not to 520f2c0 as the contract's own liveEvidence narrative claims -- the script itself warns 'A clean checkout of it will read as drift.' I independently verified this by cloning to a temp dir, checking out the true parent 520f2c0, and running the exact 7 files Instrument A flagged: got 19/19 identical failures (matching the 'NEWLY RED' count exactly) and confirmed the 3 'NO LONGER RED' body-identity-fence tests already passed at 520f2c0 too. I also ran the contract's own specified invariant command, `npx vitest run --dir tests`, at both commits: 520f2c0 = 8 files/20 tests failing (3765 total); f9da55d = 8 files/20 tests failing (3793 total, +28 new passing stormDeck-suite tests). Byte-identical failure count before/after -- 'nothing else moves' holds. Live half (lab in Chrome): contract.json liveEvidence records 0 script errors, checkbox combos giving uStormCount 0/1/4/5 correctly, reroll re-placing the primary, driven sliders correct -- confirmed unchanged code (see AC-5) so this remains valid. Net: AC-6's actual invariant holds; only the Instrument A baseline ARTIFACT is stale and should be re-recorded as housekeeping (not a storm-wire defect)."
+    },
+    {
+      "id": "AC-7",
+      "result": "PASS",
+      "evidence": "Covered by 'AC-7' describe block (1 test: finite per-body resolve time, empty attributes, unchanged ctx). Passes in the 27/27 run; cross-referenced against the corpus timing data the contract cites (0.5ms mean/3.2ms max)."
+    },
+    {
+      "id": "AC-8",
+      "result": "deferred-to-max",
+      "evidence": "UAT, never agent-PASSed. Max's own gate per the contract: warp to a rocky-* system with a Saturnian (rocky-2 p2) or sub-Neptune/Neptunian body (rocky-2 p5), fly in, tap I while moving, judge whether the great spot and its family read as riding the gas bands (not floating on top) and are in the same place on return; then fly to the other gas body and confirm a visibly different storm family. His words render the verdict -- 'driven by the new system', not 'rolling dice', not 'in the same place every seed'. QB-16 (blend) and QB-18 (ink-in-water) are logged lab defects deferred by his 2026-09-02 ruling and are explicitly NOT this gate."
+    }
+  ],
+  "overall": "Integration PASS — UAT deferred to Max",
+  "summaryForMax": "wire-storm-slice-lab-into-game is unit+integration GREEN at f9da55d. All 9 ACs check out: AC-0 through AC-4 and AC-7 (unit, the pipeline/contract/coherence/population/cost work) pass 27/27 in tests/driver-pack-stormdeck.test.js, which I re-ran myself. AC-5 and AC-6 (integration/live) were measured live via chrome-devtools two commits ago (378b352) with real pixel-diff evidence on two gas bodies plus a solid-body control, sabotage arm, and re-approach check -- I confirmed zero production code changed since then, so that evidence still holds at f9da55d.\n\nOne thing worth your attention, not a storm-wire defect: `npm run check:instruments` currently reports Instrument A (the shared cross-workstream test-baseline diff) as FAILED. I dug in -- its recorded baseline file is stale, pointing at a commit from before this workstream even started, and the tool itself flags it as a dirty-tree recording. I independently confirmed, by diffing against the true parent commit, that every test it flagged was already failing (or already passing) before storm-wire touched anything -- the contract's own specified invariant command (`npx vitest run --dir tests`) shows byte-identical failure counts (20=20) before and after. So the underlying invariant holds; it's the baseline artifact that needs re-recording (`npm run test:baseline:record`) so it doesn't cause false alarms on the NEXT workstream. I'd suggest working-Claude do that as routine housekeeping, not urgent.\n\nFor your UAT (AC-8): warp to rocky-2, fly to p2 (a warm Saturnian, red oval + 4 pearls) or p5 (a dark Neptunian, dark spot + scooter), tap `I` while flying in, and judge whether the great spot and its train read as riding the gas bands rather than sitting on top of them, and whether it's in the same place if you leave and come back. Then fly to the other gas body and check the storm family looks visibly different. The known-and-deferred defects (QB-16 blend, QB-18 ink-in-water) are not part of this gate -- only whether it reads as system-driven, not random.",
+  "verifiedAt": "2026-09-03T14:12:48-04:00",
+  "workflowRun": "wf_14116a31-eca (light, 4 agents) after wf_bb6e5172-5df (full, 35 agents) at 378b352",
+  "mode": "light",
+  "note": "The full-mode run at 378b352 returned INSUFFICIENT on AC-3 (a no-op control and an unreachable 1 K T_eq nudge), AC-5/AC-6 (live halves not re-drivable by the workflow) and found one CONFIRMED regression (the QB-24 backlog row shifted a line under PLAN:75's citation; the contract's 858/858 claim had been measured before that row landed). Repaired at f9da55d — see contract.json `amendments`. AC-5 and AC-6's live halves were driven by working-Claude (chrome-devtools, lane A + Chrome :9223) on 2026-09-03 and are recorded in contract.json `liveEvidence`; the light re-run confirmed no runtime file changed between the measurement commit and f9da55d. Instrument A's STORED baseline (tests/baseline/known-failures.json) was stale (2f7402f, dirty tree, pre-workstream): the measurement used a baseline recorded from the parent 520f2c0 in a clean worktree (failing set unchanged, 20 = 20); the stored file is re-recorded from a clean full run at HEAD as housekeeping in the follow-up commit."
+}
