@@ -4,13 +4,13 @@
 > ⚠ **IN-REPO ON PURPOSE** (`/tmp` does not survive a WSL restart).
 > ⛔ Supersedes `handoff-2026-09-02-river-router-built-live-pair-next.md` for the WORLD-ENGINE lane. That file's §3 traps still hold; two of its FACTS were wrong and are corrected in §2 below.
 
-**Branch** `feature/world-engine-production-L1` · **Repo** `~/projects/well-dipper` (lane A, **NOT** master) · **HEAD** = the commit carrying this handoff (read `git log -3`), **NOT PUSHED** at the time of writing — pushes are confirmed per batch (§5).
+**Branch** `feature/world-engine-production-L1` · **Repo** `~/projects/well-dipper` (lane A, **NOT** master) · **HEAD** = `60e3bd7` (the ruling commit; ship `c565537`, verdict `1ee0219`, live pair `5c952e3`), **PUSHED 2026-09-02 — origin at `60e3bd7`, verified by `git ls-remote`**; later pushes are confirmed per batch (§5).
 ⛔ ~700 untracked PNGs are normal. NEVER `git add -A`. ⚠ ALWAYS `npx vitest run --dir tests` (the root config collects nested worktrees and vendor kits: 685 files vs 195).
 ⛔ **Two repos, diverged** — `~/projects/well-dipper-trunk` is `master` and deploys; it has all the mobile code and none of this.
 
 ---
 
-## 0. STATE — workstream `docs/WORKSTREAMS/wire-river-router-lab-into-game/` (contract `verifying`; `verdict.json` still at `a737ffd` — the re-run at THIS commit is the next step)
+## 0. STATE — workstream `docs/WORKSTREAMS/wire-river-router-lab-into-game/` (contract **`shipped`**; `verdict.json` re-run light at `5c952e3` = `1ee0219`: unit PASS · integration PASS · AC-8 deferred-to-max, then closed on Max's word)
 
 | AC | what | state |
 |---|---|---|
@@ -22,7 +22,7 @@
 | AC-5 | LIVE rivers A/B (key `J`) + the sea | ✅ **MEASURED** — `rocky-4` p5 `body.planet.8ad228` (0.449 R⊕, wet): 6,141 px ON/OFF, 0 outside, floor 0, ribbon alone 2,103 (visible, not buried), sabotage 228 px from OFF, airless control 0; `uSeaLevel` = the solved sea ≠ −1, `uCoastStrength` 1 |
 | AC-6 | nothing else moves + the lab in Chrome | ✅ instruments at `a737ffd` (workflow re-measures) · **lab clause MEASURED**: 0 console errors, real 1024/256/256/128 cubes, Rivers toggle → ribbon (8,736 px) |
 | AC-7 | lifetime + thread + recorded cost | ✅ headless; live costs one sample: wet 146.8 ms (route 110.3) · relict 82.2 (route 62.5), transport `'worker'` on every body |
-| AC-8 | **Max:** rivers in their own valleys draining into a sea that looks right, deltas at the mouths — one coupled system | ⏳ **his walk — §4** |
+| AC-8 | **Max:** rivers in their own valleys draining into a sea that looks right, deltas at the mouths — one coupled system | ✅ **Max, 2026-09-02 — his words in the banner; the wire accepted, "not fully developed" deferred by his ruling** |
 
 Every live number, the arms and the instruments: **PLAN § THE RIVER ROUTER, WIRED → (viii) The live pair: MEASURED** (`docs/FEATURES/one-pipeline-two-frontends-PLAN.md`), mirrored as `liveEvidence` on AC-4 / AC-5 / AC-6 in `contract.json`.
 
