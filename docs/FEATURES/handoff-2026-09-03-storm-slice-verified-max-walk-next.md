@@ -1,9 +1,10 @@
-# Handoff 2026-09-03 — ⭐ THE STORM SLICE (F27/F28, `uStorm*`) IS WIRED, LIVE-PAIR MEASURED · verdict at `378b352` = unit PASS · integration PASS · AC-8 deferred-to-max (verify-workstream `wf_14116a31-eca`, light re-run after the full run `wf_bb6e5172-5df` at `378b352`) · NEXT = Max's walk (AC-8) on `rocky-2`, key `I`
+# Handoff 2026-09-03 — ✅✅ THE STORM SLICE (F27/F28, `uStorm*`) IS SHIPPED — Max's UAT on rocky-2: *"It works, red dot appears"* · verdict at `f9da55d` = unit PASS · integration PASS · NEXT = queue (c) / partials F3, F35 (each a fresh `dev-collab-scope`)
 
+> ✅✅ **SHIPPED 2026-09-03.** Max's walk on rocky-2 (key `I`): *"It works, red dot appears"* — the WIRE is accepted; contract `shipped` (+ `shipped.followUp`), FEATURES.md row added (Rule 3), lane A PUSHED with the ship commit (verified by `git ls-remote`). **Queue (b) is EMPTY** — ▶ NEXT = queue (c) as world-generation inputs allow (`uRayBrightness ≡ 0`, `uFacetStrength ≡ 0`, `habGate ≡ 0` are world-gen work, not wiring) and the partials F3 (4/7) / F35 (3/4), each its own `dev-collab-scope` workstream in a fresh session. The AC-8 row and §4/§5 below are kept as the record of the walk.
 > ⚠ **IN-REPO ON PURPOSE** (`/tmp` does not survive a WSL restart).
 > ⛔ Supersedes `handoff-2026-09-02b-live-pair-measured-max-uat-next.md` for the WORLD-ENGINE lane. Its §3 traps still hold and are extended in §3 below.
 
-**Branch** `feature/world-engine-production-L1` · **Repo** `~/projects/well-dipper` (lane A, **NOT** master) · **HEAD** = the close-out commit carrying this file (see `git log -1`; the verified code is `f9da55d`) (scope `ea18406` → greenlight `520f2c0` → fixtures `9c3443e` → built `f8ea499` → live pair `378b352` → verdict `f9da55d`). **NOT PUSHED** — lane A pushes are confirmed per batch; origin is at `df94080`.
+**Branch** `feature/world-engine-production-L1` · **Repo** `~/projects/well-dipper` (lane A, **NOT** master) · **HEAD** = the close-out commit carrying this file (see `git log -1`; the verified code is `f9da55d`) (scope `ea18406` → greenlight `520f2c0` → fixtures `9c3443e` → built `f8ea499` → live pair `378b352` → verdict `f9da55d`). **PUSHED 2026-09-03 with the ship commit** (lane A batch `ea18406`..ship, verified by `git ls-remote`).
 ⛔ ~700 untracked PNGs are normal. NEVER `git add -A`. ⚠ ALWAYS `npx vitest run --dir tests`.
 ⛔ **Two repos, diverged** — `~/projects/well-dipper-trunk` is `master` and deploys; it has all the mobile code and none of this.
 

@@ -1252,3 +1252,5 @@ Readback: on both gas bodies `_labStorms.slots(surface)` equals the pack's `meta
 ### (ix) What Max's walk is now (AC-8, his alone)
 
 Warp to `rocky-2` (deep link `?system=rocky-2`). Fly in on its **Saturnian** (the 12.6 R⊕ giant, third planet out: a warm red oval at 19° north with four pearls on the same belt) and tap **`I`** while moving in; then the **Neptunian** (the 0.84 R⊕ ice giant, sixth planet out: a dark cleared spot at 19° south with a bright companion and one small scooter). Leave and come back — same storms, same place. His question: do the storms read as PART of the gas deck — riding its bands, the bands wrapping around them — and does the next gas giant carry a different family? The blend (QB-16) and the ink-in-water complexity (QB-18) are logged lab defects deferred by his ruling; they will be visible and are not this gate.
+
+**✅✅ SHIPPED 2026-09-03 — Max's UAT on rocky-2, his words: *"It works, red dot appears"*.** The wire is accepted; verdict `wf_14116a31-eca` at `f9da55d`; contract `shipped`; FEATURES.md row added. Queue (b) is EMPTY. Next per the 2026-09-02 ruling: queue (c) as world-generation inputs allow, and the partials F3 / F35.
