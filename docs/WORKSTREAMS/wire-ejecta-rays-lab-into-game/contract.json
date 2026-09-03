@@ -2,7 +2,7 @@
   "workstream": "wire-ejecta-rays-lab-into-game",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verified",
+  "status": "shipped",
   "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
   "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — F3 row (§3 :67, ◑ 4/7 → ✅ 7/7); §7 'Queue (c)' bullet (:574) and the queue list (:133) annotated in place with the 2026-08-20 correction (r-rows-decision-packet-2026-08-20.md:441-444); docs/FEATURES/lab-pipeline-into-game-PLAN.md :398 and :403 (the plan of record MEMORY names) annotated the same way; the record goes in a '§ THE EJECTA RAYS, WIRED' addendum appended at EOF of one-pipeline-two-frontends-PLAN.md (§10: line-count-neutral below :24; 1256 lines at scoping). ⛔ The `conditionFromPlanet.js` SPELLING in the PLAN is left alone — 19 lines carry it, three are the rename's own record, and tools/port-uniform-delta.mjs pins it as a citation spelling.",
   "ruling": "Max 2026-09-02: 'I want to continue wiring up all the features from the world engine before we try to further develop any of them' — the ray law moves verbatim; the full-disk ray treatment and the cell-boundary truncation carry-forward are NOT this workstream's gate",
@@ -368,5 +368,22 @@
   },
   "verdictRef": "verdict.json",
   "verifiedAt": "2026-09-03T18:52:13-04:00",
-  "verifiedCommit": "6d70d56"
+  "verifiedCommit": "6d70d56",
+  "shipped": {
+    "date": "2026-09-03",
+    "commit": "6d70d56 (verified; verdict 2e60453)",
+    "uat": {
+      "max": "they do read as spokes",
+      "where": "rocky-13 (deep link ?system=rocky-13), the fifth planet's ice moons, key Y while moving in",
+      "readAs": "the WIRE is accepted — the bright rays read as spokes from their own craters on the game's airless moons"
+    },
+    "followUp": [
+      "The full-disk ray treatment (Max's pending 2026-06-10 lab call) and the cell-boundary truncation carry-forward ('an obvious clipped square' at ≈ 20 radii) — lab items deferred by the 2026-09-02 ruling",
+      "QB-25: airless erosion is the system age alone, so every plain moon of a system carries the same ray brightness (19 values over 56 moons) — world generation",
+      "QB-26: terrestrial plain moons' physics-less atmosphere record — world generation",
+      "Thin-air (Mars-class) rays via airlessnessOf — identical on today's population, a law change if ever wanted",
+      "42 of 124 solid corpus bodies have no crater schedule (4 of the 56 airless, incl. the two biggest) — the bombardment lane's population, not the wire"
+    ],
+    "next": "F35 terminator (verifying at 2e60453) → Max's walk on rocky-2 (key .) → ship → the wiring pass is DONE except queue (c) (F43 / F46, world-generation work)"
+  }
 }
