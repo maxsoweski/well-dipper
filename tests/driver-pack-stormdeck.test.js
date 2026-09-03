@@ -242,12 +242,17 @@ describe('AC-2 — refactor byte-identity under the LAB\'s policy: the mirror + 
     expect(combos).toBe(92 * 4);
   });
   it('[CONTROL] the fixture comparison CAN fail: a 1e-3 colour nudge and a 1.001 radius knob both go red', () => {
-    const row = LAB_FIXTURE.rows.find((r) => r.gas && r.slots['11'].count > 1);
+    const row = LAB_FIXTURE.rows.find((r) => r.gas && r.slots['11'].count > 1 && r.written.spotMode === 0);
     const cond = condOf(row);
     const mirror = stormDeckLabState(stormDeckPack(cond, ctxFor(row, cond)));
     const nudged = { ...mirror, spotColor: [mirror.spotColor[0] + 1e-3, mirror.spotColor[1], mirror.spotColor[2]] };
     expect(nudged).not.toEqual(row.written);
     expect(composeStormSlots({ ...mirror, trainRadiusScale: 1.001 }, { greatSpot: true, stormTrain: true })).not.toEqual(row.slots['11']);
+    // the deck-height law is INSIDE the comparison: nudging its age input moves aux.z on the warm primary
+    // (a mode-0 tower; a dark primary would sit on the FLOOR regardless of age) and reds the slots
+    const aged = composeStormSlots({ ...mirror, spotAge: mirror.spotAge + 0.01, trainRadiusScale: 1 }, { greatSpot: true, stormTrain: true });
+    expect(aged.aux[0][2]).not.toBe(row.slots['11'].aux[0][2]);
+    expect(aged).not.toEqual(row.slots['11']);
     // and an arm's-length re-derivation of the colour law agrees with the pack's (the coefficients are the lab's)
     const L = STORM_COLOR_LAW;
     expect(L.BARGE).toEqual([0.50, 0.42, 0.38]); expect(L.SCOOTER).toEqual([0.85, 0.90, 1.0]);
@@ -304,7 +309,7 @@ describe('AC-3 — coherence: the vortices the game PLACES are the vortices its 
       const ctx = labPackCtx(b.d, b.cond, MESH);
       const deck = giantDeckPack(b.cond, { ...ctx, gates: gatesFor(giantEntry) });
       const bake = bakeStormEAttributes(MESH.positions, MESH.count, 1.0, {
-        regime: deck.meta.regime, drivers: { ...deck.meta.e5Drivers, composition: 'h2-he', T_eq: b.cond.T_eq },
+        regime: deck.meta.regime, drivers: { ...deck.meta.e5Drivers, composition: b.cond.atmosphere && b.cond.atmosphere.composition, T_eq: b.cond.T_eq },
         macroSeed: ctx.macroSeed | 0, stormSeed: 1,
       });
       const storm = stormDeckPack(b.cond, { ...ctx, gates: gatesFor(STORM_DECK_ENTRY) });
@@ -312,15 +317,42 @@ describe('AC-3 — coherence: the vortices the game PLACES are the vortices its 
     }
     expect(red).toBe(32);
   });
+  it('[CONTROL] T_eq reaches the vortices ONLY through the vigor thresholds: crossing one flips the family on 32/32; a 1 K nudge flips 0/32 (measured by the verify workflow 2026-09-03 and WITHDRAWN as a control)', () => {
+    // vigor = smooth01(55, 130, T_eq) with DARK_VIGOR 0.35 and LATTICE_VIGOR 0.70 — the family is a
+    // step function of T_eq, so the honest control sends every body to the OPPOSITE end of the ramp.
+    let flipped = 0; const nudged = [];
+    const fam = (m) => JSON.stringify([m.primary && m.primary.role, m.primary && m.primary.mode, m.train.map((v) => v.role)]);
+    for (const b of GAS) {
+      const ctx = { ...labPackCtx(b.d, b.cond, MESH), gates: gatesFor(STORM_DECK_ENTRY) };
+      const base = stormDeckPack(b.cond, ctx);
+      const cross = stormDeckPack({ ...b.cond, T_eq: base.meta.vigor >= 0.5 ? 60 : 300 }, ctx);
+      if (fam(cross.meta) !== fam(base.meta)) flipped++;
+      const nudge = stormDeckPack({ ...b.cond, T_eq: b.cond.T_eq + 1 }, ctx);
+      if (JSON.stringify(nudge.meta.vortices) !== JSON.stringify(base.meta.vortices)) nudged.push(`${b.id} T_eq ${Math.round(b.cond.T_eq)} vigor ${base.meta.vigor.toFixed(3)}`);
+    }
+    expect(flipped).toBe(32);
+    // MEASURED 2026-09-03: exactly the two bodies that sit within 1 K of a vigor threshold flip (the
+    // workflow's read-only pass read 0 comparing families through the mask bake). Pinned as the
+    // measured number so the withdrawal is itself a measurement, not a shrug: 2 of 32 is not a control.
+    expect(nudged, nudged.join(' | ')).toHaveLength(2);
+  });
   it('solid bodies: the registry never applies the pack, and a direct call emits nothing but the off-gate mirror', () => {
     for (const b of SOLID) {
       expect(selectPacks(b.cond, labPackCtx(b.d, b.cond, null)).map((e) => e.name).includes('stormDeck'), b.id).toBe(false);
     }
-    const s = SOLID[0];
-    const r = stormDeckPack(s.cond, { ...labPackCtx(s.d, s.cond, null), gates: ALL_ON() });
-    expect(r.drivers).toEqual({});
-    expect(r.attributes).toEqual({});
-    expect(stormDeckLabState(r)).toEqual({ spotStrength: 0, trainStrength: 0, trainSpots: [], trainCount: 0, _stormUranian: false });
+    // direct calls on every solid class the world engine has: the corpus's rocky body plus the icy and
+    // carbon PRESETS (the corpus may hold none of a class; the presets always do)
+    const presetCond = (name) => deriveConditionVector(DRIVER_PRESETS[name], deriveUniforms(DRIVER_PRESETS[name], 1.0), DRIVER_PRESETS[name].radiusEarth ?? 1);
+    const cases = [['rocky', SOLID[0].cond, labPackCtx(SOLID[0].d, SOLID[0].cond, null)],
+      ['icy', presetCond('Europa (icy moon)'), { macroSeed: 1, displayRadiusEarth: 1, animRate: 1, relevance: {} }],
+      ['carbon', presetCond('Carbon (high C/O)'), { macroSeed: 1, displayRadiusEarth: 1, animRate: 1, relevance: {} }]];
+    for (const [cls, cond, ctx] of cases) {
+      expect(compositionClass(cond), cls).toBe(cls);
+      const r = stormDeckPack(cond, { ...ctx, gates: ALL_ON() });
+      expect(r.drivers, cls).toEqual({});
+      expect(r.attributes, cls).toEqual({});
+      expect(stormDeckLabState(r), cls).toEqual({ spotStrength: 0, trainStrength: 0, trainSpots: [], trainCount: 0, _stormUranian: false });
+    }
     expect(SOLID.length).toBe(124);
   });
   it('an absent gate key THROWS (the writer\'s rule, applied by hand because a composed array carries no gate)', () => {

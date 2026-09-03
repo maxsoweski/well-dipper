@@ -9,7 +9,7 @@
   "acceptanceCriteria": [
     {
       "id": "AC-0",
-      "statement": "One pipeline: the storm slice has ONE definition, under src/, that both front-ends import. Driver pack #10 `src/worldengine/drivers/stormDeck.js` exports `stormDeckPack(condition, ctx) -> { drivers, attributes, meta }`, `STORM_DECK_ENTRY` (predicate character-identical to polarDeck's: compositionClass === 'gas'; gates ['greatSpot','stormTrain']), the colour law (the lab's `_stormColor`: chromophore age ramp, 20 % deck tint, barge/scooter/dark-spot branches, as NAMED coefficients), the deck-height law (`_stormDeckZ` over STORM_DECK), the slot composer (`composeStormSlots`: slot 0 = primary iff gate, train iff gate, cap 8, aux slot-synced, count = written) and the lab mirror (`STORM_LAB_BINDING` + `stormDeckLabState`). The lab imports them back and its own copies are deleted: `applyStormState` no longer calls `resolveStormE` itself, and `_stormColor`, `_stormDeckZ` and the hand-written slot loop are gone from world-engine-lab.html. Pack #1's fence comment stays TRUE (giantDeck still emits no uStorm* name) and polarDeck's source-scan fence stays green (it still never names resolveStormE / writeStormESphere / bakeStormEAttributes).",
+      "statement": "One pipeline: the storm slice has ONE definition, under src/, that both front-ends import. Driver pack #10 `src/worldengine/drivers/stormDeck.js` exports `stormDeckPack(condition, ctx) -> { drivers, attributes, meta }`, `STORM_DECK_ENTRY` (predicate character-identical to polarDeck's: compositionClass === 'gas'; gates ['greatSpot','stormTrain']), the colour law (the lab's `_stormColor`: chromophore age ramp, 20 % deck tint, barge/scooter/dark-spot branches, as NAMED coefficients), the deck-height law (`_stormDeckZ` over STORM_DECK), the slot composer (`composeStormSlots`: slot 0 = primary iff gate, train iff gate, cap 8, aux slot-synced, count = written) and the lab mirror (`STORM_LAB_FIELDS` + `stormDeckLabState`, which returns the fifteen-field record the pack pre-composes in `meta.labState` — AMENDED 2026-09-03 from `STORM_LAB_BINDING`, a name that did not ship; the verify workflow's AC-0 note). The lab imports them back and its own copies are deleted: `applyStormState` no longer calls `resolveStormE` itself, and `_stormColor`, `_stormDeckZ` and the hand-written slot loop are gone from world-engine-lab.html. Pack #1's fence comment stays TRUE (giantDeck still emits no uStorm* name) and polarDeck's source-scan fence stays green (it still never names resolveStormE / writeStormESphere / bakeStormEAttributes).",
       "verifyVia": {
         "input": "Static: grep the lab for the deleted definitions and for the import-back line; grep giantDeck.js / polarDeck.js for the fenced names; run tests/driver-pack-polardeck.test.js and tests/driver-pack-giantdeck.test.js unchanged; assert STORM_DECK_ENTRY is in PACKS by IDENTITY and that stormDeck is pack #10 (giantSurface holds #8, fluvialDeck #9).",
         "observable": "Deny-scan clean (0 hits for the three lab-local definitions and for a lab-side `resolveStormE(` call outside the import); the import line present; both sibling suites green byte-for-byte; the registry membership fence in drivers/index.js passes with the new entry and the emitted-name sets of every pre-existing pack are unchanged (asserted as SET MEMBERSHIP over real pack outputs on the corpus, not as counts)."
@@ -31,7 +31,7 @@
       "id": "AC-2",
       "statement": "Refactor byte-identity under the LAB's policy. For every driver preset × the pinned (macroSeed, stormSeed) grid, the pack's mirror `stormDeckLabState` reproduces every state field `applyStormState` wrote before the change (spotStrength/Center/Radius/Rot/Aspect/Mode/Color/Companion/Age/Emboss/Billow, trainStrength, trainSpots[] with every member field, trainCount, _stormUranian) deep-equal to a fixture captured from the lab BEFORE the change, and `composeStormSlots` reproduces the lab's per-frame uniform writes byte-for-byte under all four checkbox combinations. Measured on the same CONDITION object, not the same preset name. Any deviation (the candidate is the T_eq fallback: the lab read `_fp.T_eq ?? 288`, the pack reads `condition.T_eq`; all 17 presets define T_eq so the expectation is zero) is RECORDED as a declared deviation in this contract, never absorbed.",
       "verifyVia": {
-        "input": "Headless: the pre-change fixture (captured by running the lab's applyStormState in the existing lab-state test harness at the parent commit) vs stormDeckLabState(stormDeckPack(cond, labCtx)) and composeStormSlots at HEAD; [CONTROL] perturb one colour-law coefficient by 1e-3 and one STORM_DECK constant and show red.",
+        "input": "Headless: the pre-change fixture (captured by running the lab's applyStormState in the existing lab-state test harness at the parent commit) vs stormDeckLabState(stormDeckPack(cond, labCtx)) and composeStormSlots at HEAD; [CONTROL] nudge a colour output by 1e-3, the composer's radius knob by 1.001 and the deck-height law's AGE input by 0.01 (aux.z moves on a warm primary) and show red each time — AMENDED 2026-09-03: the constants are frozen exports, so the controls perturb the laws' inputs and outputs rather than the constants themselves (the verify workflow's AC-2 note).",
         "observable": "Max delta exactly 0 on every field, every preset, every seed pair, every gate combination; both controls red; the deviation list in `deviations` is empty or names each field with its cause."
       },
       "layer": "unit",
@@ -41,8 +41,8 @@
       "id": "AC-3",
       "statement": "Coherence: the vortices the game PLACES are the vortices its `aStorm` MASK was baked around. For every gas body in the corpus, `stormDeckPack(cond, ctx).meta.vortices` deep-equals the `vortices` list returned by `bakeStormEAttributes` when called with pack #1's OWN `meta.e5Drivers` + composition + T_eq at (labMacroSeed, GAME_STORM_SEED) — two independent derivations of the input chain, one writer — and `meta.count` equals giantDeck's `meta.stormCount` on every gas body. Solid bodies: the registry never applies the pack, and calling it directly emits nothing (the polarDeck idiom).",
       "verifyVia": {
-        "input": "Headless over the 32 gas bodies with a real mesh so pack #1 bakes; [CONTROL] perturb T_eq by 1 K on one side, and separately pass stormSeed 1 on one side, and show red both times; call stormDeckPack on a rocky and an icy condition.",
-        "observable": "32 of 32 deep-equal (centre, radius, rot, aspect, mode, role, ageScalar, companion, embossDir, billowPhase, coreScale); 32 of 32 counts agree; both controls red; solid calls return empty drivers and no attributes."
+        "input": "Headless over the 32 gas bodies with a real mesh so pack #1 bakes; [CONTROL] pass stormSeed 1 on one side and show red on 32/32; send T_eq across the writer's vigor thresholds (60 K on warm bodies, 300 K on cold ones) and show the FAMILY flip on 32/32 — ⚠ AMENDED 2026-09-03: the 1 K nudge originally written here was MEASURED by the verify workflow to flip 0 of 32 (comparing families through the mask bake; the pack-side re-measure reads 2 of 32 — the two bodies within 1 K of a vigor threshold — because T_eq reaches the vortices only through discrete threshold crossings) and is WITHDRAWN as a control, pinned at the measured 2/32 in the test so the withdrawal is itself measured; call stormDeckPack directly on rocky, icy and carbon conditions.",
+        "observable": "32 of 32 deep-equal (centre, radius, rot, aspect, mode, role, ageScalar, companion, embossDir, billowPhase, coreScale); 32 of 32 counts agree; the seed control red 32/32, the threshold control red 32/32, the 1 K nudge 2/32 (recorded: the two bodies within 1 K of a threshold); direct calls on rocky, icy and carbon return empty drivers, no attributes and the off-gate mirror."
       },
       "layer": "unit",
       "live": false
@@ -213,7 +213,7 @@
     "AC-6": {
       "instrumentA": "per-test set diff vs a baseline recorded from the parent 520f2c0 in a clean worktree: +1 file (driver-pack-stormdeck, 26), gas-body 70→71, failing set unchanged (20 = 20, none new, none fixed)",
       "instrumentB": "8/8",
-      "instrumentC": "ZERO delta on all shipped shared uniforms; 858/858 citations",
+      "instrumentC": "ZERO delta on all shipped shared uniforms. Citations: 858/858 at the build commit f8ea499 — ⚠ then BROKEN (exit 2) at 378b352 by this workstream's own QB-24 row, which shifted mvp-spine-lab-quality-backlog.md:87 → :88 under PLAN:75's citation; caught by the verify workflow (the 858 figure recorded here had been measured before that row landed), re-pointed in place at the repair commit, 858/858 again.",
       "instrumentE": "ON/OFF pair on rocky-2 p2 recorded above",
       "lab": "world-engine-lab.html: 0 script errors (favicon 404 only); Jovian preset: checkbox combos → uStormCount 0/1/4/5; slot 0 = primary (great spot on) / trainSpots[0] (train only); 🎲 stormSeed 424242 → applyDrivers re-placed the primary (count 7); radius (driven) slider = state.spotRadius; restored"
     }
@@ -232,5 +232,17 @@
     "max": "Greenlight",
     "onScopeCommit": "ea18406",
     "decisionsStanding": "all ten scoping decisions in intent.md stand as written; none overruled"
-  }
+  },
+  "amendments": [
+    {
+      "date": "2026-09-03",
+      "by": "working-Claude after verify-workstream wf_bb6e5172-5df at 378b352",
+      "changes": [
+        "AC-0 statement: STORM_LAB_BINDING → STORM_LAB_FIELDS + stormDeckLabState (naming drift, no behaviour change).",
+        "AC-2 control: perturbs the laws' inputs/outputs (colour, radius knob, deckZ age) — the constants are frozen exports.",
+        "AC-3 control: the 1 K T_eq nudge is withdrawn (the workflow measured 0/32 by family; the pack-side re-measure is 2/32 — the two bodies within 1 K of a threshold — pinned); replaced by a vigor-threshold crossing (32/32 family flip); direct calls extended to icy and carbon.",
+        "AC-6 evidence: the 858/858 citation claim was measured before the QB-24 row landed; that row broke PLAN:75 (exit 2); re-pointed, 858/858 at the repair commit."
+      ]
+    }
+  ]
 }
