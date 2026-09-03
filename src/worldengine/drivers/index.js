@@ -54,7 +54,7 @@ import { giantDeckPack, bandedEnvelopeOf, giantDeckLabState } from './giantDeck.
 import { LIMB_DECK_ENTRY } from './limbDeck.js';
 import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
-import { SOLID_OPTICS_ENTRY } from './solidOptics.js';
+import { SOLID_OPTICS_ENTRY, TERMINATOR_ENABLED } from './solidOptics.js';   // ⛔ TERMINATOR_ENABLED RIDES THIS LINE — the ruled gate value below, appended to an existing import statement rather than spending a new line: fifteen live symbol-anchored refs point INTO this file by line and a new row reds them as some other block's failure (the rule stated in full three lines down).
 import { CRATER_DECK_ENTRY } from './craterDeck.js';
 import { SOLID_FEATURES_ENTRY } from './solidFeatures.js'; import { GIANT_SURFACE_ENTRY } from './giantSurface.js'; import { FLUVIAL_DECK_ENTRY } from './fluvialDeck.js'; import { STORM_DECK_ENTRY } from './stormDeck.js';   // ⛔ TWO import STATEMENTS ON ONE LINE, ON PURPOSE. Fifteen live symbol-anchored refs point INTO this file by line — src/worldengine/drivers/limbDeck.js:173 `import plus one array element at` is one of them — so a new line here reds fifteen citations as some other block's failure. The same discipline world-engine-lab.html:188 keeps.
 import {
@@ -74,15 +74,15 @@ import {
 // rendering decision". Under a permissive proxy, a pack that started emitting a driver gated on a
 // name nobody had ever ruled on would silently render it ON. Declaring the names per entry keeps
 // that throw alive: the new gate is unanswered until someone adds it here.
-export const GATE_POLICY_ALL_ON = 'all-on';
+export const GATE_POLICY_ALL_ON = 'all-on';   // ⛔ KEPT, AND IT STILL MEANS ALL-ON. Ruling #4 is a real ruling and it stays truthful: a caller that asks for ALL_ON gets every declared gate true, ruled names included. It is no longer the DEFAULT — see GATE_POLICY_RULED at EOF — so it is now what an instrument passes when it wants the pre-ruling answer (the two cross-commit fixture harnesses do exactly that).
 
-/** The ctx.gates map for one entry under the ALL_ON policy: every DECLARED gate true, no others. */
-export function gatesFor(entry, policy = GATE_POLICY_ALL_ON) {
-  if (policy !== GATE_POLICY_ALL_ON) {
+/** The ctx.gates map for one entry: every DECLARED gate true under ALL_ON, minus the RULED ones. */
+export function gatesFor(entry, policy = GATE_POLICY_RULED, rulings = GATE_RULINGS) {
+  if (policy !== GATE_POLICY_ALL_ON && policy !== GATE_POLICY_RULED) {
     throw new PackContractError(`unknown gate policy '${String(policy)}'.`);
   }
   const out = {};
-  for (const g of entry.gates) out[g] = true;
+  for (const g of entry.gates) out[g] = policy === GATE_POLICY_RULED ? (rulings[g] ?? true) : true;   // ⛔ PER DECLARED NAME, NEVER `Object.assign(out, rulings)`. A ruling ANSWERS a gate the entry declares; it must not ADD a key the entry never declared, or writePackUniforms.js:180's absent-gate throw would start being satisfied by a map nobody's pack asked for. `?? true` and not `|| true`: `false` is the whole point.
   return out;
 }
 
@@ -441,3 +441,35 @@ function runPacks(condition, ctx, sink) {
   return out;
 }
 
+
+// ── The rulings, and the policy that reads them ──────────────────────────────
+// ⭐ APPENDED AT EOF, not inserted beside `gatesFor`, for the reason the import block three rows
+// above the gate policy states at length: fifteen live symbol-anchored refs point into this file by
+// LINE, so a row inserted anywhere above them reds fifteen citations as some other block's failure.
+// `gatesFor`'s default parameter names these two, which is legal and evaluated at CALL time — the
+// only module-scope caller in this file is inside `applyDriverPacks`.
+//
+// ⭐⭐ WHY A SECOND POLICY RATHER THAN AN EDIT TO THE FIRST. `GATE_POLICY_ALL_ON` is Max's ruling #4
+// (2026-08-06) and it is a real answer to a real question — "the game has no checkboxes, so every
+// declared gate is on". Overwriting it would have made ruling #4 quietly false while its name went
+// on being cited from `src/main.js`'s provenance string and from four suites. So ALL_ON keeps its
+// meaning and stops being the DEFAULT; RULED is ALL_ON minus the names Max has since ruled on
+// individually. The difference between the two IS the set of decisions he has made, and both are
+// readable off one line of code.
+//
+// ⛔ A RULING NEVER ADDS A GATE. `gatesFor` resolves PER DECLARED NAME (`rulings[g] ?? true`) so an
+// entry that does not declare `terminator` gets no `terminator` key, and `writePackUniforms.js:180`'s
+// absent-gate throw — "an absent gate is not an off gate and is not an on gate, it is an unanswered
+// rendering decision" — stays alive under both policies.
+export const GATE_POLICY_RULED = 'ruled';
+
+/**
+ * The gate names Max has ruled on INDIVIDUALLY, keyed by the gate name the packs declare.
+ *
+ * ⚠ ONE ENTRY TODAY, and it is a pointer rather than a value: the terminator's answer lives in
+ * `src/worldengine/drivers/solidOptics.js` beside the pack that emits the uniform, with his 2026-07-16
+ * words on the line, and this map is how the game's writer reaches it. The LAB reaches the same
+ * constant through `buildDefaultDressing` (planet-feature-associations.js) and through its state
+ * literal (world-engine-lab.html:1053). Three producers, one declared value.
+ */
+export const GATE_RULINGS = Object.freeze({ terminator: TERMINATOR_ENABLED });

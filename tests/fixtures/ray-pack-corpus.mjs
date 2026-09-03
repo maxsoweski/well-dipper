@@ -17,7 +17,7 @@ import { compositionClass } from '../../src/worldengine/base/e1Regime.js';
 import { StarSystemGenerator } from '../../src/generation/StarSystemGenerator.js';
 import { conditionFromBody } from '../../src/worldengine/port/conditionFromBody.js';
 import { labPackCtx } from '../../src/objects/Planet.js';
-import { PACKS, gatesFor } from '../../src/worldengine/drivers/index.js';
+import { PACKS, gatesFor, GATE_POLICY_ALL_ON } from '../../src/worldengine/drivers/index.js';
 import { resolveDriver } from '../../src/worldengine/port/writePackUniforms.js';
 import { rockySurfacePack } from '../../src/worldengine/drivers/rockySurface.js';
 import { craterDeckPack } from '../../src/worldengine/drivers/craterDeck.js';
@@ -58,7 +58,7 @@ export function resolvedPacks(cond, ctx) {
   const out = {};
   for (const entry of PACKS) {
     if (entry.applies(cond, ctx) !== true) continue;
-    const packCtx = { ...ctx, gates: gatesFor(entry) };
+    const packCtx = { ...ctx, gates: gatesFor(entry, GATE_POLICY_ALL_ON) };   // ⛔ THE POLICY IS PINNED, 2026-09-03 (F35). This harness compares HEAD against a fixture captured at dc03fc6 UNDER ALL_ON, which was `gatesFor`'s default then and is not now: F35 made GATE_POLICY_RULED the default so `uTermStrength` resolves to 0 (Max 2026-07-16, "disable terminator gradient totally"). Taking the new default here would compare two policies and read the difference as a code change in the packs. Naming ALL_ON keeps this a comparison of CODE across commits — which is the only thing AC-3 is entitled to conclude — and F35's own suite is where the ruled value is asserted.
     const r = entry.pack(cond, packCtx);
     const drivers = {};
     for (const n of Object.keys(r.drivers)) drivers[n] = resolveDriver(n, r.drivers[n], packCtx);

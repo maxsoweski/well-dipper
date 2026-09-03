@@ -156,7 +156,13 @@ export function runLabRows(sl, { literals = { terminatorEnabled: false, limbBypa
       const cond = deriveConditionVector(dp, u, R);
       const gas = compositionClass(cond) === 'gas';
       const bodyDrivers = { condition: cond };
-      const run = (st) => applyDrivers(st, driverUI, fp, u, deriveConditionVector, drawPresetConditions,
+      // ⛔ THE DRAW IS WRAPPED, NOT PRE-COMPUTED. The sliced :2464 calls `drawPresetConditions` ITSELF
+      // to build `_atmoCond`, so a perturbation applied only to the harness's own copy would never
+      // reach the law — measured: scaling the frozen preset's pressure 4x moved `drawnPressure` and
+      // left `termWidth` untouched on 18/18 presets, i.e. it would have been a control that could
+      // not fail. Wrapping the injected function is what puts the break INSIDE the lab's own derive.
+      const drawWrapped = (preset, seed) => perturb(drawPresetConditions(preset, seed));
+      const run = (st) => applyDrivers(st, driverUI, fp, u, deriveConditionVector, drawWrapped,
         atmosphereOpticsOf, terminatorOpticsOf, visScaleOf, selectPacks, limbDeckPack, solidOpticsPack, solidOpticsLabState);
       const routeGas = (st) => ensureNetworkRouted(st, bodyDrivers, visScaleOf, selectPacks, giantSurfacePack, giantSurfaceLabState);
 
