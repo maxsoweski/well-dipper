@@ -82,4 +82,4 @@ Built — solo on the :9223 lab (chrome-devtools MCP, see memory/well-dipper-tes
 - Max's feedback: (pending Phase-7 lap — decide full-disk ray treatment)
 - Tweaks applied: none (structural item documented, not slider-fixable)
 - Re-verify: n/a
-- Status: VERIFIED_PENDING_MAX
+- Status: VERIFIED_PENDING_MAX (lab, 2026-06-10) · ⭐ **WIRED INTO THE GAME 2026-09-03** — the ray law moved to `src/worldengine/base/ejectaRays.js` (`rayBrightnessOf` + `RAY_COUNT`/`RAY_SHARP`, the ONE definition labCore and the crater driver block import), emitted by `craterDeckPack` and `rockySurfacePack` on every admitted body; live on every plain moon (56 of 124 corpus solid bodies airless, rays on the 52 with a crater host), 0 on every body with air; A/B key `Y`; workstream `wire-ejecta-rays-lab-into-game`, `VERIFIED_PENDING_MAX 6d70d56` — **Max's game-side walk pending** (rocky-13, the fifth planet's ice moons). The full-disk ray treatment and the cell-boundary truncation carry-forward stay deferred by his 2026-09-02 ruling.
