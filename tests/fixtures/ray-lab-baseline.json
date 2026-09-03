@@ -1,0 +1,2024 @@
+{
+ "capturedFrom": "dc03fc6",
+ "capturedAt": "2026-09-03",
+ "law": "clamp01(1 - (surfaceHistory.erosion ?? surfaceHistory.erosionLevel ?? 0)) * (atmosphere ? 0 : 1)  — labCore.js:785 at the parent",
+ "absentNames": [
+  "rayCount",
+  "raySharp"
+ ],
+ "summary": {
+  "bodies": 156,
+  "presets": 18,
+  "airlessSolid": 56,
+  "airlessDistinctRayValues": 19,
+  "nonZeroRayBodies": 56
+ },
+ "bodies": {
+  "rocky-0/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.6320034122967092,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-0/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.6320034122967092,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-0/planet/2": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.6320034122967092,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-0/moon/2.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.12640068245934186,
+   "rayBrightness": 0.8735993175406581,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-0/moon/2.1": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.12640068245934186,
+   "rayBrightness": 0.8735993175406581,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-0/planet/3": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.6320034122967092,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-0/moon/3.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.12640068245934186,
+   "rayBrightness": 0.8735993175406581,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-1/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-1/moon/0.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.25607416972899455,
+   "rayBrightness": 0.7439258302710055,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-1/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-1/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-2/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8155539931037501,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-2/moon/0.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.16311079862075,
+   "rayBrightness": 0.8368892013792499,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-2/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8155539931037501,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-2/moon/1.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.16311079862075,
+   "rayBrightness": 0.8368892013792499,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-2/planet/2": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8155539931037501,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-2/planet/3": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8155539931037501,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-2/planet/4": {
+   "kind": "planet",
+   "compositionClass": "icy",
+   "hasAtmosphere": true,
+   "erosion": 0.8155539931037501,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-2/planet/5": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8155539931037501,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-3/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.7180791307371543,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-3/moon/0.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.14361582614743088,
+   "rayBrightness": 0.8563841738525692,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-3/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.7180791307371543,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-3/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.7180791307371543,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-3/moon/2.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.14361582614743088,
+   "rayBrightness": 0.8563841738525692,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-3/planet/3": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.7180791307371543,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-3/moon/3.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.14361582614743088,
+   "rayBrightness": 0.8563841738525692,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-4/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-4/moon/0.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.21824040170725292,
+   "rayBrightness": 0.7817595982927471,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-4/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-4/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-4/moon/2.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.21824040170725292,
+   "rayBrightness": 0.7817595982927471,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-4/planet/3": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-4/planet/4": {
+   "kind": "planet",
+   "compositionClass": "icy",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-4/planet/5": {
+   "kind": "planet",
+   "compositionClass": "icy",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-6/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.6973096564950543,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-6/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.6973096564950543,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-7/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.5291211052527405,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-7/moon/0.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.10582422105054809,
+   "rayBrightness": 0.8941757789494519,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-7/planet/1": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.5291211052527405,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-7/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.5291211052527405,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-7/moon/2.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.10582422105054809,
+   "rayBrightness": 0.8941757789494519,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-7/planet/3": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.5291211052527405,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-7/planet/4": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.5291211052527405,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-7/planet/5": {
+   "kind": "planet",
+   "compositionClass": "icy",
+   "hasAtmosphere": true,
+   "erosion": 0.5291211052527405,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-9/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-9/planet/1": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-9/moon/1.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.3,
+   "rayBrightness": 0.7,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-9/moon/1.1": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.3,
+   "rayBrightness": 0.7,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-9/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-9/planet/3": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-10/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.7858900238008474,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-10/moon/0.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.15717800476016947,
+   "rayBrightness": 0.8428219952398306,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-10/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.7858900238008474,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-10/planet/2": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.7858900238008474,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-10/planet/3": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.7858900238008474,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-10/planet/4": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.7858900238008474,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-10/moon/4.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.15717800476016947,
+   "rayBrightness": 0.8428219952398306,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-10/moon/4.1": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.15717800476016947,
+   "rayBrightness": 0.8428219952398306,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-11/planet/0": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-11/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-11/moon/1.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.212611318775957,
+   "rayBrightness": 0.787388681224043,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-11/planet/2": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-11/moon/2.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.212611318775957,
+   "rayBrightness": 0.787388681224043,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-11/moon/2.1": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.212611318775957,
+   "rayBrightness": 0.787388681224043,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-11/moon/2.2": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.212611318775957,
+   "rayBrightness": 0.787388681224043,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-12/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8048549766719251,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-12/moon/0.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.16097099533438503,
+   "rayBrightness": 0.839029004665615,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-12/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8048549766719251,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-12/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8048549766719251,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-12/moon/2.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.16097099533438503,
+   "rayBrightness": 0.839029004665615,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/2.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/planet/3": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/3.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/3.1": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/3.2": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/planet/4": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/4.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/4.1": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/4.2": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/4.3": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/4.4": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/4.5": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/planet/5": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-13/moon/5.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.24769643663152788,
+   "rayBrightness": 0.7523035633684722,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-14/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8731246246464542,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-14/planet-moon/pm-0.0": {
+   "kind": "planet-moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8731246246464542,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-14/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8731246246464542,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-14/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8731246246464542,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-14/planet/3": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8731246246464542,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-14/moon/3.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.17462492492929083,
+   "rayBrightness": 0.8253750750707092,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-14/planet/4": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8731246246464542,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-14/planet/5": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8731246246464542,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-14/moon/5.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.17462492492929083,
+   "rayBrightness": 0.8253750750707092,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-15/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-15/moon/0.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.2451473920299103,
+   "rayBrightness": 0.7548526079700897,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-15/planet-moon/pm-0.1": {
+   "kind": "planet-moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-15/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-15/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-16/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8005505690422733,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-16/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8005505690422733,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-16/planet/2": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8005505690422733,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-16/planet/3": {
+   "kind": "planet",
+   "compositionClass": "icy",
+   "hasAtmosphere": true,
+   "erosion": 0.8005505690422733,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-16/planet/4": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8005505690422733,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-16/moon/4.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.16011011380845463,
+   "rayBrightness": 0.8398898861915454,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-16/planet/5": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8005505690422733,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-16/moon/5.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.16011011380845463,
+   "rayBrightness": 0.8398898861915454,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-17/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-17/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-17/moon/1.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.25192236329004364,
+   "rayBrightness": 0.7480776367099564,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-17/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-17/moon/2.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.25192236329004364,
+   "rayBrightness": 0.7480776367099564,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-17/planet/3": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-17/moon/3.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.25192236329004364,
+   "rayBrightness": 0.7480776367099564,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-17/planet/4": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-19/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.9114827971063904,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-19/moon/0.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.1822965594212781,
+   "rayBrightness": 0.8177034405787219,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-19/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.9114827971063904,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-19/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.9114827971063904,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-19/planet/3": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.9114827971063904,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-20/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-20/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-20/moon/1.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.2541439709497403,
+   "rayBrightness": 0.7458560290502597,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-20/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-20/planet/3": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-20/planet/4": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 1,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8071378127809596,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8071378127809596,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/moon/1.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.16142756255619192,
+   "rayBrightness": 0.838572437443808,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/planet/2": {
+   "kind": "planet",
+   "compositionClass": "icy",
+   "hasAtmosphere": true,
+   "erosion": 0.8071378127809596,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/planet/3": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8071378127809596,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/moon/3.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.16142756255619192,
+   "rayBrightness": 0.838572437443808,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/planet/4": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8071378127809596,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/planet/5": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.8071378127809596,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/moon/5.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.16142756255619192,
+   "rayBrightness": 0.838572437443808,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-21/moon/5.1": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.16142756255619192,
+   "rayBrightness": 0.838572437443808,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-22/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8720476217240443,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-22/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8720476217240443,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-22/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.8720476217240443,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/planet/0": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.32478226623955936,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/planet/1": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.32478226623955936,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/planet/2": {
+   "kind": "planet",
+   "compositionClass": "rocky",
+   "hasAtmosphere": true,
+   "erosion": 0.32478226623955936,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/planet/3": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.32478226623955936,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/moon/3.0": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.06495645324791187,
+   "rayBrightness": 0.9350435467520881,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/moon/3.1": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.06495645324791187,
+   "rayBrightness": 0.9350435467520881,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/moon/3.2": {
+   "kind": "moon",
+   "compositionClass": "rocky",
+   "hasAtmosphere": false,
+   "erosion": 0.06495645324791187,
+   "rayBrightness": 0.9350435467520881,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/planet/4": {
+   "kind": "planet",
+   "compositionClass": "icy",
+   "hasAtmosphere": true,
+   "erosion": 0.32478226623955936,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/planet/5": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.32478226623955936,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/moon/5.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.06495645324791187,
+   "rayBrightness": 0.9350435467520881,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/moon/5.1": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.06495645324791187,
+   "rayBrightness": 0.9350435467520881,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/planet/6": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.32478226623955936,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/moon/6.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.06495645324791187,
+   "rayBrightness": 0.9350435467520881,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/planet/7": {
+   "kind": "planet",
+   "compositionClass": "gas",
+   "hasAtmosphere": true,
+   "erosion": 0.32478226623955936,
+   "rayBrightness": 0,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "rocky-23/moon/7.0": {
+   "kind": "moon",
+   "compositionClass": "icy",
+   "hasAtmosphere": false,
+   "erosion": 0.06495645324791187,
+   "rayBrightness": 0.9350435467520881,
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ]
+  }
+ },
+ "presets": {
+  "Rocky (Earthlike)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Lava (hot airless)": {
+   "preset": 1,
+   "conditionVector": 1,
+   "drawn": {
+    "0": 1,
+    "1234": 1
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Ocean (temperate)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Titan (methane seas)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Frozen (airless)": {
+   "preset": 0.9,
+   "conditionVector": 0.9,
+   "drawn": {
+    "0": 0.9,
+    "1234": 0.9
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Europa (icy moon)": {
+   "preset": 0.95,
+   "conditionVector": 0.95,
+   "drawn": {
+    "0": 0.95,
+    "1234": 0.95
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Gas giant (Jovian)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Gas giant (Saturnian)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Ice giant (Neptunian)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Venus (sulfuric shroud)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Sub-Neptune (hazy)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Eyeball (locked temperate)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Hot Jupiter (locked giant)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Mars (arid rocky)": {
+   "preset": 0,
+   "conditionVector": 0,
+   "drawn": {
+    "0": 0,
+    "1234": 0
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Moon/Mercury (impact-airless)": {
+   "preset": 0.95,
+   "conditionVector": 0.95,
+   "drawn": {
+    "0": 0.95,
+    "1234": 0.95
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Magma (K2-141b)": {
+   "preset": 1,
+   "conditionVector": 1,
+   "drawn": {
+    "0": 1,
+    "1234": 1
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Carbon (high C/O)": {
+   "preset": 0.9,
+   "conditionVector": 0.9,
+   "drawn": {
+    "0": 0.9,
+    "1234": 0.9
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  },
+  "Crystal (faceted)": {
+   "preset": 1,
+   "conditionVector": 1,
+   "drawn": {
+    "0": 1,
+    "1234": 1
+   },
+   "absent": [
+    "rayCount",
+    "raySharp"
+   ],
+   "absentFromConditionVector": [
+    "rayCount",
+    "raySharp"
+   ]
+  }
+ }
+}
