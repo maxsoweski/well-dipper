@@ -1,0 +1,1277 @@
+{
+ "capturedFrom": "f0b93aa",
+ "capturedAt": "2026-09-03",
+ "file": "world-engine-lab.html",
+ "method": "nine regions sliced from the pinned blob (:2464 :2465 :2477 :2497 :2504 :2505 :2511, the :2630 solid mirror fragment, the :2821 gas mirror fragment) and run through new Function against the real modules; gas presets in BOTH call orders",
+ "retypeLiveAtCapture": true,
+ "stateLiteralTokens": {
+  "terminatorEnabled": "false",
+  "limbBypass": "false",
+  "termBypass": "false"
+ },
+ "gatePolicyAtCapture": "gatesFor(entry) default — GATE_POLICY_ALL_ON at this commit",
+ "grid": {
+  "macroSeeds": [
+   0,
+   12345
+  ],
+  "presets": [
+   "Rocky (Earthlike)",
+   "Lava (hot airless)",
+   "Ocean (temperate)",
+   "Titan (methane seas)",
+   "Frozen (airless)",
+   "Europa (icy moon)",
+   "Gas giant (Jovian)",
+   "Gas giant (Saturnian)",
+   "Ice giant (Neptunian)",
+   "Venus (sulfuric shroud)",
+   "Sub-Neptune (hazy)",
+   "Eyeball (locked temperate)",
+   "Hot Jupiter (locked giant)",
+   "Mars (arid rocky)",
+   "Moon/Mercury (impact-airless)",
+   "Magma (K2-141b)",
+   "Carbon (high C/O)",
+   "Crystal (faceted)"
+  ]
+ },
+ "termFields": [
+  "termStrength",
+  "termWidth",
+  "termColor"
+ ],
+ "summary": {
+  "rows": 36,
+  "gasRows": 10,
+  "presets": 18,
+  "dressingEntriesWithTerminator": 0,
+  "terminatorRendersOn": 11
+ },
+ "rows": [
+  {
+   "preset": "Rocky (Earthlike)",
+   "macroSeed": 0,
+   "radiusEarth": 1,
+   "gas": false,
+   "presetPressure": 1,
+   "drawnPressure": 1,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.12,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.12,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.12,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Rocky (Earthlike)",
+   "macroSeed": 12345,
+   "radiusEarth": 1,
+   "gas": false,
+   "presetPressure": 1,
+   "drawnPressure": 1,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.12,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.12,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.12,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Lava (hot airless)",
+   "macroSeed": 0,
+   "radiusEarth": 0.9,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Lava (hot airless)",
+   "macroSeed": 12345,
+   "radiusEarth": 0.9,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Ocean (temperate)",
+   "macroSeed": 0,
+   "radiusEarth": 1.1,
+   "gas": false,
+   "presetPressure": 1.5,
+   "drawnPressure": 1.5,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.13584821331501132,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.13584821331501132,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.13584821331501132,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Ocean (temperate)",
+   "macroSeed": 12345,
+   "radiusEarth": 1.1,
+   "gas": false,
+   "presetPressure": 1.5,
+   "drawnPressure": 1.5,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.13584821331501132,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.13584821331501132,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.13584821331501132,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Titan (methane seas)",
+   "macroSeed": 0,
+   "radiusEarth": 0.4,
+   "gas": false,
+   "presetPressure": 1.5,
+   "drawnPressure": 1.5,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.13584821331501132,
+    "termColor": [
+     0.72,
+     0.52,
+     0.78
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.13584821331501132,
+    "termColor": [
+     0.72,
+     0.52,
+     0.78
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.13584821331501132,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Titan (methane seas)",
+   "macroSeed": 12345,
+   "radiusEarth": 0.4,
+   "gas": false,
+   "presetPressure": 1.5,
+   "drawnPressure": 1.5,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.13584821331501132,
+    "termColor": [
+     0.72,
+     0.52,
+     0.78
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.13584821331501132,
+    "termColor": [
+     0.72,
+     0.52,
+     0.78
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.13584821331501132,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Frozen (airless)",
+   "macroSeed": 0,
+   "radiusEarth": 0.5,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Frozen (airless)",
+   "macroSeed": 12345,
+   "radiusEarth": 0.5,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Europa (icy moon)",
+   "macroSeed": 0,
+   "radiusEarth": 0.5,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Europa (icy moon)",
+   "macroSeed": 12345,
+   "radiusEarth": 0.5,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Gas giant (Jovian)",
+   "macroSeed": 0,
+   "radiusEarth": 11.2,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.9485508524397414,
+     0.5590498236331569,
+     0.3186890064667842
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.9485508524397414,
+     0.5590498236331569,
+     0.3186890064667842
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Gas giant (Jovian)",
+   "macroSeed": 12345,
+   "radiusEarth": 11.2,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.9485508524397414,
+     0.5590498236331569,
+     0.3186890064667842
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.9485508524397414,
+     0.5590498236331569,
+     0.3186890064667842
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Gas giant (Saturnian)",
+   "macroSeed": 0,
+   "radiusEarth": 9.4,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.940164609053498,
+     0.7416975308641975,
+     0.5090946502057613
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.940164609053498,
+     0.7416975308641975,
+     0.5090946502057613
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Gas giant (Saturnian)",
+   "macroSeed": 12345,
+   "radiusEarth": 9.4,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.940164609053498,
+     0.7416975308641975,
+     0.5090946502057613
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.940164609053498,
+     0.7416975308641975,
+     0.5090946502057613
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Ice giant (Neptunian)",
+   "macroSeed": 0,
+   "radiusEarth": 3.9,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.44999999999999996,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.44999999999999996,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Ice giant (Neptunian)",
+   "macroSeed": 12345,
+   "radiusEarth": 3.9,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.44999999999999996,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.44999999999999996,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Venus (sulfuric shroud)",
+   "macroSeed": 0,
+   "radiusEarth": 0.95,
+   "gas": false,
+   "presetPressure": 92,
+   "drawnPressure": 92,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.29674090446109996,
+    "termColor": [
+     1,
+     0.62,
+     0.28
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.29674090446109996,
+    "termColor": [
+     1,
+     0.62,
+     0.28
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.29674090446109996,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Venus (sulfuric shroud)",
+   "macroSeed": 12345,
+   "radiusEarth": 0.95,
+   "gas": false,
+   "presetPressure": 92,
+   "drawnPressure": 92,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.29674090446109996,
+    "termColor": [
+     1,
+     0.62,
+     0.28
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.29674090446109996,
+    "termColor": [
+     1,
+     0.62,
+     0.28
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.29674090446109996,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Sub-Neptune (hazy)",
+   "macroSeed": 0,
+   "radiusEarth": 2.7,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.92789681920941,
+     0.5789727509821128,
+     0.3637854639832369
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.92789681920941,
+     0.5789727509821128,
+     0.3637854639832369
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Sub-Neptune (hazy)",
+   "macroSeed": 12345,
+   "radiusEarth": 2.7,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.92789681920941,
+     0.5789727509821128,
+     0.3637854639832369
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.92789681920941,
+     0.5789727509821128,
+     0.3637854639832369
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Eyeball (locked temperate)",
+   "macroSeed": 0,
+   "radiusEarth": 1,
+   "gas": false,
+   "presetPressure": 1,
+   "drawnPressure": 1,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.12,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.12,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.12,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Eyeball (locked temperate)",
+   "macroSeed": 12345,
+   "radiusEarth": 1,
+   "gas": false,
+   "presetPressure": 1,
+   "drawnPressure": 1,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.12,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.12,
+    "termColor": [
+     1,
+     0.45,
+     0.17999999999999994
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.12,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Hot Jupiter (locked giant)",
+   "macroSeed": 0,
+   "radiusEarth": 13,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.905,
+     0.47375,
+     0.2465
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.905,
+     0.47375,
+     0.2465
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Hot Jupiter (locked giant)",
+   "macroSeed": 12345,
+   "radiusEarth": 13,
+   "gas": true,
+   "presetPressure": 1000,
+   "drawnPressure": 1000,
+   "gasBody": true,
+   "soApplied": false,
+   "gsApplied": true,
+   "orderA": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.905,
+     0.47375,
+     0.2465
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.15,
+    "termWidth": 0.3,
+    "termColor": [
+     0.905,
+     0.47375,
+     0.2465
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.3,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Mars (arid rocky)",
+   "macroSeed": 0,
+   "radiusEarth": 0.53,
+   "gas": false,
+   "presetPressure": 0.01,
+   "drawnPressure": 0.01,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.025396888379163728,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45123283950279997,
+     0.5996637710446909,
+     0.9981619483776437
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.025396888379163728,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45123283950279997,
+     0.5996637710446909,
+     0.9981619483776437
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Mars (arid rocky)",
+   "macroSeed": 12345,
+   "radiusEarth": 0.53,
+   "gas": false,
+   "presetPressure": 0.01,
+   "drawnPressure": 0.01,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0.025396888379163728,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45123283950279997,
+     0.5996637710446909,
+     0.9981619483776437
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0.025396888379163728,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45123283950279997,
+     0.5996637710446909,
+     0.9981619483776437
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": true
+  },
+  {
+   "preset": "Moon/Mercury (impact-airless)",
+   "macroSeed": 0,
+   "radiusEarth": 0.38,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Moon/Mercury (impact-airless)",
+   "macroSeed": 12345,
+   "radiusEarth": 0.38,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Magma (K2-141b)",
+   "macroSeed": 0,
+   "radiusEarth": 1.5,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Magma (K2-141b)",
+   "macroSeed": 12345,
+   "radiusEarth": 1.5,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Carbon (high C/O)",
+   "macroSeed": 0,
+   "radiusEarth": 1.1,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Carbon (high C/O)",
+   "macroSeed": 12345,
+   "radiusEarth": 1.1,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Crystal (faceted)",
+   "macroSeed": 0,
+   "radiusEarth": 0.8,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.4572101704130412,
+     0.598831286009414,
+     0.9897227682352345
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.4572101704130412,
+     0.598831286009414,
+     0.9897227682352345
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  },
+  {
+   "preset": "Crystal (faceted)",
+   "macroSeed": 12345,
+   "radiusEarth": 0.8,
+   "gas": false,
+   "presetPressure": null,
+   "drawnPressure": null,
+   "gasBody": false,
+   "soApplied": true,
+   "gsApplied": false,
+   "orderA": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "orderB": {
+    "termStrength": 0,
+    "termWidth": 0.06,
+    "termColor": [
+     0.45,
+     0.6,
+     1
+    ],
+    "terminatorEnabled": false
+   },
+   "retypedWidth": 0.06,
+   "dressingIncludesTerminator": false,
+   "rendersTerminator": false
+  }
+ ]
+}
