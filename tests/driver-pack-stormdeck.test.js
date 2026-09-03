@@ -58,6 +58,8 @@ const PACK_FIXTURE = JSON.parse(src('tests/fixtures/pack-drivers-baseline.json')
 
 const MESH = { positions: fibonacciSphere(MESH_N, 1.0), count: MESH_N, radius: 1.0 };
 const ALL_ON = () => ({ [GREAT_SPOT_GATE]: true, [STORM_TRAIN_GATE]: true });
+const F3_RAY_NAMES = ['uRayBrightness', 'uRayCount', 'uRaySharp'];   // ⭐ 2026-09-03 (workstream wire-ejecta-rays-lab-into-game, AC-0) — the three names the crater driver block gained AFTER this file's fixture was captured at 520f2c0. ⛔ RIDES THESE LINES: this file is cited by line and a new declaration row would shift every ref below it.
+const noRays = (pk) => { if (!pk || !pk.drivers) return pk; const d = { ...pk.drivers }; for (const n of F3_RAY_NAMES) delete d[n]; return { ...pk, drivers: d }; };   // ⚠ THE COMPARE IS `toEqual` OVER A WHOLE PACK OBJECT, so ANY name added to a pack reds it regardless of value — re-capturing the fixture would not help (a parent capture has no ray names either) and would move this suite's :149 commit pin. So the three DECLARED names are removed from the HEAD side and every other name still compares byte-for-byte. Their own compare is tests/driver-pack-ejectarays.test.js against a fixture captured at dc03fc6.
 const fnv = (arr) => { const b = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength); let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193) >>> 0; } return h; };
 
 // ── The corpus: the game's own bodies, read as the game mounts them ─────────────────────────────
@@ -153,7 +155,7 @@ describe('AC-1 — the pack contract learns exactly ONE new value shape and noth
       const was = PACK_FIXTURE.bodies[b.id];
       expect(was, b.id).toBeDefined();
       for (const name of Object.keys(was)) {
-        expect(now[name], `${b.id} ${name}`).toEqual(was[name]);
+        expect(noRays(now[name]), `${b.id} ${name}`).toEqual(was[name]);
         compared++;
       }
       // the ONLY new name on any body is stormDeck, and only on gas bodies
@@ -166,7 +168,7 @@ describe('AC-1 — the pack contract learns exactly ONE new value shape and noth
       const dFake = { ...fp, _systemSeed: 'preset', _ordinal: name, radius: 1 };
       const now = resolvedPacks(cond, { ...labPackCtx(dFake, cond, MESH), rotationHours: fp.rotationHours ?? 24 });
       const was = PACK_FIXTURE.presets[name];
-      for (const p of Object.keys(was)) { expect(now[p], `${name} ${p}`).toEqual(was[p]); compared++; }
+      for (const p of Object.keys(was)) { expect(noRays(now[p]), `${name} ${p}`).toEqual(was[p]); compared++; }
     }
     expect(compared).toBeGreaterThan(600);
   });

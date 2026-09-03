@@ -371,6 +371,7 @@ export const ROCKY_SURFACE_UNIFORMS = Object.freeze([
   // sides answer different questions, one drawn and one derived, and the ledger row is what records
   // that. MEASURED over `lab-procedural-0…199`: 0 of 1160 non-gas bodies agree.
   'uNoiseScale',   'uCoarseCut',   // ⭐ 22 -> 23, 2026-08-26. Unlike `uNoiseScale` above, this name has NO legacy counterpart at all — the game has never had a term for 'how much large-scale relief was erased', so there is nothing for it to reach byte-identity WITH. It is new physics, not a port.
+  'uRayBrightness', 'uRayCount', 'uRaySharp',   // ⭐⭐ 23 -> 26, 2026-09-03 — F3's RAY HALF (workstream wire-ejecta-rays-lab-into-game). These three arrive through `craterDriverBlock`, exactly as the ten impact names above do, so they land on BOTH packs' sets on the same day and neither pack can carry a name the other does not. ⛔ Unlike every other name in the block they are read off the CONDITION, not off `craterUniformsFrom` — its frozen `CRATERS_OFF` has no ray key and four AIRLESS moons in the corpus return it. The declared count at tests/driver-pack-rockysurface.test.js:1097 moves with this line.
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────

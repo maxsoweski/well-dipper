@@ -782,7 +782,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // high-albedo streaks from YOUNG craters, and AIRLESS-ONLY (an atmosphere weathers
   // them away → gate hard on hasAtmo). Fade with erosion (rays are the first thing to
   // go as a surface ages). Airless + pristine → bright; any atmosphere → 0.
-  const rayBrightness = clamp01(1 - erosion) * (hasAtmo ? 0 : 1);
+  const rayBrightness = rayBrightnessOf(d);   // ⭐ 2026-09-03 — THE LAW MOVED, THE LINE RIDES. The expression that stood here (`clamp01(1 - erosion) * (hasAtmo ? 0 : 1)`) is now src/worldengine/base/ejectaRays.js `rayBrightnessOf`, so the port's crater driver block can read it without re-typing it. This line is cited by symbol from the PLAN and the F3 card; the call replaces the expression IN PLACE and `hasAtmo`/`erosion` above are still the inputs — `rayBrightnessOf(d)` re-reads both off the same bundle. Byte-identity over 18 presets + 156 bodies: tests/fixtures/ray-lab-baseline.json, captured at dc03fc6 before the move.
 
   // ── F1 mountains / ranges (Stage-C step 3, Relief domain — relief doc §F1.b) ─
   // Ridged-multifractal base relief, the layer every other relief feature sits on.
@@ -1118,7 +1118,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
 // importer working unchanged; tests/pack-contract.test.js pins single-definition by identity with
 // `toBe`, which a copy cannot satisfy even when its numbers are byte-identical. ⚠ The `import`
 // sits HERE, not at the top (imports hoist): the edit is LINE-COUNT-NEUTRAL so §10 refs still hold.
-import { R_EARTH_KM, featureFrequencyFromKm } from './featureScale.js';
+import { R_EARTH_KM, featureFrequencyFromKm } from './featureScale.js'; import { rayBrightnessOf } from './ejectaRays.js';   // ⭐ THE RAY LAW RIDES THIS LINE (2026-09-03, workstream wire-ejecta-rays-lab-into-game). ⛔ NEVER A NEW IMPORT LINE: this file is cited by LINE from the PLAN, four suites and the port (labCore.js:644, :646, :785, :1098 among them), and an inserted line shifts every one of them. ES imports hoist, so the binding is live inside `deriveUniforms` 300 lines above.
 export { R_EARTH_KM, featureFrequencyFromKm };
 
 // Relief height → unit-sphere amplitude. EXACT: a height of h km on a body of real radius

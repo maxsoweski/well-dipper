@@ -51,7 +51,7 @@
 import { compositionClass } from '../base/e1Regime.js';
 import { craterRelevanceOf } from '../base/bombardment.js';
 import { craterUniformsFrom } from '../port/craterUniforms.js';
-import { sizeKm, scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js';
+import { sizeKm, scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js'; import { rayBrightnessOf, RAY_COUNT, RAY_SHARP } from '../base/ejectaRays.js';   // ⭐ 2026-09-03 F3's RAY HALF RIDES THIS LINE (workstream wire-ejecta-rays-lab-into-game). ⛔ NEVER A NEW IMPORT LINE: this file is cited by line from the PLAN, the ledger and four suites (craterDeck.js:109, :116-197, :220, :270, :282-285), and an inserted line shifts every one below it.
 
 // ── The two declared gate names ──────────────────────────────────────────────────────────────────
 // ⭐ NAMES, NOT HARDCODED 1.0s, and TWO of them rather than one, because the lab has two independent
@@ -194,6 +194,30 @@ export function craterDriverBlock(condition) {
     uEjectaRampart: cu.ejectaRampart,
     uEjectaAmp: cu.ejectaAmp,
     uEjectaLump: cu.ejectaLump,
+
+    // ── F3's RAY HALF (2026-09-03) — READ OFF THE CONDITION, NOT OFF `cu` ────────────────────────
+    // ⛔ AND THAT IS THE DECISION, NOT AN OVERSIGHT. Every line above forwards `craterUniformsFrom`;
+    // these three may not, because that producer is TOTAL and returns the frozen
+    // src/worldengine/port/craterUniforms.js:88 `export const CRATERS_OFF = Object.freeze({`
+    // for any body whose schedule does not fire — a frozen object with NO ray key, on 54 corpus
+    // bodies. Adding one to it would make a pure condition law inherit the crater schedule's
+    // fired/not-fired branch: four AIRLESS moons in this corpus are CRATERS_OFF (rocky-13 p3m0 and
+    // p4m0, rocky-14 p3m0, rocky-19 p0m0) and would silently lose their rays. So the ray law reads
+    // the CONDITION directly, exactly as `rel = craterRelevanceOf(condition)` does one step above.
+    // ⚠ NO `rel` MULTIPLY, unlike `uEjectaStrength` two names up — the lab's own per-frame writer
+    // multiplies the apron by relevance (world-engine-lab.html:5361) and the rays by nothing
+    // (:5365). Measured, mirrored. The rays still only RENDER where craters do, because
+    // src/worldengine/shaders/height.glsl.js:2190 `      float rayField(vec3 pos){`
+    // hosts them on `step(1.0 - uCraterDensity, ch.x)` — the SHADER's multiply, not this block's.
+    // ⭐ THE GATE IS `EJECTA_GATE`, SHARED WITH THE APRON: the lab's ✓ ejecta checkbox drops both.
+    uRayBrightness: scalar(rayBrightnessOf(condition), { gate: EJECTA_GATE }),
+    // ⭐ THE TWO CONSTANTS ARE WRITTEN, NOT TRUSTED AS DEFAULTS — the F2 precedent one family over,
+    // where `uTerraceCount: cu.terraceCount` is a constant the pack writes. A default the pack does
+    // not write is a value no test can catch drifting; src/worldengine/shaders/uniforms.js:178-179
+    // happens to declare the same 6 and 8 today, and `tests/driver-pack-ejectarays.test.js` is what
+    // keeps that a coincidence rather than a dependency.
+    uRayCount: RAY_COUNT,
+    uRaySharp: RAY_SHARP,
   };
 
   return { drivers, cu, rel };
@@ -282,6 +306,7 @@ export const CRATER_DECK_ENTRY = Object.freeze({
 export const CRATER_DECK_UNIFORMS = Object.freeze([
   'uCraterDensity', 'uCraterScale', 'uCraterAmp', 'uCraterComplexD', 'uCraterRelaxation',
   'uTerraceCount', 'uEjectaStrength', 'uEjectaRampart', 'uEjectaAmp', 'uEjectaLump',
+  'uRayBrightness', 'uRayCount', 'uRaySharp',   // ⭐ 10 -> 13, 2026-09-03 (F3's ray half, workstream wire-ejecta-rays-lab-into-game). The three names the block reads off the CONDITION rather than off `craterUniformsFrom` — see the note at the emit. They join BOTH packs' sets by construction, which is what "one block, two packs" means: `ROCKY_SURFACE_UNIFORMS` gained the same three on the same day.
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────

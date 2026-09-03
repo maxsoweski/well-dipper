@@ -266,14 +266,15 @@ describe('D — the wire reaches a real lab material', () => {
       const before = Object.fromEntries(CRATER_DECK_UNIFORMS.map((n) => [n, built.material.uniforms[n].value]));
       applyDriverPacks(built.material, b.cond, labPackCtx(b.d, b.cond, undefined));
       const g = gameCraters(b.cond);
-      for (const n of CRATER_DECK_UNIFORMS) {
+      for (const n of CRATER_DECK_UNIFORMS) {   // ⭐ 2026-09-03 — the guard below, not the list, is what excludes F3's three ray names (workstream wire-ejecta-rays-lab-into-game, AC-0)
+        if (!(n in GAME_NAME)) continue;   // ⛔ `uRayBrightness`/`uRayCount`/`uRaySharp` are read off the CONDITION, not off `craterUniformsFrom`, so this row's producer has NO counterpart key for them — `g[undefined]` is not a value to compare against. That is the design, not a gap: `CRATERS_OFF` (craterUniforms.js:88-97) is frozen and has no ray key, and four AIRLESS corpus moons return it. Their assertions live in tests/driver-pack-ejectarays.test.js, which pins gas at exactly 0 through THIS pack.
         const after = built.material.uniforms[n].value;
         expect(after, `${b.id}/${n}: the lab material must agree with the game`).toBe(g[GAME_NAME[n]]);
         if (after !== before[n]) moved++;
         agreed++;
       }
     }
-    expect(agreed).toBe(GAS.length * CRATER_DECK_UNIFORMS.length);
+    expect(agreed).toBe(GAS.length * Object.keys(GAME_NAME).length);   // ⭐ 2026-09-03 — was `CRATER_DECK_UNIFORMS.length`; the two were the same number until F3's ray half joined the block. The count that belongs here is the number of names this row's producer ANSWERS (10), which is exactly `GAME_NAME`'s size.
     // …and it really MOVED the material rather than agreeing by luck with the defaults.
     expect(moved, 'the factory schedule must actually be displaced on the gas half').toBeGreaterThan(GAS.length);
   });

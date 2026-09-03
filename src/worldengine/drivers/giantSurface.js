@@ -72,7 +72,7 @@
 //     bodies that ALREADY receive all thirteen of these names. src/worldengine/drivers/index.js:408 `    // ⛔ COLLISION IS AN ERROR, NOT A LAST-WRITER-WINS. Two packs claiming one body is legal by`
 //     makes that a throw at a player, not a merge.
 // The complement predicate has neither problem, and it is the shape this tree already uses twice:
-// src/worldengine/drivers/craterDeck.js:272 `    applies: (condition) => compositionClass(condition) === 'gas',` and its solid mirror.
+// src/worldengine/drivers/craterDeck.js:296 `  applies: (condition) => compositionClass(condition) === 'gas',` and its solid mirror.
 //
 // ⛔ WHAT IS DELIBERATELY NOT HERE — read this before adding a uniform.
 //  1. THE LIMB PAIR. `uLimbExponent` and `uLimbColor` are already written on every gas body by
@@ -92,7 +92,7 @@
 //     src/worldengine/drivers/rockySurface.js:48 `THE OFFSET FAMILY IS NOW FORWARDED — AND STILL NOT DERIVED.` and not restated here.
 //
 // ⭐ TWO OF THE THREE FAMILIES ARE EXPORTED AS SHARED BLOCKS AND `rockySurface` IMPORTS THEM, which
-// is B3 leg 2's shape one family over: src/worldengine/drivers/craterDeck.js:272 `    applies: (condition) => compositionClass(condition) === 'gas',`'s pack holds
+// is B3 leg 2's shape one family over: src/worldengine/drivers/craterDeck.js:296 `  applies: (condition) => compositionClass(condition) === 'gas',`'s pack holds
 // `craterDriverBlock` and the solid pack imports it, so ten lines have ONE expression rather than
 // two copies. The terminator triple is NOT extracted, and the asymmetry is deliberate: its LAW
 // already lives in a shared module both front-ends import, the only decision in its three lines is
