@@ -1,0 +1,136 @@
+{
+  "workstream": "wire-terminator-gradient-lab-into-game",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
+  "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — F35 row (§3 :99, ◑ 3/4 → ✅ 4/4, note filled in place); the record goes in a '§ THE TERMINATOR, CONVERGED' addendum appended at EOF (§10: line-count-neutral below :24; 1256 lines at scoping)",
+  "ruling": "Max 2026-07-16 (planet-lod-lab-ux contract): 'We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway.' — Max 2026-08-22: 'the important thing here is the game and lab end up working the same.' — Max 2026-09-02: wire everything before developing anything (the lighting engine is parked).",
+  "scopingRead": "scoping-live-pair-2026-09-03.json — rocky-2, second planet (body.planet.22418e, rocky, air), frozen frame, lit fraction 0.98: uTermStrength 0.15 on all six planets; ON (0.15) vs OFF (0) rim annulus 0.85R–1.00R: 39,564 px, 0.096 % moved, max 9/255, floor 0; disc interior control 0. Lab: terminatorEnabled false on every preset since 2026-07-16.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "One definition, one producer each. (a) `uTermBypass` and `uLimbBypass` are written in `buildLabPlanetMaterial` on the existing `uniforms.uLevels = POSTERIZE_LEVELS` line from `TERM_BYPASS` / `LIMB_BYPASS` (both `false`) declared beside `POSTERIZE_LEVELS`; the lab's state literal (world-engine-lab.html:1143-1144) imports the same two names; no pack emits either name. (b) The lab's retyped width law at world-engine-lab.html:2505 is deleted (line padded with `//`), and `terminatorOpticsOf` is the only width producer in the repo. Both byte-inert: the two bypass uniforms read 0 on every game material before and after; the lab's per-preset state (termWidth on every path) deep-equals a fixture captured before the change.",
+      "verifyVia": {
+        "input": "Static: grep src/ and the lab for a second `termWidthFor`-shaped expression and for `uTermBypass`/`uLimbBypass` writers outside LabPlanetMaterial.js and the lab's per-frame writer; headless: build a lab material for every corpus body and preset and read both bypass uniforms; `scripts/capture-term-lab-baseline.mjs` at the parent → `tests/fixtures/term-lab-baseline.json`, re-run at HEAD. [CONTROL] set TERM_BYPASS true in a test copy and show the uniform follow; perturb the width law's pressure input and show the fixture compare red.",
+        "observable": "Deny-scan 0 hits; both bypass uniforms 0 on every material; fixture max delta 0 on every preset; both controls red/follow as stated."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-1",
+      "statement": "The gate is converged, by one declared value. `TERMINATOR_ENABLED = false` is declared once in solidOptics.js (the 2026-07-16 ruling on the line) and `gatesFor(entry)` applies a declared ruling map `GATE_RULINGS = { terminator: TERMINATOR_ENABLED }` over ALL_ON: every declared gate true except the ruled ones; the absent-gate throw in writePackUniforms stays alive. The lab's `terminatorEnabled` initial state reads the same constant. Result: over the 24-seed corpus (124 solid + 32 gas) and the 18 presets, `uTermStrength` resolves to 0 on every body under the game policy while `uTermWidth` and `uTermColor` still resolve to their derived values; the aurora gate is still true.",
+      "verifyVia": {
+        "input": "Headless: resolve every pack on the corpus and presets under gatesFor; assert the gates map for solidOptics = { terminator: false, aurora: true } and for giantSurface = { terminator: false }; [CONTROL] flip TERMINATOR_ENABLED to true in a test copy and show 0.15 on the 68 air-bearing solid bodies and the 32 gas bodies and 0 on the 56 airless (today's shipped state, reproduced as the control); [CONTROL] an undeclared gate name still throws PackContractError; read the lab's state literal source for the import.",
+        "observable": "uTermStrength 0 on 156/156 under the game policy; width/colour unchanged vs the parent fixture; aurora true; both controls behave as stated; the lab imports the constant (allow-scan)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-2",
+      "statement": "Nothing else moves. Every driver every existing pack emits, other than `uTermStrength`, resolves identically before and after on the corpus and presets (fixture captured at the parent); Instrument A shows only the new suite; Instruments B and C green (C reports the one intended value change: uTermStrength 0.15 → 0 on air-bearing and gas bodies); every line+symbol citation resolves (`--check-citations` LAST before each commit); the full suite shows the parent's own failing set and none new.",
+      "verifyVia": {
+        "input": "Headless: `tests/fixtures/pack-drivers-baseline.json` re-captured at the parent, deep-compare at HEAD with uTermStrength excluded and reported separately; Instruments A/B/C; the citation check; the full suite diffed per test ID against a clean parent worktree.",
+        "observable": "Zero drivers other than uTermStrength differ; uTermStrength's change set = exactly the air-bearing solid + gas bodies; A +1 file; B 8/8; C the one named delta; citations resolve; suite failing set = parent's."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-3",
+      "statement": "LIVE terminator A/B (key `.`) on a planet with air, at a crescent. On rocky-2's second planet (rocky, air) framed at 3 radii under a frozen frame with the terminator across the disc: OFF (the shipped state, uTermStrength 0) vs ON (the pack's law value written by the instrument) differ inside the disc along the day/night line and 0 px outside the silhouette; an OFF/OFF floor pair is 0; an airless moon moves 0 px under the key (its law value is 0); a gas body moves > 0 (its law value is 0.15); restore is exact. The readback `_labTerm.record(surface)` returns the pack's resolved law value and the shipped uniform value (0).",
+      "verifyVia": {
+        "input": "chrome-devtools on lane A's server + Chrome :9223, never Sol, `_autoNav` stopped, clean reload before every measured pair, `freezeFrame()` then `frameBody` twice, the camera placed so the terminator crosses the disc (lit fraction between 0.3 and 0.7, read from frameBody's lighting); `_lab.shotState({ body })` sidecar; page screenshots through the compositor path; `scripts/shot-diff.mjs` (region: disc) and the pngjs outside-silhouette counter.",
+        "observable": "Pixel counts OFF/ON, floor, outside = 0, airless control 0, gas > 0, restore 0, recorded per body in `liveEvidence` beside the scoping pair (near-full phase, 0.096 % rim, max 9)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-4",
+      "statement": "The lab in Chrome still authors. The lab loads with 0 script errors; on a preset with air the ✓ enabled checkbox turns `uTermStrength` from 0 to the driven value and back; the width slider reads the driven value on non-gas and gas presets after the retype deletion; the bypass checkboxes flip `uTermBypass` / `uLimbBypass` 0 ↔ 1; on an airless preset the strength stays 0 with the checkbox on. Restore every control flipped.",
+      "verifyVia": {
+        "input": "chrome-devtools on the lab page: read lil-gui states first, toggle via `.lil-controller.lil-boolean`, read the uniforms through the lab's material on Rocky, Venus, a gas preset and Moon/Mercury.",
+        "observable": "0 errors; the enable gate 0/value/0; widths match terminatorOpticsOf on each preset; bypass 0/1/0; airless 0; controls restored."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-5",
+      "statement": "MAX'S GATE (deferred-to-max, never agent-PASSed). On a planet with air, flying in with the day/night line in view, the `.` key: the warm twilight band appears (the lab's law value) and vanishes (what ships, per his 2026-07-16 'disable totally'). Does the razor terminator read right in the game while the lighting engine waits — or does he want the band back in the game in the meantime? His call with the key in hand; either answer is one constant in one file and the lab follows it. He judges the CONVERGENCE, not the band's quality (which he has already ruled on).",
+      "verifyVia": {
+        "input": "Max: deep link `?system=rocky-2`, fly toward the second planet (0.72 R⊕, rocky, named in the orrery) so the day/night line crosses the disc, tap `.` while moving in; then the Saturnian (third planet out) at a crescent, tap `.` again.",
+        "observable": "His words."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/worldengine/base/terminatorOptics.js `terminatorOpticsOf(condition) -> { termStrength, termWidth, termColor }` (:47-50 the width law, :52 the 0.15 magnitude, :92-95) — the law, untouched",
+      "src/worldengine/drivers/solidOptics.js:61 `TERMINATOR_GATE`, :100-102 the triple, :149 gates, :159-163 SOLID_OPTICS_UNIFORMS, :199 the lab mirror ctx; src/worldengine/drivers/giantSurface.js:117 the import, :296-300, :358, :371, :437",
+      "src/worldengine/drivers/index.js:64-86 `gatesFor` / GATE_POLICY_ALL_ON (ruling #4, 2026-08-06) — edited by riding lines; :183-202 and :241-267 the two entries",
+      "src/worldengine/port/writePackUniforms.js:180 the absent-gate throw (must stay alive)",
+      "src/rendering/LabPlanetMaterial.js:208-211 `buildLabPlanetMaterial`, the `uLevels = POSTERIZE_LEVELS` display-policy line the bypass pair rides",
+      "src/worldengine/shaders/uniforms.js:43-51 (uLimbBypass at :43 outside F34's block; the F35 block :47-51); planetShaders.glsl.js:943-959 the band and its posterize route on uTermBypass; height.glsl.js:43",
+      "world-engine-lab.html:1053 `terminatorEnabled: false`, :1143-1144 the bypass defaults, :2497-2511 (the :2505 retype), :2630 / :2821 the supersessions, :4008-4012 the GUI, :5044-5046 the per-frame writer, :5351-5352 the bypass writes",
+      "docs/WORKSTREAMS/planet-lod-lab-ux-2026-07-15/contract.json:6 (the 2026-07-16 ruling), docs/FEATURES/step6-parity-ledger.md:131 (P-11: 'the CONSTANT 0.15 on all 266'), docs/WORKSTREAMS/one-route-shared-driver-path/AC2-pack-law-survey.md:101-102 (the 2026-08-22 ruling)",
+      "src/rendering/labStormAB.js — the A/B key + `_lab*` instrument idiom the terminator A/B copies"
+    ],
+    "outputs": [
+      "`TERMINATOR_ENABLED`, `GATE_RULINGS` (drivers/index.js), `TERM_BYPASS` / `LIMB_BYPASS` (beside POSTERIZE_LEVELS) — each imported by the lab",
+      "uTermStrength 0 on every game body under the game policy; uTermBypass / uLimbBypass written (0) on every lab material; the lab's :2505 retype gone",
+      "The `.` A/B key + `globalThis._labTerm` instrument (toggle, off, record(surface))",
+      "tests/driver-pack-terminator.test.js with executed [CONTROL]s; tests/fixtures/term-lab-baseline.json; scripts/capture-term-lab-baseline.mjs",
+      "PLAN: F35 row → ✅ 4/4 with the note filled (expanded in place); '§ THE TERMINATOR, CONVERGED' addendum at EOF; §7 gains one line on F52 / the lighting engine as the terminator's owner",
+      "docs/FEATURES.md row (Rule 3), docs/NOW.md, docs/FEATURES/cards/F35-terminator-gradient.md status line"
+    ],
+    "mustStayWorking": [
+      "uTermWidth and uTermColor still derived and written on every body (the wire's three stay wired; only the strength's gate flips)",
+      "The aurora gate and every other declared gate true under the game policy; the absent-gate throw alive",
+      "F34 limb glow (uLimbStrength/uLimbWidth) unchanged; posterize (uLevels) unchanged",
+      "Every other pack's drivers byte-identical on the corpus and presets (fixture)",
+      "The lab's authoring surface: ✓ enabled, the bypass checkboxes, driven sliders `.listen()`, the shrink-only ratchet",
+      "Instruments A / B / C; every line+symbol citation into drivers/index.js, solidOptics.js, LabPlanetMaterial.js and the lab",
+      "The PLAN's line count below :24 (1256 lines; §10)",
+      "The full suite — the parent's failing set, none new",
+      "Sol and the legacy programs untouched (Planet.js:552 ×3, Moon.js:515, MaterialBodyShader.js:333, AsteroidBelt.js:143)"
+    ]
+  },
+  "scope": {
+    "paths": [
+      "src/worldengine/drivers/solidOptics.js",
+      "src/worldengine/drivers/index.js",
+      "src/rendering/LabPlanetMaterial.js",
+      "src/rendering/labTermAB.js",
+      "src/objects/Planet.js",
+      "world-engine-lab.html",
+      "scripts/capture-term-lab-baseline.mjs",
+      "tests/fixtures/term-lab-baseline.json",
+      "tests/driver-pack-terminator.test.js",
+      "docs/FEATURES/one-pipeline-two-frontends-PLAN.md",
+      "docs/FEATURES/cards/F35-terminator-gradient.md",
+      "docs/FEATURES.md",
+      "docs/NOW.md"
+    ],
+    "notInScope": [
+      "The lighting engine / F52 (terminator for all objects) — parked by the 2026-09-02 ruling",
+      "Any change to terminatorOpticsOf's law or values (0.15, the width ramp, the colour)",
+      "The legacy terminator programs in Planet.js / Moon.js / MaterialBodyShader.js / AsteroidBelt.js",
+      "Sol (excluded by provenance)"
+    ]
+  },
+  "deviations": [],
+  "verifyWorkflow": {
+    "scriptPath": "/home/ax/projects/personal-os-improvements/dev-collab/workflows/verify-workstream.mjs",
+    "args": {
+      "contractPath": "/home/ax/projects/well-dipper/docs/WORKSTREAMS/wire-terminator-gradient-lab-into-game/contract.json",
+      "mode": "full",
+      "liveBranch": "main"
+    },
+    "note": "The workflow audits headless ACs and the recorded liveEvidence; it cannot drive Chrome. AC-3 / AC-4's live clauses are driven by working-Claude from the main thread; AC-5 is always deferred-to-max. Every workflow agent pins model opus (Max, 2026-09-03)."
+  }
+}

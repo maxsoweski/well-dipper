@@ -1,0 +1,159 @@
+{
+  "workstream": "wire-ejecta-rays-lab-into-game",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
+  "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — F3 row (§3 :67, ◑ 4/7 → ✅ 7/7); §7 'Queue (c)' bullet (:574) and the queue list (:133) annotated in place with the 2026-08-20 correction (r-rows-decision-packet-2026-08-20.md:441-444); the record goes in a '§ THE EJECTA RAYS, WIRED' addendum appended at EOF (§10: line-count-neutral below :24; 1256 lines at scoping)",
+  "ruling": "Max 2026-09-02: 'I want to continue wiring up all the features from the world engine before we try to further develop any of them' — the ray law moves verbatim; the full-disk ray treatment and the cell-boundary truncation carry-forward are NOT this workstream's gate",
+  "scopingRead": "scoping-corpus-2026-09-03.json — 24 rocky-* seeds, 156 bodies: 124 solid (66 planets, 2 planet-class moons, 56 plain moons) + 32 gas; condition.atmosphere null on 56/56 plain moons and non-null on 68/68 planets+pm (min pressure 0.105 bar); rayBrightness > 0 on exactly the 56 (min 0.70, median 0.84, max 0.94, 0 zeros); deriveUniforms and airlessnessOf agree 124/124",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "One pipeline: the ray law has ONE definition under src/ that both front-ends import. New module `src/worldengine/base/ejectaRays.js` exports `rayBrightnessOf(condition)` — the lab's law verbatim: clamp01(1 − erosion) × (condition.atmosphere ? 0 : 1) with erosion = surfaceHistory.erosion ?? surfaceHistory.erosionLevel ?? 0 — plus `RAY_COUNT = 6` and `RAY_SHARP = 8`. `labCore.deriveUniforms` calls it (the inline expression at labCore.js:785 is gone, the line rides in place); `craterUniformsFrom` returns `rayBrightness` from the same import; the crater driver block (craterDeck.js:116-197, shared by craterDeckPack and rockySurfacePack) emits `uRayBrightness: scalar(cu.rayBrightness, { gate: EJECTA_GATE })`, `uRayCount: RAY_COUNT`, `uRaySharp: RAY_SHARP`; the lab's state literal (world-engine-lab.html:1175-1176) takes the two constants from the import. Both packs' published uniform-name sets gain exactly those three names and nothing else.",
+      "verifyVia": {
+        "input": "Static: deny-scan src/ and the lab for a second `1 - erosion` ray expression and for literal `rayCount: 6` / `raySharp: 8`; allow-scan for the three import sites; assert the two packs' emitted-name sets on the corpus (set membership, real pack outputs) = the parent's sets ∪ {uRayBrightness, uRayCount, uRaySharp}; run tests/driver-pack-craterdeck / rockysurface suites unchanged.",
+        "observable": "Deny-scan 0 hits; the three import lines present; both packs' sets grow by exactly the three names; sibling suites green byte-for-byte; the registry membership fence in drivers/index.js passes with no new entry (the block is inside two existing packs)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-1",
+      "statement": "Refactor byte-identity in the LAB. For every driver preset (18) and every corpus body (156), `deriveUniforms(condition).rayBrightness` at HEAD deep-equals a fixture captured from the lab's derivation at the parent commit BEFORE any src edit; `deriveUniforms(...).rayCount/raySharp` are absent before and after (they were never derived) and the lab's state literal reads 6 and 8 through the import. Any deviation is RECORDED in `deviations`, never absorbed.",
+      "verifyVia": {
+        "input": "Headless: `scripts/capture-ray-lab-baseline.mjs` at the parent → `tests/fixtures/ray-lab-baseline.json`; re-run at HEAD, deep-compare. [CONTROL] perturb the erosion input by 0.01 on an airless body and show red; set atmosphere non-null on an airless body and show red (the gate flips to 0).",
+        "observable": "Max delta exactly 0 on every preset and body; both controls red; `deviations` empty or each field named with its cause."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-2",
+      "statement": "The population, and the two laws the pack must mirror. Over the 24-seed corpus the resolved `uRayBrightness` is > 0 on exactly the bodies whose condition has no atmosphere and exactly 0 on every body with air and on every gas body; RECORD the counts against the scoping read (56 of 124 solid, all plain moons; 0 planets; 0 planet-class moons; 32/32 gas at 0; min 0.70 / median 0.84 / max 0.94). PIN only the floor: airless count ≥ 40, every airless body > 0.5, every air-bearing and gas body exactly 0. The rays do NOT carry `craterRelevance` while the apron does (the lab's :5365 vs :5361): on a body with rel < 1, `uRayBrightness` equals `rayBrightnessOf(cond)` unscaled and `uEjectaStrength` equals cu.ejectaStrength × rel. Seed identity: the same body resolved twice gives the same value.",
+      "verifyVia": {
+        "input": "Headless corpus run writing `$TMPDIR/ray-corpus.json` (vitest hides console on pass); a hand-built airless condition with erosion 1 → 0 [CONTROL of the fade]; the corpus with every atmosphere forced non-null → 0 of 124 [CONTROL — the PLAN's old premise, reproduced as the control]; a body with relevance < 1 asserted both ways.",
+        "observable": "The recorded table matches the scoping file or the differences are explained in the PLAN addendum; floors hold; both controls behave as stated; the rel asymmetry asserted; identical on re-resolve."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-3",
+      "statement": "Nothing else moves. Every driver every existing pack emits — over the 24-seed corpus (124 solid + 32 gas) and the 18 driver presets — resolves to a value identical before and after the change (fixture captured at the parent); with the ejecta gate OFF the three new drivers resolve to 0 / 6 / 8 and the material's render is the lab's shipped off state; Instrument A (per-test-ID set diff against a baseline recorded from a clean parent worktree) shows only the new suite; Instruments B and C green; every line+symbol citation resolves (`node tools/port-uniform-delta.mjs --check-citations`, run LAST before each commit); the full suite `npx vitest run --dir tests` shows the parent's own failing set and none new.",
+      "verifyVia": {
+        "input": "Headless: `tests/fixtures/pack-drivers-baseline.json` re-captured at the parent; deep-compare at HEAD; gate-OFF resolve; Instruments A/B/C; the citation check; the full suite diffed per test ID against a clean worktree of the parent.",
+        "observable": "Zero pre-existing drivers differ; the OFF arm resolves as stated; A: +1 file only, failing set unchanged; B 8/8; C zero delta on shipped shared uniforms; citations all resolve; suite failing set = parent's."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-4",
+      "statement": "LIVE rays A/B (key `Y`) on an airless moon in a procedural system. On rocky-13's p3m1 (rocky, 1.14 R⊕) and one ice moon of the same system, framed at 3 radii under a frozen frame: ON vs OFF (uRayBrightness 0 on every live lab material — the lab's own off state) differ by > 0 px inside the disc and 0 px outside it; an ON/ON floor pair is 0; a sabotage arm (1.0 written onto a body WITH air) is a THIRD state on that body; restore is exact; an air-bearing planet of the same system and a gas body move 0 px under the key. The readback `_labRays.record(surface)` returns the pack's resolved value and the material's uniform equals it. Re-approach: leaving the system and returning gives an identical readback.",
+      "verifyVia": {
+        "input": "chrome-devtools on lane A's server + Chrome :9223, never Sol, `_autoNav` stopped first, clean reload before every measured pair, `freezeFrame()` then `frameBody` twice (the second after the orrery zoom, ≈ 5 s post-spawn); `_lab.shotState({ body })` sidecar with the disc on screen; page screenshots through the compositor path; `scripts/shot-diff.mjs` with the sidecar (region: disc); the pngjs per-pixel counter (threshold 2/255) counting pixels outside the silhouette.",
+        "observable": "Pixel counts ON/OFF, floor, sabotage-vs-OFF and sabotage-vs-ON, outside-the-disc = 0, air control = 0, gas control = 0, recorded per body in `liveEvidence`; readback equals the pack value on both moons; re-approach deep-equals."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-5",
+      "statement": "The lab in Chrome still authors. `http://localhost:5175/well-dipper/world-engine-lab.html` loads with 0 script errors (favicon 404 only); on the Frozen preset the crater folder's ✓ ejecta checkbox drops `uRayBrightness` to 0 and restores it; the ray count and sharpness sliders read 6 and 8 (the imported constants) and moving one moves the uniform; 🎲 reroll re-derives `state.rayBrightness` through `applyDrivers`; on a preset with air `uRayBrightness` reads 0. Restore every control flipped (the lab persists GUI state).",
+      "verifyVia": {
+        "input": "chrome-devtools on the lab page: read the lil-gui checkbox state first, toggle via `.lil-controller.lil-boolean`, read `uniforms.uRayBrightness/uRayCount/uRaySharp` through the lab's material, reroll, re-read.",
+        "observable": "0 errors; the checkbox gates 0/value; sliders read 6/8 and drive the uniforms; reroll changes the derived value on Frozen; air preset reads 0; controls restored."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-6",
+      "statement": "Cost recorded: per-body pack resolve time over the corpus unchanged within noise (the law is a subtraction and a multiply); zero VRAM (three uniforms already declared on every lab material); no worker; no new attribute; no new ctx field in Planet.js's labPackCtx.",
+      "verifyVia": {
+        "input": "The AC-2 headless run's timing column vs the storm scoping read (0.5 ms mean / 3.2 ms max per body incl. pack #1); a grep of labPackCtx; the AC-3 instrument diff for attributes.",
+        "observable": "Timings written to the corpus file and quoted in the PLAN addendum; labPackCtx unchanged; no new vertex attribute."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-7",
+      "statement": "MAX'S GATE (deferred-to-max, never agent-PASSed). Flying in on an airless moon in a procedural system with the `Y` key: do the bright rays read as part of the cratered surface — spokes thrown from their own young craters, lit only on the day side — and do they stay off on the worlds with air? He judges the WIRE. The card's carry-forward — the cell-boundary ray truncation ('an obvious clipped square' at full-disk view) — and whether the rays are GOOD are lab items deferred by his 2026-09-02 ruling; visible here, and not this gate.",
+      "verifyVia": {
+        "input": "Max: deep link `?system=rocky-13`, fly to the fourth planet's moons (the 1.14 R⊕ rocky moon and the 1.27 R⊕ volcanic one), tap `Y` while moving in; then any planet of the system with air and tap `Y` again (nothing should change).",
+        "observable": "His words."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/worldengine/base/labCore.js:644 `hasAtmo = !!d.atmosphere`, :646 the dual-spelling erosion read, :785 the ray law (the producer this wire moves), :1098 the emit",
+      "src/worldengine/port/craterUniforms.js:160-193 `craterUniformsFrom` (the port's crater derivation the pack reads as `cu`; gains one field)",
+      "src/worldengine/drivers/craterDeck.js:116-197 the shared crater driver block (`EJECTA_GATE`, `rel`), :270-285 craterDeckPack (gas) and src/worldengine/drivers/rockySurface.js:251,:347-374 rockySurfacePack (non-gas) — the two consumers of the block",
+      "src/worldengine/port/conditionFromBody.js:376-394 `atmosphereFromPlanet` (null on plain moons: MoonGenerator.js:217 writes no physics; null on `retained === false`, unreachable) — the input whose population this scope measured",
+      "src/worldengine/shaders/height.glsl.js:111-118 the seven F3 uniforms, :2190-2206 `rayField`; planetShaders.glsl.js:516 its call, :787 `rayBright` in the lit surface; uniforms.js:172-179 the defaults (6 / 8 already)",
+      "world-engine-lab.html:1170-1176 the state literal, :2040-2042 the copy from deriveUniforms, :3373-3380 the crater folder sliders, :5360-5367 the per-frame writer (rays gated on ejectaEnabled, no relevance multiply)",
+      "src/rendering/labStormAB.js — the A/B key + `_lab*` instrument idiom (I) the ray A/B copies; the ray instrument registers every lab material (solid, moon, gas)",
+      "docs/WORKSTREAMS/wire-ejecta-rays-lab-into-game/scoping-corpus-2026-09-03.json — the population AC-2 re-measures"
+    ],
+    "outputs": [
+      "src/worldengine/base/ejectaRays.js (rayBrightnessOf, RAY_COUNT, RAY_SHARP) imported by labCore.js, craterUniforms.js and the lab",
+      "The three uRay* uniforms carried by both crater-block packs on every admitted body: > 0 on the 56 corpus moons, 0 on the 68 with air and the 32 gas",
+      "The `Y` A/B key + `globalThis._labRays` instrument (toggle, off, record(surface), sabotage(surface) that never persists)",
+      "tests/driver-pack-ejectarays.test.js with executed [CONTROL]s; tests/fixtures/ray-lab-baseline.json captured at the parent; scripts/capture-ray-lab-baseline.mjs",
+      "PLAN: F3 row → ✅ 7/7 (expanded in place); :133 and :574 annotated with the 2026-08-20 correction and the conditionFromBody.js path; '§ THE EJECTA RAYS, WIRED' addendum at EOF",
+      "docs/FEATURES.md row (Rule 3), docs/NOW.md, docs/FEATURES/cards/F03-ejecta-rays.md status line",
+      "docs/FEATURES/mvp-spine-lab-quality-backlog.md: one world-gen row (terrestrial plain moons' physics-less atmosphere record: airless to the adapter, air-bearing to the erosion law)"
+    ],
+    "mustStayWorking": [
+      "With the ejecta gate off the render is byte-identical to today on every body; with it on, every body with air renders exactly as today (uRayBrightness 0 is the shipped state there)",
+      "The apron's four uniforms and the crater family's ten: unchanged values on every corpus body (fixture)",
+      "craterDeckPack / rockySurfacePack predicates and gates unchanged; no registry entry added; the collision throw untouched",
+      "The lab's authoring surface: ✓ ejecta, the two sliders, 🎲, driven sliders `.listen()`, the shrink-only ratchet tests/lab-surface-ratchet.test.js",
+      "Instruments A / B / C green; every line+symbol citation resolves (labCore.js:785 is cited by symbol — the line rides in place)",
+      "The PLAN's line count below :24 (1256 lines; §10)",
+      "The full suite `npx vitest run --dir tests` — the parent's failing set, none new",
+      "Sol untouched (legacy Moon.js shader declares no uRay*)"
+    ]
+  },
+  "scope": {
+    "paths": [
+      "src/worldengine/base/ejectaRays.js",
+      "src/worldengine/base/labCore.js",
+      "src/worldengine/port/craterUniforms.js",
+      "src/worldengine/drivers/craterDeck.js",
+      "src/worldengine/drivers/rockySurface.js",
+      "src/rendering/labRaysAB.js",
+      "src/objects/Planet.js",
+      "world-engine-lab.html",
+      "scripts/capture-ray-lab-baseline.mjs",
+      "tests/fixtures/ray-lab-baseline.json",
+      "tests/driver-pack-ejectarays.test.js",
+      "docs/FEATURES/one-pipeline-two-frontends-PLAN.md",
+      "docs/FEATURES/mvp-spine-lab-quality-backlog.md",
+      "docs/FEATURES/cards/F03-ejecta-rays.md",
+      "docs/FEATURES.md",
+      "docs/NOW.md"
+    ],
+    "notInScope": [
+      "The ray law itself: the full-disk ray treatment (Max's pending 2026-06-10 call), the cell-boundary truncation carry-forward, thin-air rays via airlessnessOf",
+      "The generator's physics-less terrestrial-moon atmosphere record (0 in this corpus) — logged as a world-gen row",
+      "F43 uFacetStrength / F46 habGate — still queue (c)",
+      "Any change to craterUniformsFrom's other outputs, the crater schedule or the apron law",
+      "Sol (excluded by provenance)"
+    ]
+  },
+  "deviations": [],
+  "verifyWorkflow": {
+    "scriptPath": "/home/ax/projects/personal-os-improvements/dev-collab/workflows/verify-workstream.mjs",
+    "args": {
+      "contractPath": "/home/ax/projects/well-dipper/docs/WORKSTREAMS/wire-ejecta-rays-lab-into-game/contract.json",
+      "mode": "full",
+      "liveBranch": "main"
+    },
+    "note": "The workflow audits headless ACs and the recorded liveEvidence; it cannot drive Chrome. AC-4 / AC-5's live clauses are driven by working-Claude from the main thread; AC-7 is always deferred-to-max. Every workflow agent pins model opus (Max, 2026-09-03)."
+  }
+}

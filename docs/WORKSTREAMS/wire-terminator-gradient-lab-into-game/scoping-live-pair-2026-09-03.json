@@ -1,0 +1,113 @@
+{
+  "tool": "shot-diff",
+  "a": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f35-on.png",
+  "b": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f35-off.png",
+  "floorA": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f35-floorA.png",
+  "floorB": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f35-floorB.png",
+  "sidecar": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f35-on.json",
+  "threshold": 2,
+  "image": {
+    "w": 1349,
+    "h": 844
+  },
+  "viewport": {
+    "w": 1349,
+    "h": 844,
+    "dpr": 1
+  },
+  "discPx": {
+    "cx": 674.5,
+    "cy": 422,
+    "r": 213.08
+  },
+  "declaredRegion": "rim",
+  "waivers": [],
+  "reproduction": {
+    "commit": null,
+    "seed": "rocky-2",
+    "body": "body.planet.22418e",
+    "planetType": 0,
+    "e1CompositionClass": "rocky",
+    "gameShaderVariant": "rocky",
+    "fps": 241,
+    "throttled": false
+  },
+  "regions": {
+    "full": {
+      "label": "full-frame",
+      "declarable": true,
+      "isDeclaredRegion": false,
+      "signal": {
+        "pixels": 1138556,
+        "movedPct": 0.0063,
+        "meanAbs": 0.0002,
+        "maxAbs": 9
+      },
+      "floor": {
+        "pixels": 1138556,
+        "movedPct": 0,
+        "meanAbs": 0,
+        "maxAbs": 0
+      },
+      "verdict": "SIGNAL ABOVE FLOOR",
+      "litPctA": null
+    },
+    "disc": {
+      "label": "disc",
+      "declarable": true,
+      "isDeclaredRegion": false,
+      "signal": {
+        "pixels": 142622,
+        "movedPct": 0.0266,
+        "meanAbs": 0.0008,
+        "maxAbs": 9
+      },
+      "floor": {
+        "pixels": 142622,
+        "movedPct": 0,
+        "meanAbs": 0,
+        "maxAbs": 0
+      },
+      "verdict": "SIGNAL ABOVE FLOOR",
+      "litPctA": 97.81
+    },
+    "rim": {
+      "label": "rim-annulus 0.85R–1.00R",
+      "declarable": true,
+      "isDeclaredRegion": true,
+      "signal": {
+        "pixels": 39564,
+        "movedPct": 0.096,
+        "meanAbs": 0.0029,
+        "maxAbs": 9
+      },
+      "floor": {
+        "pixels": 39564,
+        "movedPct": 0,
+        "meanAbs": 0,
+        "maxAbs": 0
+      },
+      "verdict": "SIGNAL ABOVE FLOOR",
+      "litPctA": 93.36
+    },
+    "discInterior": {
+      "label": "disc interior 0–0.85R (control)",
+      "declarable": false,
+      "isDeclaredRegion": false,
+      "signal": {
+        "pixels": 103058,
+        "movedPct": 0,
+        "meanAbs": 0,
+        "maxAbs": 0
+      },
+      "floor": {
+        "pixels": 103058,
+        "movedPct": 0,
+        "meanAbs": 0,
+        "maxAbs": 0
+      },
+      "verdict": "AT OR BELOW FLOOR",
+      "litPctA": 99.52
+    }
+  }
+}
