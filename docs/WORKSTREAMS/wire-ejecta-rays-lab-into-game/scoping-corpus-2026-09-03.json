@@ -1,5 +1,12 @@
 {
  "summary": {
+  "seedsRequested": 24,
+  "seedsWithBodies": 21,
+  "emptySeeds": [
+   "rocky-5",
+   "rocky-8",
+   "rocky-18"
+  ],
   "total": 156,
   "gas": 32,
   "errors": 0,
@@ -48,7 +55,15 @@
    "planet:measured": 66,
    "moon:measured": 56,
    "planet-moon:measured": 2
-  }
+  },
+  "relZero": 28,
+  "relZeroWithEjecta": 0,
+  "cratersOffSolid": 42,
+  "cratersOffAirless": 4,
+  "renderCapable": 52,
+  "renderVisible": 39,
+  "distinctRayAirless": 19,
+  "perSystemDistinct": "1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1"
  },
  "rows": [
   {
@@ -71,7 +86,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-0",
@@ -93,7 +113,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.7560381096744208,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-0",
@@ -123,7 +148,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8735993175406581,
-   "rayDerived": 0.8735993175406581
+   "rayDerived": 0.8735993175406581,
+   "craterDensity": 0.0008688928434755406,
+   "Dchar": 49.858141183257736,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-0",
@@ -145,7 +175,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8735993175406581,
-   "rayDerived": 0.8735993175406581
+   "rayDerived": 0.8735993175406581,
+   "craterDensity": 0.43393562450031525,
+   "Dchar": 41.1486708417537,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-0",
@@ -175,7 +210,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8735993175406581,
-   "rayDerived": 0.8735993175406581
+   "rayDerived": 0.8735993175406581,
+   "craterDensity": 0.5857669201397286,
+   "Dchar": 27.00512248355637,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-1",
@@ -197,7 +237,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-1",
@@ -219,7 +264,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7439258302710055,
-   "rayDerived": 0.7439258302710055
+   "rayDerived": 0.7439258302710055,
+   "craterDensity": 1,
+   "Dchar": 29.806990263596187,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-1",
@@ -241,7 +291,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-1",
@@ -263,7 +318,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-2",
@@ -285,7 +345,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0010600793505334022,
+   "Dchar": 88.94569620632815,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-2",
@@ -307,7 +372,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8368892013792499,
-   "rayDerived": 0.8368892013792499
+   "rayDerived": 0.8368892013792499,
+   "craterDensity": 1,
+   "Dchar": 14.615109159110931,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-2",
@@ -329,7 +399,12 @@
    "airlessnessOf": 0,
    "erosionOf": 1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-2",
@@ -351,7 +426,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8368892013792499,
-   "rayDerived": 0.8368892013792499
+   "rayDerived": 0.8368892013792499,
+   "craterDensity": 1,
+   "Dchar": 17.098063105267304,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-2",
@@ -381,7 +461,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0007664941592221047,
+   "Dchar": 155.8743105965605,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-2",
@@ -403,7 +488,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.07485075547673074,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0014248989804262044,
+   "Dchar": 88.01456224077991,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-2",
@@ -433,7 +523,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.011474966727314118,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 1,
+   "Dchar": 59.99075942043434,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-3",
@@ -455,7 +550,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8563841738525692,
-   "rayDerived": 0.8563841738525692
+   "rayDerived": 0.8563841738525692,
+   "craterDensity": 1,
+   "Dchar": 15.668548676246637,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-3",
@@ -477,7 +577,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-3",
@@ -499,7 +604,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.0993668969781068,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.000838113436369823,
+   "Dchar": 135.02963408058324,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-3",
@@ -521,7 +631,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8563841738525692,
-   "rayDerived": 0.8563841738525692
+   "rayDerived": 0.8563841738525692,
+   "craterDensity": 1,
+   "Dchar": 21.25506482991879,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-3",
@@ -551,7 +666,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8563841738525692,
-   "rayDerived": 0.8563841738525692
+   "rayDerived": 0.8563841738525692,
+   "craterDensity": 1,
+   "Dchar": 20.656920382504484,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-4",
@@ -573,7 +693,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.25395191272552875,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0003438318599068062,
+   "Dchar": 124.41424240719277,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-4",
@@ -595,7 +720,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7817595982927471,
-   "rayDerived": 0.7817595982927471
+   "rayDerived": 0.7817595982927471,
+   "craterDensity": 1,
+   "Dchar": 18.79975678329842,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-4",
@@ -617,7 +747,12 @@
    "airlessnessOf": 0,
    "erosionOf": 1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-4",
@@ -639,7 +774,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.09901668786193579,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0008455251108180297,
+   "Dchar": 133.80320254119212,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-4",
@@ -661,7 +801,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7817595982927471,
-   "rayDerived": 0.7817595982927471
+   "rayDerived": 0.7817595982927471,
+   "craterDensity": 1,
+   "Dchar": 15.496718729209512,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-4",
@@ -691,7 +836,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.07942705331826153,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0012614026108889761,
+   "Dchar": 98.07101482401156,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-4",
@@ -713,7 +863,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.0751338548734283,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0014130776593982242,
+   "Dchar": 88.71103300542353,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-6",
@@ -735,7 +890,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-6",
@@ -757,7 +917,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-7",
@@ -779,7 +944,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0009752069401973676,
+   "Dchar": 102.7605967283836,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-7",
@@ -801,7 +971,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8941757789494519,
-   "rayDerived": 0.8941757789494519
+   "rayDerived": 0.8941757789494519,
+   "craterDensity": 0.008429256770666124,
+   "Dchar": 28.521301843703842,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-7",
@@ -831,7 +1006,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0006313767959331426,
+   "Dchar": 218.013945779514,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-7",
@@ -853,7 +1033,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8941757789494519,
-   "rayDerived": 0.8941757789494519
+   "rayDerived": 0.8941757789494519,
+   "craterDensity": 0.009769293133471661,
+   "Dchar": 17.787809270180247,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-7",
@@ -891,7 +1076,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.06791522568394016,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0018941343710680042,
+   "Dchar": 63.639797106161915,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-9",
@@ -913,7 +1103,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-9",
@@ -943,7 +1138,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7,
-   "rayDerived": 0.7
+   "rayDerived": 0.7,
+   "craterDensity": 0.20057963887780234,
+   "Dchar": 60.25604343005358,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-9",
@@ -965,7 +1165,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7,
-   "rayDerived": 0.7
+   "rayDerived": 0.7,
+   "craterDensity": 1,
+   "Dchar": 28.078326334095458,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-9",
@@ -987,7 +1192,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.06940552886535127,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0017422107122278896,
+   "Dchar": 70.83359107824887,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-9",
@@ -1009,7 +1219,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.08974628990290855,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0010130257827533089,
+   "Dchar": 116.01796054395051,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-10",
@@ -1031,7 +1246,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-10",
@@ -1053,7 +1273,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8428219952398306,
-   "rayDerived": 0.8428219952398306
+   "rayDerived": 0.8428219952398306,
+   "craterDensity": 1,
+   "Dchar": 24.01500114988293,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-10",
@@ -1075,7 +1300,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.5366700505729505,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.00019694953687174723,
+   "Dchar": 89.39898527132812,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-10",
@@ -1105,7 +1335,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0004295052857293268,
+   "Dchar": 439.09767398241337,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-10",
@@ -1135,7 +1370,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8428219952398306,
-   "rayDerived": 0.8428219952398306
+   "rayDerived": 0.8428219952398306,
+   "craterDensity": 1,
+   "Dchar": 28.39832264521835,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-10",
@@ -1157,7 +1397,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8428219952398306,
-   "rayDerived": 0.8428219952398306
+   "rayDerived": 0.8428219952398306,
+   "craterDensity": 1,
+   "Dchar": 94.25330947551645,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-11",
@@ -1187,7 +1432,12 @@
    "airlessnessOf": 0,
    "erosionOf": 1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-11",
@@ -1209,7 +1459,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.787388681224043,
-   "rayDerived": 0.787388681224043
+   "rayDerived": 0.787388681224043,
+   "craterDensity": 1,
+   "Dchar": 16.370064058079347,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-11",
@@ -1239,7 +1494,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.787388681224043,
-   "rayDerived": 0.787388681224043
+   "rayDerived": 0.787388681224043,
+   "craterDensity": 1,
+   "Dchar": 38.648595182694734,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-11",
@@ -1261,7 +1521,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.787388681224043,
-   "rayDerived": 0.787388681224043
+   "rayDerived": 0.787388681224043,
+   "craterDensity": 1,
+   "Dchar": 37.69189880699351,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-11",
@@ -1283,7 +1548,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.787388681224043,
-   "rayDerived": 0.787388681224043
+   "rayDerived": 0.787388681224043,
+   "craterDensity": 1,
+   "Dchar": 32.011415600635715,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-12",
@@ -1305,7 +1575,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0009230146375094932,
+   "Dchar": 113.02009212941938,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-12",
@@ -1327,7 +1602,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.839029004665615,
-   "rayDerived": 0.839029004665615
+   "rayDerived": 0.839029004665615,
+   "craterDensity": 1,
+   "Dchar": 16.541993282612626,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-12",
@@ -1349,7 +1629,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-12",
@@ -1371,7 +1656,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.07538625380834658,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0014027730934551895,
+   "Dchar": 89.32171596208424,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-12",
@@ -1393,7 +1683,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.839029004665615,
-   "rayDerived": 0.839029004665615
+   "rayDerived": 0.839029004665615,
+   "craterDensity": 1,
+   "Dchar": 14.04775104046587,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1415,7 +1710,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-13",
@@ -1437,7 +1737,12 @@
    "airlessnessOf": 0,
    "erosionOf": 1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-13",
@@ -1459,7 +1764,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.07707097015828054,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0013389779817649763,
+   "Dchar": 93.17997851003643,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1481,7 +1791,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 1,
+   "Dchar": 16.319293610872368,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1511,7 +1826,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-13",
@@ -1533,7 +1853,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 0.00020584354270373226,
+   "Dchar": 225.072794246051,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1555,7 +1880,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 1,
+   "Dchar": 121.80326928051257,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1585,7 +1915,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-13",
@@ -1607,7 +1942,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 1,
+   "Dchar": 42.269425067960434,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1629,7 +1969,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 1,
+   "Dchar": 42.596960000858246,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1651,7 +1996,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 1,
+   "Dchar": 208.72640854483873,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1673,7 +2023,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 1,
+   "Dchar": 106.66005474610405,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1695,7 +2050,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 1,
+   "Dchar": 188.69718083760742,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-13",
@@ -1725,7 +2085,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7523035633684722,
-   "rayDerived": 0.7523035633684722
+   "rayDerived": 0.7523035633684722,
+   "craterDensity": 1,
+   "Dchar": 15.211305416276707,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-14",
@@ -1747,7 +2112,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-14",
@@ -1769,7 +2139,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0008038165960851247,
+   "Dchar": 187.06533137162197,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-14",
@@ -1791,7 +2166,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-14",
@@ -1813,7 +2193,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-14",
@@ -1843,7 +2228,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8253750750707092,
-   "rayDerived": 0.8253750750707092
+   "rayDerived": 0.8253750750707092,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-14",
@@ -1865,7 +2255,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0006868858145285404,
+   "Dchar": 188.43844929487366,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-14",
@@ -1895,7 +2290,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8253750750707092,
-   "rayDerived": 0.8253750750707092
+   "rayDerived": 0.8253750750707092,
+   "craterDensity": 0.002265816981160834,
+   "Dchar": 52.432980008152356,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-15",
@@ -1917,7 +2317,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0010218339633157418,
+   "Dchar": 94.78377227953307,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-15",
@@ -1939,7 +2344,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7548526079700897,
-   "rayDerived": 0.7548526079700897
+   "rayDerived": 0.7548526079700897,
+   "craterDensity": 1,
+   "Dchar": 15.460611732158418,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-15",
@@ -1961,7 +2371,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-15",
@@ -1983,7 +2398,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-15",
@@ -2005,7 +2425,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0007658437280719097,
+   "Dchar": 156.10341974152675,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-16",
@@ -2027,7 +2452,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-16",
@@ -2049,7 +2479,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-16",
@@ -2079,7 +2514,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.000606989961305672,
+   "Dchar": 233.38951765909107,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-16",
@@ -2109,7 +2549,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8398898861915454,
-   "rayDerived": 0.8398898861915454
+   "rayDerived": 0.8398898861915454,
+   "craterDensity": 1,
+   "Dchar": 17.31589780064278,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-16",
@@ -2139,7 +2584,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8398898861915454,
-   "rayDerived": 0.8398898861915454
+   "rayDerived": 0.8398898861915454,
+   "craterDensity": 1,
+   "Dchar": 20.860815813729737,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-17",
@@ -2161,7 +2611,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-17",
@@ -2183,7 +2638,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.6489365861874421,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.00019209576443944117,
+   "Dchar": 67.1981648729324,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-17",
@@ -2205,7 +2665,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7480776367099564,
-   "rayDerived": 0.7480776367099564
+   "rayDerived": 0.7480776367099564,
+   "craterDensity": 1,
+   "Dchar": 10.704839220352543,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-17",
@@ -2227,7 +2692,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.08559179769121061,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0011001359572192341,
+   "Dchar": 109.18321788460482,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-17",
@@ -2249,7 +2719,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7480776367099564,
-   "rayDerived": 0.7480776367099564
+   "rayDerived": 0.7480776367099564,
+   "craterDensity": 1,
+   "Dchar": 15.490106187560327,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-17",
@@ -2279,7 +2754,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7480776367099564,
-   "rayDerived": 0.7480776367099564
+   "rayDerived": 0.7480776367099564,
+   "craterDensity": 1,
+   "Dchar": 18.867321585066883,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-17",
@@ -2309,7 +2789,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-19",
@@ -2331,7 +2816,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.8177034405787219,
-   "rayDerived": 0.8177034405787219
+   "rayDerived": 0.8177034405787219,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-19",
@@ -2353,7 +2843,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-19",
@@ -2375,7 +2870,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.9618016053660643,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-19",
@@ -2397,7 +2897,12 @@
    "airlessnessOf": 0,
    "erosionOf": 1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-20",
@@ -2419,7 +2924,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.5539113691424682,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.00016408645233388573,
+   "Dchar": 116.07525821360885,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-20",
@@ -2441,7 +2951,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.8358839047189832,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-20",
@@ -2463,7 +2978,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.7458560290502597,
-   "rayDerived": 0.7458560290502597
+   "rayDerived": 0.7458560290502597,
+   "craterDensity": 1,
+   "Dchar": 20.301589562365812,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-20",
@@ -2485,7 +3005,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-20",
@@ -2507,7 +3032,12 @@
    "airlessnessOf": 0,
    "erosionOf": 1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-20",
@@ -2537,7 +3067,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-21",
@@ -2559,7 +3094,12 @@
    "airlessnessOf": 0,
    "erosionOf": 1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-21",
@@ -2581,7 +3121,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.838572437443808,
-   "rayDerived": 0.838572437443808
+   "rayDerived": 0.838572437443808,
+   "craterDensity": 1,
+   "Dchar": 27.425105164232445,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-21",
@@ -2603,7 +3148,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.08856070024239858,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0010366044634248718,
+   "Dchar": 114.08517019158303,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-21",
@@ -2633,7 +3183,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.838572437443808,
-   "rayDerived": 0.838572437443808
+   "rayDerived": 0.838572437443808,
+   "craterDensity": 0.004865058064557072,
+   "Dchar": 41.77783544146922,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-21",
@@ -2671,7 +3226,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.838572437443808,
-   "rayDerived": 0.838572437443808
+   "rayDerived": 0.838572437443808,
+   "craterDensity": 1,
+   "Dchar": 65.90365851741545,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-21",
@@ -2693,7 +3253,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.838572437443808,
-   "rayDerived": 0.838572437443808
+   "rayDerived": 0.838572437443808,
+   "craterDensity": 1,
+   "Dchar": 44.74324041628895,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-22",
@@ -2715,7 +3280,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0011273781576032402,
+   "Dchar": 79.96080425983611,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-22",
@@ -2737,7 +3307,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-22",
@@ -2759,7 +3334,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-23",
@@ -2781,7 +3361,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-23",
@@ -2803,7 +3388,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 0,
+   "cratersOff": true
   },
   {
    "seed": "rocky-23",
@@ -2825,7 +3415,12 @@
    "airlessnessOf": 0,
    "erosionOf": 1,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0,
+   "Dchar": 0,
+   "ejectaStrength": 0,
+   "rel": 1,
+   "cratersOff": true
   },
   {
    "seed": "rocky-23",
@@ -2855,7 +3450,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.9350435467520881,
-   "rayDerived": 0.9350435467520881
+   "rayDerived": 0.9350435467520881,
+   "craterDensity": 0.0026538142141405135,
+   "Dchar": 39.505543735630496,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-23",
@@ -2877,7 +3477,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.9350435467520881,
-   "rayDerived": 0.9350435467520881
+   "rayDerived": 0.9350435467520881,
+   "craterDensity": 0.002685315840195453,
+   "Dchar": 38.58138038057296,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-23",
@@ -2899,7 +3504,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.9350435467520881,
-   "rayDerived": 0.9350435467520881
+   "rayDerived": 0.9350435467520881,
+   "craterDensity": 0.002349373214816765,
+   "Dchar": 54.955404973817,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-23",
@@ -2921,7 +3531,12 @@
    "airlessnessOf": 0,
    "erosionOf": 0.06779964362524445,
    "rayLaw": 0,
-   "rayDerived": 0
+   "rayDerived": 0,
+   "craterDensity": 0.0019087203034600017,
+   "Dchar": 62.98610819186991,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-23",
@@ -2951,7 +3566,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.9350435467520881,
-   "rayDerived": 0.9350435467520881
+   "rayDerived": 0.9350435467520881,
+   "craterDensity": 0.003526797416752902,
+   "Dchar": 30.398288994939925,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-23",
@@ -2973,7 +3593,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.9350435467520881,
-   "rayDerived": 0.9350435467520881
+   "rayDerived": 0.9350435467520881,
+   "craterDensity": 0.002622206963952886,
+   "Dchar": 62.33048935945347,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-23",
@@ -3003,7 +3628,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.9350435467520881,
-   "rayDerived": 0.9350435467520881
+   "rayDerived": 0.9350435467520881,
+   "craterDensity": 0.0036929948574053696,
+   "Dchar": 28.355361721777964,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   },
   {
    "seed": "rocky-23",
@@ -3033,7 +3663,12 @@
    "airlessnessOf": 1,
    "erosionOf": 0,
    "rayLaw": 0.9350435467520881,
-   "rayDerived": 0.9350435467520881
+   "rayDerived": 0.9350435467520881,
+   "craterDensity": 0.0035452311999205734,
+   "Dchar": 39.94788745892356,
+   "ejectaStrength": 1,
+   "rel": 1,
+   "cratersOff": false
   }
  ]
 }
