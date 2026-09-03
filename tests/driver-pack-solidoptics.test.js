@@ -27,7 +27,7 @@ import { buildLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 import {
   writePackUniforms, isPackDriver, PackContractError,
 } from '../src/worldengine/port/writePackUniforms.js';
-import { PACKS, gatesFor, selectPacks } from '../src/worldengine/drivers/index.js';
+import { PACKS, gatesFor, GATE_POLICY_ALL_ON, GATE_POLICY_RULED, GATE_RULINGS, selectPacks } from '../src/worldengine/drivers/index.js';
 import { ROCKY_SURFACE_ENTRY, ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; import { SOLID_FEATURES_UNIFORMS } from '../src/worldengine/drivers/solidFeatures.js'; import { FLUVIAL_DECK_UNIFORMS } from '../src/worldengine/drivers/fluvialDeck.js';   // ⛔ RIDES THIS LINE: a new import line shifts every cited line below it.
 import { LIMB_UNIFORMS } from '../src/worldengine/drivers/limbDeck.js';
 import { Planet, labPackCtx, setLabGasBodiesOverride } from '../src/objects/Planet.js';
@@ -81,10 +81,10 @@ const GENERATED = generatedPlanets(24);
 const GAS = GENERATED.filter((b) => compositionClass(b.cond) === 'gas');
 const SOLID = GENERATED.filter((b) => compositionClass(b.cond) !== 'gas');
 
-const ctxFor = (b, gates = gatesFor(SOLID_OPTICS_ENTRY)) => ({ ...labPackCtx(b.d, b.cond), gates });
+const ctxFor = (b, gates = gatesFor(SOLID_OPTICS_ENTRY, GATE_POLICY_ALL_ON)) => ({ ...labPackCtx(b.d, b.cond), gates });   // ⛔ THE DEFAULT NAMES ALL_ON, 2026-09-03 (F35). This file's subject is the pack's LAW FORWARDING — does the swapped material carry the same limb/terminator values the legacy game material does — and that question is only askable with the gate OPEN. `gatesFor`'s DEFAULT moved to GATE_POLICY_RULED, under which uTermStrength is +0 (Max 2026-07-16: "We need to disable terminator gradient totally"), so leaving the default here would have turned four law assertions into assertions about a gate. The ruled value has its own arms at :159 and :496.
 const packFor = (b, gates) => solidOpticsPack(b.cond, ctxFor(b, gates));
 
-function composeOnto(b, gates = gatesFor(SOLID_OPTICS_ENTRY)) {
+function composeOnto(b, gates = gatesFor(SOLID_OPTICS_ENTRY, GATE_POLICY_ALL_ON)) {   // ⛔ ALL_ON for the reason `ctxFor` states three lines up.
   const built = buildLabPlanetMaterial({ bodyRadius: b.d.radius });
   const ctx = ctxFor(b, gates);
   const res = solidOpticsPack(b.cond, ctx);
@@ -156,7 +156,10 @@ describe('A — the predicate admits exactly the non-gas class, and moves no bod
 describe('B — the declared gate names are the ones the ALL_ON policy resolves', () => {
   it('declares exactly the two gates its drivers key on', () => {
     expect(SOLID_OPTICS_ENTRY.gates).toEqual([TERMINATOR_GATE, AURORA_GATE]);
-    expect(gatesFor(SOLID_OPTICS_ENTRY)).toEqual({ terminator: true, aurora: true });
+    expect(gatesFor(SOLID_OPTICS_ENTRY, GATE_POLICY_ALL_ON)).toEqual({ terminator: true, aurora: true });
+    expect(gatesFor(SOLID_OPTICS_ENTRY, GATE_POLICY_RULED)).toEqual({ terminator: false, aurora: true });   // ⭐ 2026-09-03 RE-POINTED — Max 2026-07-16: "We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway." RULED is now `gatesFor`'s DEFAULT, so the bare call below is the GAME's answer; ALL_ON above is kept and still means all-on, which is what keeps his ruling #4 truthful.
+    expect(gatesFor(SOLID_OPTICS_ENTRY)).toEqual({ terminator: false, aurora: true });
+    expect(GATE_RULINGS.terminator).toBe(false);
   });
 
   it('every gated driver keys on a DECLARED name — checked by walking the emitted drivers', () => {
@@ -493,7 +496,7 @@ describe('F — the entry is registry-ready and its collision guard is LIVE', ()
     const built = buildLabPlanetMaterial({ bodyRadius: b.d.radius });
     const res = applyDriverPacks(built.material, b.cond, labPackCtx(b.d, b.cond, undefined));
     expect(res.applied).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck']);   // ⭐ FOUR SINCE 2026-09-02 — `fluvialDeck` carries the same `!== 'gas'` predicate.
-    expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: true, aurora: true, edifices: true, chaos: true, frost: true, glacial: true, deltas: true, coast: true, outflow: true });
+    expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: false, aurora: true, edifices: true, chaos: true, frost: true, glacial: true, deltas: true, coast: true, outflow: true });   // ⭐ 2026-09-03 `terminator` RE-POINTED true -> false — Max 2026-07-16: "We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway." This is applyDriverPacks, i.e. the GAME's own composition point, so it takes `gatesFor`'s default (RULED) and this row is what the game now writes. Every OTHER gate is still true: the ruling answers one name, it does not weaken the policy.
     // The write log is the UNION of both contract sets and nothing outside them.
     // ⭐ THREE PACKS SINCE B3 LEG 3: `solidFeatures` shares this predicate, so the union it is
     // compared against has to include its contract set or the assertion reds on a declared write.

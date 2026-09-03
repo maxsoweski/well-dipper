@@ -217,3 +217,31 @@ export function solidOpticsLabState(pack) {
   }
   return out;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// THE RULING — one declared value, read by BOTH front-ends' real producers.
+//
+// ⭐ Max, 2026-07-16 (docs/WORKSTREAMS/planet-lod-lab-ux-2026-07-15/contract.json:6): "We need to
+// disable terminator gradient totally; it doesn't work but also this is ultimately something that
+// will need to be rendered in the lighting engine of the main game anyway."
+//
+// That ruling was APPLIED as a reversible DEFAULTS amendment — the band came out of the lab's
+// per-preset dressing table and the manual ✓ toggle stayed — so for fourteen months the lab shipped
+// it OFF while the GAME shipped it ON, because the game's blanket gate policy (ruling #4,
+// 2026-08-06, `gates = ALL_ON`) answered `true` for a name nobody had decided. His 2026-08-22 ruling
+// on the pack laws is the one this constant settles: "the important thing here is the game and lab
+// end up working the same."
+//
+// ⛔ IT IS A GATE RULING, NOT A LAW CHANGE. `terminatorOpticsOf` still derives strength, width and
+// colour on every body; width and colour are still written. Only the STRENGTH's gate is answered,
+// and `writePackUniforms.js:186` resolves a gated-off driver to +0. Flip this to `true` and the band
+// returns to both front-ends at once — the lab's dressing table follows it on the 11 presets that
+// declare the feature renderable (`ASSOCIATIONS.terminator.rendersOn`) through
+// `buildDefaultDressing` and the game follows it through `GATE_RULINGS`.
+//
+// ⚠ WHAT IT DOES NOT REACH, declared rather than claimed away: `src/objects/Planet.js:1653` writes
+// `uTermStrength` UNGATED on the LEGACY material (Sol and the known-profile gallery bodies), and the
+// three lab-mirror ctx literals (this file's `LAB_MIRROR_CTX` at :199, giantSurface.js:437,
+// world-engine-lab.html:2821) stay ungated ON PURPOSE — the lab re-applies its own ✓ checkbox at its
+// per-frame writer (:5044), so a mirror closed by this constant would apply the decision twice.
+export const TERMINATOR_ENABLED = false;   // Max 2026-07-16: "We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway."

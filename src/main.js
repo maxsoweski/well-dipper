@@ -4068,7 +4068,7 @@ window._lab = {
     let gates = args.gates;
     let gatesSource;
     if (gates) gatesSource = 'caller-supplied';
-    else if (entry) { gates = drivers.gatesFor(entry, drivers.GATE_POLICY_ALL_ON); gatesSource = `gatesFor(PACKS['${entry.name}'], ALL_ON) — Max ruling 4`; }
+    else if (entry) { gates = drivers.gatesFor(entry, drivers.GATE_POLICY_RULED); gatesSource = `gatesFor(PACKS['${entry.name}'], RULED) — Max ruling 4 (ALL_ON) minus the names he has since ruled on individually: ${JSON.stringify(drivers.GATE_RULINGS)}`; }   // ⭐ 2026-09-03 RIDES THIS LINE — the preview now names the policy the GAME actually runs (drivers/index.js:404 takes gatesFor's default, which is RULED), and prints the rulings map so the provenance string says WHICH decisions moved rather than just naming a policy. ALL_ON is still reachable and still means all-on; asking for it here would have made this string a report about a policy no writer uses.
     else { gates = {}; gatesSource = '⚠ NONE — a bare pack function has no PACKS entry, so no gate names are declared. A gated driver will throw.'; }
 
     // ⛔ `d.radiusEarth`, NOT `d.radius`. `conditionFromBody` reads `d.radiusEarth` and the game's

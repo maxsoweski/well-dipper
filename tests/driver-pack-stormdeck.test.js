@@ -30,7 +30,7 @@ import { bakeStormEAttributes } from '../src/worldengine/base/storm-e.js';
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { labPackCtx, Planet, setLabGasBodiesOverride } from '../src/objects/Planet.js';
-import { PACKS, gatesFor, applyDriverPacks, selectPacks } from '../src/worldengine/drivers/index.js';
+import { PACKS, gatesFor, GATE_POLICY_ALL_ON, applyDriverPacks, selectPacks } from '../src/worldengine/drivers/index.js';
 import { writePackUniforms, resolveDriver, PackContractError } from '../src/worldengine/port/writePackUniforms.js';
 import { giantDeckPack } from '../src/worldengine/drivers/giantDeck.js';
 import { GAME_STORM_SEED } from '../src/worldengine/drivers/polarDeck.js';
@@ -89,7 +89,7 @@ function resolvedPacks(cond, ctx) {
   const out = {};
   for (const entry of PACKS) {
     if (entry.applies(cond, ctx) !== true) continue;
-    const packCtx = { ...ctx, gates: gatesFor(entry) };
+    const packCtx = { ...ctx, gates: gatesFor(entry, GATE_POLICY_ALL_ON) };   // ⛔ THE POLICY IS PINNED, 2026-09-03 (F35). The 520f2c0 fixture below was captured under ALL_ON, `gatesFor`'s default at the time; F35 made GATE_POLICY_RULED the default (Max 2026-07-16, "We need to disable terminator gradient totally") so uTermStrength now resolves to 0. Naming ALL_ON here keeps :149's compare a claim about CODE across commits rather than about which policy ran — the same reason the three ray names are stripped four lines up rather than re-captured.
     const r = entry.pack(cond, packCtx);
     const drivers = {};
     for (const n of Object.keys(r.drivers)) drivers[n] = resolveDriver(n, r.drivers[n], packCtx);

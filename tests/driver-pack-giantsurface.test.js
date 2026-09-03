@@ -20,7 +20,7 @@ import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js'
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';
 import { buildLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 import { writePackUniforms, isPackDriver, PackContractError } from '../src/worldengine/port/writePackUniforms.js';
-import { PACKS, gatesFor, selectPacks } from '../src/worldengine/drivers/index.js';
+import { PACKS, gatesFor, GATE_POLICY_ALL_ON, GATE_POLICY_RULED, selectPacks } from '../src/worldengine/drivers/index.js';
 import { ROCKY_SURFACE_ENTRY, ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js';
 import { SOLID_OPTICS_UNIFORMS, TERMINATOR_GATE } from '../src/worldengine/drivers/solidOptics.js';
 import { LIMB_UNIFORMS } from '../src/worldengine/drivers/limbDeck.js';
@@ -61,7 +61,7 @@ function generatedPlanets(count) {
 const GENERATED = generatedPlanets(24);
 const GAS = GENERATED.filter((b) => compositionClass(b.cond) === 'gas');
 const SOLID = GENERATED.filter((b) => compositionClass(b.cond) !== 'gas');
-const ctxFor = (b, gates = gatesFor(GIANT_SURFACE_ENTRY)) => ({ ...labPackCtx(b.d, b.cond), gates });
+const ctxFor = (b, gates = gatesFor(GIANT_SURFACE_ENTRY, GATE_POLICY_ALL_ON)) => ({ ...labPackCtx(b.d, b.cond), gates });   // ⛔ THE DEFAULT NAMES ALL_ON, 2026-09-03 (F35). `gatesFor`'s DEFAULT moved to GATE_POLICY_RULED, under which uTermStrength is +0 (Max 2026-07-16: "We need to disable terminator gradient totally"). This file's E arm asks whether the WIRE reaches a real lab material — a question only the open gate can answer — so the policy is named rather than defaulted, and the ruled value is asserted on its own beside the gate declaration below.
 const packFor = (b, gates) => giantSurfacePack(b.cond, ctxFor(b, gates));
 // ⭐ BOTH CONTAINERS, ON PURPOSE. The lab material holds a `THREE.Color` where the game holds a
 // `THREE.Vector3` for the same GLSL `vec3` slot — the split that kept six colour names "diverging"

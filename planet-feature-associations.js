@@ -2,7 +2,7 @@
 // Captures, per feature, the associations that otherwise live only in shader
 // call-order + prose. Keyed by the SAME feature keys as FEATURES (planet-archetypes.js).
 
-import { DRIVERS, PROCESSES, driversFor } from './planet-drivers.js';
+import { DRIVERS, PROCESSES, driversFor } from './planet-drivers.js';   import { GATE_RULINGS } from './src/worldengine/drivers/index.js';   // ⭐ 2026-09-03 RIDES THIS LINE — the ONE declared answer for every gate Max has ruled on individually (today: `terminator`, his 2026-07-16 ruling, declared in src/worldengine/drivers/solidOptics.js). The dressing table below is the LAB's real OFF producer, so it has to read the same value the GAME's writer reads or the two front-ends agree only by coincidence. ⛔ Appended to this line rather than spending a new one: this file is cited by line from the lab, three suites and a script.
 
 export const DOMAINS = [
   'relief', 'fluvial', 'cryo', 'aeolian', 'gradational',
@@ -490,7 +490,14 @@ for (const [key, a] of Object.entries(ASSOCIATIONS)) {
 // Terminator gradient (F35) is EXCLUDED from every entry (Max ruling 2026-07-16):
 // disabled totally — it doesn't work, and day/night shading is ultimately the main
 // game's lighting engine's job. Manual toggle remains in the lab's Optical group.
-export const DEFAULT_DRESSING = {
+// ⭐ 2026-09-03 — THAT EXCLUSION IS NO LONGER A HAND-EDITED ABSENCE, it is `GATE_RULINGS.terminator`
+// resolved by `buildDefaultDressing` below, the SAME constant the game's gate policy reads
+// (src/worldengine/drivers/solidOptics.js `TERMINATOR_ENABLED`). Between 2026-07-16 and today the
+// lab shipped the band OFF from this table while the game shipped it ON from a blanket ALL_ON
+// policy, and nothing in either file could see the other; one value now answers both. Flip the
+// constant and the band comes back HERE and in the game together — which is what makes the two
+// directions a choice between two CONVERGED states rather than a declared divergence.
+const DRESSING_BASE = {
   'Rocky (Earthlike)':          ['lakes', 'coastlines', 'clouds', 'limb'],
   'Ocean (temperate)':          ['lakes', 'coastlines', 'clouds', 'limb', 'sunglint'],
   'Eyeball (locked temperate)': ['lakes', 'coastlines', 'clouds', 'limb'],
@@ -510,3 +517,45 @@ export const DEFAULT_DRESSING = {
   'Europa (icy moon)':          [],   // airless: shell writer carrier
   'Moon/Mercury (impact-airless)': [], // V2-5 airless: the writer carrier (bombardment overprint) IS the look
 };
+
+/**
+ * The boot dressing table, resolved against the rulings map.
+ *
+ * ⭐ `terminator` is appended to a preset's dressing IFF the ruling says the band is on AND that
+ * preset declares the feature renderable. The second half is not decoration: the file's own
+ * invariant three paragraphs up is "every entry must be ⊆ ASSOCIATIONS[key].rendersOn for its
+ * preset — the lab warns at boot if this drifts", so a builder that added the name to all 18 would
+ * hand the lab a boot warning on the 7 airless/exotic presets the moment the ruling flipped.
+ *
+ * ⚠ ELEVEN, NOT THIRTEEN. `ASSOCIATIONS.terminator.rendersOn` lists 11 presets and the 2026-07-16
+ * commit (b238526) removed the name from exactly 11 entries; that commit's message said "all 13
+ * dressing entries" and the count has been carried forward wrong ever since. Measured, and the
+ * suite asserts the number against `rendersOn` rather than against a literal so it cannot drift again.
+ *
+ * ⛔ INSERTED AFTER `limb`, which is where it sat before b238526 removed it — so `buildDefaultDressing({
+ * terminator: true })` reproduces the pre-ruling table entry for entry rather than merely containing
+ * the same names. The suite pins that against a hard-coded copy of the literal.
+ *
+ * @param {{terminator?: boolean}} [rulings]  the gate rulings map; defaults to the game's own
+ *        `GATE_RULINGS`, so the lab's table and the game's writer cannot disagree.
+ * @returns {Object<string, string[]>} preset name -> the feature keys that boot ON
+ */
+export function buildDefaultDressing(rulings = GATE_RULINGS) {
+  const on = rulings.terminator !== false;
+  const out = {};
+  for (const [preset, keys] of Object.entries(DRESSING_BASE)) {
+    if (!on || !ASSOCIATIONS.terminator.rendersOn.includes(preset)) { out[preset] = keys.slice(); continue; }
+    const i = keys.indexOf('limb');
+    const next = keys.slice();
+    next.splice(i < 0 ? next.length : i + 1, 0, 'terminator');
+    out[preset] = next;
+  }
+  return out;
+}
+
+/**
+ * ⛔ THE NAME AND THE SHAPE ARE UNCHANGED so every existing importer — world-engine-lab.html:154,
+ * the boot-drift guard, the suites — is untouched by this refactor. What changed is where the value
+ * comes FROM: a hand-edited literal became a function of the one declared ruling.
+ */
+export const DEFAULT_DRESSING = buildDefaultDressing();
