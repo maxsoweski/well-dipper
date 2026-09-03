@@ -1,0 +1,35 @@
+{
+  "a": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m5-on.png",
+  "b": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m5-off.png",
+  "sidecar": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m5-on.json",
+  "threshold": 2,
+  "png": {
+    "w": 1349,
+    "h": 844
+  },
+  "viewport": {
+    "w": 1349,
+    "h": 844,
+    "dpr": 1
+  },
+  "scale": 1,
+  "disc": {
+    "cx": 674.5,
+    "cy": 422,
+    "r": 213.08,
+    "areaPx": 142638
+  },
+  "moved": 24777,
+  "inside": 24746,
+  "outside": 31,
+  "insidePctOfDisc": 17.3488,
+  "maxAbsChannelDelta": 24,
+  "outsideMaxDistancePastEdgePx": 1.15,
+  "outsideMaxAt": [
+    757,
+    224
+  ],
+  "declaredRegion": "disc",
+  "body": "body.moon.9bc06a",
+  "commit": "5c8b1d22717366b7669c49ea7513afcb8128c403"
+}

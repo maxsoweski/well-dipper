@@ -1,0 +1,32 @@
+{
+  "a": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m3r20-on.png",
+  "b": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m3r20-off.png",
+  "sidecar": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m3r20-on.json",
+  "threshold": 2,
+  "png": {
+    "w": 1349,
+    "h": 844
+  },
+  "viewport": {
+    "w": 1349,
+    "h": 844,
+    "dpr": 1
+  },
+  "scale": 1,
+  "disc": {
+    "cx": 674.5,
+    "cy": 422,
+    "r": 30.17,
+    "areaPx": 2860
+  },
+  "moved": 369,
+  "inside": 369,
+  "outside": 0,
+  "insidePctOfDisc": 12.904,
+  "maxAbsChannelDelta": 17,
+  "outsideMaxDistancePastEdgePx": 0,
+  "outsideMaxAt": null,
+  "declaredRegion": "disc",
+  "body": "body.moon.e7c55f",
+  "commit": "5c8b1d22717366b7669c49ea7513afcb8128c403"
+}

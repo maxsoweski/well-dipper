@@ -1,0 +1,32 @@
+{
+  "a": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/gas-on.png",
+  "b": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/gas-off.png",
+  "sidecar": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/gas-on.json",
+  "threshold": 2,
+  "png": {
+    "w": 1349,
+    "h": 844
+  },
+  "viewport": {
+    "w": 1349,
+    "h": 844,
+    "dpr": 1
+  },
+  "scale": 1,
+  "disc": {
+    "cx": 674.5,
+    "cy": 422,
+    "r": 213.08,
+    "areaPx": 142638
+  },
+  "moved": 0,
+  "inside": 0,
+  "outside": 0,
+  "insidePctOfDisc": 0,
+  "maxAbsChannelDelta": 0,
+  "outsideMaxDistancePastEdgePx": 0,
+  "outsideMaxAt": null,
+  "declaredRegion": "disc",
+  "body": "body.planet.e3e886",
+  "commit": "5c8b1d22717366b7669c49ea7513afcb8128c403"
+}

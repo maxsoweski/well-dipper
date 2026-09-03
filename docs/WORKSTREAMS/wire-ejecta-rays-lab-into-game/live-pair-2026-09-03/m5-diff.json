@@ -1,0 +1,113 @@
+{
+  "tool": "shot-diff",
+  "a": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m5-on.png",
+  "b": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m5-off.png",
+  "floorA": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m5-floorA.png",
+  "floorB": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m5-floorB.png",
+  "sidecar": "/tmp/claude-1000/-home-ax/2512145e-c9d5-478a-9ae7-5fdcce59aadd/scratchpad/f3-live/m5-on.json",
+  "threshold": 2,
+  "image": {
+    "w": 1349,
+    "h": 844
+  },
+  "viewport": {
+    "w": 1349,
+    "h": 844,
+    "dpr": 1
+  },
+  "discPx": {
+    "cx": 674.5,
+    "cy": 422,
+    "r": 213.08
+  },
+  "declaredRegion": "disc",
+  "waivers": [],
+  "reproduction": {
+    "commit": "5c8b1d22717366b7669c49ea7513afcb8128c403",
+    "seed": "rocky-13",
+    "body": "body.moon.9bc06a",
+    "planetType": null,
+    "e1CompositionClass": "icy",
+    "gameShaderVariant": "rocky",
+    "fps": 62,
+    "throttled": false
+  },
+  "regions": {
+    "full": {
+      "label": "full-frame",
+      "declarable": true,
+      "isDeclaredRegion": false,
+      "signal": {
+        "pixels": 1138556,
+        "movedPct": 2.1762,
+        "meanAbs": 0.1449,
+        "maxAbs": 24
+      },
+      "floor": {
+        "pixels": 1138556,
+        "movedPct": 0,
+        "meanAbs": 0,
+        "maxAbs": 0
+      },
+      "verdict": "SIGNAL ABOVE FLOOR",
+      "litPctA": null
+    },
+    "disc": {
+      "label": "disc",
+      "declarable": true,
+      "isDeclaredRegion": true,
+      "signal": {
+        "pixels": 142622,
+        "movedPct": 17.3487,
+        "meanAbs": 1.1552,
+        "maxAbs": 24
+      },
+      "floor": {
+        "pixels": 142622,
+        "movedPct": 0,
+        "meanAbs": 0,
+        "maxAbs": 0
+      },
+      "verdict": "SIGNAL ABOVE FLOOR",
+      "litPctA": 97.63
+    },
+    "rim": {
+      "label": "rim-annulus 0.85R–1.00R",
+      "declarable": true,
+      "isDeclaredRegion": false,
+      "signal": {
+        "pixels": 39564,
+        "movedPct": 14.9429,
+        "meanAbs": 0.8647,
+        "maxAbs": 17
+      },
+      "floor": {
+        "pixels": 39564,
+        "movedPct": 0,
+        "meanAbs": 0,
+        "maxAbs": 0
+      },
+      "verdict": "SIGNAL ABOVE FLOOR",
+      "litPctA": 92.49
+    },
+    "discInterior": {
+      "label": "disc interior 0–0.85R (control)",
+      "declarable": false,
+      "isDeclaredRegion": false,
+      "signal": {
+        "pixels": 103058,
+        "movedPct": 18.2722,
+        "meanAbs": 1.2668,
+        "maxAbs": 24
+      },
+      "floor": {
+        "pixels": 103058,
+        "movedPct": 0,
+        "meanAbs": 0,
+        "maxAbs": 0
+      },
+      "verdict": "SIGNAL ABOVE FLOOR",
+      "litPctA": 99.6
+    }
+  }
+}
