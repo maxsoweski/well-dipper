@@ -157,7 +157,7 @@
     "commit": "5c952e3",
     "verdict": "1ee0219 (verdict.json at 5c952e3: unit PASS · integration PASS · AC-8 deferred-to-max)",
     "uat": "Max, 2026-09-02: \"The rivers are not fully developed but the wiring appears to be working here. The wiring for U is also working\" — on rocky-4's outermost planet (0.449 R⊕, carbon, wet), keys J and U while approaching, lane-A dev server :5175, deep link ?system=rocky-4. Read as: the WIRE is accepted (AC-8's coupled-system read stands on his word for J and U); \"not fully developed\" is the open follow-up.",
-    "followUp": "\"The rivers are not fully developed\" — his specifics pending (thin? few? no visible deltas or sea? does not resolve on approach?). Candidates already logged: QB-21 (35 % ocean constant), QB-22 (per-body admission), QB-23 (F13 saturates), the view-dependent river LOD (uRiverCarvePatchMap, spike `building`, out of this workstream's scope), and the 0.45 R⊕ width law (paramsForRadius). Not scoped here.",
+    "followUp": "\"The rivers are not fully developed\" — his specifics pending (thin? few? no visible deltas or sea? does not resolve on approach?). Candidates already logged: QB-21 (35 % ocean constant), QB-22 (per-body admission), QB-23 (F13 saturates), the view-dependent river LOD (uRiverCarvePatchMap, spike `building`, out of this workstream's scope), and the 0.45 R⊕ width law (paramsForRadius). Not scoped here. ⭐ DEFERRED by Max 2026-09-02: \"I want to continue wiring up all the features from the world engine before we try to further develop any of them\" — comes back after the wiring pass.",
     "date": "2026-09-02"
   }
 }
