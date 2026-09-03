@@ -134,7 +134,50 @@
       "Sol (excluded by provenance)"
     ]
   },
-  "deviations": [],
+  "deviations": [
+    {
+      "id": "D-1",
+      "ac": "AC-2",
+      "what": "pack-drivers-baseline.json (storm, pinned capturedFrom 520f2c0) and ray-pack-drivers-baseline.json (F3, pinned dc03fc6) were NOT re-captured: re-capturing turns two shipped cross-commit controls into HEAD-vs-HEAD tautologies, and F3's three ray names would land in the diff anyway, so 'exactly the uTermStrength entries' was unbuildable against them. Built instead: F35's own wider parent fixture tests/fixtures/term-pack-drivers-baseline.json at f0b93aa (every pack, ray names and stormDeck included), and the two consuming harnesses now NAME GATE_POLICY_ALL_ON — the policy their fixtures were captured under — with the ruling on each line.",
+      "recorded": "2026-09-03 build"
+    },
+    {
+      "id": "D-2",
+      "ac": "AC-1",
+      "what": "'13 dressing entries' is wrong: ASSOCIATIONS.terminator.rendersOn lists 11 presets and commit b238526 (the 2026-07-16 application) removed the name from exactly 11; the commit message said 13 and the contract inherited it. buildDefaultDressing resolves against rendersOn and the suite asserts the count against it, never a literal.",
+      "recorded": "2026-09-03 build"
+    },
+    {
+      "id": "D-3",
+      "ac": "AC-2",
+      "what": "The six re-pointed test lines became nine; driver-pack-solidoptics.test.js:84/:87 and driver-pack-giantsurface.test.js:64 build their ctx from gatesFor(ENTRY) and under the RULED default their subject (does the swapped material carry the legacy law values) would become a question about a gate — they NAME GATE_POLICY_ALL_ON with the reason on the line; the ruled value is asserted separately at :159 and :496.",
+      "recorded": "2026-09-03 build"
+    },
+    {
+      "id": "D-4",
+      "ac": "AC-2",
+      "what": "Five lines of tests/material-parity-list.test.js moved beyond the enumeration: uTermStrength RE-OPENS in the parity ledger (the first name ever to come back) because the ruling reaches the world-engine material and not Planet.js:1653's ungated legacy producer — exactly the divergence AC-1 declares. Line-neutral (step6-parity-ledger.md cites the file by line).",
+      "recorded": "2026-09-03 build"
+    },
+    {
+      "id": "D-5",
+      "ac": "AC-3",
+      "what": "labTermAB.js registers a material 'dispose' listener from the start (folded in from the F3 live finding: moons dispose via Moon.js:704 without unregistering); the suite asserts a disposed material leaves the registry.",
+      "recorded": "2026-09-03 build"
+    },
+    {
+      "id": "D-6",
+      "ac": "AC-0",
+      "what": "Two capture scripts, not one: capture-term-lab-baseline.mjs (the LAB's state) and capture-term-pack-baseline.mjs (the GAME's resolved drivers) — two producers, kept apart so one cannot cover for the other's silence; the second needs F3's node alias import.",
+      "recorded": "2026-09-03 build"
+    },
+    {
+      "id": "D-7",
+      "ac": "AC-0",
+      "what": "A shared harness tests/fixtures/term-lab-harness.mjs is imported by the capture script and the suite so both slice and run the lab identically; re-running it against the pinned f0b93aa blob reproduces the committed fixture byte-for-byte (two provenance fields added).",
+      "recorded": "2026-09-03 build"
+    }
+  ],
   "verifyWorkflow": {
     "scriptPath": "/home/ax/projects/personal-os-improvements/dev-collab/workflows/verify-workstream.mjs",
     "args": {
@@ -164,5 +207,11 @@
     "onScopeCommit": "ddb30dc (scope 250e712 + review amendments)",
     "decisionsStanding": "all eight scoping decisions stand; direction of convergence = OFF (decision 1, his 2026-07-16 ruling) confirmed — \"2 yes\" against the recommendation as stated",
     "buildOrder": "F3 first, then F35 (handoff-2026-09-03b §3)"
+  },
+  "buildCommits": {
+    "fixtures": "ee1dc6f",
+    "build": "0a536d6",
+    "branch": "worktree-agent-a7a81db245dc3b7b2 (opus builder in an isolated worktree from f0b93aa; the worktree arrived on master and was reset onto lane A before any work), merged into lane A after the F3 verdict",
+    "note": "report at the session scratchpad f35-build-report.md"
   }
 }
