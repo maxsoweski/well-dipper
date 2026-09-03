@@ -618,7 +618,7 @@ describe('GATE 6 · fences and the open registration hole', () => {
     // ⭐ B3 leg 2 APPENDS A SIXTH, `craterDeck` (ledger row P-14's crater half). Its predicate is
     // rockySurface's exact COMPLEMENT, `=== 'gas'`, so every gas body it claims was already claimed by
     // this deck and the swapped population does not move — see tests/driver-pack-craterdeck.test.js.
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures', 'giantSurface', 'fluvialDeck']);   // ⭐ A NINTH, 2026-09-02 — `fluvialDeck`, predicate `!== 'gas'`, so the SWAPPED POPULATION does not move here either.
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures', 'giantSurface', 'fluvialDeck', 'stormDeck']);   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.   // ⭐ A NINTH, 2026-09-02 — `fluvialDeck`, predicate `!== 'gas'`, so the SWAPPED POPULATION does not move here either.
   });
 
   it('⭐ the registered path actually writes the uPolar family onto a real gas body', () => {

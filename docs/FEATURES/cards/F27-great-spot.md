@@ -72,4 +72,4 @@ v1 scope cuts: animation/rotation of the interior (two-phase flow map) → defer
 - Code review (fable): no blockers/should-fix. Nits both applied: spotRot sign decorrelated from magnitude (separate PRNG draw); spotRadius slider max clamped 0.5→0.35 (slider extremes could push swirl past the hemisphere guard).
 - Infrastructure note: the registry-shaped uStorm* carriage (vec4[8] pos/params, vec3[8] color, count) is LIVE with F27 = index 0 — **F28 extends the same arrays**; uStormParams.z (mode) is carried but unread in GLSL (color baked JS-side), reserved for production wiring.
 - Taste forks for Max's lap: (a) wake/peel-off filament not built; (b) core saturation (brick-red lean); (c) interior rotation is static (animated swirl deferred per research doc).
-- Status: VERIFIED_PENDING_MAX
+- Status: VERIFIED_PENDING_MAX (lab, 2026-06-10) · ⭐ **WIRED INTO THE GAME 2026-09-03** — driver pack #10 `stormDeck` (`src/worldengine/drivers/stormDeck.js`), workstream `wire-storm-slice-lab-into-game`; the game's `uStorm*` slots are the lab's composed slots on every gas body. Max's game-side walk pending; QB-16 (blend) / QB-18 (ink-in-water) deferred by his 2026-09-02 ruling.

@@ -119,7 +119,7 @@ describe('6a — PACKS is an array with pinned MEMBERSHIP, not a pinned length',
     // (world-engine-lab.html:2123-2167) as one law. APPENDED, because the array order is the
     // composition order; its predicate is `!== 'gas'`, identical to rockySurface's, so it moves no
     // body between materials and only ADDS ten previously-unwritten names on the solid half.
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures', 'giantSurface', 'fluvialDeck']);
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures', 'giantSurface', 'fluvialDeck', 'stormDeck']);   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.
   });
 
   it('every entry carries the four contract fields, and the array is frozen', () => {
@@ -259,7 +259,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     const { material, res, count } = runOn(gas());
     // ⭐ `craterDeck` JOINS THE APPLIED LIST AT B3 LEG 2 — it is the gas half of ledger P-14, and a
     // gas body is exactly the population it exists for.
-    expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface']);
+    expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface', 'stormDeck']);   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.
     // ⭐ `solidOptics` joins the SKIPPED list here and nowhere else on a gas body: its predicate is
     // the complement of gas, so a gas body must never see it. That is the whole of its scope claim.
     expect(res.skipped).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck']);   // ⭐ `fluvialDeck` joins the SKIPPED list on a gas body, 2026-09-02 — same `!== 'gas'` predicate as the three above it, so a gas body never sees a sea level.
@@ -284,7 +284,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     // is the last gate name a skipped pack alone owns, and the line below is the whole of what this
     // check was ever for. If a pack is ever added that declares `aurora` over the gas predicate, the
     // right move is to re-aim again — not to drop the direction.
-    expect(res.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true, terminator: true });
+    expect(res.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true, terminator: true, greatSpot: true, stormTrain: true });   // ⭐ +2 GATES 2026-09-03 — `greatSpot` and `stormTrain`, the lab's two storm checkboxes become stormDeck's two registry gates (ALL_ON under the game's policy; workstream wire-storm-slice-lab-into-game).
     expect(Object.keys(res.gates)).not.toContain('aurora');
     expect(Object.keys(res.attributes).sort()).toEqual(['aBand', 'aMush', 'aShear', 'aStorm']);   // ⭐ aStorm ADDED 2026-08-28 — giantDeck.js:309 now bakes it beside the other three, from the same e5Drivers. WAS ['aBand','aMush','aShear'].
     expect(res.attributes.aBand.length).toBe(count);
@@ -339,7 +339,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     // ⭐ `craterDeck` JOINS THE SKIPPED LIST at B3 leg 2: its predicate is `=== 'gas'`, so on a solid
     // body the impact family keeps its single writer (`rockySurface`) and the collision throw stays
     // inert for that pair by construction.
-    expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface']);
+    expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface', 'stormDeck']);   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.
     // The gate map is the applied packs' names ONLY — the three skipped decks contribute none.
     expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: true, aurora: true, edifices: true, chaos: true, frost: true, glacial: true, deltas: true, coast: true, outflow: true });   // ⭐ THREE NEW NAMES 2026-09-02 — fluvialDeck's. ⛔ There is NO `lakes` key and that is the pack's own ruling: an off gate resolves to +0 and the lab's no-liquid value is -1, so `uSeaLevel` is emitted ungated (src/worldengine/drivers/fluvialDeck.js header).
     // ⛔ NO ATTRIBUTE IS BAKED ON A SOLID BODY. `aBand`/`aMush`/`aShear` are the gas deck's, and the
@@ -720,8 +720,8 @@ describe('6e — ⭐ the flag is ON by default since B7 (was OFF), and either va
     // under an explicit override, and `default` still has to read LAB_GAS_BODIES_DEFAULT rather than
     // the override in force, or the E caption would print a fact about the flag that isn't true.
     expect(lab.flag).toEqual({ enabled: true, source: 'override', default: true });
-    expect(lab.packsApplied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface']);
-    expect(lab.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true, terminator: true });
+    expect(lab.packsApplied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface', 'stormDeck']);   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.
+    expect(lab.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true, terminator: true, greatSpot: true, stormTrain: true });   // ⭐ +2 GATES 2026-09-03 — `greatSpot` and `stormTrain`, the lab's two storm checkboxes become stormDeck's two registry gates (ALL_ON under the game's policy; workstream wire-storm-slice-lab-into-game).
     expect(lab.provenance.isWorldEngine).toBe(true);
     expect(lab.uniformsWritten).toContain('uBandStrength');
   });
@@ -802,7 +802,7 @@ describe('6e — ⭐ the flag is ON by default since B7 (was OFF), and either va
     for (const b of [...GEN_GAS, ...GEN_SOLID]) {
       const packs = labPipelineAdmits(b.d, b.cond).packs;
       if (compositionClass(b.cond) === 'gas') {
-        expect(packs, b.id).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface']);   // ⛔ UNCHANGED BY fluvialDeck, and that is its gas-side scope claim: `!== 'gas'` never reaches this branch.
+        expect(packs, b.id).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface', 'stormDeck']);   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.   // ⛔ UNCHANGED BY fluvialDeck, and that is its gas-side scope claim: `!== 'gas'` never reaches this branch.
       } else {
         const banded = PACKS.find((e) => e.name === 'giantDeck').applies(b.cond) === true;
         if (banded) bandedSolid++;

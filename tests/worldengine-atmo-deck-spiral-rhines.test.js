@@ -36,6 +36,9 @@ const LAB_SRC_TEXT = src('../world-engine-lab.html') + '\n' + src('../src/worlde
 const LAB_CODE = strip(LAB_SRC_TEXT);
 const LAB_RAW = LAB_SRC_TEXT;
 const STORM_SRC = src('../src/worldengine/base/storm-e.js');
+// ⭐ 2026-09-03 (workstream wire-storm-slice-lab-into-game): the slot COMPOSER and the deckZ law LEFT the lab for
+// driver pack #10; the S2 carriage assertions below now read the ONE definition both front-ends import.
+const STORM_PACK_CODE = strip(src('../src/worldengine/drivers/stormDeck.js'));
 
 // balanced-brace body extractor over comment-stripped code (defn found by a signature substring).
 // Skips the parameter list FIRST (paren-balanced) so a destructured/`= {}` param brace isn't mistaken
@@ -374,27 +377,38 @@ describe('S2 carriage — uStormAux slot-sync (F2) + train s.mode pass-through',
   });
 
   it('[F2 slot-sync] uStormAux is written INSIDE BOTH gated composition blocks at the matching slot', () => {
-    // greatSpotEnabled block ⇒ slot 0; stormTrainEnabled loop ⇒ slot _stormN. A naive aux[0]=primary /
-    // aux[1..]=train fill desyncs from the other arrays whenever greatSpot is unchecked (train ⇒ slot 0+).
-    const greatBlock = fnBody(LAB_CODE, 'if (state.greatSpotEnabled && state.spotStrength');
-    const trainBlock = fnBody(LAB_CODE, 'if (state.stormTrainEnabled && state.trainStrength');
-    expect(greatBlock).toMatch(/uStormAux\.value\[0\]\.set\(/);          // slot-0 aux write in the greatSpot block
-    expect(trainBlock).toMatch(/uStormAux\.value\[_stormN\]\.set\(/);    // slot-_stormN aux write in the train loop
-    // the aux write sits alongside the other arrays at the SAME slot index in each block
-    expect(greatBlock).toMatch(/uStormPosSize\.value\[0\]/);
-    expect(trainBlock).toMatch(/uStormPosSize\.value\[_stormN\]/);
+    // greatSpot block ⇒ slot 0; stormTrain loop ⇒ slot _stormN. A naive aux[0]=primary / aux[1..]=train
+    // fill desyncs from the other arrays whenever greatSpot is unchecked (train ⇒ slot 0+).
+    // ⭐ RE-POINTED 2026-09-03: the blocks live in stormDeck.js `forEachStormSlot` (the lab's frame loop is
+    // now its SINK — asserted below — so the law is checked once, where both front-ends read it).
+    const greatBlock = fnBody(STORM_PACK_CODE, 'if (gates.greatSpot && s.spotStrength');
+    const trainBlock = fnBody(STORM_PACK_CODE, 'if (gates.stormTrain && s.trainStrength');
+    expect(greatBlock).toMatch(/write\(0,/);                                   // slot-0 write in the greatSpot block
+    expect(greatBlock).toMatch(/stormDeckZ\(s\.spotMode,\s*s\.spotAge\)/);   // … carrying the aux row at that slot
+    expect(trainBlock).toMatch(/write\(_stormN,/);                            // slot-_stormN write in the train loop
+    expect(trainBlock).toMatch(/stormDeckZ\(t\.mode,\s*t\.age\)/);           // … carrying the aux row at that slot
+    // the lab's sink lands all four arrays at the SAME slot index the composer handed it
+    const i0 = LAB_CODE.indexOf('forEachStormSlot(state, { greatSpot: state.greatSpotEnabled');
+    expect(i0).toBeGreaterThan(0);
+    const sink = LAB_CODE.slice(i0, LAB_CODE.indexOf('uniforms.uStormCount.value = _stormN;', i0));
+    expect(sink).toMatch(/uStormPosSize\.value\[_i\]\.set\(/);
+    expect(sink).toMatch(/uStormAux\.value\[_i\]\.set\(/);
   });
 
   it('[s.mode pass-through] the train slot writes the TRUE storm mode (was hard-coded 0)', () => {
-    const trainBlock = fnBody(LAB_CODE, 'if (state.stormTrainEnabled && state.trainStrength');
-    expect(trainBlock).toMatch(/uStormParams\.value\[_stormN\]\.set\(s\.rot,\s*s\.aspect,\s*s\.mode,\s*s\.companion\)/);
+    const trainBlock = fnBody(STORM_PACK_CODE, 'if (gates.stormTrain && s.trainStrength');
+    expect(trainBlock).toMatch(/\[t\.rot,\s*t\.aspect,\s*t\.mode,\s*t\.companion\]/);
   });
 
   it('[deckZ derivation] the carriage derives deckZ from mode+age via STORM_DECK, not a raw literal', () => {
     // the deck value is DERIVED (mode-0 tower / mode-1 floor) — the derivation reads STORM_DECK, so the
     // deck constants have a real consumer (F16-consts / AC-0 driver connectivity).
-    expect(LAB_CODE).toContain('_stormDeckZ');
-    expect(LAB_CODE).toMatch(/STORM_DECK\.(FLOOR|ZONE|TOWER)/);
+    // ⭐ RE-POINTED 2026-09-03: the ONE definition is stormDeck.js `stormDeckZ`; the lab holds NO copy and
+    // reaches it through the shared composer. Both halves are asserted so the move cannot silently fork.
+    expect(STORM_PACK_CODE).toContain('export function stormDeckZ');
+    expect(STORM_PACK_CODE).toMatch(/STORM_DECK\.(FLOOR|ZONE|TOWER)/);
+    expect(LAB_CODE).not.toContain('_stormDeckZ');
+    expect(LAB_CODE).toContain('forEachStormSlot(');
   });
 
   it('[envelope] S2 adds NO new baked attribute (aStorm stays the only one)', () => {

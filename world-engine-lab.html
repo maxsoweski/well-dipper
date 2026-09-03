@@ -185,7 +185,7 @@
     import { E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a regime tags. ⭐ `bakeClimateE5Attributes` is NO LONGER IMPORTED HERE — PLAN §4 Step 5c moved the band/jet bake into giantDeckPack, and an unused import is how a "deleted" copy stays one edit away from coming back
     import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)
     import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars, drawRotationHours } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation); + S1 giantDriverScalars (single-sourced radius/rotation wire) & drawRotationHours (per-archetype rotation draw, hot-Jupiter derived)
-    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms, resolveDriver } from './src/worldengine/port/writePackUniforms.js'; import { solidFeaturesPack, solidFeaturesLabState } from './src/worldengine/drivers/solidFeatures.js'; import { giantSurfacePack, giantSurfaceLabState } from './src/worldengine/drivers/giantSurface.js'; import { polarDeckPack, polarDeckLabState } from './src/worldengine/drivers/polarDeck.js'; import { solidOpticsPack, solidOpticsLabState } from './src/worldengine/drivers/solidOptics.js'; import { limbDeckPack, limbDeckLabState } from './src/worldengine/drivers/limbDeck.js'; import { rockySurfacePack, rockySurfaceLabState } from './src/worldengine/drivers/rockySurface.js'; import { craterDeckPack, craterDeckLabState } from './src/worldengine/drivers/craterDeck.js'; import { EMISSION_PHYS } from './src/worldengine/base/emission-e.js'; import { selectPacks } from './src/worldengine/drivers/index.js'; import { RING_VERTEX_GLSL, RING_FRAGMENT_GLSL, ringUniformsFrom, RING_MAX_RINGLETS, RING_MAX_GAPS } from './src/worldengine/shaders/ringRelief.glsl.js'; import { POSTERIZE_QUANTUM } from './src/rendering/posterizeLevels.js'; import { fluvialDeckPack, fluvialDeckLabState, fluvialDeckDirectDrivers } from './src/worldengine/drivers/fluvialDeck.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does ⭐⭐ A THIRD import STATEMENT JOINED THIS LINE 2026-08-22 — DRIVER PACK #2, `solidFeatures` (workstream AC5), for the same line-budget reason the first two share it. ⛔⛔ IT WAS INSERTED BEFORE THIS COMMENT AND NEVER APPENDED AFTER IT: an import appended past a trailing `//` lands INSIDE the comment, both new imports were silently disabled exactly that way on 2026-08-21, every headless gate stayed GREEN, and the lab died only on page load. Loading the page is the only thing that found it. ⭐ AND A FOURTH, 2026-08-22 — DRIVER PACK #8 `giantSurface`, the GAS-class complement, wired the same day and under the same two rules: inserted BEFORE this comment, and sharing this line rather than spending one. ⭐ AND A FIFTH AND SIXTH, 2026-08-25 — THE CRATER WIRE: `rockySurface` (the SOLID-class complement of `giantSurface`, the same two shared blocks under the exact complement predicate) and `craterDeck` (its gas-class sibling over the crater block alone). Under the same two rules again: inserted BEFORE this comment, and sharing this line rather than spending two. ⛔ AND THE PAGE WAS LOADED. The mirrors' call site records at :2880 why no headless gate can stand in for that here either. ⭐ AND A SEVENTH, 2026-08-25 — `EMISSION_PHYS`, which is NOT a pack: it is the four-constant blackbody register the game already ships, and the lab held its own copies of three of them. Same two rules again. ⭐ AND AN EIGHTH, 2026-08-26 — `selectPacks`, the SHARED APPLICABILITY LAW from the composition point. NOT a pack: it is the predicate list applyDriverPacks itself filters on, so adopting it single-homes the question "does this pack apply to this body" that the lab has been hand-writing as `compositionClass(...) === 'gas'` in three separate places. Inserted BEFORE this comment and sharing this line, under the same two rules as the seven above. ⭐ AND A NINTH + TENTH, 2026-08-27 — F51's ring module and the shared posterize quantum. Inserted BEFORE this comment, sharing this line, under the same two rules as the eight above.
+    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms, resolveDriver } from './src/worldengine/port/writePackUniforms.js'; import { solidFeaturesPack, solidFeaturesLabState } from './src/worldengine/drivers/solidFeatures.js'; import { giantSurfacePack, giantSurfaceLabState } from './src/worldengine/drivers/giantSurface.js'; import { polarDeckPack, polarDeckLabState } from './src/worldengine/drivers/polarDeck.js'; import { solidOpticsPack, solidOpticsLabState } from './src/worldengine/drivers/solidOptics.js'; import { limbDeckPack, limbDeckLabState } from './src/worldengine/drivers/limbDeck.js'; import { rockySurfacePack, rockySurfaceLabState } from './src/worldengine/drivers/rockySurface.js'; import { craterDeckPack, craterDeckLabState } from './src/worldengine/drivers/craterDeck.js'; import { EMISSION_PHYS } from './src/worldengine/base/emission-e.js'; import { selectPacks } from './src/worldengine/drivers/index.js'; import { RING_VERTEX_GLSL, RING_FRAGMENT_GLSL, ringUniformsFrom, RING_MAX_RINGLETS, RING_MAX_GAPS } from './src/worldengine/shaders/ringRelief.glsl.js'; import { POSTERIZE_QUANTUM } from './src/rendering/posterizeLevels.js'; import { fluvialDeckPack, fluvialDeckLabState, fluvialDeckDirectDrivers } from './src/worldengine/drivers/fluvialDeck.js'; import { stormDeckPack, stormDeckLabState, forEachStormSlot } from './src/worldengine/drivers/stormDeck.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does ⭐⭐ A THIRD import STATEMENT JOINED THIS LINE 2026-08-22 — DRIVER PACK #2, `solidFeatures` (workstream AC5), for the same line-budget reason the first two share it. ⛔⛔ IT WAS INSERTED BEFORE THIS COMMENT AND NEVER APPENDED AFTER IT: an import appended past a trailing `//` lands INSIDE the comment, both new imports were silently disabled exactly that way on 2026-08-21, every headless gate stayed GREEN, and the lab died only on page load. Loading the page is the only thing that found it. ⭐ AND A FOURTH, 2026-08-22 — DRIVER PACK #8 `giantSurface`, the GAS-class complement, wired the same day and under the same two rules: inserted BEFORE this comment, and sharing this line rather than spending one. ⭐ AND A FIFTH AND SIXTH, 2026-08-25 — THE CRATER WIRE: `rockySurface` (the SOLID-class complement of `giantSurface`, the same two shared blocks under the exact complement predicate) and `craterDeck` (its gas-class sibling over the crater block alone). Under the same two rules again: inserted BEFORE this comment, and sharing this line rather than spending two. ⛔ AND THE PAGE WAS LOADED. The mirrors' call site records at :2880 why no headless gate can stand in for that here either. ⭐ AND A SEVENTH, 2026-08-25 — `EMISSION_PHYS`, which is NOT a pack: it is the four-constant blackbody register the game already ships, and the lab held its own copies of three of them. Same two rules again. ⭐ AND AN EIGHTH, 2026-08-26 — `selectPacks`, the SHARED APPLICABILITY LAW from the composition point. NOT a pack: it is the predicate list applyDriverPacks itself filters on, so adopting it single-homes the question "does this pack apply to this body" that the lab has been hand-writing as `compositionClass(...) === 'gas'` in three separate places. Inserted BEFORE this comment and sharing this line, under the same two rules as the seven above. ⭐ AND A NINTH + TENTH, 2026-08-27 — F51's ring module and the shared posterize quantum. Inserted BEFORE this comment, sharing this line, under the same two rules as the eight above.
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -1800,111 +1800,59 @@
     // the OFFGATE render byte-identical after a gas→solid preset change; an early-return would leave
     // stale gas storm state. On the reseed path (preset unchanged) that same strength-0 result is a
     // no-op, so reseedGiant() is naturally inert on non-gas presets.
-    // S2 deckZ derivation (§3.1): the deck a storm occupies IS the storm. Mode 0 (warm anticyclone) earns
-    // a TOWER above the zone deck, height ∝ prominence (older/redder = higher, shares the chromophore age
-    // driver: prom = 0.35 + 0.65·age); mode 1 (dark spot) is a hole that REVEALS the deep FLOOR. Consumed
-    // by the per-frame uStormAux carriage; STORM_DECK is the single source of the deck constants.
-    const _stormDeckZ = (mode, age) => (mode >= 0.5)
-      ? STORM_DECK.FLOOR
-      : STORM_DECK.ZONE + (STORM_DECK.TOWER - STORM_DECK.ZONE) * (0.35 + 0.65 * (age ?? 0));
+    // S2 deckZ derivation (§3.1) — ⭐ MOVED 2026-09-03 to src/worldengine/drivers/stormDeck.js `export function stormDeckZ(`
+    // (driver pack #10, workstream wire-storm-slice-lab-into-game). The deck a storm occupies IS the storm: mode 0 earns a
+    // TOWER above the zone deck (prom = 0.35 + 0.65·age), mode 1 reveals the FLOOR; STORM_DECK stays the single source of the
+    // deck constants, now read by the ONE definition both front-ends import. frame() reaches it through forEachStormSlot —
+    // the lab holds no copy: a second `_stormDeckZ` here would be the two-routes disease this pack was extracted to end.
+    //
+    //
 
     function applyStormState(){
       const _fp = DRIVER_PRESETS[driverUI.preset];
-      // ── #3b Slice P: PHYSICS storm/vortex placement — REPLACES the F27/F28/F29
-      // mulberry32 hash closures with the storm-e.js writer. resolveStormE places
-      // vortices at the anticyclonic-shear ARGMAX over the PV staircase (band-confined,
-      // deterministic tie-break lowest-lat→lowest-node), draws longitude/phase/count-mix
-      // from the disjoint stormE:{place,age,phase,polar} alea streams, and returns a
-      // place-once seeded age + phase bank (the #4/#5/#8 oscillator substrate). Placement
-      // is STILL SEED IDENTITY (macroSeed, stormSeed) — same pair ⇒ same latitudes on
-      // re-approach; the folder 🎲 rerolls stormSeed THROUGH applyDrivers. Gas gate keys
-      // on composition 'h2-he' (designDecision-5): every solid preset ⇒ count 0 ⇒ the
-      // per-frame carriage writes uStormCount 0 ⇒ byte-identical off-gate render. Discrete
-      // vortices fill the existing uStorm[8]/uPolar carriage (unchanged); the ONE new
-      // baked field is the storm/convection MASK (aStorm, filled in rebakeE5Bands). Colors
-      // are materialized HERE from state.bandTint + the vortex role/mode (V-α.4 will swap
-      // this for the writer's ageScalar→chromophore ramp).
-      const _bt = state.bandTint;
-      // V-α.4 chromophore aging: the WARM anticyclones (grs / pearl / oval) take their color
-      // from the writer's per-vortex ageScalar via the white→red ramp (storm-e chromophoreColor),
-      // lightly deck-tinted so the family still reads as one planet — two vortices of different
-      // seeded age now read visibly different (AC-VIS c). Dark cyclonic features (dark-spot / barge)
-      // do NOT redden: their color is a cleared/darker hole (taxonomy 1.1/4.1).
-      const _stormColor = (role, mode, age = 0, coreScale = 1) => {
-        if (role === 'dark-spot') {
-          // V-β.3 lifecycle: coreScale = dark-core visibility (precursor 0 = NO cleared hole, blends into
-          // the deck / companion-only read; mature 1 = full clearing; dissipating ~0.45 = weak contrast).
-          // Blend the cleared color toward the deck background (bandTint) by (1−coreScale).
-          const _d = chromophoreColor(age, 1);                                              // cleared dark hole (ice-giant GDS) — neutral, no reddening
-          const cs = (coreScale == null) ? 1 : coreScale;
-          return [_bt[0] * (1 - cs) + _d[0] * cs, _bt[1] * (1 - cs) + _d[1] * cs, _bt[2] * (1 - cs) + _d[2] * cs];
-        }
-        if (role === 'barge')     return [_bt[0] * 0.50, _bt[1] * 0.42, _bt[2] * 0.38];     // brown barge (dark cyclonic)
-        if (role === 'scooter')   return [0.85, 0.90, 1.0];                                 // Neptune blue-white companion
-        const _cr = chromophoreColor(age, 0);                                               // white→red age ramp (the chromophore output)
-        return [_bt[0] * 0.20 + _cr[0] * 0.80, _bt[1] * 0.20 + _cr[1] * 0.80, _bt[2] * 0.20 + _cr[2] * 0.80];  // grs / pearl / oval — age-reddened, lightly deck-tinted
-      };
-      // derive-not-freeze Slice D: the SAME per-seed D-slot triple the band + mask bakes use. Derived
-      // FRESH ([RESOLVED-BY-REVISE:2]) from the same (regime, condition, macroSeed) → identical _gd to
-      // rebakeE5Bands (drawGiantConditions is deterministic), so placement rides the SAME per-seed jets
-      // the bands + mask bake ([RESOLVED-BY-REVISE-2:minor-1] — consumer (c) VORTICES). The derived shellDepthFrac/internalHeat/dissipation OVERRIDE the frozen DRIVER_BUNDLES in resolveStormE's resolveParams → per-seed uPeak/m/sEq → per-seed storm latitudes (AC-LAT) on the shear argmax.
-      // ⭐ PLAN §4 Step 4 item 5, THE SECOND READER of the retired preset-name table — re-sourced in the same edit as rebakeE5Bands, whose ⛔ ORDER note governs this site too: the regime is classified off the PRE-draw _scond, never off drawGiantConditions' output.
-      // ⛔ THE NON-GAS FALLBACK IS REPRODUCED EXACTLY RATHER THAN DROPPED, and that is a measurement, not caution: giantRegimeOf is TOTAL, so an ungated call answers for solid presets too — differently on 13/13 of them — which moves the polar bank this function writes (state.polarSides / state.polarR0) on 52/52 (preset, seed) pairs tried. polarStrength and the storm count stay 0 either way, so the render is off-gate regardless; the STATE written is not, and no test in this repo would have seen that.
+      // ── #3b Slice P → ⭐ DRIVER PACK #10 (2026-09-03, workstream wire-storm-slice-lab-into-game). The storm WRITER
+      // (resolveStormE — shear-argmax placement over the PV staircase, the disjoint stormE:{place,age,phase,polar,
+      // emboss,billow} alea streams, seed identity (macroSeed, stormSeed)) was already shared under src/. What stood
+      // HERE and is now gone from the lab: the colour law `_stormColor`, the driver-bundle construction, and the
+      // fifteen-field mapping onto state.spot* / state.train* / state._stormUranian. All three live in ONE module the
+      // GAME imports too — src/worldengine/drivers/stormDeck.js `export function stormDeckPack(` — and the lab reads
+      // them back through `stormDeckLabState`, exactly as it reads the polar bank through polarDeckLabState below.
+      // ⛔ THE SWAP IS MEASURED, NOT ARGUED: tests/fixtures/storm-lab-state-baseline.json is this function's OWN output
+      // at 520f2c0 (sliced from the pinned blob, run through new Function), and tests/driver-pack-stormdeck.test.js
+      // pins the pack's mirror + composer to it byte-for-byte over every preset × seed pair × obliquity × gate combo.
+      // Gas gate keys on composition 'h2-he' inside the writer: every solid preset ⇒ strength 0 ⇒ the per-frame
+      // carriage writes uStormCount 0 ⇒ byte-identical off-gate render. ⛔ THE NON-GAS RESET IS REPRODUCED EXACTLY
+      // (spotStrength/trainStrength 0, trainSpots [], trainCount 0, _stormUranian false; spot fields untouched) —
+      // the mirror is never EMPTY off-gate, because an early return that wrote nothing would leave a gas world's
+      // storms on state after a gas→solid preset change (the stale-state skew evidence/README.md records).
       const _su = state._derived || deriveUniforms(_fp, driverUI.qualityTier);
       const _scond = deriveConditionVector(_fp, _su, state.planetRadiusEarth);
-      const _stormRegime = compositionClass(_scond) === 'gas' ? giantRegimeOf(_scond) : E5_REGIME.GAS_GIANT;
-      const _sgd = deriveGiantDrivers(drawGiantConditions(_stormRegime, _scond, state.macroSeed | 0));
-      const _stormDrivers = {
-        ..._sgd,                                     // per-seed triple (consumer c — vortices)
-        // MERGE 2026-07-30 (lanes A+ATMO) — the two lanes fenced these SAME lines with CONTRADICTORY
-        // pins. Atmo requires the bundle to come from giantDriverScalars (one source for both sites, and
-        // it carries the DRAWN rotation that L1 still read frozen off _fp). L1 requires `radius` to name
-        // the condition vector (tests/radius-live-feed-fence.test.js AC-0 source pins). BOTH are kept,
-        // because both guards are worth having and the values are provably identical: giant-drivers.js:277
-        // computes radius as (planetRadiusEarth ?? 1)/11.2, and _gcond/_scond.radiusEarth is
-        // deriveConditionVector fed state.planetRadiusEarth (pinned by that same fence). The explicit key
-        // therefore overrides the spread with the same number — no behavioural ambiguity.
-        // ⚠ The redundancy is DELIBERATE, not sloppiness. It should collapse only when someone reconciles
-        // the two contracts on purpose; deleting either line silently drops a lane's regression guard.
-        ...giantDriverScalars(state.planetRadiusEarth, state.rotationHours ?? _fp.rotationHours, state.e5RotationScale),
-        // radius-live-feed R1 (2026-07-25): DRAWN radius via the condition vector (_scond, :2930) — the
-        // SAME live value rebakeE5Bands() feeds the band/mask bake. These two MUST move together: the
-        // storm writer places vortices on the shear argmax of the PV staircase the band bake produced, so
-        // a frozen radius here against a live radius there would put vortices at latitudes the bands no
-        // longer sit at. Bit-inert at canonical radius (R === R_c).
-        radius: (_scond.radiusEarth ?? 1) / 11.2,
-        composition: _fp.atmosphere?.composition,   // the gas gate (designDecision-5)
-        T_eq: _fp.T_eq ?? 288,                       // the deck-personality ramp
-      };
-      if (state.e5Obliquity > 0) _stormDrivers.obliquityDeg = state.e5Obliquity;
-      const _storm = resolveStormE(_stormRegime, _stormDrivers, state.macroSeed | 0, state.stormSeed | 0);
-      // F27 great spot ← writer primary (null off-gate ⇒ strength 0 keeps the carriage silent)
-      state.spotStrength = _storm.strength;
-      if (_storm.primary){
-        const _p = _storm.primary;
-        state.spotCenter = _p.center;
-        state.spotRadius = _p.radius;
-        state.spotRot = _p.rot;
-        state.spotAspect = _p.aspect;
-        state.spotMode = _p.mode;
-        state.spotColor = _stormColor(_p.role, _p.mode, _p.ageScalar, _p.coreScale);   // V-β.3 lifecycle core visibility
-        state.spotCompanion = _p.companion;
-        // S2 per-storm scalar substrate (append-only stormE:emboss/billow + the age scalar) — stashed for
-        // the per-frame uStormAux slot-0 carriage (deckZ derived from mode+age via STORM_DECK).
-        state.spotAge = _p.ageScalar;
-        state.spotEmboss = _p.embossDir;
-        state.spotBillow = _p.billowPhase;
-      }
-      // F28 storm clusters ← writer train members (vortex street / brown barge / scooters)
-      state.trainStrength = _storm.strength;
-      state.trainSpots = _storm.train.map((v) => ({
-        center: v.center, radius: v.radius, rot: v.rot, aspect: v.aspect,
-        color: _stormColor(v.role, v.mode, v.ageScalar), companion: v.companion,
-        // S2: carry the per-storm scalars + the TRUE mode into the train-slot carriage (mode was
-        // hard-coded 0 at the uStormParams write — §0.4 consumer-safe: only slot-0's z is read today).
-        age: v.ageScalar, embossDir: v.embossDir, billowPhase: v.billowPhase, mode: v.mode,
-      }));
-      state.trainCount = state.trainSpots.length;
+      // The pack re-derives pack #1's input chain from the SAME (regime, condition, macroSeed) rebakeE5Bands feeds the
+      // band + MASK bake — drawGiantConditions is deterministic, so placement rides the SAME per-seed jets the mask was
+      // placed around (derive-not-freeze Slice D, consumer (c) VORTICES). The ctx below is the lab's own _dctx shape:
+      // ⚠ BOTH radius guards are KEPT, deliberately (MERGE 2026-07-30, lanes A+ATMO): giantDriverScalars carries the
+      // DRAWN rotation the atmo lane pinned, and the explicit `radius:` names the condition vector the L1 lane pinned
+      // (tests/radius-live-feed-fence.test.js). giant-drivers.js computes radius as (planetRadiusEarth ?? 1)/11.2 and
+      // _scond.radiusEarth is deriveConditionVector fed state.planetRadiusEarth, so the override carries the same
+      // number — no behavioural ambiguity; deleting either line silently drops a lane's regression guard.
+      // radius-live-feed R1 (2026-07-25): DRAWN radius via the condition vector — the SAME live value rebakeE5Bands()
+      // feeds the band/mask bake. These two MUST move together: a frozen radius here against a live radius there
+      // would put vortices at latitudes the bands no longer sit at. Bit-inert at canonical radius (R === R_c).
+      // ⭐ stormSeed IS PASSED AND NOT DEFAULTED — Max's ruling 2026-08-22 (AC2-pack-law-survey.md): the lab's slider
+      // is a LAB AUTHORING KNOB, so the divergence from the game's `GAME_STORM_SEED = 0` is DECLARED, not closed.
+      // gates: ALL ON for the pack call — the lab applies its OWN ✓ checkboxes in frame() (forEachStormSlot), so the
+      // mirror must carry the UNGATED record or the decision is applied twice (the polarDeckLabState rule).
+      const _sd = stormDeckPack(_scond, {
+        displayRadiusEarth: visScaleOf(state.planetRadiusEarth ?? 1),
+        macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0,
+        animRate: 1, gates: { greatSpot: true, stormTrain: true }, relevance: {},
+        rotationHours: state.rotationHours ?? _fp.rotationHours, rotationScale: state.e5RotationScale,
+        ...(state.e5Obliquity > 0 ? { obliquityDeg: state.e5Obliquity } : {}),
+        e5DriverOverrides: {
+          ...giantDriverScalars(state.planetRadiusEarth, state.rotationHours ?? _fp.rotationHours, state.e5RotationScale),
+          radius: (_scond.radiusEarth ?? 1) / 11.2,
+        },
+      });   Object.assign(state, stormDeckLabState(_sd));   // F27 great spot ← primary; F28 clusters ← train; _stormUranian ← writer
       // F29 polar vortex ← DRIVER PACK (polarDeck) — the eight-field bank AND the cap-tint law now
       // live in ONE module the GAME imports too: src/worldengine/drivers/polarDeck.js
       // `export function polarDeckPack(`. The hand-written bank that stood here read the SAME
@@ -1913,14 +1861,66 @@
       // ⭐ stormSeed IS PASSED AND NOT DEFAULTED — Max's ruling 2026-08-22 (AC2-pack-law-survey.md):
       // the lab's slider is a LAB AUTHORING KNOB, so the divergence from the game's
       // `GAME_STORM_SEED = 0` is DECLARED, not closed. Defaulting here would close it by accident.
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
       const _pd = polarDeckPack(_scond, {
         displayRadiusEarth: visScaleOf(state.planetRadiusEarth ?? 1),
         macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0,
         ...(state.e5Obliquity > 0 ? { obliquityDeg: state.e5Obliquity } : {}),
       });   Object.assign(state, polarDeckLabState(_pd));
-      // Slice 1: _storm.uranian is read downstream in applyDrivers (F31 hazeMute bump). The extraction
-      // stashes it on state so that consumer keeps working — applyStormState() runs BEFORE that line.
-      state._stormUranian = _storm.uranian;
+      // Slice 1: _storm.uranian is read downstream in applyDrivers (F31 hazeMute bump); the mirror stashes it on
+      // state (`_stormUranian`) so that consumer keeps working — applyStormState() runs BEFORE that line.
+      //
     }
     // Slice 1 coherence seam (§2): ONE seed pass re-runs the seeded terrain offsets, the E5 band +
     // storm MASK bake, AND the discrete vortex/pole placement together — so mask and vortices always
@@ -5165,34 +5165,34 @@
       uniforms.uWeatherWarp.value      = state.weatherWarp;
       uniforms.uWeatherDry.value       = state.weatherDry;
       uniforms.uWeatherOffset.value.set(state.weatherOffset[0], state.weatherOffset[1], state.weatherOffset[2]);
-      // F27/F28 storm carriage — COMPOSE the slots each frame (no allocations: .set()
-      // on the preallocated vectors): idx 0 = F27 great spot iff ITS gate passes;
-      // next slots = F28 train spots iff THEIR gate passes (cap 8); uStormCount =
-      // total written. Each feature drops out independently — stormTrainEnabled false
-      // reproduces the F27-committed writes exactly; BOTH off (or any terrestrial
-      // preset deriving strength 0) ⇒ count 0 ⇒ every GLSL storm term no-ops ⇒
-      // byte-identical F25 rendering (the regression contract).
-      let _stormN = 0;
-      if (state.greatSpotEnabled && state.spotStrength > 0){
-        uniforms.uStormPosSize.value[0].set(state.spotCenter[0], state.spotCenter[1], state.spotCenter[2], state.spotRadius);
-        uniforms.uStormParams.value[0].set(state.spotRot, state.spotAspect, state.spotMode, state.spotCompanion);
-        uniforms.uStormColor.value[0].set(state.spotColor[0], state.spotColor[1], state.spotColor[2]);
-        // S2 slot-sync (F2): uStormAux MUST be written at the SAME _stormN as the arrays above, inside
-        // THIS gated block — with greatSpot off, train members occupy slot 0+, so a naive aux[0]=primary
-        // fill would desync deck/emboss scalars from another storm under the stormTrainEnabled toggle.
-        uniforms.uStormAux.value[0].set(state.spotAge, state.spotEmboss, _stormDeckZ(state.spotMode, state.spotAge), state.spotBillow);
-        _stormN = 1;
-      }
-      if (state.stormTrainEnabled && state.trainStrength > 0){
-        for (let i = 0; i < state.trainSpots.length && _stormN < 8; i++, _stormN++){
-          const s = state.trainSpots[i];
-          uniforms.uStormPosSize.value[_stormN].set(s.center[0], s.center[1], s.center[2], s.radius * state.trainRadiusScale);
-          uniforms.uStormParams.value[_stormN].set(s.rot, s.aspect, s.mode, s.companion);   // S2: TRUE mode (was 0) — §0.4 consumer-safe
-          uniforms.uStormColor.value[_stormN].set(s.color[0], s.color[1], s.color[2]);
-          uniforms.uStormAux.value[_stormN].set(s.age, s.embossDir, _stormDeckZ(s.mode, s.age), s.billowPhase);   // S2 slot-sync (F2): SAME _stormN as the arrays above
-        }
-      }
-      uniforms.uStormCount.value = _stormN;   // ✓ both enable gates folded in
+      // F27/F28 storm carriage — COMPOSE the slots each frame. ⭐ 2026-09-03: the composition LAW moved to
+      // src/worldengine/drivers/stormDeck.js `export function forEachStormSlot(` (driver pack #10, workstream
+      // wire-storm-slice-lab-into-game); this block is now the lab's SINK for it. The lab's own ✓ checkboxes are
+      // the gates, `state` is the record (applyStormState mirrored it, ungated — including the trainRadiusScale
+      // lab knob the composer multiplies onto every train radius), and each written slot lands on the preallocated
+      // vectors through .set(). Slot 0 = F27 great spot iff ITS gate passes; next slots = F28 train spots iff THEIR
+      // gate passes (cap 8); uStormAux is written at the SAME slot index as the arrays (S2 slot-sync); uStormCount =
+      // total written. Each feature drops out independently — stormTrainEnabled false reproduces the F27-committed
+      // writes exactly; BOTH off (or any terrestrial preset deriving strength 0) ⇒ count 0 ⇒ every GLSL storm term
+      // no-ops ⇒ byte-identical F25 rendering (the regression contract, unchanged by the move). The game calls the
+      // SAME function once at material creation under ALL-ON gates (stormDeckPack); the lab calls it per frame.
+      const _stormN = forEachStormSlot(state, { greatSpot: state.greatSpotEnabled, stormTrain: state.stormTrainEnabled }, (_i, _ps, _pr, _c, _a) => {
+        uniforms.uStormPosSize.value[_i].set(_ps[0], _ps[1], _ps[2], _ps[3]);
+        uniforms.uStormParams.value[_i].set(_pr[0], _pr[1], _pr[2], _pr[3]);
+        uniforms.uStormColor.value[_i].set(_c[0], _c[1], _c[2]);
+        uniforms.uStormAux.value[_i].set(_a[0], _a[1], _a[2], _a[3]);
+      });
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      //
+      uniforms.uStormCount.value = _stormN;   // ✓ both enable gates folded in — by forEachStormSlot
       // F29 polar vortex — polarVortexEnabled gates strength→0 ONLY (the GLSL call
       // site and every polar term key on uPolarStrength alone, so one gate kills the
       // whole combiner and restores byte-identical F28 output); everything else

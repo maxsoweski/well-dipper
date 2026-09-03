@@ -483,7 +483,7 @@ describe('2. the collapse in per-body variation', () => {
       'uPlanetTempEq', 'uPldStrength', 'uPolarMode', 'uPolarPhase',
       'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint', 'uSedColor', 'uShieldStratoMix',
-      'uStarBrightness2', 'uStarColor1', 'uStarColor2', 'uStrandStrength', 'uTermColor',
+      'uStarBrightness2', 'uStarColor1', 'uStarColor2', 'uStormAux', 'uStormColor', 'uStormCount', 'uStormParams', 'uStormPosSize', 'uStrandStrength', 'uTermColor',
       // ⭐⭐ `uTermStrength` LEFT THIS LIST ON 2026-08-21 AND THE DIRECTION IS THE WHOLE POINT — a name
       // leaving `labVarying` normally means a wire died, and here it means one landed. The lab used
       // to write TWO values across the corpus: 0.15 on the 163 solid bodies `solidOptics` claimed,
@@ -580,7 +580,7 @@ describe('2. the collapse in per-body variation', () => {
       'uLiquidMask', 'uMacroOffset', 'uNoiseScale', 'uOutflowActivity', 'uOutflowDensity', 'uPerturb', 'uPlanetTempEq',
       'uPldStrength', 'uPolarMode', 'uPolarPhase', 'uPolarPole',
       'uPolarR0', 'uPolarRing', 'uPolarSides', 'uPolarStrength',
-      'uPolarTint', 'uSeaLevel', 'uSedColor', 'uShieldStratoMix', 'uStrandStrength', 'uTermColor',
+      'uPolarTint', 'uSeaLevel', 'uSedColor', 'uShieldStratoMix', 'uStormAux', 'uStormColor', 'uStormCount', 'uStormParams', 'uStormPosSize', 'uStrandStrength', 'uTermColor',   // ⭐⭐ AND FIVE MORE 2026-09-03, `stormDeck` (driver pack #10, workstream wire-storm-slice-lab-into-game): uStormAux, uStormColor, uStormCount, uStormParams, uStormPosSize — the F27/F28 carriage, written by NOTHING before this commit (uStormCount was 0 on every game body, so every GLSL storm term no-op'd). All five VARY per gas body (count 2–7; slots re-derived per (macroSeed, GAME_STORM_SEED)), so they land in `labVarying` too and the residue below is unchanged.
       'uTermStrength', 'uTermWidth', 'uTerraceCount', 'uVolcanismStrength',
       'uWeatheredColor',
     ]);

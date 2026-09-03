@@ -159,7 +159,7 @@ export function resolveDriver(name, d, ctx) {
     }
     return d;
   }
-  if (Array.isArray(d)) {
+  if (Array.isArray(d)) { if (isVectorRows(d)) return assertVectorRows(name, d);   // ⭐ 2026-09-03 THE ONE SHAPE ADDED FOR THE STORM SLICE — an array of equal-length numeric ROWS for an array-valued vector uniform (`uStormPosSize: vec4[8]`); see the helpers at EOF (workstream wire-storm-slice-lab-into-game, AC-1). A flat numeric array falls through unchanged.
     for (let i = 0; i < d.length; i++) {
       if (typeof d[i] !== 'number' || !Number.isFinite(d[i])) {
         throw new PackContractError(`driver '${name}' component ${i} is not a finite number.`);
@@ -276,7 +276,7 @@ export function writePackUniforms(uniforms, drivers, ctx) {
     }
     const v = resolveDriver(name, drivers[name], ctx);
     if (Array.isArray(v)) {
-      const target = slot.value;
+      const target = slot.value; if (isVectorRows(v)) { writeVectorRows(name, target, v); continue; }   // ⭐ 2026-09-03 slot-wise for the storm carriage — NEVER through the element-wise branch two lines down, which would REPLACE the material's Vector4 slots with plain arrays (renders as nothing, throws nowhere; measured at scoping). Helpers at EOF.
       if (target && typeof target.set === 'function') target.set(...v);
       else if (Array.isArray(target)) for (let i = 0; i < v.length; i++) target[i] = v[i];
       else {
@@ -307,4 +307,50 @@ export function assertPackResult(result, packName = 'pack') {
     );
   }
   return result;
+}
+
+// ── The storm carriage's shape, appended at EOF so nothing above shifts (§10) ──────────────────
+// ⭐ ADDED 2026-09-03 (workstream wire-storm-slice-lab-into-game, AC-1). The storm slice is three `vec4[8]`,
+// one `vec3[8]` and an `int`; before this the writer admitted flat numeric arrays only, and its
+// element-wise branch would have overwritten the material's Vector4 slots with numbers. This is NOT a
+// general nested-value contract: exactly one shape — an array of equal-length numeric rows — written
+// slot-wise through each target element's `.set(...)`. The pack emits EXACTLY `count` rows, so the
+// writer touches only those slots and the material's zero defaults stand behind the count (which is
+// what the lab's frame loop leaves behind too). Every pre-existing driver is byte-inert under this
+// change: tests/driver-pack-stormdeck.test.js re-resolves all of them against a fixture captured at
+// 520f2c0 (156 corpus bodies + 18 presets) and asserts stormDeck is the only pack emitting rows.
+export function isVectorRows(d) {
+  return Array.isArray(d) && d.length > 0 && Array.isArray(d[0]);
+}
+export function assertVectorRows(name, d) {
+  const width = d[0].length;
+  for (let i = 0; i < d.length; i++) {
+    if (!Array.isArray(d[i]) || d[i].length !== width) {
+      throw new PackContractError(`driver '${name}' row ${i} is ragged (expected ${width} components).`);
+    }
+    for (let j = 0; j < width; j++) {
+      if (typeof d[i][j] !== 'number' || !Number.isFinite(d[i][j])) {
+        throw new PackContractError(`driver '${name}' row ${i} component ${j} is not a finite number.`);
+      }
+    }
+  }
+  return d;
+}
+export function writeVectorRows(name, target, rows) {
+  if (!Array.isArray(target)) {
+    throw new PackContractError(
+      `writePackUniforms: driver '${name}' resolved to an array of vectors but uniform '${name}' is not ` +
+      'an array of settable vectors.',
+    );
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const el = target[i];
+    if (!el || typeof el.set !== 'function') {
+      throw new PackContractError(
+        `writePackUniforms: driver '${name}' row ${i} has no settable slot to land in (uniform '${name}' ` +
+        `carries ${target.length} slots).`,
+      );
+    }
+    el.set(...rows[i]);
+  }
 }

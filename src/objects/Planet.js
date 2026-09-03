@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { assignBodyName } from '../util/scene-naming.js';
 import { HEIGHT_NOISE_GLSL, HEIGHT_NOISE_UNIFORMS_GLSL } from '../worldengine/shaders/heightNoise.glsl.js';
-import { applyDriverPacks, selectPacks } from '../worldengine/drivers/index.js'; import { attachLabBake, disposeLabBake } from '../rendering/bake/labBakeHost.js';   // §4 Step 6a · ⭐ 2026-09-01 THE PROVINCE CUBE, 2026-09-02 THE WHOLE LAB BAKE (relief + crater + carve + ribbon) — RIDES THIS LINE (this file is symbol-cited to :2251; a new import line shifts every citation below it). The host runs the lab's dispatch over the shared carrier and bakes the four cubes on the body's first draw.
+import { applyDriverPacks, selectPacks } from '../worldengine/drivers/index.js'; import { attachLabBake, disposeLabBake } from '../rendering/bake/labBakeHost.js'; import { registerStormAB, unregisterStormAB } from '../rendering/labStormAB.js';   // §4 Step 6a · ⭐ 2026-09-01 THE PROVINCE CUBE, 2026-09-02 THE WHOLE LAB BAKE (relief + crater + carve + ribbon) — RIDES THIS LINE (this file is symbol-cited to :2251; a new import line shifts every citation below it). The host runs the lab's dispatch over the shared carrier and bakes the four cubes on the body's first draw.
 import { gameDisplayRadiusEarth } from '../worldengine/port/writePackUniforms.js';
 import { fnv1aString } from 'motion-test-kit/core/hash/fnv1a.js';          // the 5d macroSeed shape, numeric form
 import {
@@ -1998,7 +1998,7 @@ export class Planet {
 
   dispose() {
     this.surface.geometry.dispose();
-    this.surface.material.dispose(); disposeLabBake(this.surface);   // ⭐ 2026-09-01 — releases the four cube render targets and the ribbon child this body owns (idempotent; a legacy-material body has no record and this is a no-op). RIDES THIS LINE.
+    this.surface.material.dispose(); disposeLabBake(this.surface); unregisterStormAB(this.surface);   // ⭐ 2026-09-01 — releases the four cube render targets and the ribbon child this body owns (idempotent; a legacy-material body has no record and this is a no-op). RIDES THIS LINE.
     if (this.ring) {
       this.ring.geometry.dispose();
       this.ring.material.dispose();
@@ -2073,7 +2073,7 @@ export class Planet {
         },
       },
     };
-    attachLabBake(surface, { condition, macroSeed: labMacroSeed(d), T_eq: condition.T_eq, radiusEarth: condition.radiusEarth ?? d.radiusEarth ?? 1 }); return surface;   // ⭐ 2026-09-01 THE PROVINCE CUBE, 2026-09-02 THE WHOLE LAB BAKE — RIDES THIS LINE, and it sits AFTER the userData block on purpose: publish() writes the record into userData.wd.lab.province, and the assignment above REPLACES `wd` wholesale, so an earlier attach would be erased. Deferred to first draw (surface.onBeforeRender carries the renderer); solid bodies only (compositionClass !== "gas", condition-derived); Sol never reaches here (labPipelineAdmits refused it above).
+    attachLabBake(surface, { condition, macroSeed: labMacroSeed(d), T_eq: condition.T_eq, radiusEarth: condition.radiusEarth ?? d.radiusEarth ?? 1 }); registerStormAB(surface, { condition, ctx: labPackCtx(d, condition, null), packs }); return surface;   // ⭐ 2026-09-03 THE STORM A/B (key I) RIDES THIS LINE TOO — registers the gas material with its pack ctx so `_labStorms` can toggle / sabotage / read back the five uStorm* slots; a no-op on every body stormDeck did not run on (solid bodies). // ⭐ 2026-09-01 THE PROVINCE CUBE, 2026-09-02 THE WHOLE LAB BAKE — RIDES THIS LINE, and it sits AFTER the userData block on purpose: publish() writes the record into userData.wd.lab.province, and the assignment above REPLACES `wd` wholesale, so an earlier attach would be erased. Deferred to first draw (surface.onBeforeRender carries the renderer); solid bodies only (compositionClass !== "gas", condition-derived); Sol never reaches here (labPipelineAdmits refused it above).
   }
 }
 

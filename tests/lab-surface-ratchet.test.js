@@ -686,7 +686,7 @@ const APPLY_DRIVERS_AND_FRAME_CALLEES = [
   'applyDrivers::resetDriverOverrides',
   'applyDrivers::riverRerouteDebounced',
   'applyDrivers::syncDisplays',
-  'frame::_stormDeckZ',
+  'frame::forEachStormSlot',   // ⭐ REPLACES `frame::_stormDeckZ` ON THIS LINE, 2026-09-03 (workstream wire-storm-slice-lab-into-game), per this fence's own instruction. REASON: the OPPOSITE of the hazard set 4 guards — the lab's deckZ law AND its slot-composition loop LEFT the lab for src/worldengine/drivers/stormDeck.js (driver pack #10), and frame() now calls the shared composer the game calls too; `_stormDeckZ` is gone from the lab (removal is always allowed), `forEachStormSlot` is the call that removed it. Same class as atmosphereOpticsOf / terminatorOpticsOf above.
   'frame::animationRateFactor',
   'frame::autoOctaves',
   'frame::bakeReliefCrossover',
