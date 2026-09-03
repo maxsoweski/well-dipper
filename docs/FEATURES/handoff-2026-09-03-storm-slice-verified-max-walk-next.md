@@ -61,6 +61,15 @@ Every live number: **PLAN § THE STORM SLICE, WIRED (vii)–(viii)** (`docs/FEAT
 3. Then queue (c) as world-gen inputs allow (`uRayBrightness ≡ 0`, `uFacetStrength ≡ 0`, `habGate ≡ 0` — world-generation work, not wiring), and the partials F3 (4/7) / F35 (3/4) — each its own `dev-collab-scope` workstream in a fresh session.
 4. **Logged for other lanes:** QB-24 (vigor ramp saturates on 20 of 32 game gas bodies); the two pre-existing suite failures (§2.3); the province suite's wrapper read (river handoff §2.4).
 
+## 4a. ⭐ MAX'S INSTRUCTION FOR THE NEXT SESSION (2026-09-03, verbatim)
+
+*"let's handoff to a fresh session to continue the last of the wiring work. In that new session I want you to use workflows where helpful, but use Opus subagents to save a bit of tokens."*
+
+- **The work:** the LAST of the wiring — the two partials **F3 ejecta rays (4/7: `uRayBrightness` / `uRayCount` / `uRaySharp` absent)** and **F35 terminator gradient (3/4)** are WIRING jobs; **queue (c)** (`uRayBrightness ≡ 0` because `hasAtmo` is true on 100 % of bodies, `uFacetStrength ≡ 0` because `retained === false` never happens, `habGate ≡ 0`) needs WORLD-GENERATION work before any wire renders — say so in the scope rather than wiring a feature that draws nothing (PLAN §7 "Queue (c)" bullet; risk #13). Each partial = its own `dev-collab-scope` workstream. Start with the F-spine rows (`one-pipeline-two-frontends-PLAN.md` §3) and the §7 fence bullets; the storm-slice addendum is the shape of a wire's record.
+- **Workflows where helpful:** `verify-workstream` after each coherent unit (mode `light` for the close-out re-run), review fan-outs when they earn their cost.
+- **Opus subagents:** pin `model: "opus"` on every `Agent(...)` and every Workflow `agent()` — never fable (omission inherits fable at 2× opus). Step down to sonnet/haiku only where the `feedback_subagent-model` four questions say so. The two verify runs of 2026-09-03 burned 3.3 M + 0.37 M subagent tokens; that is what he is trimming.
+- **Repo state at handoff:** lane A `~/projects/well-dipper` at the ship `4af25c4` + this docs commit; origin at `4af25c4` (pushed 2026-09-03); `~/projects/well-dipper-trunk` is master and untouched. Chrome :9223 has the game parked on `?system=rocky-2`; lane A's server is up on :5175.
+
 ## 5. WORKING WITH MAX (delta)
 
 - **His walk, in his frame:** deep link `?system=rocky-2`. Fly in on the **Saturnian** (the 12.6 R⊕ giant, third planet out: a warm red oval at 19° north with four pearls on the same belt) and tap **`I`** while moving in; then the **Neptunian** (the 0.84 R⊕ ice giant, sixth planet out: a dark cleared spot at 19° south with a bright companion and one small scooter). Leave and come back — same storms, same place. His question: *do the storms read as PART of the gas deck — riding its bands, the bands wrapping around them — and does the next gas giant carry a different family?* QB-16 (the spot "does not blend correctly with the rest of the gas") and QB-18 (ink-in-water) will be visible and are deferred by his 2026-09-02 ruling — not this gate. **Claude's route:** `_lab.spawnProceduralSystem('rocky-2')` → wait 5 s → `freezeFrame()` → `frameBody({kind:'planet',p:2},{radii:3})` twice.
@@ -68,7 +77,8 @@ Every live number: **PLAN § THE STORM SLICE, WIRED (vii)–(viii)** (`docs/FEAT
 
 ## Suggested skills
 - **`superpowers:verification-before-completion`** before writing `shipped`.
-- ⛔ **NOT `dev-collab-scope`** for this workstream — it is one walk from shipped. YES for the next F-row.
+- ⛔ **NOT `dev-collab-scope`** for this (shipped) workstream. **YES for the next F-row** — the partials F3 / F35 first (they are wiring); queue (c) is world-gen work and must be scoped as such.
+- **`subagent-model`** (feedback rule, re-affirmed 2026-09-03): opus subagents, workflows where helpful.
 
 ## Not in scope
 QB-16 / QB-18 / QB-24 · slot animation · obliquity for game gas bodies · a storm-seed UI · the two pre-existing suite failures · Instrument A's stored-baseline re-bless (still stale at 2026-08-22; the measurement is the clean-parent diff).
