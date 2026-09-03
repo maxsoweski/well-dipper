@@ -2,7 +2,7 @@
   "workstream": "wire-storm-slice-lab-into-game",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verifying",
   "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
   "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — queue (b)'s last row (F27/F28, the uStorm* family); §7 'The storm slice' fence is LIFTED by this workstream; the record goes in a '§ THE STORM SLICE, WIRED' addendum appended at EOF (§10: line-count-neutral below :24; 1202 lines at scoping)",
   "ruling": "Max 2026-09-02: \"I want to continue wiring up all the features from the world engine before we try to further develop any of them\" — QB-16 (blend) and QB-18 (ink-in-water) ship as-is and are NOT this workstream's gate",
@@ -158,7 +158,66 @@
     ]
   },
   "deviations": [],
-  "liveEvidence": {},
+  "liveEvidence": {
+    "measuredAt": "2026-09-03",
+    "method": "lane A server + Chrome :9223, ?system=rocky-2, _autoNav stopped, freezeFrame() then frameBody at 3 radii (second frameBody after the arrival zoom), compositor-path page screenshots, _lab.shotState() sidecar disc (r 213.08 px, 142,622 px), per-pixel counter threshold 2/255 with outside pixels reported by distance past the silhouette; scripts/shot-diff.mjs on the same frames",
+    "AC-5": {
+      "p2 body.planet.484409 (rocky-2 p2, 12.6 R⊕ Saturnian, count 5)": {
+        "floorOnOn": 0,
+        "onVsOff": {
+          "inside": 14405,
+          "insideFrac": 0.101,
+          "outside": 1,
+          "outsideBeyondEdgePx": 0.35,
+          "shotDiff": {
+            "disc": 10.1,
+            "rim": 5.31,
+            "interior": 11.94,
+            "maxAbs": 17
+          }
+        },
+        "sabotageVsOff": {
+          "inside": 26391,
+          "outside": 15,
+          "outsideBeyondEdgePx": "<=1.2"
+        },
+        "sabotageVsOn": {
+          "inside": 23446,
+          "outside": 14
+        },
+        "restoreVsOn": 0,
+        "readbackEqualsMeta": true,
+        "uStormCount": 5
+      },
+      "p5 body.planet.8a37a5 (rocky-2 p5, 0.84 R⊕ Neptunian, count 2)": {
+        "onVsOff": {
+          "inside": 5046,
+          "insideFrac": 0.0354,
+          "outside": 3,
+          "outsideBeyondEdgePx": "<=0.2"
+        },
+        "readbackEqualsMeta": true,
+        "uStormCount": 2
+      },
+      "solid control body.planet.22418e (rocky-2 p1, rocky, lit 1.0)": {
+        "onVsOff": {
+          "inside": 0,
+          "outside": 0
+        },
+        "record": null,
+        "uStormCount": 0
+      },
+      "reApproach": "thaw → spawnProceduralSystem(rocky-2) → registry 2→2, slots on p2 and p5 IDENTICAL to the first visit (count, posSize, params, color, aux)",
+      "console": "0 errors after load; the long-standing GL_INVALID_VALUE glGetProgramiv warning only"
+    },
+    "AC-6": {
+      "instrumentA": "per-test set diff vs a baseline recorded from the parent 520f2c0 in a clean worktree: +1 file (driver-pack-stormdeck, 26), gas-body 70→71, failing set unchanged (20 = 20, none new, none fixed)",
+      "instrumentB": "8/8",
+      "instrumentC": "ZERO delta on all shipped shared uniforms; 858/858 citations",
+      "instrumentE": "ON/OFF pair on rocky-2 p2 recorded above",
+      "lab": "world-engine-lab.html: 0 script errors (favicon 404 only); Jovian preset: checkbox combos → uStormCount 0/1/4/5; slot 0 = primary (great spot on) / trainSpots[0] (train only); 🎲 stormSeed 424242 → applyDrivers re-placed the primary (count 7); radius (driven) slider = state.spotRadius; restored"
+    }
+  },
   "verifyWorkflow": {
     "scriptPath": "/home/ax/projects/personal-os-improvements/dev-collab/workflows/verify-workstream.mjs",
     "args": {
