@@ -2,7 +2,7 @@
   "workstream": "wire-terminator-gradient-lab-into-game",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verified",
+  "status": "shipped",
   "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
   "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — F35 row (§3 :99, ◑ 3/4 → ✅ 4/4, note filled in place: the 4th piece is uTermBypass, a display knob whose only consumer sits inside the uTermStrength > 0 block, so under the ruling it is a wired PRODUCER, not a rendering path in the game); the record goes in a '§ THE TERMINATOR, CONVERGED' addendum appended at EOF (§10: line-count-neutral below :24; 1256 lines at scoping); §7 gains one line naming F52 / the lighting engine as the terminator's owner",
   "ruling": "Max 2026-07-16 (planet-lod-lab-ux contract:6): 'We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway.' — APPLIED 2026-07-16 as a REVERSIBLE DEFAULTS amendment: 'removed from DEFAULT_DRESSING on all 13 presets … Manual toggle stays … (reversible-first designDecision: no code deletion, GUI/data change only)'. — Max 2026-08-22: 'the important thing here is the game and lab end up working the same.' — Max 2026-08-06: 'yes, the lighting engine needs to work for all objects in game.' — Max 2026-09-02: wire everything before developing anything (the lighting engine is parked). The asymmetry this wire creates is RECORDED, not claimed away: the lab keeps its reversible ✓ enabled toggle, the game gains no runtime equivalent, so the two front-ends agree at the lab's DEFAULT and diverge whenever that box is turned on.",
@@ -310,5 +310,22 @@
   },
   "verdictRef": "verdict.json",
   "verifiedAt": "2026-09-03T19:13:22-04:00",
-  "verifiedCommit": "2e60453"
+  "verifiedCommit": "2e60453",
+  "shipped": {
+    "date": "2026-09-03",
+    "commit": "2e60453 (verified; verdict e7a3050)",
+    "uat": {
+      "max": "Terminator is there (but looks really bad as usual). This has been in the game for weeks at this point though, what's the change",
+      "then": "1 yes — ship the OFF state",
+      "where": "rocky-2 (deep link ?system=rocky-2), the second planet at half phase (lit 0.494), the A/B pair sent as screenshots (band OFF = shipped, band ON = the law value; disc diff 23.2 %, floor 0, max abs 42)",
+      "readAs": "the CONVERGENCE is accepted: his 'looks really bad as usual' is the 2026-07-16 judgment still rendering in the game (the packs began writing uTermStrength on 2026-08-21, five weeks after the lab turned it off); this wire stops it. OFF ships in both front-ends."
+    },
+    "followUp": [
+      "The band's LOOK is F52 / the lighting engine's — Max 2026-07-16 ('it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway') and 2026-08-06 ('the lighting engine needs to work for all objects in game'); parked by the 2026-09-02 ruling. Turning it back on is one constant (TERMINATOR_ENABLED).",
+      "Planet.js:1653 — the legacy material's ungated uTermStrength producer (Sol + gallery bodies) is declared, not converged; the lighting engine's row.",
+      "uTermBypass is a wired PRODUCER with no game rendering path while the band is off (its only consumer sits inside the shader's uTermStrength > 0 block); it becomes reachable the day the band is ruled back on.",
+      "QB-27 (the lab's persisted-blob restore warning at world-engine-lab.html:3294) and QB-28 (gas termWidth settles ≈ 1.5 s after a preset change)"
+    ],
+    "next": "THE WIRING PASS IS DONE. What remains unwired is queue (c) — F43 uFacetStrength (retained === false never happens) and F46 habGate — world-GENERATION work, not wiring. The parked development list goes back to Max."
+  }
 }
