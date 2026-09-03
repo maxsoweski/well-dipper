@@ -7,8 +7,8 @@
 
 | workstream | status | commit | Max's gate |
 |---|---|---|---|
-| `wire-ejecta-rays-lab-into-game` (F3 → ✅ 7/7) | **`verified`** — `verdict.json` composed from the full run (AC-1/2/6 PASS 3/3) + the light run (AC-0 PASS) + working-Claude's measured AC-3 repair and AC-4/AC-5 drives, provenance per row | verified `6d70d56`, verdict `2e60453` | **his walk (AC-7)** |
-| `wire-terminator-gradient-lab-into-game` (F35 → ✅ 4/4) | **`verifying`** — live pair + lab clause recorded (`15ea92c`), PLAN record written (`e3cc73f`) | full verify running at `2e60453` | verdict → `VERIFIED_PENDING_MAX` → **his walk (AC-5)** |
+| `wire-ejecta-rays-lab-into-game` (F3 → ✅ 7/7) | **`shipped` `649e669`** — Max's UAT 2026-09-03: *"they do read as spokes"*; previously `verified` — `verdict.json` composed from the full run (AC-1/2/6 PASS 3/3) + the light run (AC-0 PASS) + working-Claude's measured AC-3 repair and AC-4/AC-5 drives, provenance per row | verified `6d70d56`, verdict `2e60453` | **his walk (AC-7)** |
+| `wire-terminator-gradient-lab-into-game` (F35 → ✅ 4/4) | **`verified`** — `verdict.json` composed from the full run (AC-0/1 PASS 3/3) + working-Claude's repairs (Instrument C re-blessed on the intended delta; the nine re-pointed lines; artifacts in-repo) and live drives (AC-3/AC-4) | verified `2e60453`, verdict `e7a3050` | **his walk (AC-5)** |
 
 Both PLAN rows are flipped in place; the two addenda (§ THE EJECTA RAYS, WIRED; § THE TERMINATOR, CONVERGED) are at EOF of `one-pipeline-two-frontends-PLAN.md`; the F3 card carries its wired line; the F35 card's line is written at ship (the F27 precedent). Backlog: QB-25..28. NOW.md banner in. Instrument A re-recorded at `eb58ac9` (`6d70d56`).
 
@@ -21,8 +21,8 @@ Both PLAN rows are flipped in place; the two addenda (§ THE EJECTA RAYS, WIRED;
 
 ## 2. ▶ NEXT, in order
 
-1. **F35 verdict** (`wf_7172985a-9a3`) → repairs if any → `verdict.json` → contract `verified` → `VERIFIED_PENDING_MAX <sha>`; NOW.md line.
-2. **Max's two walks** (§4). On his word per workstream: contract `shipped` (+ `shipped.uat`, `shipped.followUp`), FEATURES.md row (Rule 3, the world-engine row), the card line (F35), NOW.md, then **push lane A** (≈ 17 commits since `dc03fc6`) on his say-so. ⛔ never `master`.
+1. ~~F35 verdict~~ DONE (`e7a3050`); F3 SHIPPED (`649e669`, FEATURES.md `220d32e`).
+2. **Max's terminator walk** (§4; the rays walk is done). On his word per workstream: contract `shipped` (+ `shipped.uat`, `shipped.followUp`), FEATURES.md row (Rule 3, the world-engine row), the card line (F35), NOW.md, then **push lane A** (≈ 17 commits since `dc03fc6`) on his say-so. ⛔ never `master`.
 3. After both ship: **the wiring pass is DONE** — every F-row the lab has is wired except queue (c) (F43 `uFacetStrength` — `retained === false` unreachable; F46 `habGate`), which is world-generation work. The 2026-09-02 ruling ("wire everything before developing anything") is then satisfied and the parked development items come back to Max as a list: river look (QB-21/22/23), storm blend/ink (QB-16/18/24), the ray full-disk treatment + truncation, the per-system erosion (QB-25), the lighting engine / F52 (the terminator's owner).
 
 ## 3. ⛔ TRAPS (new; the 09-03b list still holds)
