@@ -1,0 +1,167 @@
+{
+  "workstream": "wire-storm-slice-lab-into-game",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
+  "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — queue (b)'s last row (F27/F28, the uStorm* family); §7 'The storm slice' fence is LIFTED by this workstream; the record goes in a '§ THE STORM SLICE, WIRED' addendum appended at EOF (§10: line-count-neutral below :24; 1202 lines at scoping)",
+  "ruling": "Max 2026-09-02: \"I want to continue wiring up all the features from the world engine before we try to further develop any of them\" — QB-16 (blend) and QB-18 (ink-in-water) ship as-is and are NOT this workstream's gate",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "One pipeline: the storm slice has ONE definition, under src/, that both front-ends import. Driver pack #10 `src/worldengine/drivers/stormDeck.js` exports `stormDeckPack(condition, ctx) -> { drivers, attributes, meta }`, `STORM_DECK_ENTRY` (predicate character-identical to polarDeck's: compositionClass === 'gas'; gates ['greatSpot','stormTrain']), the colour law (the lab's `_stormColor`: chromophore age ramp, 20 % deck tint, barge/scooter/dark-spot branches, as NAMED coefficients), the deck-height law (`_stormDeckZ` over STORM_DECK), the slot composer (`composeStormSlots`: slot 0 = primary iff gate, train iff gate, cap 8, aux slot-synced, count = written) and the lab mirror (`STORM_LAB_BINDING` + `stormDeckLabState`). The lab imports them back and its own copies are deleted: `applyStormState` no longer calls `resolveStormE` itself, and `_stormColor`, `_stormDeckZ` and the hand-written slot loop are gone from world-engine-lab.html. Pack #1's fence comment stays TRUE (giantDeck still emits no uStorm* name) and polarDeck's source-scan fence stays green (it still never names resolveStormE / writeStormESphere / bakeStormEAttributes).",
+      "verifyVia": {
+        "input": "Static: grep the lab for the deleted definitions and for the import-back line; grep giantDeck.js / polarDeck.js for the fenced names; run tests/driver-pack-polardeck.test.js and tests/driver-pack-giantdeck.test.js unchanged; assert STORM_DECK_ENTRY is in PACKS by IDENTITY and that stormDeck is pack #10 (giantSurface holds #8, fluvialDeck #9).",
+        "observable": "Deny-scan clean (0 hits for the three lab-local definitions and for a lab-side `resolveStormE(` call outside the import); the import line present; both sibling suites green byte-for-byte; the registry membership fence in drivers/index.js passes with the new entry and the emitted-name sets of every pre-existing pack are unchanged (asserted as SET MEMBERSHIP over real pack outputs on the corpus, not as counts)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-1",
+      "statement": "The pack contract learns exactly ONE new value shape and nothing already on it moves. `resolveDriver` admits an array of equal-length numeric arrays (every component finite; ragged or non-numeric throws PackContractError) and `writePackUniforms` writes such a value slot-wise through each target element's `.set(...)`, throwing when the target array's elements are not settable. Every driver every existing pack emits — over the 24-seed corpus (124 solid + 32 gas bodies) and the 18 driver presets — resolves to a value identical before and after the change, and stormDeck is the ONLY pack that emits the nested shape.",
+      "verifyVia": {
+        "input": "Headless: capture every pack's resolved driver map on every corpus body and preset at the parent commit (a fixture), re-run at HEAD, deep-compare; scan all pack outputs for nested arrays; feed the writer a nested driver aimed at a scalar uniform, at a ragged array, and at an array of plain numbers [CONTROL — each must throw].",
+        "observable": "Zero drivers differ (by value, not by count); the nested-shape scan names exactly stormDeck; the three controls throw PackContractError with the stated reasons; the five uStorm* uniforms on a gas material hold Vector4/Vector3 instances after the write (instanceof, so the element-wise overwrite defect is falsifiable)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-2",
+      "statement": "Refactor byte-identity under the LAB's policy. For every driver preset × the pinned (macroSeed, stormSeed) grid, the pack's mirror `stormDeckLabState` reproduces every state field `applyStormState` wrote before the change (spotStrength/Center/Radius/Rot/Aspect/Mode/Color/Companion/Age/Emboss/Billow, trainStrength, trainSpots[] with every member field, trainCount, _stormUranian) deep-equal to a fixture captured from the lab BEFORE the change, and `composeStormSlots` reproduces the lab's per-frame uniform writes byte-for-byte under all four checkbox combinations. Measured on the same CONDITION object, not the same preset name. Any deviation (the candidate is the T_eq fallback: the lab read `_fp.T_eq ?? 288`, the pack reads `condition.T_eq`; all 17 presets define T_eq so the expectation is zero) is RECORDED as a declared deviation in this contract, never absorbed.",
+      "verifyVia": {
+        "input": "Headless: the pre-change fixture (captured by running the lab's applyStormState in the existing lab-state test harness at the parent commit) vs stormDeckLabState(stormDeckPack(cond, labCtx)) and composeStormSlots at HEAD; [CONTROL] perturb one colour-law coefficient by 1e-3 and one STORM_DECK constant and show red.",
+        "observable": "Max delta exactly 0 on every field, every preset, every seed pair, every gate combination; both controls red; the deviation list in `deviations` is empty or names each field with its cause."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-3",
+      "statement": "Coherence: the vortices the game PLACES are the vortices its `aStorm` MASK was baked around. For every gas body in the corpus, `stormDeckPack(cond, ctx).meta.vortices` deep-equals the `vortices` list returned by `bakeStormEAttributes` when called with pack #1's OWN `meta.e5Drivers` + composition + T_eq at (labMacroSeed, GAME_STORM_SEED) — two independent derivations of the input chain, one writer — and `meta.count` equals giantDeck's `meta.stormCount` on every gas body. Solid bodies: the registry never applies the pack, and calling it directly emits nothing (the polarDeck idiom).",
+      "verifyVia": {
+        "input": "Headless over the 32 gas bodies with a real mesh so pack #1 bakes; [CONTROL] perturb T_eq by 1 K on one side, and separately pass stormSeed 1 on one side, and show red both times; call stormDeckPack on a rocky and an icy condition.",
+        "observable": "32 of 32 deep-equal (centre, radius, rot, aspect, mode, role, ageScalar, companion, embossDir, billowPhase, coreScale); 32 of 32 counts agree; both controls red; solid calls return empty drivers and no attributes."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-4",
+      "statement": "Every gas body gets its storm family from its condition, and no two are the same world. Over the 24-seed corpus (32 gas bodies) RECORD per body: regime, T_eq, vigor, primary role/mode, train family, count, primary lat/lon, hot-Jupiter and Uranian flags; RECORD the distribution against the scoping read (26 warm / 6 dark primaries; 22 pearl trains / 4 barge+oval / 6 scooter families; counts 2–7; 19 sub-Neptune / 6 Saturnian / 7 Neptunian; 0 hot-Jupiter, 0 Uranian). PIN only the distinctness floor: ≥ 20 distinct primary latitudes and ≥ 20 distinct longitudes over the 32 (a constant seed collapses both to 1). Seed identity: mounting the same body twice yields identical slots; two gas bodies of one system differ.",
+      "verifyVia": {
+        "input": "Headless corpus run writing `$TMPDIR/storm-corpus.json` (vitest hides console on pass); the same run mounts one body twice and compares; [CONTROL] force macroSeed constant and show the distinctness gate red.",
+        "observable": "The recorded table matches the scoping file's summary or the differences are explained in the PLAN addendum; distinct-lat ≥ 20 and distinct-lon ≥ 20; identical slots on re-mount; the constant-seed control red; the hot-Jupiter / Uranian counts recorded as the named never-rendered branches."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-5",
+      "statement": "LIVE storms A/B (key `I`) on a gas giant in a procedural system. ON vs OFF (uStormCount 0 on every live gas material — the lab's own off state) differ by > 0 px inside the disc and 0 px outside it; an ON/ON floor pair is 0; a sabotage arm (the slots recomposed from ANOTHER body's seed, count kept) is a THIRD state ≠ ON and ≠ OFF; a solid-body control moves 0 px under the key. The readback `_labStorms.slots(surface)` returns the composed slots and `uStormCount` equals `meta.count`. Re-approach: leaving the system and returning gives an identical readback (same storms, same place).",
+      "verifyVia": {
+        "input": "chrome-devtools on lane A's server + Chrome :9223, never Sol, `_autoNav` stopped first, clean reload before every measured pair, `freezeFrame()` then `frameBody` (a SECOND frameBody after the orrery zoom settles ≈ 5 s post-spawn); page screenshots through the compositor path; `scripts/shot-diff.mjs` with the `_lab.shotState()` sidecar disc; the pngjs per-pixel counter (threshold 2/255) counting pixels outside the disc. Bodies from the AC-4 table: one warm primary + pearl train (e.g. rocky-2 p2, Saturnian) and one dark spot + scooter (e.g. rocky-2 p5, Neptunian).",
+        "observable": "Pixel counts ON/OFF, floor, sabotage-vs-OFF and sabotage-vs-ON, outside-the-disc = 0, solid control = 0, recorded per body in `liveEvidence`; the readback equals the pack's meta on both bodies; the re-approach readback deep-equals the first."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-6",
+      "statement": "Nothing else moves, and the lab still authors. Instrument A (the per-test-ID uniform-bundle set diff on a clean worktree of the parent, never `check:instruments`' exit code): the only uniforms whose VALUE changes on any body are the five uStorm* names, on gas bodies only; solid bodies byte-identical; the emitted-name set of every other pack unchanged (membership). Instrument E: one paired shot on a gas body recorded. The lab in Chrome: 0 console errors; the storm folders' driven sliders show the mirrored values (`.listen()` on spotRadius/spotRot/spotAspect/trainCount); the two ✓ checkboxes still drop slot 0 and the train INDEPENDENTLY (the lab's regression contract at world-engine-lab.html:5170); the 🎲 reroll still re-places every storm; the shrink-only ratchet `tests/lab-surface-ratchet.test.js` is green (no new state field).",
+      "verifyVia": {
+        "input": "Instruments A/B/C + the full suite `npx vitest run --dir tests` (the root config collects nested worktrees); chrome-devtools on the lab page: toggle each checkbox via the lil-gui title-bar checkbox (`.lil-controller.lil-boolean`, read `checked` first), read uStormCount and the slot arrays through `_lab`, reroll and re-read.",
+        "observable": "Instrument A's changed-value set = {uStormPosSize, uStormParams, uStormColor, uStormAux, uStormCount} on gas bodies and ∅ on solid ones; every other pack's emitted set unchanged; full suite green (file count recorded); lab: 0 errors, count 0/1/N/N+1 across the four checkbox states with slot 0 = primary only when its box is on, reroll moves the primary's centre."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-7",
+      "statement": "Cost recorded. Per-body resolve time over the corpus (scoping read: 0.5 ms mean, 3.2 ms max, including pack #1's derivation); zero VRAM (five uniforms, no cube, no attribute); no worker; no new ctx field on the game side (stormSeed defaults to the DECLARED GAME_STORM_SEED; obliquity absent, so the Uranian branch is recorded as unreachable in the game).",
+      "verifyVia": {
+        "input": "The AC-4 headless run's timing column; a grep of Planet.js's labPackCtx for new fields; the AC-6 instrument diff for new attributes.",
+        "observable": "Timings written to the corpus file and quoted in the PLAN addendum; labPackCtx unchanged; no new vertex attribute in the instrument diff."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-8",
+      "statement": "MAX'S GATE (deferred-to-max, never agent-PASSed). Flying in on a gas giant in a procedural system with the `I` key: do the great spot and its storm family read as PART of the gas deck — riding its bands, the bands wrapping around them — in the same place when he comes back; and does the next gas giant carry a different family? He judges the WIRE: \"driven by the new system\", not \"rolling dice\", not \"in the same place every seed\". The great spot \"does not blend correctly with the rest of the gas\" (QB-16) and the missing \"ink in water\" complexity (QB-18) are logged lab defects deferred by his 2026-09-02 ruling — visible here, and not this gate.",
+      "verifyVia": {
+        "input": "Max: warp to a rocky-* system with a Saturnian or sub-Neptune body (e.g. rocky-2's 12.6 R⊕ Saturnian: warm red oval + 4 pearls; then rocky-2's 0.84 R⊕ Neptunian: dark spot + scooter), fly in, tap `I` while moving in; leave and return; fly to the other gas body.",
+        "observable": "His words."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/worldengine/base/storm-e.js `resolveStormE(regime, drivers, macroSeed, stormSeed)` — the writer (already shared, pure, three-free); `chromophoreColor`, `STORM_DECK`, `STORM_PHYS`; `bakeStormEAttributes` (the mask bake pack #1 already runs, whose vortex list is AC-3's control)",
+      "src/worldengine/drivers/giantDeck.js — pack #1's input chain (`giantRegimeOf` on the UN-drawn condition → `drawGiantConditions` → `deriveGiantDrivers` → `giantDriverScalars(radiusEarth, rotationHours, rotationScale)` + ctx.e5DriverOverrides + obliquity) that the storm pack re-derives; its `uBandTint` source `condition.atmosphere.color`; its fence comment that must stay true",
+      "src/worldengine/drivers/polarDeck.js — `GAME_STORM_SEED` (imported, never re-declared), the sibling-pack idiom (non-gas early return, lab mirror + `LAB_MIRROR_CTX`, lab-knob assertion), the source-scan fence",
+      "src/worldengine/drivers/index.js — `runPacks` (gate policy ALL_ON, collision throw), the two-import line 59 and the entry line 267 (RIDE, never insert — fifteen live line citations)",
+      "src/worldengine/port/writePackUniforms.js — `resolveDriver` / `writePackUniforms` (the shape rules extended by AC-1)",
+      "src/objects/Planet.js `labPackCtx` — macroSeed (numeric fnv1a), displayRadiusEarth, animRate, relevance (empty), rotationHours, rotationScale; unchanged",
+      "world-engine-lab.html:1811 `applyStormState` (the lab-local producer this wire replaces), :1807 `_stormDeckZ`, :1833 `_stormColor`, :5170-5195 the per-frame slot compose, :1007/:1012 the two checkboxes, :1011 `trainRadiusScale`, :3770-3789 the F27/F28 GUI folders",
+      "src/worldengine/shaders/uniforms.js:416-421 the five uStorm* uniforms (declared on every lab material today, all-zero) and height.glsl.js's consumers (`stormSwirl` :1611, `stormColTerms` :1650, `dWake` :1928 and its sibling :1972), all gated on `i < uStormCount`",
+      "src/rendering/bake/labBakeHost.js — the A/B key + `_lab*` instrument idiom (V/J/U) the storm A/B mirrors; the storm A/B needs its OWN registry of live gas materials (the bake host tracks solid bodies only)",
+      "docs/WORKSTREAMS/wire-storm-slice-lab-into-game/scoping-corpus-2026-09-02.json — the scoping population read AC-4 re-measures"
+    ],
+    "outputs": [
+      "The five uStorm* uniforms carry the lab's composed slots on every gas body the game mounts (32 of 32 in the corpus), count 2–7",
+      "src/worldengine/drivers/stormDeck.js (pack #10) + STORM_DECK_ENTRY registered; the lab's applyStormState reduced to a pack call + mirror; the lab's frame loop calling the shared composer",
+      "The `I` A/B key + `globalThis._labStorms` instrument (toggle, off, count, slots(surface), sabotage(surface, seed) that never persists)",
+      "tests/driver-pack-stormdeck.test.js with executed [CONTROL]s for every gate that could be vacuous",
+      "PLAN: F27/F28 rows → ✅ (expanded in place, line-neutral); §7 storm-slice bullet annotated LIFTED; '§ THE STORM SLICE, WIRED' addendum at EOF with every number; queue (b) declared EMPTY",
+      "docs/FEATURES.md row (Rule 3), docs/NOW.md, cards F27/F28 status lines",
+      "docs/FEATURES/mvp-spine-lab-quality-backlog.md: QB-24 (vigor ramp saturates at 130 K; 20 of 32 game gas bodies above it)"
+    ],
+    "mustStayWorking": [
+      "With uStormCount 0 the render is byte-identical to today on every body (the lab's shipped off-gate contract; the A/B OFF arm IS that state)",
+      "Solid bodies: untouched — no pack applied, no uniform moved, the province/relief/river bakes and their V/J/U keys unchanged",
+      "giantDeck (F24/F25/F31b) and polarDeck (F29) outputs and their test fences, including the aStorm bake at giantDeck.js:309 and the polar byte-identity control",
+      "The lab's authoring surface: both storm checkboxes independent, 🎲 reroll through applyDrivers, driven sliders `.listen()`, the shrink-only ratchet tests/lab-surface-ratchet.test.js",
+      "Instruments A / B / C green; `npm run check:instruments` citation check passes (line+symbol refs into index.js / Planet.js / the lab unchanged)",
+      "The PLAN's line count below :24 (1202 lines; §10) and every symbol-anchored citation into drivers/index.js and Planet.js",
+      "The full suite `npx vitest run --dir tests` green",
+      "GAME_STORM_SEED stays a single declared law (polarDeck.js:102); no second storm seed authored",
+      "The `.superpowers/sdd/` ledger discipline: rulings in commit messages and this contract, never only in the ledger"
+    ]
+  },
+  "scope": {
+    "paths": [
+      "src/worldengine/drivers/stormDeck.js",
+      "src/worldengine/drivers/index.js",
+      "src/worldengine/port/writePackUniforms.js",
+      "src/rendering/labStormAB.js",
+      "src/objects/Planet.js",
+      "world-engine-lab.html",
+      "tests/driver-pack-stormdeck.test.js",
+      "tests/driver-pack-polardeck.test.js",
+      "tests/driver-pack-giantdeck.test.js",
+      "docs/FEATURES/one-pipeline-two-frontends-PLAN.md",
+      "docs/FEATURES/mvp-spine-lab-quality-backlog.md",
+      "docs/FEATURES/cards/F27-great-spot.md",
+      "docs/FEATURES/cards/F28-storm-clusters.md",
+      "docs/FEATURES.md",
+      "docs/NOW.md"
+    ],
+    "notInScope": [
+      "QB-16 the blend, QB-18 ink-in-water, QB-24 the vigor saturation — lab model rows",
+      "Slot animation; obliquity for game gas bodies; a per-body storm seed UI",
+      "Any change to resolveStormE, STORM_PHYS, STORM_DECK, the chromophore ramp or the colour coefficients",
+      "Pack #1 / polar-pack changes beyond keeping their fences true",
+      "Sol (excluded by provenance)"
+    ]
+  },
+  "deviations": [],
+  "liveEvidence": {},
+  "verifyWorkflow": {
+    "scriptPath": "/home/ax/projects/personal-os-improvements/dev-collab/workflows/verify-workstream.mjs",
+    "args": { "contractPath": "/home/ax/projects/well-dipper/docs/WORKSTREAMS/wire-storm-slice-lab-into-game/contract.json", "mode": "full", "liveBranch": "main" },
+    "note": "The workflow audits headless ACs and the recorded liveEvidence; it cannot drive Chrome. AC-5 / AC-6's live clauses are driven by working-Claude from the main thread; AC-8 is always deferred-to-max."
+  }
+}
