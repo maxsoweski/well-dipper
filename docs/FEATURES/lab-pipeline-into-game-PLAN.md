@@ -397,11 +397,11 @@ wiring bug and is not. Do not chase them as rendering defects.
 
 - **`airlessnessOf ≡ 0` on every body** (`P_AIR_REF = 0.1 bar`, population min 0.310). The
   space-weathering stage of `surfaceAlbedoOf` is identically 0 across the entire population — no
-  world will ever show lunar darkening.
+  world will ever show lunar darkening. ⭐ CORRECTED 2026-09-03: true of PLANETS only (min 0.105 bar over the rocky-* corpus); every plain MOON reads `airlessnessOf` 1 (56 of 124 solid bodies) — the stage is live on moons. See `one-pipeline-two-frontends-PLAN.md` § THE EJECTA RAYS, WIRED.
 - **`uFacetStrength ≡ 0`** — gated on `!cond.atmosphere`, and `conditionFromPlanet:102` only nulls
   the atmosphere when `retained === false`, which never happens. Crystal worlds never render.
 - **`uRayBrightness ≡ 0`** — `(hasAtmo ? 0 : 1)`, and `hasAtmo` is true on 100% of bodies. Crater
-  ray systems never render. Re-gate on *pressure* if you want them back.
+  ray systems never render. Re-gate on *pressure* if you want them back. ⭐ CORRECTED 2026-09-03: `hasAtmo` is true on 100 % of PLANETS and false on 100 % of plain MOONS (56 of 124 solid corpus bodies, ray brightness 0.70–0.94 by the lab's own law); re-gating on pressure buys 0 extra bodies (`P_AIR_REF` 0.1 bar vs a planet minimum of 0.105). `uRayBrightness` was 0 because no pack wrote it — WIRED 2026-09-03 (workstream `wire-ejecta-rays-lab-into-game`).
 - **`uTermStrength` constant** — its only condition input is `atmosphere.retained`, which carries
   zero information. (Now `0.15` after `fd2fdd4`; was `1.0`.)
 - **`uLimbStrength ∈ {0.7, 0.91}` only** — the airless-silhouette branch is dead.

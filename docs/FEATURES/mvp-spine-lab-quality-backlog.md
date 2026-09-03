@@ -120,3 +120,14 @@ correct *and* means the feature Max asked for does not exist) and **QB-3** (F11 
 
 *Written 2026-08-06 against `feature/world-engine-production-L1` @ `92277c6`. Not committed by
 the enumerating agent.*
+
+---
+
+## Addendum 2026-09-03 — two WORLD-GENERATION rows logged at the F3 ejecta-rays wire (appended at EOF so no cited line above moves)
+
+| # | row | measured | owner |
+|---|---|---|---|
+| **QB-25** | **Airless erosion is the SYSTEM age alone, so every plain moon of one system carries the identical ray brightness.** `src/generation/PhysicsEngine.js:823-825` — `erosion = hasAtmosphere ? min(1, age × 0.15) : min(0.3, age × 0.03)` — is fed the system age at `src/generation/MoonGenerator.js:300`; the lab's ray law `clamp01(1 − erosion) × (atmosphere ? 0 : 1)` therefore reads one value per system. | 19 distinct values over the 56 airless corpus moons, max 1 distinct WITHIN a system; the 0.3 cap floors the whole population at 0.70 (range 0.700–0.935). `wire-ejecta-rays-lab-into-game/scoping-corpus-2026-09-03.json`. | world generation (a per-moon age or a per-moon resurfacing term); NOT the wire — it carries the law verbatim |
+| **QB-26** | **A terrestrial plain moon's atmosphere record is `{ color, strength }` with no physics** (`MoonGenerator.js:217-220`), so `conditionFromBody.js:381` refuses it and the condition reads AIRLESS while the generator's own erosion law (`MoonGenerator.js:300-301`, passing `moon.atmosphere != null`) treats the same moon as AIR-BEARING — one moon, two answers. | 0 such moons in the 24-seed corpus (56/56 airless moons have `atmosphere: null` outright); ~3 % of `_pickType` draws by `tests/moon-condition-contract.test.js:815-816`. | world generation (give terrestrial moons a physics record, or drop the visual-only wrapper) |
+
+Also recorded here, not a row: 42 of 124 solid corpus bodies (4 of the 56 airless) have NO crater schedule (`craterUniformsFrom` → `CRATERS_OFF`: rocky-13 p3m0 1.27 R⊕ and p4m0, rocky-14 p3m0, rocky-19 p0m0) — rays multiply the crater host, so the two biggest airless moons in the corpus cannot show one. That is the bombardment schedule's population, already the crater lane's.
