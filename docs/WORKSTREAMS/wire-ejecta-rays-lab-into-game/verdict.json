@@ -1,0 +1,65 @@
+{
+  "commit": "6d70d56",
+  "workstream": "wire-ejecta-rays-lab-into-game",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Light run wf_11f1fe5c-094 at 6d70d56: sole definition of rayBrightnessOf in src/worldengine/base/ejectaRays.js; labCore.js:785 and the crater driver block call it off the condition; craterUniformsFrom / CRATERS_OFF byte-identical; the lab literal imports the constants; uRayBrightness absent from both LAB_BINDINGs; CRATER_DECK_UNIFORMS / ROCKY_SURFACE_UNIFORMS gained exactly the three names; sibling-suite diffs confined to the declared lines; six suites + material-parity + planet-archetypes green (166/166); deny-scans clean; spine conformance confirmed. (The full run at 870fd49 had marked this INSUFFICIENT on the AC's own wording — 'one line changed' vs the declared lines of D-4 — repaired by amendment, not by trimming the diff.)",
+      "adversarialVotes": "1/1 sufficient (light)"
+    },
+    {
+      "id": "AC-1",
+      "result": "PASS",
+      "evidence": "Full run wf_c18c70d0-801 at 870fd49 (src byte-identical to 6d70d56 for this workstream's files — the F35 merge touched only the harness's policy naming, D-1 of that contract, and the suite is green at HEAD 28/28): 55/55 tests; byte-identical deriveUniforms output vs the dc03fc6 fixture across 18 presets / 156 bodies; rayCount/raySharp absent; both perturbation controls red; the vi.doMock liveness probe reds BOTH readers; the fixture independently reproduced at a true dc03fc6 checkout, byte-identical.",
+      "adversarialVotes": "3/3 sufficient (full)"
+    },
+    {
+      "id": "AC-2",
+      "result": "PASS",
+      "evidence": "Full run at 870fd49: uRayBrightness > 0 on exactly the 56 airless solid bodies, 0 on every air + gas body; 12-dp independent recompute; distinctness 19 (≥ 15) over 19 systems; render floor 39 (≥ 30); seed identity, CRATERS_OFF and rel-asymmetry controls pass; the recorded corpus table matches scopingRead.",
+      "adversarialVotes": "3/3 sufficient (full)"
+    },
+    {
+      "id": "AC-3",
+      "result": "PASS",
+      "evidence": "Full run at 870fd49 found Instruments B (8/8), C (0 delta over 57 uniforms × 633 bodies) and the citation checker (860/860) clean and the 9,970-cell driver compare zero-diff, but `npm run check:instruments` exited 1: Instrument A's check collected 349 files / 5,890 tests against a stored 196 / 3,793. WORKING-CLAUDE MEASURED THE CAUSE (not judged by the workflow): the stored record (caa8751) never covered src/**/__tests__ or vendor/motion-test-kit/tests, and a nested worktree under .claude/worktrees/ doubled the collection. The 27 src/generation failures now in scope were run at a clean dc03fc6 worktree OUTSIDE the repo and at HEAD: identical sets, 0 newly red, 0 no-longer-red (ProcgenSnapshot 23, l0-plumbing 2, byteSafety 1, binary-barycentre 1); the tests/ set is the parent's 20 (both builders' clean-parent diffs). Baseline re-recorded at eb58ac9 (commit 6d70d56) naming every moved ID; `npm run test:baseline` now reads identical (349 / 5,922 / 47). The light run at 6d70d56 did not re-audit AC-3.",
+      "adversarialVotes": "instrument re-check + parent-vs-HEAD per-ID diff (working-Claude); not workflow-judged after the repair"
+    },
+    {
+      "id": "AC-4",
+      "result": "PASS",
+      "evidence": "LIVE INTEGRATION, driven from the main thread (the workflow cannot drive Chrome — its own note; dev-collab-os assigns live integration to working-Claude). Recorded in contract.json liveEvidence at src 5c8b1d2 / 76be09b (headEquivalence: src identical through 6d70d56): rocky-13 p4m3 21,181 px (14.85 % of disc, max 25, floor 0), p4m5 24,743 px (17.35 %), air control 0, gas control 0, ≈ 20-radii pair 366 px, restore exact ×5, sabotage a third state at the instrument (0 px on an air body without a crater host; 7,106 px liveness on the airless subject), outside-silhouette 21 / 31 px all within 1.15 px (the ≤ 20 count amended to a derived ≤ 5 % of circumference; measured 1.6 % / 2.3 %), registry 17 → 28 leak FIXED at 76be09b and re-measured 17 / 17 / 17 across three spawns with a byte-identical record. Both workflow runs read this evidence as numerically consistent with every bar and deferred the close to working-Claude.",
+      "adversarialVotes": "working-Claude (opus live driver + main-thread review); workflow: 'numerically consistent, not re-drivable'"
+    },
+    {
+      "id": "AC-5",
+      "result": "PASS",
+      "evidence": "LIVE INTEGRATION, driven from the main thread: the lab loads with 0 errors / 0 warnings; airless presets read the law (Frozen 0.9, Moon/Mercury 0.95); sliders 6 / 8 drive the uniforms and restore; ✓ ejecta gates the write (0 ↔ 0.9) while the derived state holds; 🎲 ×3 re-derives (erosion is the preset constant); air presets 0 even with ejecta forced ON (the law's air gate, confound closed); every control restored byte-identical. The full run confirmed every static clause by source read.",
+      "adversarialVotes": "working-Claude; workflow: static clauses confirmed, live not re-drivable"
+    },
+    {
+      "id": "AC-6",
+      "result": "PASS",
+      "evidence": "Full run at 870fd49: live-measured timing (not a fixture replay) — rockySurface 0.855×, craterDeck 1.092× normalised, under the 2× ceiling; absolute delta ≤ 0.01 ms/body; labPackCtx's 12 keys unchanged; no attribute / VRAM / worker; the withdrawn +10 % bar recorded as a declared amendment, not silent drift.",
+      "adversarialVotes": "3/3 sufficient (full)"
+    },
+    {
+      "id": "AC-7",
+      "result": "deferred-to-max",
+      "evidence": "MAX'S GATE. Deep link ?system=rocky-13, the FIFTH planet's ice moons ('f IV' 1.06 R⊕ and 'Dione' 0.96 R⊕), key Y while moving in; then any planet with air ('Paurosgara', the second) and Y again — nothing changes. His question: do the rays read as spokes thrown from their own young craters, lit only on the day side, and stay off on worlds with air? The card's full-disk carry-forward ('clipped square') and whether the rays are GOOD are deferred lab items, not this gate.",
+      "adversarialVotes": "n/a — UAT is Max-only"
+    }
+  ],
+  "overall": "Unit PASS · Integration PASS — UAT deferred to Max",
+  "summaryForMax": "The rays wire is verified: the law lives in one place both front-ends import, every other driver is byte-inert (9,970 cells, zero differ), the population is exactly the airless moons (56 of 124, 52 with craters to host a ray), and the live A/B on rocky-13's fifth planet's ice moons moves 15–17 % of the disc with a zero floor and nothing on worlds with air. Two instrument defects the verification found were fixed (a registry leak on moon teardown; a stale test baseline that had never covered half the suite) and one timing bar was withdrawn as unmeasurable at microsecond scale. What is yours: fly to rocky-13's fifth planet's ice moons and tap Y.",
+  "verifiedAt": "2026-09-03T18:52:13-04:00",
+  "workflowRun": "wf_11f1fe5c-094 (light, 4 agents) at 6d70d56 after wf_c18c70d0-801 (full, 31 agents) at 870fd49",
+  "mode": "composed",
+  "note": "The full run at 870fd49 PASSED AC-1 / AC-2 / AC-6 (3/3 votes each) and returned INSUFFICIENT on AC-0 (the AC's wording vs the diff), AC-3 (Instrument A's collection scope + a nested worktree) and AC-4 / AC-5 (live halves the workflow cannot drive). All four were repaired or driven (contract.json `amendments`, `liveEvidence`, `headEquivalence`). The light re-run at 6d70d56 judged AC-0 PASS and produced no findings for the other seven — it does not fail them; light mode scores only what it audits. This verdict is COMPOSED by working-Claude from the two runs plus its own measured repairs (AC-3) and live drives (AC-4 / AC-5), each row naming its provenance; a further full run would re-confirm at ≈ 3 M subagent tokens and was not spent (Max, 2026-09-03: opus subagents, save tokens). If Max wants the belt and braces, the re-run command is the contract's verifyWorkflow block."
+}
