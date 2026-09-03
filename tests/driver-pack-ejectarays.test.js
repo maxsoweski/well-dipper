@@ -621,3 +621,32 @@ describe('AC-6 — the cost of the three uniforms, measured against dc03fc6', ()
     expect(strip(src('src/worldengine/base/ejectaRays.js'))).not.toMatch(/Worker|postMessage|async/);
   });
 });
+
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// AC-4 (the instrument's headless half, added at the live seam 2026-09-03) — THE REGISTRY IS A CENSUS.
+// The first live re-approach measured `_labRays.size()` 17 → 28: moons dispose through Moon.js:704,
+// which never called unregisterRaysAB. The fix listens to the material's own 'dispose' event.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+describe('AC-4 registry — a disposed material leaves the registry on every body class', () => {
+  it('register → dispose() → gone; unregister removes the listener; a second dispose is a no-op', async () => {
+    // ⚠ Under node the keyboard instrument (`globalThis._labRays`) never installs (no window), so the
+    // registry is probed through the module's own `recordRays` — non-null ⇔ registered.
+    const THREE = await import('three');
+    const { registerRaysAB, unregisterRaysAB, recordRays } = await import('../src/rendering/labRaysAB.js');
+    const mk = () => ({ material: new THREE.ShaderMaterial({ uniforms: { uRayBrightness: { value: 0 }, uCraterDensity: { value: 1 } } }), userData: {} });
+    const cond = { atmosphere: null, surfaceHistory: { erosionLevel: 0.2 } };
+    const a = mk(), b = mk();
+    expect(registerRaysAB(a, { condition: cond, ctx: {} })).toBe(true);
+    expect(registerRaysAB(b, { condition: cond, ctx: {} })).toBe(true);
+    expect(recordRays(a), 'registered').not.toBeNull();
+    expect(recordRays(b), 'registered').not.toBeNull();
+    a.material.dispose();                                   // the Moon.js:704 path: dispose WITHOUT unregister
+    expect(recordRays(a), 'dispose alone removes the material').toBeNull();
+    expect(recordRays(b), 'the other material is untouched').not.toBeNull();
+    unregisterRaysAB(b);                                     // the Planet.js:2001 path
+    expect(recordRays(b)).toBeNull();
+    expect(() => b.material.dispose(), '[CONTROL] no listener left, no double-delete, no throw').not.toThrow();
+    expect(recordRays(b)).toBeNull();
+  });
+});

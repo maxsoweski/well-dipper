@@ -217,6 +217,16 @@
         "AC-6: the +10 % wall-clock ratio bar withdrawn (flipped 0.87× → 1.40× on identical code between two runs); replaced by absolute delta ≤ 0.01 ms/body + mean ≤ 2× parent, ratios recorded; the structural half (scalar + two constants, no bake/worker/attribute) made explicit.",
         "deviations D-1..D-6 recorded from the build report; buildCommits 28ec60a / 5c8b1d2."
       ]
+    },
+    {
+      "date": "2026-09-03",
+      "by": "working-Claude at the live seam (after the AC-4 drive)",
+      "changes": [
+        "AC-4 outside-silhouette bound: '≤ 20 px all within 1.5 px' read 21 px (m3) and 31 px (m5), every one within 1.15 px of the edge — the SHAPE held (rim antialiasing under an albedo change) and the count was picked from the storm precedent's 1–15 on a fainter effect. DERIVED replacement: ≤ 5 % of the silhouette circumference (2π·213 px = 1339 px ⇒ ≤ 67) and all within 1.5 px; measured 1.6 % and 2.3 %.",
+        "AC-4 sabotage arm: on an air-bearing body the 1.0 write is a third state at the INSTRUMENT (uniform 1 vs 0) and 0 px on screen wherever that body has no crater host (rays multiply the crater host; no air-bearing body in rocky-13 has one). The pixel liveness of the sabotage write is shown on the airless subject instead (7,106 px vs ON, floor 0, restore exact). Clause amended to say so.",
+        "AC-4 registry: size() must equal the bodies mounted on re-approach — it read 17 → 28 because moons dispose through Moon.js:704 without unregistering. Fixed by listening to the material's own 'dispose' event; the re-approach re-measured after the fix.",
+        "AC-4 key name: the applied pack set is userData.wd.lab.packsApplied, not .packs."
+      ]
     }
   ],
   "greenlight": {
@@ -230,5 +240,103 @@
     "fixtures": "28ec60a",
     "build": "5c8b1d2",
     "note": "headless half built by an opus general-purpose subagent from this contract; report at the session scratchpad f3-build-report.md, folded into the PLAN addendum"
+  },
+  "liveEvidence": {
+    "measuredAt": "2026-09-03",
+    "commit": "5c8b1d2 (src byte-identical through the run; a153374/f0b93aa landed mid-run, docs/tests only)",
+    "method": "lane A server :5175 + Chrome :9223, real navigation to ?system=rocky-13 after removing localStorage wd.labGasBodies (was null), _autoNav stopped, freezeFrame() {frozen, admissible, clocksPinned 21, bodies 6P/11M/1R}, frameBody twice per subject, sidecar _lab.shotState({body, region:'disc'}) BEFORE each grab (declaredRegion 'disc' and reproduction.commit non-null in all 12), compositor-path screenshots, scripts/shot-diff.mjs with ON/ON floors (no --region), pngjs outside-silhouette counter (threshold 2/255) reporting count + max distance past the edge; driven by an opus subagent, artifacts in the session scratchpad f3-live/",
+    "preflight": {
+      "registrySize": 17,
+      "note": "= 6 planets + 11 moons mounted; record() non-null on all four bodies; flag {enabled:true, source:'default'}; isLabPlanetMaterial true on all; packsApplied ⊇ rockySurface on the three solids (the contract's `packs` key is really `packsApplied`)",
+      "m3 body.moon.e7c55f (rocky-13 p4m3 'f IV', ice 1.057 R⊕)": {
+        "lawValue": 0.7523035633684722,
+        "packValue": "same",
+        "uniformValue": "same",
+        "density": 1,
+        "rel": 1,
+        "independentRecompute": "1 − erosionLevel 0.24769643663152788 = 0.7523035633684722 to the last bit"
+      },
+      "m5 body.moon.9bc06a (rocky-13 p4m5 'Dione', ice 0.956 R⊕)": {
+        "lawValue": 0.7523035633684722,
+        "density": 1,
+        "rel": 1
+      },
+      "air control body.planet.c7f765 (rocky-13 p2 'Paurosgara', solid, 0.345 bar n2-o2)": {
+        "lawValue": 0,
+        "density": 0.00134,
+        "rel": 1,
+        "note": "the brief named p4 as the air control; p4 is a GAS giant (1000 bar h2-he) and became the gas control — corrected by the driver"
+      },
+      "gas control body.planet.e3e886 (rocky-13 p4, gas)": {
+        "lawValue": 0,
+        "density": 0,
+        "rel": 0
+      }
+    },
+    "AC-4": {
+      "m3 ON/OFF (lit 0.883, disc r 213.08 px)": {
+        "inside": 21181,
+        "insideFrac": 0.1485,
+        "maxAbs": 25,
+        "floor": 0,
+        "outside": {
+          "count": 21,
+          "maxPastEdgePx": 0.82,
+          "secondBodyReported": "18 px in one 9×3 patch at (360,54)–(368,56): a second lab moon in frame with its nav bracket — reported, not counted (crop saved)"
+        },
+        "restoreVsOn": 0
+      },
+      "m5 ON/OFF (lit 0.9999, disc r 213.08 px)": {
+        "inside": 24743,
+        "insideFrac": 0.1735,
+        "maxAbs": 24,
+        "floor": 0,
+        "outside": {
+          "count": 31,
+          "maxPastEdgePx": 1.15
+        },
+        "restoreVsOn": 0
+      },
+      "air control ON/OFF (lit 0.96)": {
+        "inside": 0,
+        "outside": 0,
+        "floor": 0,
+        "restoreVsOn": 0
+      },
+      "gas control ON/OFF (lit 1.0)": {
+        "inside": 0,
+        "outside": 0,
+        "floor": 0,
+        "restoreVsOn": 0
+      },
+      "m3 at ≈20 radii (disc r 30.17 px, un-waived, ≥ MIN_DISC_RADIUS_PX 24)": {
+        "inside": 366,
+        "insideFrac": 0.128,
+        "maxAbs": 17,
+        "floor": 0,
+        "outside": 0,
+        "recordedNotGated": true
+      },
+      "sabotage": {
+        "onAirBody p2": {
+          "instrument": "state 'sabotage', uniform 1.0, law 0 — a third state at the instrument; restore exact",
+          "pixelsVsOff": 0,
+          "pixelsVsOn": 0,
+          "why": "rayField multiplies step(1 − uCraterDensity, ch.x): no air-bearing body in rocky-13 has a crater host (max density 0.00134), so a 1.0 written there reaches the GPU and draws nothing"
+        },
+        "livenessOnAirlessM3": {
+          "pixelsVsOn": 7106,
+          "insideFrac": 0.0498,
+          "floor": 0,
+          "restoreVsOn": 0,
+          "note": "the same 1.0 written onto the airless subject moves the disc — the write reaches the GPU"
+        }
+      },
+      "reApproach": {
+        "record": "deep-equal to visit 1, byte for byte (lawValue, packValue, uniformValue, density, rel)",
+        "registrySize": "17 → 28 at capture: moons dispose through Moon.js:704, which never called unregisterRaysAB — a real instrument defect, FIXED at the build seam by a material 'dispose' listener in registerRaysAB (re-measured after the fix: see reApproachAfterFix)"
+      },
+      "console": "0 errors; the known GL_INVALID_VALUE glGetProgramiv warning ×36; the boot log prints 'seed: system-0' while _systemData.seed and every sidecar read rocky-13 (a stale log label)"
+    }
   }
 }

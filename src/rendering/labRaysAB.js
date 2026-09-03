@@ -75,18 +75,29 @@ export function registerRaysAB(surface, { condition, ctx, packs } = {}) {
   if (!material.uniforms.uRayBrightness) return false;
   if (!condition) return false;
   const a = packAnswer(condition, ctx);
+  // ⭐ 2026-09-03 (the live seam) — THE REGISTRY FOLLOWS THE MATERIAL'S OWN LIFETIME. Planet.js:2001
+  // unregisters planets on dispose, but MOONS dispose through src/objects/Moon.js:704 and never called
+  // this module, so the first re-approach measured the registry at 17 → 28 (11 stale moon materials).
+  // A material dispatches 'dispose' when it is disposed (three's EventDispatcher), on every body class,
+  // so the registry listens to that instead of depending on each teardown path remembering to call
+  // unregister — no new line in Moon.js, and `size()` is a census again, not a monotone counter.
+  const onDispose = () => { LIVE.delete(material); material.removeEventListener('dispose', onDispose); };
   LIVE.set(material, {
-    surface, condition, ctx, sabotaged: null,
+    surface, condition, ctx, sabotaged: null, onDispose,
     packsApplied: (packs && packs.applied) ? [...packs.applied] : [],
     ...a,
   });
+  material.addEventListener('dispose', onDispose);
   if (_off) material.uniforms.uRayBrightness.value = 0;
   installOnce();
   return true;
 }
 
 export function unregisterRaysAB(surface) {
-  if (surface && surface.material) LIVE.delete(surface.material);
+  if (!surface || !surface.material) return;
+  const r = LIVE.get(surface.material);
+  if (r && r.onDispose) surface.material.removeEventListener('dispose', r.onDispose);
+  LIVE.delete(surface.material);
 }
 
 function writeArm(m, r) {
