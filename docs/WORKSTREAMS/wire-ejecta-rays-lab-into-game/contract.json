@@ -2,7 +2,7 @@
   "workstream": "wire-ejecta-rays-lab-into-game",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "scoping",
+  "status": "building",
   "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
   "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — F3 row (§3 :67, ◑ 4/7 → ✅ 7/7); §7 'Queue (c)' bullet (:574) and the queue list (:133) annotated in place with the 2026-08-20 correction (r-rows-decision-packet-2026-08-20.md:441-444); docs/FEATURES/lab-pipeline-into-game-PLAN.md :398 and :403 (the plan of record MEMORY names) annotated the same way; the record goes in a '§ THE EJECTA RAYS, WIRED' addendum appended at EOF of one-pipeline-two-frontends-PLAN.md (§10: line-count-neutral below :24; 1256 lines at scoping). ⛔ The `conditionFromPlanet.js` SPELLING in the PLAN is left alone — 19 lines carry it, three are the rename's own record, and tools/port-uniform-delta.mjs pins it as a citation spelling.",
   "ruling": "Max 2026-09-02: 'I want to continue wiring up all the features from the world engine before we try to further develop any of them' — the ray law moves verbatim; the full-disk ray treatment and the cell-boundary truncation carry-forward are NOT this workstream's gate",
@@ -173,5 +173,12 @@
         "Docs: lab-pipeline-into-game-PLAN.md :398/:403 added; the conditionFromPlanet.js path rewrite dropped (19 lines, a pinned citation spelling); scopingRead names the 3 empty seeds and what was not measured."
       ]
     }
-  ]
+  ],
+  "greenlight": {
+    "date": "2026-09-03",
+    "max": "yes",
+    "onScopeCommit": "ddb30dc (scope 250e712 + review amendments)",
+    "decisionsStanding": "all eight scoping decisions in intent.md stand as written (as amended by the pre-greenlight review); none overruled",
+    "buildOrder": "F3 first, then F35 (handoff-2026-09-03b §3)"
+  }
 }
