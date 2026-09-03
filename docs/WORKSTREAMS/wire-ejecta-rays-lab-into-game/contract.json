@@ -364,7 +364,8 @@
       "air": "Rocky, Ocean, Venus → 0. Confound closed: setPreset runs applyWorldDefaults (resets the enables), so the first air read was doubly gated; with ✓ ejecta clicked ON on 'Rocky (Earthlike)' uRayBrightness is still 0 (its erosion 0.4 would give 0.6 ungated) — the law's air gate does the work",
       "restored": "every control byte-identical to the persisted original ('Rocky (Earthlike)', ejectaEnabled false, 6 / 8, radiusSeed 1, planetRadiusEarth 0.8188630066346377)"
     },
-    "headEquivalence": "The live pair was driven at src 5c8b1d2 and the registry recheck + AC-5 at src 76be09b; `git diff --stat 76be09b..870fd49 -- src tests` is EMPTY (the two commits between are docs + this contract), so every recorded live number stands at the verified commit. The verify workflow cannot drive Chrome (its own note); working-Claude drives the live ACs from the main thread, per dev-collab-os."
+    "headEquivalence": "The live pair was driven at src 5c8b1d2 and the registry recheck + AC-5 at src 76be09b; `git diff --stat 76be09b..870fd49 -- src tests` is EMPTY (the two commits between are docs + this contract), so every recorded live number stands at the verified commit. The verify workflow cannot drive Chrome (its own note); working-Claude drives the live ACs from the main thread, per dev-collab-os.",
+    "artifacts": "live-pair-2026-09-03/ (in-repo): per-pair shot-diff JSONs (declaredRegion 'disc', reproduction.commit 5c8b1d2), sidecars, outside-silhouette counts, REPORT.md — the PNGs stay in the session scratchpad"
   },
   "verdictRef": "verdict.json",
   "verifiedAt": "2026-09-03T18:52:13-04:00",

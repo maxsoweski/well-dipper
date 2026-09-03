@@ -2,7 +2,7 @@
   "workstream": "wire-terminator-gradient-lab-into-game",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verifying",
+  "status": "verified",
   "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master)",
   "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — F35 row (§3 :99, ◑ 3/4 → ✅ 4/4, note filled in place: the 4th piece is uTermBypass, a display knob whose only consumer sits inside the uTermStrength > 0 block, so under the ruling it is a wired PRODUCER, not a rendering path in the game); the record goes in a '§ THE TERMINATOR, CONVERGED' addendum appended at EOF (§10: line-count-neutral below :24; 1256 lines at scoping); §7 gains one line naming F52 / the lighting engine as the terminator's owner",
   "ruling": "Max 2026-07-16 (planet-lod-lab-ux contract:6): 'We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway.' — APPLIED 2026-07-16 as a REVERSIBLE DEFAULTS amendment: 'removed from DEFAULT_DRESSING on all 13 presets … Manual toggle stays … (reversible-first designDecision: no code deletion, GUI/data change only)'. — Max 2026-08-22: 'the important thing here is the game and lab end up working the same.' — Max 2026-08-06: 'yes, the lighting engine needs to work for all objects in game.' — Max 2026-09-02: wire everything before developing anything (the lighting engine is parked). The asymmetry this wire creates is RECORDED, not claimed away: the lab keeps its reversible ✓ enabled toggle, the game gains no runtime equivalent, so the two front-ends agree at the lab's DEFAULT and diverge whenever that box is turned on.",
@@ -30,7 +30,7 @@
     },
     {
       "id": "AC-2",
-      "statement": "Nothing else moves, and the compare is proven non-empty. Every driver every existing pack emits, other than `uTermStrength`, resolves identically before and after on the corpus and presets; `tests/fixtures/pack-drivers-baseline.json` is RE-CAPTURED at HEAD and its diff from the parent's is EXACTLY the 100 body + 11 preset `uTermStrength` entries, enumerated in the commit message, every other value max delta 0. The six gate assertions that pin `terminator: true` (tests/driver-pack-solidoptics.test.js:159/:496, tests/gas-body-lab-material.test.js:287/:344/:724/:751) and any gate-resolved terminator value in tests/driver-pack-stormdeck.test.js are RE-POINTED at the ruled value with the 2026-07-16 ruling on each line; Instrument A shows only the new suite plus those declared lines; Instruments B and C green (C reports the one intended delta); every line+symbol citation resolves (`--check-citations` LAST before each commit); the full suite's remaining failing set = the parent's, none new.",
+      "statement": "Nothing else moves, and the compare is proven non-empty. Every driver every existing pack emits, other than `uTermStrength`, resolves identically before and after on the corpus and presets; `tests/fixtures/pack-drivers-baseline.json` is RE-CAPTURED at HEAD and its diff from the parent's is EXACTLY the 100 body + 11 preset `uTermStrength` entries, enumerated in the commit message, every other value max delta 0. The NINE lines that pinned `terminator: true` or built a ctx from the old default (AMENDED 2026-09-03 after verify wf_7172985a-9a3 — the AC said six): tests/driver-pack-solidoptics.test.js :84/:87 (ctx defaults, now naming GATE_POLICY_ALL_ON with the reason), :159/:496 (the ruled value); tests/driver-pack-giantsurface.test.js:64 (ctx default); tests/gas-body-lab-material.test.js :287/:344/:724/:751 — each with the 2026-07-16 ruling on the line (deviation D-3); Instrument A shows only the new suite plus those declared lines; Instruments B and C green (C reports the one intended delta); every line+symbol citation resolves (`--check-citations` LAST before each commit); the full suite's remaining failing set = the parent's, none new. Instrument C (the shipped-uniform capture tests/baseline/port-uniform-capture.json) is RE-BLESSED after the merge per the repo's own convention (commit 4e864bc's pattern: `--check --allow-deltas` names the single intended delta — uTermStrength on 371 of 633 bodies, Δ ∈ [−0.15, 0] — then `--record --force`, then `--check` green), so `npm run check:instruments` closes green at the verified commit.",
       "verifyVia": {
         "input": "Headless deep-compare at HEAD with uTermStrength excluded and reported separately; Instruments A/B/C; the citation check; the full suite diffed per test ID against a clean parent worktree. [CONTROL] perturb one NON-terminator driver's input on one corpus body (e.g. nudge `condition.atmosphere.pressure` feeding uLimbExponent) → the compare red on exactly that body and name. [CONTROL — non-empty] the number of (body × driver) cells compared equals 156 × the emitted-name count and is > 0; the fixture's body-id list deep-equals the corpus's.",
         "observable": "Zero drivers other than uTermStrength differ; uTermStrength's change set = exactly the air-bearing solid + gas bodies + the 11 presets; the re-pointed lines enumerated; A +1 file and the declared lines; B 8/8; C the one named delta; citations resolve; suite failing set = parent's; both controls behave; cells compared recorded and non-zero."
@@ -209,6 +209,15 @@
         "AC-4: the lab's persisted-blob restore warning (world-engine-lab.html:3294 getter-only `crater` readout) is a pre-existing cross-build effect, logged as a backlog row, not this wire's.",
         "Recorded gotcha: gas termWidth settles ≈ 1.5 s after a preset change (debounced giantSurfaceLabState) now that :2505 is gone."
       ]
+    },
+    {
+      "date": "2026-09-03",
+      "by": "working-Claude after verify-workstream wf_7172985a-9a3 (full, 23 agents) at 2e60453 — AC-0 / AC-1 PASS 3/3; AC-2 / AC-3 / AC-4 INSUFFICIENT",
+      "changes": [
+        "AC-2: Instrument C had not been re-blessed after the merge (uTermStrength moved on 371/633 — the intended delta) — re-blessed per commit 4e864bc's pattern; the 'six' re-pointed lines corrected to the nine of D-3 in the AC text; the compare fixture is term-pack-drivers-baseline.json by D-1 (the named cross-commit fixtures stay pinned to their own commits).",
+        "AC-3: the live artifacts lived only in the session scratchpad, so the verifier could not trace liveEvidence to a per-pair artifact — moved in-repo (live-pair-2026-09-03/) and referenced from liveEvidence.artifacts.",
+        "AC-4: the verdict states 'no liveEvidence entry for AC-4' — the entry EXISTS at liveEvidence['AC-4'] since 15ea92c (a static-agent misread); the live drive (0 errors, the live probe at boot + after presets, the enable gate 0 → 0.15 → 0, widths, bypasses, airless 0, byte-identical restore) is recorded there and in the in-repo REPORT.md."
+      ]
     }
   ],
   "greenlight": {
@@ -296,6 +305,10 @@
       "airless": "Moon/Mercury with the gate ON: strength stays 0",
       "restored": "every control byte-identical (incl. planetRadiusEarth 0.8188630066346377)",
       "gotcha": "after the :2505 deletion the GAS width is written only by the debounced giantSurfaceLabState — one frame after a preset change it still reads the previous body's width (0.06/0.12) and settles to 0.30 by ≈ 1.5 s; invisible while strength ships at 0, but any gas-width measurement must settle first"
-    }
-  }
+    },
+    "artifacts": "live-pair-2026-09-03/ (in-repo, added after wf_7172985a-9a3 could not trace the evidence): p1 / moon / gas shot-diff JSONs (declaredRegion 'disc', litPctA recorded), sidecars, outside-silhouette counts, restore diffs, REPORT.md — the scoping file scoping-live-pair-2026-09-03.json is the EARLIER rim-region pair, not AC-3's"
+  },
+  "verdictRef": "verdict.json",
+  "verifiedAt": "2026-09-03T19:13:22-04:00",
+  "verifiedCommit": "2e60453"
 }
