@@ -84,3 +84,48 @@ this workstream's (`feedback_converge-dont-declare-divergence` — it is debt, n
 ## AC-7 — Max's gate, NOT closed by any of the above
 
 Fly to `PVX J3DK6GAO+RBJGI5M c` and to a frozen world. **The game is parked on it right now.**
+
+---
+
+## ⛔ CONTAMINATION FOUND BY MAX, AND WHAT IT DOES AND DOES NOT INVALIDATE
+
+Max, 2026-09-05, looking at the lab: *"The one you're showing me in-lab appears to be a chaotic mix
+of every shader."*
+
+**It was mine.** `_lab.enableAllFeatures()` is needed to measure (the per-feature checkboxes default
+off — the trap that reads as "you broke the lab"), and I left it on. He was looking at gas-giant
+bands, jets, storms, city lights, ecumenopolis, magma and hex tessellation layered onto a rocky ocean
+world.
+
+⭐⭐ **AND IT SURVIVED A HARD RELOAD THAT REPORTED SUCCESS.** `navigate_page` with
+`ignoreCache: true` returned "Successfully reloaded", `navType` read `"reload"` and `performance.now()`
+reset — and all **49** features were still on. The tell I walked past: `state.tempEq` came back with
+its exact pre-reload value (267.2).
+
+**The only thing that established the real baseline was opening a separate fresh page and reading it
+before touching anything: 5 features on** — lakes, coastlines, clouds, limb glow, craters. Not 49, and
+not the 48-off/1-on the source defaults say either. **Source defaults are not the boot state.**
+
+### What this invalidates, stated rather than glossed
+
+⛔ **My claim that both pages were "RELOADED first" was weaker than I wrote it.** The reload happened
+and did not clear module state.
+
+✅ **The law measurements stand, and here is why that is not special pleading.** Every number in the
+sections above is RE-DERIVED each frame from `deriveUniforms` through the driver pack, or tapped from
+the compiled shader — none of it is persisted page state. And each was corroborated independently in
+three places that cannot share a contaminated module graph: **headless** (`frost-census.mjs`), the
+**game page**, and the **lab**. The derived gradient reading 0.157 / 0.168 / 0.600 in the lab against
+0.162 in the game and the same values headlessly is not something one page's stale state can produce.
+
+⛔ **What does NOT stand is anything about the page's own state**, which is exactly the class this
+contamination belongs to — and it is the class Max was looking at.
+
+### Restored
+
+The lab is back to the measured fresh baseline (the 5) **plus frost**, on `Ocean (temperate)`,
+seed 1 — a **267.2 K** world, which is below freezing and correctly capped.
+`lab-restored-frost-only.png`.
+
+⚠ The lab has a **"reset to world defaults"** button in its World folder. Use the app's own restore
+before hand-reconstructing a baseline.
