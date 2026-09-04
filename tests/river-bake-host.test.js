@@ -264,7 +264,7 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
     expect(solid).toBe(124);
     expect(gas).toBe(32);
     expect(counts.wet + counts.relict + counts.airless).toBe(124);
-    expect(counts).toEqual({ wet: 2, relict: 66, airless: 56 });
+    expect(counts).toEqual({ wet: 7, relict: 61, airless: 56 });
     // ⛔ THE RELICT CLASS MUST BE NON-EMPTY, stated on its own line rather than left inside the triple:
     // it was 0 before the erosion key was fixed, and a regression there would put it back to 0 while
     // every other arm in this file stayed green.
@@ -294,7 +294,7 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
         .toBeGreaterThan(0);
       n++;
     }
-    expect(n, 'the corpus must contain wet bodies or this arm is vacuous').toBe(2);
+    expect(n, 'the corpus must contain wet bodies or this arm is vacuous').toBe(7);
   });
 
   it('AIRLESS bodies have every MASTER off — and the two ungated terms that are not zero are inert', () => {
@@ -352,16 +352,19 @@ describe('AC-1 — the fluvial family reaches every solid body from its conditio
       if (u.uOutflowDensity.value > 0) ramped++;
       n++;
     }
-    expect(n, 'the relict class must be populated — see the block header').toBe(66);
-    // NON-VACUITY, with the honest number rather than the hoped-for one. All 64 clear the ramp's 0.30
-    // foot — MEASURED erosion range on this class is 0.325 … 1.0 — so `ramped` is 64, not a subset.
-    // ⚠ AND THE RAMP SATURATES: 60 of the 64 sit at exactly 1.0 because their erosion is at or above
-    // 0.45, so this population carries TWO distinct outflow values rather than a spread. The lab's
+    expect(n, 'the relict class must be populated — see the block header').toBe(61);
+    // NON-VACUITY, with the honest number rather than the hoped-for one. Every relict body clears the
+    // ramp's 0.30 foot, so `ramped` is the whole class, not a subset.
+    // ⭐ RE-MEASURED 2026-09-04 (workstream volatile-delivery): WAS 66. The relict class shrank to 61
+    // because five of its members became WET — the surface-volatile delivery term moved them across
+    // `fluvialClassOf`'s liquid test. Nothing about the ramp changed.
+    // ⚠ AND THE RAMP STILL SATURATES: most of the class sits at exactly 1.0 because their erosion is at
+    // or above 0.45, so this population carries TWO distinct outflow values rather than a spread. The lab's
     // stated intent for F13 is that megafloods are "SINGULAR catastrophic events … RARER"
     // (world-engine-lab.html:2158-2162); on the game's erosion distribution the 0.30→0.45 window is
     // too low to deliver that. Recorded here rather than silently re-tuned — the window is the lab's
     // number and re-choosing it is a rendering decision, not a wiring one.
-    expect(ramped).toBe(66);
+    expect(ramped).toBe(61);
     const outflowValues = new Set();
     for (const b of RIVER_BODIES) {
       if (compositionClass(b.cond) === 'gas' || fluvialClassOf(b.cond) !== 'relict') continue;
@@ -669,9 +672,12 @@ describe('AC-2 — the game\'s bundle IS the lab\'s route on the same carrier', 
     // MEASURED spread over the 68 is 0.3468 … 0.3540.
     expect(oceanFracMin).toBeGreaterThan(0.34);
     expect(oceanFracMax).toBeLessThan(0.36);
-    // MEASURED and recorded rather than asserted as a law: exactly one routed body composites.
-    expect(composited).toBe(1);
-    expect(wetNetworks.length, 'the R_b / maxStrahler record is empty — AC-2 asks for it on every wet body').toBe(2);
+    // MEASURED and recorded rather than asserted as a law.
+    // ⭐ RE-MEASURED 2026-09-04 (workstream volatile-delivery): WAS 1 composited / 2 wet networks.
+    // Compositing is the passive-margin arm, which only wet bodies reach, so both counts follow the
+    // corpus's wet count from 2 to 7 — the same single cause as every other number in this file.
+    expect(composited).toBe(5);
+    expect(wetNetworks.length, 'the R_b / maxStrahler record is empty — AC-2 asks for it on every wet body').toBe(7);
     // ⭐ THE PER-SYSTEM ROUTED COUNT, for the VRAM arithmetic the contract and the PLAN quote. The
     // per-BODY figure (57.3 MB routed / 7.0 MB solid) is what a body costs; what a phone allocates is
     // a whole SYSTEM's worth at once, so the distribution over systems is the number that matters and

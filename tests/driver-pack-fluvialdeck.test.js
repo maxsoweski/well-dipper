@@ -354,7 +354,10 @@ describe('§D — gates, membership, collision, registration', () => {
     // MEASURED 2026-09-02 over the 24 rocky-* seeds, WITH ROOT-0 fix 1's two-spelling erosion read
     // (§F): 2 wet, 66 relict, 56 airless (re-measured 2026-09-02 after the planet-moon wrapper fix — the two "wet" planet-moons were reading a 288 K default T_eq). Under the raw single-spelling read the same corpus answered
     // 2 / 0 / 122 — the relict class was empty and F13/F20 were dark on every body.
-    expect(c).toEqual({ wet: 2, relict: 66, airless: 56 });
+    // ⭐ RE-MEASURED 2026-09-04, workstream volatile-delivery: `deriveComposition` gained a surface-volatile delivery term, so warm worlds are no longer dry by construction.
+    // WAS { wet: 2, relict: 66, airless: 56 } — the corpus had exactly TWO wet worlds and both were
+    // 0.45 R⊕ carbon bodies, because no temperate body could be wet. It now has SEVEN.
+    expect(c).toEqual({ wet: 7, relict: 61, airless: 56 });
     // vitest hides console.info on a passing test, so the record goes to a FILE.
     writeFileSync(join(TMP, 'fluvial-classes.json'), JSON.stringify({ solid: 124, gas: BODIES.length - 124, classes: c }, null, 2));
   });
@@ -515,12 +518,20 @@ describe('§F — the erosion key: ROOT-0 fix 1 at its third reader, and the reg
       shipped[cls]++; raw[rawCls]++;
       if (cls !== rawCls) disagreements++;
     }
-    expect(shipped).toEqual({ wet: 2, relict: 66, airless: 56 });
-    expect(raw).toEqual({ wet: 2, relict: 0, airless: 122 });
-    expect(disagreements, 'the two readers agree everywhere — the fix has become a no-op').toBe(66);
+    // ⭐ RE-MEASURED %s. Both arms move, and they move for
+    // DIFFERENT reasons, which is why the control still discriminates: `shipped` moves because more
+    // bodies are wet; `raw` moves with it because its wet test reads the same liquid stability.
+    expect(shipped).toEqual({ wet: 7, relict: 61, airless: 56 });
+    // ⭐ THE CONTROL STILL DISCRIMINATES, and by the same margin it always did: the two readers agree
+    // on the WET class (both 7 — that class never needed the erosion fix) and disagree on the entire
+    // RELICT class, which the raw single-spelling read still calls airless. `disagreements` is
+    // therefore exactly the relict count, which keeps it a live measure of the fix rather than a
+    // number that merely happens to be non-zero. WAS raw { 2, 0, 122 } · disagreements 66.
+    expect(raw).toEqual({ wet: 7, relict: 0, airless: 117 });
+    expect(disagreements, 'the two readers agree everywhere — the fix has become a no-op').toBe(61);
     writeFileSync(join(TMP, 'fluvial-erosion-key.json'), JSON.stringify({
-      shipped: { ...shipped, outflowNonZero: 68, strandNonZero: 124, note: 'ROOT-0 fix 1 two-spelling read' },
-      rawSingleSpelling: { ...raw, outflowNonZero: 0, strandNonZero: 0, note: 'the untouched world-engine-lab.html:2128' },
+      shipped: { ...shipped, note: 'ROOT-0 fix 1 two-spelling read' },
+      rawSingleSpelling: { ...raw, note: 'the untouched world-engine-lab.html:2128' },
       bodiesThatChangedClass: disagreements,
     }, null, 2));
   });

@@ -379,15 +379,185 @@ export function circularize(initialEccentricity, ageGyr, orbitAU, massParent) {
 // §3 COMPOSITION
 // ═══════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════
+// §3b SURFACE VOLATILE INVENTORY — the delivery law
+// ═══════════════════════════════════════════════
+//
+// ⭐⭐ WHY THIS EXISTS. `deriveComposition` used to do TWO jobs with ONE field. `volatileFraction` was a
+// pure function of `frostRatio = orbitAU / frostLineAU`, and `T_eq` is a function of THE SAME VARIABLE
+// INVERTED — the frost line is by definition where ice survives. So "temperate" meant "well inside the
+// frost line" meant "bone dry", BY CONSTRUCTION, and no body could ever be both. Measured over 1,183
+// solid bodies from 200 seeds: the temperate set and the wet set did not intersect ONCE, and they missed
+// by a wide margin both ways (wettest temperate body V = 0.0595 against the plate band's 0.12; warmest
+// wet body T = 186 K against the band's 250 K). Run through the engine's own gate (labCore.js:693), of
+// 135 temperate bodies 78.5 % sat at or under the bone-dry floor and ZERO read wet, while 26.7 % of all
+// solid bodies DID read wet — every one of them frozen. A bimodal galaxy: hot deserts and cold ice.
+// Full finding: docs/WORKSTREAMS/f1-mountains-generation-2026-09-04/REPORT.md.
+//
+// The old law is not wrong; it is INCOMPLETE. It models ACCRETED BULK ICE, which really is frost-line
+// driven — that half is kept verbatim as `iceFraction` below and still feeds bulk density. What it has
+// no term for is SURFACE VOLATILE INVENTORY: inside the frost line a terrestrial planet accretes
+// essentially dry and then RECEIVES its water, delivered late from outer-system material scattered
+// inward. Earth's water is ~0.02 % of its mass and arrived that way. That process is largely DECOUPLED
+// from the body's own frost ratio, which is exactly what breaks the implication.
+//
+//   surfaceVolatiles = trace floor + (in-situ exposed ice  OR  delivered inventory × retention)
+//
+// ⛔ WHICH WAY THE RECONCILIATION GOES, AND WHY. The world engine anchors this field at Earth = 0.15 in
+// three places (passiveMargins.js:54 MARGIN_VF0, labCore.js:693's bone-dry floor, the Rocky (Earthlike)
+// preset) and driver-presets.js carries SIX measured real bodies on that scale. surfaceMaterial.js:347-367
+// records a whole re-derivation of the oxidiser window against four of them, INCLUDING an explicitly
+// REFUSED corpus-fitted alternative, with the reason written down: "Fitting the law to our own generator
+// is how a world-generation defect becomes a palette law." The engine's scale is anchored on real bodies;
+// the generator's ramp was anchored on nothing. So THE GENERATOR MOVES TO THE ENGINE — this file changes
+// and src/worldengine/ does not.
+//
+// ⚠ HONESTY ABOUT THE RETENTION TERM. `RETAIN_LAM_*` gates a dimensionless group (M/R)/T normalised to
+// Earth — the shape of the Jeans escape parameter λ = GMm/(kTR), gravity against thermal energy. It is
+// NOT a claim that Jeans escape is the operating mechanism at every anchor: the Moon's absolute λ for
+// water is ~26, comfortably above the ~20 where thermal escape stops mattering, and its dryness is really
+// about never cold-trapping a surface inventory against sublimation and impact erosion over Gyr. The
+// group is the right SHAPE for "can this body hold surface water", and the two edges are placed by the
+// real bodies rather than by the mechanism. Named rather than hidden, in the idiom of the density
+// comment above.
+
+/** Trace inventory every rocky body keeps — mineral-bound water, sulfur. driver-presets.js puts Venus,
+ *  the Moon/Mercury body and the Lava world all at exactly 0.02, so the floor IS the anchor.
+ *  ⚠ A FLOOR, NOT AN ADDEND: adding it would push every icy body 0.02 past the frost-line law's own
+ *  0.7 clamp and pile them up ON it. */
+export const VOL_TRACE_FLOOR = 0.02;
+/** Delivery scale, SOLVED (not chosen) from Earth: softCap(K·(1/4.85)^EXP · 1) = 0.15. */
+export const DELIV_K = 1.331;
+/** Radial growth of delivered inventory inside the frost line. Mars is wetter per unit mass than Earth
+ *  because it formed nearer the snow line's inner edge, so delivery INCREASES outward; the exponent is
+ *  SOLVED from the Earth/Mars pair (0.15 and 0.10 at their own retention) rather than picked. */
+export const DELIV_RADIAL_EXP = 1.23;
+/** ⭐ SUPPLY CEILING on the delivered inventory, and it is anchored, not chosen: the wettest ROCKY world
+ *  in driver-presets.js is 'Ocean (temperate)' at 0.35. Past that a body is not a rock with an ocean,
+ *  it is an ice body — and ice bodies come from the in-situ term, not this one.
+ *  ⛔ APPLIED AS A SOFT ASYMPTOTE, never a hard min(). A hard cap makes an instrument that SATURATES:
+ *  the first cut of this law put 34 of 1,183 bodies exactly ON the 0.7 clamp where the parent had zero,
+ *  which is the same defect already logged as QB-23 (F13's outflow ramp saturating on 62 of 66 relict
+ *  worlds). A saturated field cannot tell 0.7 from 3.0 and every consumer downstream reads the same
+ *  number for both. */
+export const DELIV_MAX = 0.38;
+/** Log-spread of the stochastic draw. Delivery is a FEW large impactors, so its variance is large — that
+ *  variance is what turns a monotone dial into "a wide variety of physically-plausible worlds" (Max,
+ *  2026-09-04). ±1σ spans ×0.39 … ×2.59. */
+export const DELIV_SIGMA = 0.95;
+/** solidInventoryOf(1, 0.01 + 0.04·10^0) at solar metallicity — the normaliser, so the Solar System's
+ *  own anchors sit at proxy 1.0 and are untouched by the system terms. */
+export const SOLAR_SOLID_INVENTORY = 0.05;
+/** Runaway-greenhouse / hydrodynamic loss window. Venus (737 K) must land ON the trace floor; Earth
+ *  (288 K) and Mars (210 K) must be untouched by it. */
+export const RETAIN_T_LO = 320, RETAIN_T_HI = 500;
+/** The gravity-against-temperature window, SOLVED from the Moon/Mars pair — the two anchors 25 K apart
+ *  that a temperature gate alone cannot separate (Moon 0.02, Mars 0.10 at λ_norm 0.129 vs 0.277). */
+export const RETAIN_LAM_LO = 0.07, RETAIN_LAM_HI = 0.55;
+/** (M/R)/T at Earth — the normaliser for the retention group. */
+export const LAMBDA_EARTH = 1 / 288;
+/** Where in-situ accreted ice takes over from delivery as the surface inventory. The two ramps are
+ *  complementary by construction, so the hand-off across the frost line conserves nothing twice. */
+export const INSITU_LO = 0.6, INSITU_HI = 1.0;
+
+const _clamp = (lo, hi, x) => Math.max(lo, Math.min(hi, x));
+const _smoothstep = (a, b, x) => { const t = _clamp(0, 1, (x - a) / (b - a)); return t * t * (3 - 2 * t); };
+
+/**
+ * Surface volatile inventory — what a body actually has available as water, on the world engine's
+ * real-body scale (Earth 0.15, Mars 0.10, Venus 0.02, Moon/Mercury 0.02, Titan 0.40, Europa 0.50).
+ *
+ * SEPARATE FROM `iceFraction`, which is the accreted BULK ice the body is made of and which still
+ * drives density. ⛔ Do not merge them: MoonGenerator.js:266 derives `moon.massEarth` FROM
+ * `composition.density`, and checkTidalLock reads that mass, so moving density re-rolls every moon's
+ * `locked` flag — the very first thing writeBodyRelief's dispatch tests.
+ *
+ * @param {object} a
+ * @param {number} a.iceFraction     accreted bulk ice fraction (the frost-line law's output)
+ * @param {number} a.frostRatio      orbitAU / frostLineAU
+ * @param {number} a.massEarth       body mass in Earth masses
+ * @param {number} a.radiusEarth     body radius in Earth radii
+ * @param {number} a.T_eq            equilibrium temperature, K
+ * @param {number} a.metallicity     system [Fe/H] — the giant-planet scatterer proxy
+ * @param {number} a.solidInventory  system solid reservoir (StarSystemGenerator zones.solidInventory)
+ * @param {number} a.deliveryFloat   [0,1) stochastic draw, from a NAMESPACED sub-seed (never the shared stream)
+ * @returns {number} surface volatile inventory, [0, 0.7]
+ */
+export function surfaceVolatileInventory({
+  iceFraction, frostRatio, massEarth, radiusEarth, T_eq,
+  metallicity = 0, solidInventory = SOLAR_SOLID_INVENTORY, deliveryFloat = 0.5,
+}) {
+  // ── (i) IN-SITU. Beyond the frost line the accreted ice IS the surface — Europa and Titan are made of
+  //    the stuff. Inside it, whatever ice accreted is negligible and buried, so this ramps to zero.
+  const exposed = _smoothstep(INSITU_LO, INSITU_HI, frostRatio);
+  const inSitu = iceFraction * exposed;
+
+  // ── (ii) DELIVERED. Late accretion of volatile-rich planetesimals scattered inward from beyond the
+  //    frost line. A SYSTEM-level process, weakly dependent on the receiving body's own orbit, and it
+  //    hands off to (i) across the frost line rather than adding to it (`1 - exposed`).
+  //
+  //    Two system inputs, and BOTH ALREADY EXIST on `zones` — `metallicity`, and `solidInventory`
+  //    (StarSystemGenerator.js:467), which has been computed and marked "UNREAD BY DESIGN (plan B3)"
+  //    since it was written. This is its first reader.
+  //
+  //    ⚠ THE METALLICITY EXPONENT IS DELIBERATELY SOFTENED TO 1. Fischer & Valenti (2005) put giant-planet
+  //    OCCURRENCE at ∝ 10^(2·[Fe/H]), but `solidFraction` (PhysicsEngine.js:608, 0.01 + 0.04·10^Z) already
+  //    carries a metallicity channel into `solidInventory`, so the published exponent here would
+  //    double-count it. What this term needs is SCATTERING EFFICIENCY, which is sub-linear in occurrence
+  //    anyway. 1.0 is the conservative half of that range, recorded as softened rather than presented as
+  //    the published figure.
+  //
+  //    ⛔ THE TWO PROXIES ARE COMBINED AS A GEOMETRIC MEAN, NOT MULTIPLIED. They are two readings of ONE
+  //    quantity — how much volatile-rich material this system had to throw inward — and they are strongly
+  //    CORRELATED, because `solidFraction` is itself a function of metallicity. Multiplying them squares
+  //    the metallicity dependence: the first cut of this law did exactly that and gave the system term a
+  //    19× range, which is what drove bodies onto the clamp. The geometric mean is the honest way to
+  //    average two correlated estimates of one number.
+  const giantProxy     = _clamp(0.2, 3.0, Math.pow(10, metallicity));
+  const inventoryProxy = _clamp(0.3, 2.5, solidInventory / SOLAR_SOLID_INVENTORY);
+  const systemDelivery = _clamp(0.25, 2.5, Math.sqrt(giantProxy * inventoryProxy));
+  //    Median 1.0 at deliveryFloat 0.5, so the six real-body anchors are solved at the median draw.
+  const draw   = Math.exp(DELIV_SIGMA * (2 * deliveryFloat - 1));
+  const radial = Math.pow(Math.min(frostRatio, 1.0), DELIV_RADIAL_EXP);
+  const delivered = DELIV_K * radial * (1 - exposed) * systemDelivery * draw;
+
+  // ── (iii) RETAINED — applied to the DELIVERED inventory only. In-situ ice is structural: a body made
+  //    of ice does not lose itself. A delivered veneer can be lost, by two channels.
+  const thermalKeep = 1 - _smoothstep(RETAIN_T_LO, RETAIN_T_HI, T_eq);        // runaway greenhouse (Venus)
+  const lambdaNorm  = (massEarth / Math.max(radiusEarth, 1e-3)) / Math.max(T_eq, 1) / LAMBDA_EARTH;
+  const gravityKeep = _smoothstep(RETAIN_LAM_LO, RETAIN_LAM_HI, lambdaNorm);   // the Moon/Mars separation
+  const retained    = thermalKeep * gravityKeep;
+
+  //    The supply ceiling applies to what the body actually KEPT, not to what was aimed at it, and it
+  //    approaches DELIV_MAX asymptotically so no population piles up on an edge.
+  const kept = DELIV_MAX * (1 - Math.exp(-(delivered * retained) / DELIV_MAX));
+
+  return _clamp(0, 0.7, Math.max(VOL_TRACE_FLOOR, inSitu + kept));
+}
+
 /**
  * Derive planetary composition from star's metallicity and orbital distance.
  * @param {number} metallicity - [Fe/H]
  * @param {number} orbitAU
  * @param {number} frostLineAU
  * @param {number} rngFloat - random float 0-1 for scatter
- * @returns {object} composition properties
+ * @param {object|null} [body] - the body bundle the SURFACE volatile law (§3b) needs. Optional, and
+ *   its absence is a DECLARED fallback rather than a default: without mass/radius/T_eq the retention
+ *   term cannot be computed, so `volatileFraction` degrades to `iceFraction` — exactly the pre-split
+ *   behaviour — instead of being fabricated from assumed Earth values. Both shipped call sites pass it.
+ * @param {number} [body.massEarth] - body mass. OMIT on the moon path: `moon.massEarth` is derived FROM
+ *   `composition.density`, so passing it there would be circular; the fallback below reproduces the
+ *   same expression from radius and density.
+ * @param {number} [body.radiusEarth]
+ * @param {number} [body.T_eq]
+ * @param {number} [body.solidInventory] - zones.solidInventory, the system's solid reservoir
+ * @param {number} [body.deliveryFloat] - [0,1) from a NAMESPACED hash, never the shared rng stream
+ * @returns {object} composition properties — { carbonToOxygen, ironFraction, iceFraction,
+ *   volatileFraction, surfaceType, density }. ⭐ `iceFraction` is ACCRETED BULK ICE (feeds density);
+ *   `volatileFraction` is the SURFACE inventory (feeds the world engine's ~80 read sites). They were
+ *   one field until 2026-09-04; see §3b for the measurement that forced them apart.
  */
-export function deriveComposition(metallicity, orbitAU, frostLineAU, rngFloat) {
+export function deriveComposition(metallicity, orbitAU, frostLineAU, rngFloat, body = null) {
   // Carbon-to-oxygen ratio: correlates with metallicity
   // Solar: C/O ≈ 0.55. Metal-rich stars tend toward higher C/O.
   const carbonToOxygen = Math.max(0.2, Math.min(1.3,
@@ -400,18 +570,26 @@ export function deriveComposition(metallicity, orbitAU, frostLineAU, rngFloat) {
     0.28 + 0.15 * metallicity + (rngFloat - 0.5) * 0.1
   ));
 
-  // Volatile budget: distance from star during formation
+  // ACCRETED BULK ICE: distance from star during formation.
   // Beyond frost line: volatile-rich (icy). Inside: dry.
+  //
+  // ⭐ THIS LAW IS UNCHANGED — same three buckets, same coefficients, same clamp. What changed is its
+  // NAME and its job. It used to be called `volatileFraction` and carried two meanings at once; it is
+  // now `iceFraction` and carries only the one it was always right about, the bulk ice a body accreted
+  // where it formed. It still feeds bulk density and the ice-rock surface classification, and it is
+  // still what makes Europa and Titan icy. The SURFACE inventory is a separate law (§3b above), because
+  // inside the frost line water is DELIVERED rather than accreted. See §3b's header for the measurement
+  // that forced the split.
   const frostRatio = orbitAU / Math.max(frostLineAU, 0.01);
-  let volatileFraction;
+  let iceFraction;
   if (frostRatio < 0.5) {
-    volatileFraction = 0.01 + rngFloat * 0.05; // bone dry
+    iceFraction = 0.01 + rngFloat * 0.05; // bone dry
   } else if (frostRatio < 1.0) {
-    volatileFraction = 0.05 + (frostRatio - 0.5) * 0.4 + rngFloat * 0.1; // transitioning
+    iceFraction = 0.05 + (frostRatio - 0.5) * 0.4 + rngFloat * 0.1; // transitioning
   } else {
-    volatileFraction = 0.25 + Math.min(frostRatio - 1.0, 2.0) * 0.15 + rngFloat * 0.1; // volatile-rich
+    iceFraction = 0.25 + Math.min(frostRatio - 1.0, 2.0) * 0.15 + rngFloat * 0.1; // volatile-rich
   }
-  volatileFraction = Math.min(volatileFraction, 0.7);
+  iceFraction = Math.min(iceFraction, 0.7);
 
   // Surface type
   let surfaceType;
@@ -419,7 +597,7 @@ export function deriveComposition(metallicity, orbitAU, frostLineAU, rngFloat) {
     surfaceType = 'carbon';
   } else if (ironFraction > 0.45) {
     surfaceType = 'iron-rich';
-  } else if (volatileFraction > 0.4) {
+  } else if (iceFraction > 0.4) {   // a bulk-composition class, so it reads the bulk field
     surfaceType = 'ice-rock';
   } else {
     surfaceType = 'silicate';
@@ -448,12 +626,35 @@ export function deriveComposition(metallicity, orbitAU, frostLineAU, rngFloat) {
   // the rule only diverges where the old one was lying. Mass, gravity, escape velocity and atmosphere
   // retention do NOT read this field (estimateMassEarth is a pure mass-radius relation), so the change
   // is confined to the surfaced planetDensity and the world-engine condition vector.
+  //
+  // ⛔⛔ THIS READS `iceFraction`, THE BULK FIELD, AND IT MUST. MoonGenerator.js:266 derives
+  // `moon.massEarth` FROM this density, and checkTidalLock reads that mass, so `tidalState.locked` is
+  // downstream of this line — and `locked` is the FIRST thing writeBodyRelief's dispatch tests. Pointing
+  // this at the surface inventory instead would re-roll every moon's mass and lock state in the galaxy,
+  // and would drop an Earth analogue from ~4870 to ~3090 kg/m³, under surfaceMaterial.js's DENS_ROCK_LO
+  // of 3.5 g/cc, so Earth analogues would start reading partly ICY. That is the whole reason the field
+  // is split rather than rescaled.
   const ICE_DENSITY = 1000;   // kg/m^3 — water ice, standing in for the whole volatile inventory
   const rockDensity = 3500 + ironFraction * 5000;   // the silicate + iron trend, unchanged
-  const specificVolume = volatileFraction / ICE_DENSITY + (1 - volatileFraction) / rockDensity;
+  const specificVolume = iceFraction / ICE_DENSITY + (1 - iceFraction) / rockDensity;
   const density = Math.max(1000, Math.min(8000, 1 / specificVolume));
 
-  return { carbonToOxygen, ironFraction, volatileFraction, surfaceType, density };
+  // ── SURFACE VOLATILE INVENTORY (§3b) ────────────────────────────────────────────────────────────
+  // ⚠ FALLBACK, STATED RATHER THAN INVENTED: retention needs the body's own mass, radius and T_eq. The
+  // two shipped call sites always pass them (PlanetGenerator.js, MoonGenerator.js); the 4-argument test
+  // call sites do not, and for those the surface inventory degrades to the accreted ice — i.e. exactly
+  // the pre-split behaviour — rather than being fabricated from assumed Earth values.
+  const radiusEarth = body?.radiusEarth;
+  const T_eq = body?.T_eq;
+  const massEarth = body?.massEarth ?? (radiusEarth != null ? radiusEarth ** 3 * (density / 5514) : null);
+  const volatileFraction = (massEarth != null && radiusEarth != null && T_eq != null)
+    ? surfaceVolatileInventory({
+        iceFraction, frostRatio, massEarth, radiusEarth, T_eq,
+        metallicity, solidInventory: body.solidInventory, deliveryFloat: body.deliveryFloat,
+      })
+    : iceFraction;
+
+  return { carbonToOxygen, ironFraction, iceFraction, volatileFraction, surfaceType, density };
 }
 
 

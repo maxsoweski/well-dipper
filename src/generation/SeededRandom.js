@@ -95,3 +95,55 @@ export class SeededRandom {
     return new SeededRandom(this.rng() + '-' + suffix);
   }
 }
+
+/**
+ * Deterministic float in [0,1) from a namespaced identity key.
+ *
+ * ⛔ WHY THIS IS NOT `new SeededRandom(key).float()`, which is the idiom used
+ * for `moonecc:` at _computeTidalHeating below.
+ *
+ * Instrument B's DRAW STREAM channel counts draws with an accessor installed on
+ * `SeededRandom.prototype` (tests/body-identity-fence.test.js:225-241), so it
+ * counts EVERY instance, not just the passed-in generation stream. `moonecc:`
+ * reads green there only because its draws were already baked into
+ * tests/baseline/body-identity.json at Step 0 (`b2ac455`). A NEW sub-rng is not,
+ * and it reds the channel — measured, not argued: this exact block with
+ * `new SeededRandom(compSeed).float()` moves the draw profile on 197 of 221
+ * fence seeds ("wd-0: first divergence at yield 2 (68 → 69); total 8903 →
+ * 8907"), +1 per plain moon, with zero drawn VALUES moved. The same block with
+ * this function moves 0 of 221.
+ *
+ * That matters beyond one commit's colour: DRAW STREAM is the only channel that
+ * detects a leak into the shared stream, and a genuine `rng.float()` leak
+ * appended here produces a signature byte-identical to the sub-rng's. Spending
+ * the channel's red on an expected, benign construction would leave the next
+ * commit unable to tell a leak from the noise.
+ *
+ * The namespace discipline documented at _computeTidalHeating is unchanged and
+ * is what this preserves: the key is a prefix plus the body's stable identity,
+ * carrying no per-system seed and no per-body counter, so the value is a pure
+ * function of the body and ZERO numbers come off the passed-in `rng`.
+ *
+ * Hash is xmur3's mixer (two Math.imul rounds + xorshift finalizer) for
+ * avalanche — `deriveComposition` uses this float as scatter across three
+ * correlated outputs, so a low-avalanche hash would band them.
+ *
+ * ⭐ LIFTED HERE 2026-09-04 (workstream volatile-delivery) so PlanetGenerator can use it too.
+ * It was private to MoonGenerator, and the volatile-delivery draw needed the same discipline on
+ * the PLANET path: a `new SeededRandom(...)` there moved the fence's draw profile on 212 of 221
+ * seeds with zero values moved — the same benign-looking red this comment already warns about.
+ * ONE copy, two callers; do not re-inline it.
+ *
+ * @param {string} key - namespaced identity key, e.g. `mooncomp:...` / `vdel:...`
+ * @returns {number} float in [0,1)
+ */
+export function namespacedFloat(key) {
+  let h = 1779033703 ^ key.length;
+  for (let i = 0; i < key.length; i++) {
+    h = Math.imul(h ^ key.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}

@@ -10,7 +10,7 @@ import {
   circularize, tidalHeatingPlanet,
 } from './PhysicsEngine.js';
 import { realisticRotationSpeed as rot } from '../core/CelestialTime.js';
-import { SeededRandom } from './SeededRandom.js';
+import { SeededRandom, namespacedFloat } from './SeededRandom.js';
 
 /**
  * PlanetGenerator — produces data describing a single planet.
@@ -358,15 +358,36 @@ export class PlanetGenerator {
     // Mass estimate from radius + type (PhysicsEngine §1)
     const massEarth = estimateMassEarth(radiusEarth, type);
 
-    // Composition from star chemistry (PhysicsEngine §3)
-    // zones carries metallicity and frostLine from the system generator
-    const composition = zones
-      ? deriveComposition(zones.metallicity || 0, orbitRadiusAU, zones.frostLine || 4.85, rng.float())
-      : deriveComposition(0, orbitRadiusAU, 4.85, rng.float());
-
-    // Equilibrium temperature
+    // Equilibrium temperature.
+    // ⭐ HOISTED ABOVE `deriveComposition` (it used to sit just below it) because the SURFACE volatile
+    // law reads it — see PhysicsEngine §3b. `equilibriumTemperature` is a pure function of luminosity
+    // and orbit with NO rng draw, so moving it changes no stream position and no value.
     const luminosityRel = zones?.luminosity || 1.0;
     const T_eq = equilibriumTemperature(luminosityRel, Math.max(orbitRadiusAU, 0.01));
+
+    // ⛔ THE DELIVERY DRAW COMES FROM A NAMESPACED HASH, NEVER THE SHARED STREAM. Adding a second
+    // `rng.float()` on this line would shift every downstream draw and silently regenerate the whole
+    // galaxy. Body identity IS in the key (radius and type), because delivery varies BODY to body
+    // within one system; that is the difference from `eccSeed` below, which deliberately leaves it out.
+    //
+    // ⭐⭐ AND IT IS `namespacedFloat`, NOT `new SeededRandom(...)`, AND THAT IS NOT A STYLE CHOICE.
+    // A fresh SeededRandom draws no numbers off the shared stream, but Instrument B counts draws on
+    // `SeededRandom.prototype.rng` — EVERY instance — so constructing one here moved the fence's
+    // per-yield draw profile on 212 of 221 seeds with ZERO drawn values moved. SeededRandom.js's own
+    // comment on this function says why that red must not be spent: DRAW STREAM is the only channel
+    // that detects a real leak into the shared stream, and a genuine leak's signature is byte-identical
+    // to a benign construction's. This path was measured red, then fixed to zero.
+    const vdelSeed = `vdel:${orbitRadiusAU}:${zones?.metallicity ?? 0}:${zones?.starMassSolar ?? 1}:${zones?.starType ?? 'none'}:${radiusEarth}:${type}`;
+    const deliveryFloat = namespacedFloat(vdelSeed);
+
+    // Composition from star chemistry (PhysicsEngine §3)
+    // zones carries metallicity and frostLine from the system generator; the 5th argument is the body
+    // bundle the SURFACE volatile law (§3b) needs — its own mass/radius/T_eq for retention, and the
+    // system's solid reservoir (zones.solidInventory, computed since plan B3 and unread until now).
+    const compBody = { massEarth, radiusEarth, T_eq, solidInventory: zones?.solidInventory, deliveryFloat };
+    const composition = zones
+      ? deriveComposition(zones.metallicity || 0, orbitRadiusAU, zones.frostLine || 4.85, rng.float(), compBody)
+      : deriveComposition(0, orbitRadiusAU, 4.85, rng.float(), compBody);
 
     // Tidal locking (PhysicsEngine §2)
     const starMassSolar = zones?.starMassSolar || 1.0;

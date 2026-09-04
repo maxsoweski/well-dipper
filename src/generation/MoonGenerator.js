@@ -2,7 +2,7 @@ import { earthRadiiToScene, EARTH_RADIUS_AU, AU_TO_SCENE } from '../core/ScaleCo
 import { PlanetGenerator } from './PlanetGenerator.js';
 import { realisticOrbitSpeed as orb } from '../core/CelestialTime.js';
 import { tidalHeating as tidalHeatingFn, equilibriumTemperature, tidalLockTimescale, checkTidalLock, deriveComposition, computeSurfaceHistory } from './PhysicsEngine.js';
-import { SeededRandom } from './SeededRandom.js';
+import { SeededRandom, namespacedFloat } from './SeededRandom.js';   // namespacedFloat LIFTED to SeededRandom.js 2026-09-04 — one copy, shared with PlanetGenerator
 
 /**
  * Parent types massive enough to count as "a giant" for a moon.
@@ -255,8 +255,21 @@ export class MoonGenerator {
 
     const compSeed = `mooncomp:${planetData.massEarth}:${planetData.radiusEarth}:${orbitRadiusEarth}:${moonRadiusData.radiusEarth}:${type}`;
     const compFloat = namespacedFloat(compSeed);
+    // ⭐ T_eq HOISTED above the composition call (it used to be assigned just below, at `moon.T_eq`)
+    // because the SURFACE volatile law reads it — PhysicsEngine §3b. Pure function of luminosity and
+    // parent orbit, ZERO draws, so nothing moves. It is re-used verbatim for `moon.T_eq` below.
+    const T_eqMoon = equilibriumTemperature(luminosityRel, parentAU);
+    // ⛔ The delivery draw gets its own namespace, exactly like `mooncomp:` above — ZERO draws from the
+    // passed-in `rng`, so no downstream value re-rolls.
+    const deliveryFloat = namespacedFloat(`vdel:${compSeed}`);
+    // ⚠ `massEarth` IS DELIBERATELY NOT PASSED, and this is the one place the arrow reverses: the moon's
+    // mass is derived FROM composition.density three lines below, so passing it here would be circular.
+    // `deriveComposition` falls back to `radiusEarth ** 3 * (density / 5514)` — the SAME expression used
+    // at `moon.massEarth`, so the retention term reads the identical mass without the cycle.
     const composition = deriveComposition(
       zones?.metallicity ?? 0, parentAU, zones?.frostLine ?? 4.85, compFloat,
+      { radiusEarth: moonRadiusData.radiusEarth, T_eq: T_eqMoon,
+        solidInventory: zones?.solidInventory, deliveryFloat },
     );
 
     moon.composition = composition;
@@ -264,7 +277,7 @@ export class MoonGenerator {
     // lands on this same record in this same commit; sourcing mass from the
     // parent's bulk density would put two disagreeing densities on one body.
     moon.massEarth = moonRadiusData.radiusEarth ** 3 * (composition.density / RHO_EARTH_KGM3);
-    moon.T_eq = equilibriumTemperature(luminosityRel, parentAU);
+    moon.T_eq = T_eqMoon;   // hoisted above deriveComposition — same expression, same value
     moon.age = ageGyr;
     // Parent is the PLANET, so the units convert twice: the planet's mass into
     // solar masses, and the moon's orbit out of Earth radii into AU.
@@ -617,51 +630,6 @@ const RHO_EARTH_KGM3 = 5514;
 // → t_lock 9.66e-4 Gyr → locked/synchronous, which is correct.
 const EARTH_MASSES_PER_SUN = 332946;
 
-/**
- * Deterministic float in [0,1) from a namespaced identity key.
- *
- * ⛔ WHY THIS IS NOT `new SeededRandom(key).float()`, which is the idiom used
- * for `moonecc:` at _computeTidalHeating below.
- *
- * Instrument B's DRAW STREAM channel counts draws with an accessor installed on
- * `SeededRandom.prototype` (tests/body-identity-fence.test.js:225-241), so it
- * counts EVERY instance, not just the passed-in generation stream. `moonecc:`
- * reads green there only because its draws were already baked into
- * tests/baseline/body-identity.json at Step 0 (`b2ac455`). A NEW sub-rng is not,
- * and it reds the channel — measured, not argued: this exact block with
- * `new SeededRandom(compSeed).float()` moves the draw profile on 197 of 221
- * fence seeds ("wd-0: first divergence at yield 2 (68 → 69); total 8903 →
- * 8907"), +1 per plain moon, with zero drawn VALUES moved. The same block with
- * this function moves 0 of 221.
- *
- * That matters beyond one commit's colour: DRAW STREAM is the only channel that
- * detects a leak into the shared stream, and a genuine `rng.float()` leak
- * appended here produces a signature byte-identical to the sub-rng's. Spending
- * the channel's red on an expected, benign construction would leave the next
- * commit unable to tell a leak from the noise.
- *
- * The namespace discipline documented at _computeTidalHeating is unchanged and
- * is what this preserves: the key is a prefix plus the body's stable identity,
- * carrying no per-system seed and no per-body counter, so the value is a pure
- * function of the body and ZERO numbers come off the passed-in `rng`.
- *
- * Hash is xmur3's mixer (two Math.imul rounds + xorshift finalizer) for
- * avalanche — `deriveComposition` uses this float as scatter across three
- * correlated outputs, so a low-avalanche hash would band them.
- *
- * @param {string} key - namespaced identity key, e.g. `mooncomp:...`
- * @returns {number} float in [0,1)
- */
-function namespacedFloat(key) {
-  let h = 1779033703 ^ key.length;
-  for (let i = 0; i < key.length; i++) {
-    h = Math.imul(h ^ key.charCodeAt(i), 3432918353);
-    h = (h << 13) | (h >>> 19);
-  }
-  h = Math.imul(h ^ (h >>> 16), 2246822507);
-  h = Math.imul(h ^ (h >>> 13), 3266489909);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
 
 
 /**
