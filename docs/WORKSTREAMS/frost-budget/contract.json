@@ -1,0 +1,95 @@
+{
+  "workstream": "frost-budget",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "statement": "Earth is the anchor: a world at Earth's average surface temperature (288 K) with Earth's water carries about a tenth of the world in ice — caps at the poles, bare at the equator.",
+      "verifyVia": {
+        "input": "Feed an Earth-shaped condition vector (T_eq 288 K surface, volatileFraction 0.15, radius 1 R⊕, water ice) to deriveUniforms, and evaluate the shipped snowline law at sea level.",
+        "observable": "Painted frost coverage lands in the 5–15% band around Earth's ~10%, and the sea-level snowline sits poleward of 55° latitude. The equator is bare (coverage at lat 0 is exactly 0)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-2",
+      "statement": "\"As things get colder, more ice coming down from the poles\" — cooling a world grows its cap DOWN in latitude, smoothly, with no jump or step.",
+      "verifyVia": {
+        "input": "Sweep one fixed world's surface temperature from 350 K down to 100 K in 1 K steps, holding volatiles and everything else constant.",
+        "observable": "Painted coverage is monotonically non-decreasing across the whole sweep and the snowline latitude monotonically non-increasing; no adjacent 1 K step moves coverage by more than 3 percentage points (continuity — the thing that would read as a pop)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-3",
+      "statement": "\"as it gets warmer less ice\" — warming a world retreats the ice poleward, and a hot world has none at all.",
+      "verifyVia": {
+        "input": "The same temperature sweep as AC-2, read upward; plus the full 200-seed population census.",
+        "observable": "Coverage falls monotonically as temperature rises and reaches exactly 0 above the volatile's condensation point plus the cap's own margin. Across the population, no body above 320 K carries any frost, and no body warmer than Earth's 288 K carries more ice than Earth's ~10%."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-4",
+      "statement": "\"in high places\" — high ground holds ice where the low ground beside it, at the same latitude, is bare.",
+      "verifyVia": {
+        "input": "In the running lab, spawn a temperate world whose snowline sits mid-latitude, and sample the frost mask at a high-relief point and a low-relief point at the SAME latitude, equatorward of the sea-level snowline.",
+        "observable": "The high point is frosted and the low point is bare. The altitude term's real strength is measured, not assumed — the ratio is reported in K per unit of the shader's height field, with the height field's actual observed range stated alongside it."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-5",
+      "statement": "The frozen worlds do not lose their ice: this change moves warm worlds and leaves cold ones exactly where they were.",
+      "verifyVia": {
+        "input": "Run docs/WORKSTREAMS/frost-budget/frost-census.mjs over 200 seeds before and after the change and diff the bands.",
+        "observable": "The three coldest bands (<150 K, 150–220 K, 220–273 K) hold their mean painted coverage to within 1 percentage point of the committed baseline (73.4% / 31.8% / 21.8%). ⭐ AND THE CONTROL DISCRIMINATES: the 273–320 K band MUST move, and move DOWN — a run where every band is unchanged is a dead instrument, not a pass."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-6",
+      "statement": "The world Max walked stops being a snowball: rocky-126's second planet — room temperature, has oceans — is drawn with ice caps at its poles and bare ground at its equator.",
+      "verifyVia": {
+        "input": "Load the game at ?system=rocky-126, approach the second planet, freeze the frame, and read the live material's frost uniforms plus a screenshot of the lit hemisphere.",
+        "observable": "uFrostMaxCoverage is materially below today's 0.834 and the drawn snowline sits poleward of 40°; the equatorial band is bare ground, not white. uIcenessMix stays 0 (the icy-body path is untouched) and the oceans are still drawn."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-7",
+      "statement": "Flying to a warm wet world reads as arriving at a world that has ice caps, rather than a world made of ice — and the cold worlds still read as frozen.",
+      "verifyVia": {
+        "input": "Max flies to rocky-126's second planet and to a frozen world, in the live build.",
+        "observable": "His judgment. Does the temperate world look like somewhere with polar ice and a habitable middle, and does the frozen world still look frozen?"
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "condition.T_eq — SURFACE temperature, greenhouse-corrected at the port (conditionFromBody.js:738). ⚠ NOT equilibrium temperature, despite the name; the two scoping documents got this wrong and the law must be built against the surface number.",
+      "condition.composition.volatileFraction — D2, drives today's whole budget.",
+      "condition.axialTiltDeg — D3, spreads the cap to low latitudes via frostLatitudeBias.",
+      "volatileSpecies / frostCondensationT — the freeze point the snowline is measured against (273 H₂O, 150 CO₂, 90 CH₄, 45 N₂). A temperature term must be relative to THIS, not to a hard-coded 273.",
+      "the shader's accumulated height field h at the frost call site (planetShaders.glsl.js:447) — the altitude term's input; sea level runs -0.2…+0.3 so h is a dimensionless field, NOT a unit-sphere fraction."
+    ],
+    "outputs": [
+      "labCore.js:953 frostMaxCoverage → uFrostMaxCoverage via solidFeatures.js:174 (gated by FROST_GATE).",
+      "shaders/uniforms.js:268-269 uFrostLatChill / uFrostLapseRate → the snowline in frostCoverage() (height.glsl.js:3171).",
+      "⚠ THREE CALL SITES SHARE THE SNOWLINE EXPRESSION, not one: frostCoverage (:3171), sublimationCombiner (:3020) and the glacial combiner (:3099) each recompute localT from the same two knobs. A change to the gradient moves F17 glacial relief and F18 sublimation landforms too — those are RELIEF, so they move geometry, not just albedo.",
+      "labCore.js:985 pldStrength and :1002 subStrength both multiply frostMaxCoverage, so the budget term propagates into F22 polar-layered-deposit banding and F18 sublimation strength."
+    ],
+    "mustStayWorking": [
+      "The frozen/cold population — <273 K bands unmoved (AC-5), including the lab's Frozen preset and the icy moons.",
+      "The lab's own presets remain byte-inert where they set values directly; a lab knob that becomes derived must keep the lab's slider authority (the erosion/erosionLevel two-spellings pattern, labCore.js:646).",
+      "The bone-dry early-out: volatileFraction < 0.05 ⇒ frostCondensationT 0 ⇒ shader early-out. A temperature term must not resurrect frost on a dry world.",
+      "F17 glacial and F18 sublimation relief keep their cold-cap confinement — they read the same localT, and both are currently GATED OFF in the game but LIVE in the lab (SOLID_RELIEF_GAME_GATES), so the lab is where a regression shows.",
+      "The 20 pre-existing suite failures at b7c1e1d are the baseline (agent-camera-api, driver-pack-giantdeck, gas-body-lab-material, lab-shader-perframe-seam, moon-condition-contract, moon-rng-stream-identity, port-condition-contract, relief-octave-lod-ramp). Diff against them; never attribute one to this change."
+    ]
+  }
+}
