@@ -163,7 +163,7 @@
     "karst": "NOT named by Max. Ruled off on the character-identical gate rather than waiting for the next UAT to find it; one flip returns it."
   },
   "shipped": {
-    "commit": "pending",
+    "commit": "6de7191",
     "uat": "Max 2026-09-04: \"Otherwise seems about right\" \u2014 accepted with the dune defect named, which this commit fixes."
   }
 }
