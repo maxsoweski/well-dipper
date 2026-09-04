@@ -1,0 +1,164 @@
+{
+  "workstream": "solid-relief-deck",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master). ⛔ ~/projects/well-dipper-trunk is master and deploys; untouched by this workstream.",
+  "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — § THE COVERAGE AUDIT, MEASURED (EOF) names the thirteen unforwarded master gates and calls this ONE pack-shaped job. F-spine rows F1/F4/F5/F6/F8/F15/F16/F18/F19/F21 re-scored on close; the record goes in a '§ THE SOLID RELIEF DECK, WIRED' addendum appended at EOF (§10: line-count-neutral below :24). docs/FEATURES/lab-pipeline-into-game-PLAN.md is the plan of record MEMORY names.",
+  "ruling": "Max 2026-09-04: 'I want all rendering features wired in so planets are distinct and variable. Much more development is needed but this lays the groundwork.' — the laws move VERBATIM; the LOOK of any of the eleven (dune strength, dust veil, relief amplitudes) is NOT this workstream's gate. And '2 yes': mountains (F1) ride along, reversing their hold-out in the 2026-09-04 handoff, because the population read found the generation block is in the BAKE's plate path, not in the runtime gate.",
+  "scopingRead": "docs/WORKSTREAMS/solid-relief-deck/POPULATION.md + population.mjs/.json at 7f19c99 — 24 rocky-* seeds, 124 solid bodies (66 planets / 58 moons). Non-zero counts: uChasmaDepth 124, uPlateauStrength 124, uScarpStrength 122, uMountainAmp 103 (42 distinct), uLavaCoverage 103, uKarstDensity/uDuneDensity/uDustDepth 68 each, uTesseraStrength 46, uSubStrength 37, uMassWastDensity 124 (constant 1.0). HELD OUT: uFacetStrength 0/124 (world-engine-lab.html:2748's four-term predicate — airless ∧ erosion<0.05 ∧ resurfacing<0.05 ∧ bombardment<0.2 — cleared by no generated body; `retained === false` never occurs, 68 retained:true / 56 no-atmosphere); uBioCoverage gate open on 68 (habitability real on 68, min 0.55 ⇒ smoothstep(0.1,0.4,·) == 1.0) but its AMOUNT is the lil-gui slider world-engine-lab.html:1078 `bioCoverage: 0.45` with no law on either side. THREE STRUCTURAL FACTS: (i) SEVEN gates are named fields off labCore.deriveUniforms, SIX exist only in world-engine-lab.html (:2175 karst, :2187 dune, :2203 dust, :2218 massWast, :2752 facet, :5077 bio) and need extraction into src/ first; (ii) four of those six read the seed-DEAF frozen preset `_fp` (:2127), the exact seam fluvialDeck hit; (iii) FIVE are multiplied in the lab by a preset-NAME membership table (world-engine-lab.html:5369/:5376/:5381/:5388/:5393 × state.featureRelevant, sourced :1988 from ASSOCIATIONS[k].rendersOn) and GAME_RELEVANCE is frozen empty at src/objects/Planet.js:2209 — a driver keyed on an absent relevance name THROWS.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "ONE PIPELINE for the four extracted laws. karst (F21), dune (F15), dust (F16) and mass-wasting (F19) get exactly one definition under src/ — a new module in the base/ closure — imported by BOTH the lab and the pack. The four expressions currently at world-engine-lab.html:2175, :2187, :2203 and :2218 are replaced by that import, not copied. No second expression of any of the four survives anywhere in the tree. The extraction reads the CONDITION, not the frozen preset `_fp`: the two-spelling erosion read (labCore.js:646, `erosion` ?? `erosionLevel`) is carried verbatim so no lab preset moves, and the seed-deaf `_fp` read is the declared defect being repaired (fluvialDeck.js's `_fp`/`_dp` seam, which took uOutflowDensity from 0 of 124 to 66 of 124).",
+      "verifyVia": {
+        "input": "Static: deny-scan src/ and world-engine-lab.html for a second copy of each of the four expressions (the `0.4 + 0.6 *` karst form, the `1.0 - 0.65 *` dryness term, the `0.3 + 0.7 *` accumulation term, a bare `massWastDensity = 1.0`); allow-scan for the import sites in both front-ends. Assert the new module's import closure is base/ + port/ only — no three, no Math.random, no Date.now, no preset name, no `d.type` (the three-free fence every pack carries; tests/vis-scale-fence.test.js also reds on the display-scale token appearing even in a COMMENT).",
+        "observable": "Deny-scan 0 hits outside the one module; both front-ends' import lines present; the lab's four assignment lines neutralised-in-place, never deleted (world-engine-lab.html §10 line-stability — the file holds its line count); the fence suites green."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-1",
+      "statement": "REFACTOR BYTE-IDENTITY IN THE LAB, AND THE EXTRACTED LAWS ARE LIVE. For every driver preset and every one of the 124 solid corpus bodies, the four extracted values at HEAD deep-equal a fixture captured from the lab's own expressions at the PARENT commit, to 12 decimal places. Byte-identity alone cannot prove the extraction is wired (feedback_identical-output-needs-a-liveness-probe): each of the four also carries an executed [CONTROL] that sabotages a required input and asserts the reader goes RED, on BOTH front-ends.",
+      "verifyVia": {
+        "input": "Headless: a capture script run at the parent writing tests/fixtures/solid-relief-lab-baseline.json; re-run at HEAD and deep-compare. [CONTROL ×4] perturb erosion by 0.01, atmospheric pressure by 0.01, liquid stability by 0.01, and the h2-he composition flag — each must move the corresponding output on both readers. [CONTROL — vacuity] assert the fixture is non-degenerate: each of the four takes ≥ 9 distinct values across the corpus, so a fixture of constants cannot pass this AC by being trivially equal.",
+        "observable": "Max delta exactly 0 on every preset and body; all four perturbation controls RED on both readers; the vacuity control's distinct counts ≥ the POPULATION.md figures (karst 17, dune 9, dust 22, massWast 1 — massWast is EXEMPT from the vacuity bar and its exemption is recorded, see AC-6)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-2",
+      "statement": "THE RELEVANCE GATE IS DERIVED FROM THE CONDITION, NEVER TYPED FROM A PRESET NAME. The lab multiplies mountains, canyons, scarps, plateaus and tessera by preset-name membership in ASSOCIATIONS[k].rendersOn. This pack replaces that with a condition-derived predicate per feature, and the replacement is MEASURED against the table over every driver preset rather than argued — polarDeck.js:58-66's precedent, which recorded 18/18 agreement with zero disagreements. Any preset where the two disagree is either a predicate bug to fix or a declared, reasoned divergence recorded in the contract's `deviations` — never a silent difference.",
+      "verifyVia": {
+        "input": "Headless: for each of the five features, evaluate the condition-derived predicate and `ASSOCIATIONS[k].rendersOn.includes(preset)` over every driver preset and compare. Deny-scan the pack for any preset-name string literal and for `d.type`. [CONTROL] a hand-built condition that the predicate must REFUSE (an icy-crust body for tessera, whose law already carries × rockyCrust) and one it must ADMIT.",
+        "observable": "Per-feature agreement recorded as an n/n figure with every disagreement enumerated and dispositioned; 0 preset-name literals and 0 `d.type` reads in the pack; both controls behave as stated; no driver keys a relevance name (GAME_RELEVANCE is frozen empty and would throw)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-3",
+      "statement": "THE POPULATION, RECOMPUTED INDEPENDENTLY FROM THE PACK'S OWN OUTPUT. Over the 24-seed corpus the eleven resolved uniforms are non-zero on exactly the counts POPULATION.md recorded, recomputed from the pack's real emissions rather than from the scoping script: uChasmaDepth 124, uPlateauStrength 124, uScarpStrength 122, uMountainAmp 103, uLavaCoverage 103, uKarstDensity 68, uDuneDensity 68, uDustDepth 68, uTesseraStrength 46, uSubStrength 37, uMassWastDensity 124. Any body whose count differs is enumerated with its cause. Distinct-value counts are recorded per gate — this is the measurable half of Max's 'distinct and variable'.",
+      "verifyVia": {
+        "input": "Headless corpus run through the real pack (vitest hides console on pass — write the table to $TMPDIR and assert on it). [CONTROL — the fade] a hand-built condition at each law's zero end resolves to exactly 0. [CONTROL — the relevance gate] a body the AC-2 predicate refuses resolves to exactly 0 on that feature, so 'non-zero' is proved to be gated and not merely defaulted.",
+        "observable": "Every count matches POPULATION.md or the difference is explained; per-gate distinct counts recorded and ≥ the scoping figures; both controls red where they must be red."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-4",
+      "statement": "NOTHING ELSE MOVES. Every driver every existing pack emits — over the 124 solid + 32 gas corpus and every driver preset — resolves to a value identical before and after. With the deck's gates OFF the render is byte-identical to today on every body. The new pack is the ELEVENTH, appended to the registry never inserted (four assertions index PACKS positionally); its predicate is `compositionClass(condition) !== 'gas'`, character-identical to rockySurface / solidOptics / solidFeatures / fluvialDeck, so it claims no body they do not already claim and the material-admission census cannot move. Its emitted name set is disjoint from every existing pack's, asserted by name lookup over real pack outputs, so the registry's collision throw stays inert.",
+      "verifyVia": {
+        "input": "Headless deep-compare against tests/fixtures/pack-drivers-baseline.json at HEAD; a gates-OFF resolve; all four instruments (`npm run check:instruments`); the citation checker (⚠ `--check-citations | tail -1` HIDES the exit code — `grep -q \"Exit 0\"` before &&-chaining); the full suite (`npx vitest run --dir tests`) diffed per test ID against a clean worktree of the parent placed OUTSIDE the repo. [CONTROL] perturb one pre-existing driver and confirm the deep-compare reds.",
+        "observable": "Zero pre-existing drivers differ; the OFF arm resolves byte-identical; instruments A/B/C/D green with only the declared deltas; citations resolve with an asserted Exit 0; suite failing set identical to the parent's; the perturbation control reds; the swapped-body census unchanged."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-5",
+      "statement": "LIVE — THE DECK REACHES GAME PIXELS, AND ONLY WHERE IT SHOULD. On a body the population read names as carrying several of the eleven, an A/B key flips the whole deck off and on in the running game and the surface measurably changes; on a body the gates resolve to 0 for, the same key changes nothing. Instrumented from the start: a `globalThis._lab*` probe registering EVERY lab material with a dispose listener, so a stale material cannot masquerade as a live one.",
+      "verifyVia": {
+        "input": "chrome-devtools on lane A's server + Chrome :9223, on a procedural system — NEVER Sol (Sol is NASA-textured, a different renderer, no condition fields; it is the one system that cannot validate procgen). Clear localStorage['wd.labGasBodies'] first (a stored '0' silently keeps the legacy shader). ⚠ RELOAD before measuring if src was edited this session — a hot-reloaded page is not evidence about shipped code. Read uniforms through the probe, capture ON/OFF screenshots, count changed pixels. [CONTROL — the null body] a corpus body whose eleven all resolve 0 shows a pixel delta of 0 with a non-null record. [CONTROL — sabotage] zero one gate at the pack and confirm its contribution vanishes while the others persist.",
+        "observable": "Pixel counts ON/OFF with the floor recorded, sabotage-vs-ON and sabotage-vs-OFF, the null-body control at 0 with a non-null record, pre-flight uniform values, admission flags. Artifacts committed IN-REPO under live-pair-<date>/ — a verifier cannot trace evidence that lives only in a scratchpad."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-6",
+      "statement": "LIVE — THE BAKE-OVERLAP CONTROL, THE WORKSTREAM'S CENTRAL RISK. The height combiners run ON TOP of the blended pre-computed + synthesised field (planetShaders.glsl.js:261-265, then the combiner chain from :305), so on a body whose pre-computed terrain already authored a landform, forwarding its runtime gate adds a SECOND expression of it. Measured overlap: 10 bodies for rifts and plateaus/tessera (the stagnantLid closure), 4 for lava plains (the magmatism closure), 0 for mountains (the plate closure claims no body). ⭐ THE LAB COMPOSES THEM THE SAME WAY ON THE SAME BODIES — one shader, one bake, both live — so the bar is not 'no double-count', it is 'the game's composed relief matches the LAB's for the same condition'. Any complaint about that composition is a LAB defect logged to the backlog, never a number invented here. Separately: the 41 corpus bodies under 0.22 R⊕ have NO pre-computed terrain at all, and on those the deck must be the sole source of relief.",
+      "verifyVia": {
+        "input": "chrome-devtools: pick one of the 10 stagnantLid bodies and one body under 0.22 R⊕ named from population.json. On each, read the composed height field through the existing field-sampler tap at matched camera framing in BOTH front-ends on the same condition, and compare. [CONTROL] the small body must show relief with the deck ON and none with it OFF — proving the 'only road' claim rather than asserting it. Camera work per the lab's own probe contract: `_lab.shotState()` is async and takes { body, region }; frameBody re-frames to a lit view, so hold distance and set the pose's yaw.",
+        "observable": "The lab-vs-game composed-height comparison recorded with its tolerance DERIVED and stated (feedback_match-ac-tolerance-to-artifact-tier — no audit-grade bound on a live render); the overlap bodies enumerated; the small-body ON/OFF control behaving as stated; any lab-vs-game divergence written up as DEBT with a backlog row, never as a GAME_ONLY_BY_DESIGN ruling (feedback_converge-dont-declare-divergence)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-7",
+      "statement": "THE LAB STILL AUTHORS. world-engine-lab.html loads with 0 script errors (favicon 404 only); every checkbox that gated one of the eleven still gates it to 0 and back; every slider that drove one still drives it; a seed reroll still changes the derived values. The extraction must not take the lab's authoring surface out of its own loop — fluvialDeck's MIRROR pattern (nine of its ten values are `.listen()`-bound sliders answered from pack output, not written straight to the material) is the shape to copy.",
+      "verifyVia": {
+        "input": "chrome-devtools on the lab page: read each lil-gui checkbox state first, toggle via `.lil-controller.lil-boolean`, read the uniforms back through the lab's probe; drive one slider per family; reroll the macro seed on a preset where the law varies. Restore every control afterwards. Close the agent's pages when done — these are visible windows on Max's desktop.",
+        "observable": "0 script errors; each checkbox gates value↔0; each slider drives its uniform; the reroll moves the derived values; all controls restored; no orphaned browser windows."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-8",
+      "statement": "THE TWO REFUSALS AND THE ONE DEFECT ARE RECORDED, NOT SILENTLY DROPPED. Crystal facets (F43) and bioluminescence (F46) are NOT wired, each with its measured one-line reason in the PLAN and its F-card, so the next reader does not rediscover them as a gap. Mass-wasting (F19) IS wired and its lab half is logged as a defect: the master gate is a flat constant 1.0 on all 124 bodies while the lab's rendered contribution measured .00006 — so this wire is carriage for a law that renders nothing until the lab defect is fixed, and the F19 row must say exactly that rather than read as shipped.",
+      "verifyVia": {
+        "input": "Static: the PLAN's F-spine rows for F1/F4/F5/F6/F8/F15/F16/F18/F19/F21 re-scored, F43/F46 annotated with the measurement, the F19 row carrying its defect note; a backlog row opened for the F19 lab half; the '§ THE SOLID RELIEF DECK, WIRED' addendum appended at EOF. The count line updated by ENUMERATING F-ids, never by bare arithmetic (it has gone stale twice).",
+        "observable": "Every row present and matching the measured numbers; F43/F46 reasons quoted from POPULATION.md; the F19 defect row exists in the backlog and the F-spine row does not claim the feature renders; the addendum's citations all resolve."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-9",
+      "statement": "MAX'S GATE (deferred-to-max; no agent ever drives or PASSes this). Flying up to worlds in the live game with one key that flips the whole deck: do planets read as DISTINCT AND VARIABLE — do two different worlds stop looking like the same ball repainted, and do the small moons stop being bare? ⚠ The bar is his own framing, quoted: 'much more development is needed but this lays the groundwork' — this is NOT a judgment on whether any single feature looks finished. ⛔ Two things the population read predicts he may dislike on sight and which are the LAB's answers, not this wire's: dunes resolve at full strength (median 1.0) on all 66 planets, and dust near it (median 0.91). If he rules against either, it is a lab-side look defect and a backlog row, not a number to change in the pack.",
+      "verifyVia": {
+        "input": "Max: a deep link to a named procedural system, fly up to two named contrasting worlds and one small moon, tap the deck key while moving in. The exact key, the exact link and where each body sits in the orrery are given to him in his own terms — never a uniform name, never an AC id.",
+        "observable": "His words."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/worldengine/base/labCore.js `deriveUniforms` — the SEVEN gates that are already named fields: mountainAmp (:793), chasmaDepth (:823), scarpStrength (:840), plateauStrength (:858), tesseraStrength (:864), lavaCoverage (:897), subStrength (:999). Read, never re-expressed — solidFeatures.js's 'not one law is expressed here' discipline.",
+      "world-engine-lab.html:2175 (karst), :2187 (dune), :2203 (dust), :2218 (mass-wasting) — the FOUR laws that exist only in the lab page and must be extracted into src/ before anything can forward them.",
+      "world-engine-lab.html:2127 `_fp` vs the per-seed `_dp` — the seed-deaf frozen-preset read those four currently take; the extraction must read the condition.",
+      "src/worldengine/base/labCore.js:646 — the two-spelling erosion read (`erosion` ?? `erosionLevel`), the ROOT-0 fix the extracted laws must carry so no lab preset moves.",
+      "planet-feature-associations.js `ASSOCIATIONS[k].rendersOn` for mountains / canyons / scarps / plateaus / tessera — the preset-name table AC-2 must replace with a condition-derived predicate.",
+      "src/worldengine/port/writePackUniforms.js — scalar/assertDisplayPolicy/assertPackResult/resolveDriver/PackContractError, the Step-5 pack contract.",
+      "src/objects/Planet.js:2209 GAME_RELEVANCE (frozen empty — a driver keyed on an absent relevance name throws) and labPackCtx.",
+      "docs/WORKSTREAMS/solid-relief-deck/population.json — the per-body expected values every count in AC-3 is checked against."
+    ],
+    "outputs": [
+      "A new pack module under src/worldengine/drivers/ (the ELEVENTH), appended to PACKS never inserted, predicate `compositionClass(condition) !== 'gas'`, emitting the eleven uniforms on every admitted solid body.",
+      "A new module in the base/ closure holding the ONE definition of the four extracted laws, imported by both the lab and the pack.",
+      "The eleven uniforms carried into the game's height combiner chain: mountainCombiner, canyonCombiner, scarpCombiner, plateauCombiner, tesseraCombiner, lavaCombiner, sublimationCombiner, karstCombiner, duneCombiner, dustCombiner, massWastCombiner — each of which early-outs at gate ≤ 0, which is what makes the OFF arm byte-identical.",
+      "An A/B key flipping the whole deck in the live build, for AC-5 and for Max's walk.",
+      "The pack's own suite, plus the PLAN addendum, the re-scored F-spine rows, the two recorded refusals and the F19 lab-defect backlog row."
+    ],
+    "mustStayWorking": [
+      "⭐ WITH THE DECK'S GATES OFF, BYTE-IDENTICAL TO TODAY ON EVERY BODY — the eleven combiners all early-out at ≤ 0, so this is checkable rather than hoped for.",
+      "Everything already UAT-closed and shipped: the river router (F11/F12/F13/F14/F20), craters (F2), ejecta rays (F3), the storm slice (F27/F28), the province/crust-colour pass, the terminator REMOVAL (F35, shipped OFF behind TERMINATOR_ENABLED — one constant, do not disturb it).",
+      "The ten existing packs' emitted values, unchanged on every corpus body and every driver preset (AC-4's deep-compare).",
+      "The material-admission census: which bodies draw with the lab material vs the legacy shader must not move — the new pack's predicate is the complement-of-gas one four packs already carry, so it claims no new body.",
+      "The registry's positional indexing (four assertions read PACKS by index) and its collision throw (disjoint emitted name sets).",
+      "The pre-computed terrain path itself — the 5-way relief dispatch, the relief/crater/carve cubes and the display crossover are untouched; this workstream adds the runtime half beside them and does not modify the bake.",
+      "The lab's authoring loop: every checkbox, slider and seed reroll for the eleven still works (AC-7), via fluvialDeck's mirror pattern rather than direct writes.",
+      "All four instruments green, and the lab loading with 0 script errors."
+    ]
+  },
+  "scope": {
+    "notInScope": [
+      "The LOOK of any of the eleven — dune strength, dust veil, relief amplitudes are the lab's answers and move verbatim. A look complaint is a lab-side backlog row.",
+      "Crystal facets (F43) and bioluminescence (F46) — held out with recorded reasons (AC-8).",
+      "Fixing the F19 mass-wasting lab defect (.00006) — logged, not repaired here.",
+      "Why the plate-based terrain builder claims 0 of 124 bodies — that is the NEXT arc, Max's (2), and it is a GENERATION question. Related and deferred with it: writePassiveMargins never firing, and the absence of any pre-computed-terrain crossover below 0.22 R⊕.",
+      "The lighting engine / F52 — Max's (3).",
+      "Queue (c) world-generation work (what would make facets or a bio amount real).",
+      "Anything on master (~/projects/well-dipper-trunk), including the mobile fixes that live there."
+    ]
+  },
+  "verifyWorkflow": {
+    "scriptPath": "/home/ax/projects/personal-os-improvements/dev-collab/workflows/verify-workstream.mjs",
+    "args": {
+      "contractPath": "/home/ax/projects/well-dipper/docs/WORKSTREAMS/solid-relief-deck/contract.json",
+      "mode": "full",
+      "liveBranch": "main"
+    },
+    "note": "The workflow audits headless ACs and the recorded liveEvidence; it cannot drive Chrome. AC-5 / AC-6 / AC-7 are driven by working-Claude from the main thread and their artifacts committed in-repo under live-pair-<date>/; AC-9 is always deferred-to-max. Every workflow agent pins model opus (Max, 2026-09-03). ⛔ Do not edit any file a running workflow reads."
+  },
+  "greenlight": {
+    "date": null,
+    "max": "pending"
+  }
+}
