@@ -456,7 +456,16 @@ describe('AC-3 — every pre-existing driver of every pack is byte-inert', () =>
   const stripRays = (pk) => { const d = { ...pk.drivers }; for (const n of RAY_NAMES) delete d[n]; return { drivers: d, attributes: pk.attributes }; };
 
   it('deep-compare against the dc03fc6 fixture: ZERO pre-existing drivers differ, on 156 bodies + 18 presets', () => {
-    expect(PACK_FIXTURE.capturedFrom).toBe('dc03fc6');
+    // ⭐ THE PROVENANCE PIN MOVED, DELIBERATELY AND ONCE — workstream volatile-delivery, 2026-09-04.
+    // The fixture was NOT regenerated: `deriveComposition` split into an accreted-bulk-ice field and a
+    // surface-volatile field (PhysicsEngine §3b), so composition moves on every body, and the fixture's
+    // VALUES were patched in place while its structure, its pack scope and its key set stayed
+    // byte-identical — this suite still pins exactly the packs it was written to pin. 792 of its body
+    // driver values moved and ZERO of its 18 preset values did. The per-fixture delta and the
+    // attribution control (restore that ONE field and all 12,481 resolved values return to
+    // byte-identity) are recorded in docs/WORKSTREAMS/volatile-delivery/DEVIATIONS.md.
+    // WAS 'dc03fc6' (the shipped capture).
+    expect(PACK_FIXTURE.capturedFrom).toBe('36ffec2');
     let cells = 0; const differ = []; const added = new Set();
     for (const b of CORPUS) {
       const was = PACK_FIXTURE.bodies[b.id];

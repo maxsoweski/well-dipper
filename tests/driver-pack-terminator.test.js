@@ -484,7 +484,16 @@ describe('AC-1 — one constant, read by the game\'s policy and by both of the l
 // ═════════════════════════════════════════════════════════════════════════════
 describe('AC-2 — every other driver of every pack is byte-inert', () => {
   it('deep-compare against the f0b93aa fixture: ZERO drivers other than uTermStrength differ', () => {
-    expect(PACK_FIXTURE.capturedFrom).toBe('f0b93aa');
+    // ⭐ THE PROVENANCE PIN MOVED, DELIBERATELY AND ONCE — workstream volatile-delivery, 2026-09-04.
+    // The fixture was NOT regenerated: `deriveComposition` split into an accreted-bulk-ice field and a
+    // surface-volatile field (PhysicsEngine §3b), so composition moves on every body, and the fixture's
+    // VALUES were patched in place while its structure, its pack scope and its key set stayed
+    // byte-identical — this suite still pins exactly the packs it was written to pin. 792 of its body
+    // driver values moved and ZERO of its 18 preset values did. The per-fixture delta and the
+    // attribution control (restore that ONE field and all 12,481 resolved values return to
+    // byte-identity) are recorded in docs/WORKSTREAMS/volatile-delivery/DEVIATIONS.md.
+    // WAS 'f0b93aa' (the shipped capture).
+    expect(PACK_FIXTURE.capturedFrom).toBe('36ffec2');
     let cells = 0; const differ = []; const termMoved = []; const added = new Set();
     for (const b of CORPUS) {
       const was = PACK_FIXTURE.bodies[b.id];

@@ -41,7 +41,12 @@ const packOf = (b) => resolvedPacks(b.cond, ctxOf(b)).solidRelief;
 // the number Max was shown. A change here is a change to what the player sees and must be deliberate.
 const EXPECTED_NONZERO = {
   uMountainAmp: 103, uChasmaDepth: 124, uScarpStrength: 122, uPlateauStrength: 124,
-  uTesseraStrength: 46, uLavaCoverage: 103, uSubStrength: 37,
+  // ⭐ uSubStrength WAS 37, re-measured 2026-09-04 (workstream volatile-delivery). Sublimation is
+  // gated on the bone-dry floor (labCore.js:946, `volatileFraction < 0.05 ? 0`), so the three extra
+  // bodies are three worlds that crossed that floor when surface volatiles stopped being a pure
+  // function of orbital distance. It is the ONLY count in this table that moved: the other ten read
+  // relief and crust drivers, not the volatile budget.
+  uTesseraStrength: 46, uLavaCoverage: 103, uSubStrength: 40,
   uKarstDensity: 68, uDuneDensity: 68, uDustDepth: 68, uMassWastDensity: 124,
 };
 
