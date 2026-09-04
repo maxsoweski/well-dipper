@@ -2,7 +2,7 @@
   "workstream": "frost-budget",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verifying",
   "acceptanceCriteria": [
     {
       "id": "AC-1",
@@ -91,5 +91,19 @@
       "F17 glacial and F18 sublimation relief keep their cold-cap confinement — they read the same localT, and both are currently GATED OFF in the game but LIVE in the lab (SOLID_RELIEF_GAME_GATES), so the lab is where a regression shows.",
       "The 20 pre-existing suite failures at b7c1e1d are the baseline (agent-camera-api, driver-pack-giantdeck, gas-body-lab-material, lab-shader-perframe-seam, moon-condition-contract, moon-rng-stream-identity, port-condition-contract, relief-octave-lod-ramp). Diff against them; never attribute one to this change."
     ]
+  },
+  "verification": {
+    "at": "2026-09-05",
+    "integration": "GREEN — AC-1/2/3/5 headless (frost-census.mjs), AC-4/AC-6 live (LIVE-CHECK.md). Suite: 20 pre-existing failures before and after, zero new.",
+    "uatPending": "AC-7 — Max flies to PVX J3DK6GAO+RBJGI5M c and to a frozen world. No agent closes it.",
+    "acNotes": {
+      "AC-1": "MISSED, and the AC's own numbers are why — see DEVIATIONS §1. Rocky (Earthlike) lands at 19.8% extent / 53 deg snowline against the AC's 5-15% / poleward-of-55. The AC was written before I understood that frostCover is an OPACITY, not an area, so it collapsed two independent quantities into one bound. Not retuned to hit an invented number.",
+      "AC-2": "PASS — monotonic and continuous across a 350 K -> 100 K sweep.",
+      "AC-3": "PASS — no body above 320 K carries any frost; the >320 K band whiteness goes 0.064 -> 0.000.",
+      "AC-4": "PASS on the criterion (high ground frosts where low ground beside it is bare, 180 K spread at 58.4 deg) — AND its required measurement is the open finding: the lapse spans 215.6 K across h, making altitude the dominant term. LIVE-CHECK.md.",
+      "AC-5": "PASS as restated by distance below the freeze point (DEVIATIONS §2): 0 of 118 genuinely frozen bodies move; only the 12 within 10 K of the line, 8 of them, each named. The census exits non-zero if the temperate band does NOT move down.",
+      "AC-6": "PASS — 0.834 -> 0.619 whiteness, 26 deg -> 60 deg snowline, uIcenessMix still 0, oceans drawn.",
+      "AC-7": "deferred-to-max"
+    }
   }
 }
