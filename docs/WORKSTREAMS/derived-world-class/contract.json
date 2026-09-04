@@ -1,0 +1,139 @@
+{
+  "workstream": "derived-world-class",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "summary": "Split PlanetGenerator's `type` into its two jobs: it stays the FORMATION SEED (it legitimately decides radius, mass, atmosphere, moon count, palette) and a new derived `worldClass`, computed from the finished body's condition vector, becomes what every descriptive surface reads \u2014 the info panel, the orrery, and the seed search. Same bug shape as the volatile-delivery split just shipped.",
+  "baseline": {
+    "measuredOn": "2026-09-04, 200 seeds `rocky-0..199`, 476 solid planets (gas excluded via compositionClass)",
+    "script": "census.mjs",
+    "labelCounts": {
+      "rocky": 138,
+      "venus": 132,
+      "carbon": 83,
+      "ice": 65,
+      "lava": 45,
+      "ocean": 7,
+      "terrestrial": 3,
+      "eyeball": 1,
+      "fungal": 1,
+      "city-lights": 1
+    },
+    "warmAndWet": 14,
+    "warmAndWetByLabel": {
+      "ice": 6,
+      "terrestrial": 3,
+      "carbon": 2,
+      "rocky": 2,
+      "fungal": 1
+    },
+    "misnamedEarthLikes": "11 of 14 carry a name other than ocean/terrestrial",
+    "oceanLabelled": "7 bodies, 0 warm-and-wet, median surface T 355 K",
+    "lavaLabelledButCold": "15 of 45 below 400 K (3.2 % of all solid)",
+    "gates": "warm = surface T in [250, 320] K; wet = composition.volatileFraction >= 0.12 (e1Regime BAND.V_MIN, the engine's own constant); rocky = compositionClass(cv) !== 'gas'",
+    "whyNotInSeededBand": "the engine's inSeededBand() adds an Earth-MASS gate 0.6-1.6 M\u2295 which cuts the 14 to 5. Max ruled 2026-09-04 that warm wet super-Earths count, so the classifier carries its own size bound. All 14 sit below 1.4 R\u2295, so a radius-valley cut at 1.8 R\u2295 is non-binding on today's population \u2014 it is there to stop a future 2.5 R\u2295 water world being called habitable, not to filter the current one.",
+    "whyNotHabitabilityD15": "PhysicsEngine.habitabilityScore has NO volatile/water term. Measured: 189 of the 462 non-habitable bodies score at or above the lowest genuinely warm-and-wet one; venus-labelled bodies median 0.80. Unusable as a classifier.",
+    "iceLabelledButHot": "6 of 65 above 273 K",
+    "anchorSeed": "rocky-126 planet 2 ('PVX J3DK6GAO+RBJGI5M c') \u2014 the exact world Max UAT'd on 2026-09-04 with 'yep, it works'. Water 0.310, surface 293 K, and the game calls it an Ice World."
+  },
+  "design": {
+    "seam": "PlanetGenerator.js:822 already builds `const condition = conditionFromBody(planetData)` from the finished record. `worldClass` is derived THERE \u2014 no new seam is cut and no second adapter is written.",
+    "vocabulary": "REUSES the existing names (gas-giant, hot-jupiter, sub-neptune, carbon, lava, venus, ice, ocean, terrestrial, rocky) so no UI copy, colour table or filter option changes shape.",
+    "guardrail": "`worldClass` must never become an input to physics \u2014 that would rebuild the loop this workstream exists to cut. It is written last, after every physical quantity is final, and carries a comment saying so at both the write site and PlanetGenerator's `type` declaration.",
+    "reuse": "every gate reads an already-exported engine function or named constant (compositionClass, icenessOf, biosphereOf, BAND.V_MIN, the BIO_T_* band) rather than a fresh hand-written bound."
+  },
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "statement": "No world carries a name its own physics flatly contradicts \u2014 every world called an ocean world actually has water on it, no lava world is cold, no ice world is boiling.",
+      "verifyVia": {
+        "input": "Re-run the 200-seed census (census.mjs) over the generator, headless.",
+        "observable": "Zero bodies classed `ocean` or `terrestrial` fail the warm-and-wet gates (baseline 7); zero classed `lava` sit below 400 K (baseline 15); zero classed `ice` sit above 273 K (baseline 6). census.mjs exits non-zero while any remain."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-2",
+      "statement": "The 14 genuinely warm, wet worlds are the ones the galaxy calls habitable \u2014 today 11 of them are called something else.",
+      "verifyVia": {
+        "input": "Same 200-seed census.",
+        "observable": "All 14 warm-and-wet bodies carry a `worldClass` of `ocean` or `terrestrial` (baseline 3), and no body outside that set does (baseline 7 false positives)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-3",
+      "statement": "Nothing about how the planets look, how big they are, or how many moons they have changed.",
+      "verifyVia": {
+        "input": "Regenerate the same 200 seeds and diff every generated field except the new one; run the draw-stream instrument (Instrument B).",
+        "observable": "Byte-identical radius, mass, moon count, rings, palette and atmosphere on all 476 bodies, and ZERO seeds move their per-yield draw profile. `worldClass` is the only added key. (Trap #15: a fresh `new SeededRandom(...)` moves the draw stream with no values moved \u2014 use `namespacedFloat` if any draw is needed at all; the intent is that none is.)"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-4",
+      "statement": "When I fly to a warm wet world, the panel tells me that is what it is, instead of calling it a rock.",
+      "verifyVia": {
+        "input": "In the running game, load ?system=rocky-126 and select the second planet \u2014 the exact world Max UAT'd on 2026-09-04 \u2014 then repeat on rocky-61 (carbon) and rocky-151 (rocky).",
+        "observable": "The info panel's type line reads Ocean World or Terrestrial, not Rocky World / Ice World / Carbon World."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-5",
+      "statement": "I can spot a habitable world on the system map before I fly to it.",
+      "verifyVia": {
+        "input": "Open the orrery on that same seed.",
+        "observable": "The habitable world's dot is drawn in the ocean/terrestrial colour (blue/green), distinguishable from the rocky and ice dots around it. Both planetColors sites in NavComputer read the derived class."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-6",
+      "statement": "When I ask the game to find me a habitable planet, the ones it hands me are habitable.",
+      "verifyVia": {
+        "input": "Run the seed search with the 'Habitable Planet' filter.",
+        "observable": "Every system it returns contains at least one body that passes the warm-and-wet gates; today the filter reads the formation roll and returns systems whose only 'ocean' is hot and dry."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-7",
+      "statement": "Flying around, the galaxy tells me what its worlds are, and I can find a place worth going to.",
+      "verifyVia": {
+        "input": "Max flies the live build, looks at several worlds and goes looking for a habitable one.",
+        "observable": "Holistic: the names the galaxy gives its worlds cohere with what he finds when he gets there, and finding somewhere worth visiting feels possible rather than random."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "PlanetGenerator.generate() \u2014 the finished planetData record, after every physical quantity is computed",
+      "conditionFromBody(planetData) at PlanetGenerator.js:822 \u2014 the existing, already-built condition vector; the ONE named seam game data enters the engine through",
+      "e1Regime.compositionClass(cv) \u2014 already derives gas / carbon / icy / rocky from physics",
+      "e1Regime BAND.V_MIN (0.12) \u2014 the engine's own wet threshold",
+      "surfaceMaterial.biosphereOf(cond) + icenessOf(cond) \u2014 the life-cover and frozen-over laws the shader already reads",
+      "conditionFromBody.surfaceTemperatureOf \u2014 the greenhouse correction, so the classifier reads SURFACE temperature, not the game's bare equilibrium number"
+    ],
+    "outputs": [
+      "planetData.worldClass \u2014 the new derived field",
+      "ui/BodyInfo.js:58 \u2014 PLANET_TYPE_NAMES lookup (the info panel type line)",
+      "ui/NavComputer.js:2331 and :2978 \u2014 both planetColors tables (the orrery dots)",
+      "main.js:8462 \u2014 the 'habitable' case of the seed-search filter, currently `type === 'terrestrial' || type === 'ocean'`",
+      "ui/DebugPanel.js:482 \u2014 the 'Habitable Planet' filter option this drives"
+    ],
+    "mustStayWorking": [
+      "The formation roll itself \u2014 _pickType stays exactly as it is, including its Kepler occurrence rates. It still chooses radius range, estimateMassEarth, atmosphere strength, cloud/ring chance, max moon count and the legacy palette.",
+      "The shared RNG draw stream \u2014 no new draw on it. Instrument B counts draws on SeededRandom.prototype.rng across EVERY instance, so even a side-draw sub-rng moves the per-yield profile (trap #15). The derived class needs no randomness at all.",
+      "conditionFromBody's rule that the adapter reads `type` for NOTHING \u2014 the derived class is computed on the game side FROM the condition vector; the label must not start crossing that seam in the other direction.",
+      "The world-engine render path \u2014 no planet's appearance changes. The lab planet material carries no planetType uniform; this is confirmed, not assumed.",
+      "MoonGenerator._pickType and moon labels \u2014 out of scope this pass; moons keep their formation labels until planets prove the shape.",
+      "The exotic-overlay types (fungal, city-lights, ecumenopolis, hex, machine, crystal, shattered) are applied AFTER natural generation and are not physical classes. They must survive the split without being re-derived away.",
+      "All 858 line-anchored citations into PlanetGenerator \u2014 editing this file drifts every one of them (trap #16). Repair by locating the SYMBOL, never by bumping the integer; some refs use the short `:539 `symbol`` form a naive File.js:NNN search misses."
+    ]
+  }
+}
