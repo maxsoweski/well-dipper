@@ -205,3 +205,95 @@ Max's sense was right, and it is sharper than "some numbers differ":
 3. **One superseded decision** — the 8.0 was correct against a default that no longer exists.
 4. **Ten hardcoded copies** of a user-adjustable `pixelScale`.
 5. **One dead quantiser** still in the tree.
+
+---
+
+# PART II — the era bar, and what I recommend
+
+> Added 2026-09-06 after Max's reframe: *"Sol is like an easter egg…not my priority. My priority is
+> deciding on the right pixel and color resolution and anything else you recommend based on my
+> n64/psx/sega saturn era chosen aesthetic for the game."*
+
+## 8. What the three machines actually did (sourced, not recalled)
+
+| | shipped mode | hi-res mode | framebuffer |
+|---|---|---|---|
+| **PlayStation** | **320×240** (most games) | 640×480 (interlaced) | 15-bit, GPU-dithered |
+| **Nintendo 64** | **320×240** | 640×480 | **15-bit, 5-5-5-1** |
+| **Sega Saturn** | **320×240** / 352×240 | 640×480 / 704×480 | 15-bit (32,768 colours) |
+
+**Two numbers are common to all three: 240 lines, and 5 bits per channel.** That is the whole of the
+shared bar, and it is why the aesthetic reads as one era despite three very different GPUs.
+
+⭐ **Dithering was not a per-object effect — it was where the quantisation happened.** On the PS1 it
+was *"a hardware feature that was embedded in the GPU… applied in all textured polygons"* on the way
+to the framebuffer. **One buffer, one depth, everything in it.** This matters architecturally (§10).
+
+## 9. Where Well Dipper sits against that bar
+
+**Colour: exactly right, and it should not move.** `posterizeLevels: 31` → 32 values → 5 bits →
+RGB555. That is all three machines' framebuffer depth. **The number is correct; the problem is
+obedience, not tuning** — only 35 materials obey it (§2).
+
+**Resolution: 480p, reached by accident.** At a 1440-tall window, `pixelScale: 3` gives 721×480 —
+the era's *hi-res* mode, which a handful of games used, not the 240p nearly all of them shipped in.
+Nobody chose 480; it is what 1440 ÷ 3 happens to be.
+
+⚠ **And it moves with the window, which no console did.** `pixelScale` is a divisor
+(`RetroRenderer.js:811`), so the same setting is a different look on a different display:
+
+| window height | at pixelScale 3 | | at 240p you'd need |
+|---|---|---|---|
+| 1080 | 360 lines | | 4.5 |
+| 1440 | 480 lines | | 6 |
+| 2160 | 720 lines | | 9 |
+
+A console had a **fixed** framebuffer and the TV stretched it. A divisor reproduces the opposite.
+
+## 10. Recommendations, in priority order
+
+**(1) Keep 31. Don't touch the colour number.** It is exactly RGB555 and it is already Max's sourced
+ruling. Nothing in the era research argues for a different value.
+
+**(2) Move quantisation to the composite pass — this is the strongest one.** The hardware had one
+framebuffer at one depth and *everything* landed in it. Well Dipper quantises per-material, which is
+precisely why 207 scene materials, all 14 sky materials, the HUD and the composite escape entirely,
+and why Sol's 16 could silently stop tracking. Quantising once in `RetroRenderer`'s composite:
+- matches the hardware model exactly, including PS1's dither-on-the-way-to-the-buffer;
+- makes the whole "a surface that never read the setting" class of defect **impossible by
+  construction** — no new material can ever escape;
+- covers the starfield, the galactic objects, orbit lines, the HUD and Sol **for free**, with no
+  per-site wiring.
+⚠ Cost to weigh: per-material `ditherEdgeWidth` would collapse to one global dither. On the real
+hardware it *was* one global dither, so this is arguably a fidelity gain — but it is a look change
+and it is Max's call.
+
+**(3) Lock the render height to a fixed line count; derive the divisor.** `renderHeight = 240` (or
+224) with the width following the aspect ratio is what a console did. It makes the look identical on
+every display, which the current divisor cannot.
+⚠ **Real tension, named rather than buried:** 240p fights
+`well-dipper-approach-lod-criterion` — Max's ruling that detail must *keep resolving* on approach.
+At 240 lines a planet at 3 body radii has ~200 pixels of disc to carry all of it. **240p and
+approach-detail are pulling against each other and he should decide with both in view.**
+
+**(4) ⛔ Do NOT add affine texture warping or vertex jitter.** These are the internet's shorthand for
+"PSX look" and they are **PSX-specific hardware defects**, not the shared era aesthetic: the
+rasterizer had no subpixel precision, and projection discarded per-vertex depth so it could only
+interpolate linearly. **The N64 had perspective correction and subpixel precision; the Saturn had
+neither of these artifacts.** Max named all three machines, so the shared bar is 240p + 15-bit +
+dither. Adding one machine's bugs would narrow the aesthetic and add glitches to smooth procedural
+spheres, where they read as breakage rather than nostalgia.
+
+**(5) The starfield is the sharpest remaining inconsistency, and it is a genuine conflict.** It is
+full-resolution with *no colour quantisation at all*, sitting behind a 1/3-resolution 5-bit world.
+On real hardware there was one buffer: stars were 15-bit and chunky like everything else. But
+`RetroRenderer.js:7`'s reason is real — at 240p a starfield of points aliases and twinkles badly.
+**Both sides of this are true; it is a taste call and the highest-leverage one on the list.**
+
+## 11. Sources
+
+- [PS1 graphics, framebuffer dithering and affine mapping — Pikuma](https://pikuma.com/blog/how-to-make-ps1-graphics)
+- [Nintendo 64 Architecture — Copetti](https://www.copetti.org/writings/consoles/nintendo-64/)
+- [Sega Saturn Architecture — Copetti](https://www.copetti.org/writings/consoles/sega-saturn/)
+- [N64 colour/image formats (5-5-5-1) — N64 Squid](https://n64squid.com/homebrew/n64-sdk/textures/image-formats/)
+- [PlayStation GPU specifications — psx-spx](https://psx-spx.consoledev.net/graphicsprocessingunitgpu/)
