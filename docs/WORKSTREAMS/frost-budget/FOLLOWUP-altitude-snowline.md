@@ -59,3 +59,63 @@ accident*. It reads correctly on the worlds looked at so far. On a world whose r
 to a different range it will over- or under-produce, and — because there is no scale — nobody will be
 able to say why. That is a latent surprise, not a present defect, and it is logged here rather than
 carried as an open ask.
+
+---
+
+# Addendum — the lab's preset temperatures were NOT a bug, and the fix is a different thing
+
+Max, 2026-09-05: *"all of these changes we're making are happening both for the game and the world
+engine lab, yes? That was the whole point of wiring this stuff up…I'd rather be able to watch these
+changes in the lab, would save time."*
+
+**The answer to the question is yes.** One definition of the law, not two — `frostPermanence` and
+`frostLatChill` are in `deriveUniforms`, which the lab calls directly and the game calls through the
+pack; the shader change is one file. Verified live in both rather than assumed: the derived gradient
+reads 0.157 / 0.168 / 0.600 across three atmospheres in the lab and 0.162 on the anchor in the game,
+with nothing left at the old 0.35. And `frost` is ON in both maps — the game rules ten gates off
+(mountains, canyons, scarps, plateaus, tessera, lava, sublimation, dust, dunes, karst) and frost and
+glacial are not among them.
+
+## ⛔ AND THE THING I CALLED A DIVERGENCE IS A DESIGNED FEATURE
+
+I reported that the lab's presets "don't render at the temperature their `T_eq` states" and
+recommended fixing it. **That recommendation was wrong and is withdrawn.** `drawPresetConditions`
+(`driver-presets.js:294`) re-draws the condition scalars per macro seed — *derive-not-freeze*. A
+preset is an ARCHETYPE, and each seed draws a world from that family:
+
+| preset | label | drawn across seeds 0–7 |
+|---|---:|---|
+| `Rocky (Earthlike)` | 288 | 306, 314, 300, 289, 297, 283, 270, 280 |
+| `Ocean (temperate)` | 295 | 308, 267, 301, 282, 300, 275, 315, 274 |
+| `Frozen (airless)` | 60 | 61.5, 62.7, 59.2, 55.6, 64.1, 65.4, 61.8, 58.2 |
+| `Titan (methane seas)` | 94 | 94 on every seed — a NAMED REAL BODY, excluded from the draw |
+
+That is per-seed variety working exactly as designed, and "fixing" it would have deleted it. Second
+time this session a measurement caught a recommendation of mine before it broke something that worked
+(`feedback_recalculate-the-recommendation`).
+
+## What was ACTUALLY wrong, and what shipped instead
+
+**The frost folder showed every knob except the world's own temperature** — the one input that decides
+all of them. So the seed-1 `Ocean (temperate)` is a **267 K** world, below freezing, and nothing on
+screen said so. Watching it stay snowy and concluding the snow law was broken is the trap, and I fell
+into it in this session.
+
+**Shipped:** one live `.listen()` slider — `⭐ surface temp (K) — DRAWN` — at the top of Cryo / Frost,
+riding an existing line (§10 line-stability). The frame loop already writes
+`uniforms.uPlanetTempEq.value = state.tempEq` (`:5466`), so it is a **dial, not a readout**:
+
+| dragged to | snowline |
+|---:|---:|
+| 240 K | 0° — frozen through |
+| 260 K | 7° |
+| 280 K | 44.6° |
+| 300 K | 72.2° |
+| 330 K | bare |
+
+⭐ That is Max's own criterion — *"as things get colder, more ice coming down from the poles… as it
+gets warmer less ice"* — with his hand on it. Measured live after a hard reload, and the check
+DISCRIMINATES: the uniform tracks the slider and the snowline moves monotonically, so it cannot pass
+as a readout wearing a slider's clothes.
+
+Suite: 20 pre-existing failures before and after, zero new.
