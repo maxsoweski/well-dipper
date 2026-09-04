@@ -376,7 +376,7 @@ export class ExoticOverlay {
         moon.radius *= kMap;
         moon.orbitRadius *= kMap;
         // ⭐ MASS FOLLOWS RADIUS, OR THE BODY STOPS BEING ONE BODY (break B7).
-        // MoonGenerator.js:266 `moon.massEarth = moonRadiusData.radiusEarth ** 3` builds mass
+        // MoonGenerator.js:279 `moon.massEarth = moonRadiusData.radiusEarth ** 3` builds mass
         // as radius³ × ρ_moon/ρ⊕, and `composition.density` is NOT rescaled here (bulk density
         // is a property of what the moon is made of, not of how big its parent is). So the cube
         // is exactly what keeps that identity true. Leaving mass alone implied 35.96 g/cc on

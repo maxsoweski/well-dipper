@@ -72,7 +72,7 @@ import {
 import { EARTH_RADIUS_AU } from '../src/core/ScaleConstants.js';
 
 // ── Duplicated src constants, deliberately ───────────────────────────────────────────────────
-// `RHO_EARTH_KGM3` (MoonGenerator.js:613 `RHO_EARTH_KGM3 = 5514`) and `EARTH_MASSES_PER_SUN` (:618 `EARTH_MASSES_PER_SUN = 332946`) are module-private.
+// `RHO_EARTH_KGM3` (MoonGenerator.js:626 `RHO_EARTH_KGM3 = 5514`) and `EARTH_MASSES_PER_SUN` (:631 `EARTH_MASSES_PER_SUN = 332946`) are module-private.
 // Copying them as literals is DESIRABLE here: if either ever changes in src, a gate should red and
 // the change should be a named act rather than a silent re-scaling of every moon in the universe.
 // Precedent: tests/moon-mass-radius-consistency.test.js:46 duplicates EARTH_DENSITY_GCC the same way.
@@ -228,7 +228,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // G3/G4 VALUE ARM — mass and radius describe the same body. CORRECTNESS. Green today.
   //
   // AT RETURN TIME, which is where MoonGenerator's own invariant is stated
-  // (MoonGenerator.js:266 `moon.massEarth = moonRadiusData.radiusEarth ** 3`).
+  // (MoonGenerator.js:279 `moon.massEarth = moonRadiusData.radiusEarth ** 3`).
   // ⚠ The symbol above is the LITERAL line text, not a math paraphrase. An earlier draft wrote
   // `massEarth = radiusEarth³ × …` — correct as algebra, a broken citation as a fence anchor,
   // because the rule is literal token presence on the cited line. :242 was always the right line.
@@ -361,7 +361,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // over the line today". Not on this corpus: max is 2.6663 g on 23 bodies, 1.88× inside the
   // shipped bound, and nothing is over any line. Row 13 measured a different population.
   //
-  // MUTANT: `pcnomass` — drop the `massScale` cube at MoonGenerator.js:418 `const massScale` (`massEarth: pData.massEarth`,
+  // MUTANT: `pcnomass` — drop the `massScale` cube at MoonGenerator.js:431 `const massScale` (`massEarth: pData.massEarth`,
   // unscaled). That is the exact regression moon-mass-radius-consistency.test.js exists for; it
   // put 27.6 M⊕ in a 0.89 R⊕ body, ~213 g/cc, ~35 g. Both bounds here red.
   // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -466,7 +466,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // G3 VALUE ARM — tidalState. CORRECTNESS. Green on 705/705.
   //
   // Re-derives `checkTidalLock(tidalLockTimescale(...))` from the moon's own record and its FINAL
-  // parent, including both unit conversions MoonGenerator.js:274 `moon.massEarth,` performs: the parent's mass
+  // parent, including both unit conversions MoonGenerator.js:287 `moon.massEarth,` performs: the parent's mass
   // out of Earth masses into SOLAR masses, and the moon's orbit out of Earth radii into AU. The
   // two constants are duplicated at the top of this file on purpose.
   //
@@ -500,9 +500,14 @@ describe('moon condition contract — the six derived fields carry real values',
   // G3 VALUE ARM — composition internal consistency. CORRECTNESS. Green on 705/705.
   //
   // ⛔ WHY THIS IS AN ALGEBRAIC IDENTITY AND NOT A RE-DERIVATION. Re-running `deriveComposition`
-  // needs the `mooncomp:` float, and `namespacedFloat` (MoonGenerator.js:655 `function namespacedFloat(key) {`) is module-private.
-  // Copying it into a test would create a genuine second source of truth for a value the record
-  // carries — the one duplication that is NOT acceptable here.
+  // needs the `mooncomp:` float from `namespacedFloat`, and copying that into a test would create a
+  // genuine second source of truth for a value the record carries — the one duplication that is NOT
+  // acceptable here.
+  // ⚠ CORRECTED 2026-09-04 (workstream volatile-delivery): this used to say the function is
+  // MODULE-PRIVATE to MoonGenerator, and that is no longer true — it was lifted to
+  // SeededRandom.js:140 `export function namespacedFloat(key) {` so the planet path could share the
+  // one copy. The identity arm is kept anyway: re-deriving would also need the delivery float and the
+  // whole §3b retention chain, so the algebra is still the cheaper and more direct assertion.
   //
   // Instead, note that in `deriveComposition` (PhysicsEngine.js:384-392) both outputs are affine in
   // the SAME two unknowns:
@@ -628,7 +633,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // ═══════════════════════════════════════════════════════════════════════════════════════════
   // surfaceHistory — **THE nearGiant DEFECT WAS FIXED. THIS ARM NOW PINS THE FIXED CALL.**
   //
-  // HISTORY (the state this gate was written against, at ea8afca): MoonGenerator.js:262 (an ea8afca line number; the live call is :300 `computeSurfaceHistory(`) called
+  // HISTORY (the state this gate was written against, at ea8afca): MoonGenerator.js:262 (an ea8afca line number; the live call is :313 `computeSurfaceHistory(`) called
   //     computeSurfaceHistory(ageGyr, /* nearBelt */ false, /* nearGiant */ false, hasAtmo, tidal)
   // hardcoding BOTH flags false for every moon — including moons of gas giants, which are by
   // definition near a giant. C6 declined to fix it and priced it instead (four reasons, of which
@@ -657,7 +662,7 @@ describe('moon condition contract — the six derived fields carry real values',
   //
   // ⚠ AND A REAL INCONSISTENCY THIS COMMIT LEAVES STANDING, FLAGGED SO IT IS NOT LOST: PLANET-CLASS
   // moons still carry `nearGiant = false` in their nested `planetData.surfaceHistory`, because they
-  // are built by PlanetGenerator (MoonGenerator.js:123 `isLargeParent && moonIndex > 0` → :378 `PlanetGenerator.generate(`) and the planet path keeps its own
+  // are built by PlanetGenerator (MoonGenerator.js:123 `isLargeParent && moonIndex > 0` → :391 `PlanetGenerator.generate(`) and the planet path keeps its own
   // hardcoded falses. They are moons of giants by construction (the branch at :98 gates on a
   // gas-giant/sub-neptune parent), so after this commit they disagree with their plain siblings
   // around the same parent. Same owner as nearBelt.
@@ -799,7 +804,7 @@ describe('moon condition contract — the six derived fields carry real values',
     expect(typeCounts).toEqual({ rocky: 226, ice: 235, captured: 171, volcanic: 73 });
 
     // ── the forced arm: drive MoonGenerator directly until the terrestrial branch fires ──
-    // gas-giant parent + parentZone 'hz' is the only route to `terrestrial` (MoonGenerator.js:499 `if (rng.chance(0.03)) return 'terrestrial';`);
+    // gas-giant parent + parentZone 'hz' is the only route to `terrestrial` (MoonGenerator.js:512 `if (rng.chance(0.03)) return 'terrestrial';`);
     // totalMoons = 2 keeps the planet-class branch (:99, needs >= 3) out of the way, and
     // moonIndex = 1 keeps the volcanic branch (:437, moonIndex 0 only) out of the way.
     const zones = { luminosity: 1.0, metallicity: 0.0, ageGyr: 4.5, frostLine: 4.85 };

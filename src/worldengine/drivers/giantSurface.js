@@ -18,8 +18,8 @@
 //
 // ⛔ NOTHING HERE IS DESIGNED. Every one of the thirteen is a forward of a function the GAME ALREADY
 // CALLS ON THIS BODY, unconditionally and with no composition branch:
-// src/generation/PlanetGenerator.js:809 `      planetData.landPalette = applyAlbedoTransfer(surfacePaletteOf(condition), {`,
-// src/generation/PlanetGenerator.js:827 `      planetData.iceness = icenessOf(condition);`,
+// src/generation/PlanetGenerator.js:830 `      planetData.landPalette = applyAlbedoTransfer(surfacePaletteOf(condition), {`,
+// src/generation/PlanetGenerator.js:848 `      planetData.iceness = icenessOf(condition);`,
 // src/objects/Planet.js:1610 `    const optics = atmosphereOpticsOf(condition); const term = terminatorOpticsOf(condition);   // ⛔ B3-1 RIDES THIS LINE (see :1403). \`term\` is the SHARED module the packs read, not a second law.`,
 // src/objects/Planet.js:1684 `          uMacroOffset: { value: reliefSeed.macro },`.
 // So a gas body's legacy render HAS these values today and the same body swapped onto the lab

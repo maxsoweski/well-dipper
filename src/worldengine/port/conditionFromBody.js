@@ -182,7 +182,7 @@ export function densityToGramsPerCC(gameDensity) {
 // ⚠ THE TWO SIDES USE DIFFERENT UNITS FOR `axialTilt`, UNDER THE SAME KEY NAME, and — for the third
 // time in this file — the names do not warn you.
 //   game   planetData.axialTilt is RADIANS.  SolarSystemData.js:180 `axialTilt: 0.41,  // 23.4°`;
-//          SolarSystemData.js:484 `axialTilt: 1.71,`; PlanetGenerator.js:687 `const axialTilt = rings ?`
+//          SolarSystemData.js:484 `axialTilt: 1.71,`; PlanetGenerator.js:708 `const axialTilt = rings ?`
 //          rolls it in ±1.5. Corroborated by two independent consumers:
 //          Planet.js:1545 `this.mesh.rotation.z = this.data.axialTilt;` (a three.js radians slot),
 //          and TextureBaker.js:265, which declares `uniform float axialTilt; // radians`.
@@ -236,8 +236,8 @@ export function axialTiltDegreesOf(gameAxialTiltRadians) {
 //
 // ⚠⚠ WHY THE SIGN CAN BE DROPPED, STATED SO IT IS A DECISION AND NOT AN OVERSIGHT. Two different
 // things get folded here and they have two different justifications:
-//   · THE SIGN is a convention, not physics. PlanetGenerator.js:687 `const axialTilt = rings ?` and
-//     PlanetGenerator.js:560 `rng.range(-1.5, 1.5)` roll a tilt ABOUT AN AXIS, consumed by
+//   · THE SIGN is a convention, not physics. PlanetGenerator.js:708 `const axialTilt = rings ?` and
+//     PlanetGenerator.js:581 `rng.range(-1.5, 1.5)` roll a tilt ABOUT AN AXIS, consumed by
 //     Planet.js:1545 `this.mesh.rotation.z`. A pole leaning −25° and one leaning +25° have the same
 //     obliquity and the same seasons; only the scene-space direction differs. Nothing physical is lost.
 //   · PAST 90° IS RETROGRADE, and that IS physics — but the seasons run back DOWN again, so a
@@ -294,7 +294,7 @@ export function effectiveObliquityDegreesOf(tiltDegrees) {
 //   lab   driver-presets.js:27 `habitability: 0.7`                  → a SCALAR
 //   game  PlanetGenerator.js `habitability: habScore` — §10 symbol-only, because it sits in the
 //         record literal that every step of this plan grows — assigned from
-//         PhysicsEngine.js:698 `return { score: Math.min(score, 1.0), factors };` → an OBJECT
+//         PhysicsEngine.js:899 `return { score: Math.min(score, 1.0), factors };` → an OBJECT
 // The engine's one reader is planet-lod-lab-core.js:792 `clamp01(d.habitability ?? 0)` — and
 // `clamp01` of an object is `Math.min(1, Math.max(0, {…}))` = **NaN**. NaN is the one failure mode in
 // this codebase that is NOT quiet: it propagates into a uniform and the whole body renders as a black
@@ -302,8 +302,8 @@ export function effectiveObliquityDegreesOf(tiltDegrees) {
 // axialTilt reaching a world matrix). Forwarding the raw object would therefore have shipped a
 // landmine to the first step that reads the field, three steps from here.
 //
-// ⚠ THE FUNCTION'S OWN JSDOC IS WRONG about this: PhysicsEngine.js:647 `@returns {number} score 0-1`
-// says a number, while PhysicsEngine.js:698 `return { score: Math.min(score, 1.0), factors };`
+// ⚠ THE FUNCTION'S OWN JSDOC IS WRONG about this: PhysicsEngine.js:848 `@returns {number} score 0-1`
+// says a number, while PhysicsEngine.js:899 `return { score: Math.min(score, 1.0), factors };`
 // returns an object. That is not fixed here — it is a game-side edit outside this seam — but one
 // live consumer is already miscomputing because of it:
 // NavComputer.js:2650 `if (pd.habitability > 0.3) lines.push(` and
@@ -638,7 +638,7 @@ export const PROVENANCE_INPUTS = Object.freeze(Object.keys(PROVENANCE_COVERAGE))
  *    5500 kg/m³ ⇒ 5.5 g/cc, i.e. Earth, and reads maximally rocky.
  *
  *  · `atmosphere` distinguishes `null` from absent. `null` is a MEASUREMENT: both
- *    PlanetGenerator.js:448 `let atmosphere = null;` and MoonGenerator.js:220 `} : null,`
+ *    PlanetGenerator.js:469 `let atmosphere = null;` and MoonGenerator.js:220 `} : null,`
  *    set it outright to mean "nothing retained", and the engine's airless
  *    presets agree. `undefined` means the body never said. And a visual-only `{color, strength}`
  *    wrapper — the moon bug above — is 'defaulted', because it looks like an answer and is not one.

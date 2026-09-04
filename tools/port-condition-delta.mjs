@@ -140,7 +140,7 @@ const AU_IN_EARTH_RADII = 23454.8;
 //   S  starMassSolar = radiusSolar^1.25   (StarSystemGenerator.js:386, and :223 sets
 //                                          star.radiusSolar = radiusSolarVaried)
 //      orbitAU       = entry.orbitRadiusAU
-//   G  zones === null ⇒ PlanetGenerator.js:372 `zones?.starMassSolar || 1.0` ⇒ 1 M☉; orbit is the
+//   G  zones === null ⇒ PlanetGenerator.js:393 `zones?.starMassSolar || 1.0` ⇒ 1 M☉; orbit is the
 //      grid AU this cell was generated at.
 //   P  the parent is the PLANET, not the star: MoonGenerator.js:257-262 computes the moon's
 //      tidalHeating from the parent planet's massEarth and the moon's orbitRadiusEarth.

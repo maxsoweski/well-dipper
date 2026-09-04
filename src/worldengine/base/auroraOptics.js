@@ -15,7 +15,7 @@
 // side rather than one broken feature.
 //
 // ⛔ WHOSE LAW THIS IS, AND WHY THERE IS NO CHOICE TO MAKE. Two aurora laws exist. The GAME's, at
-// src/generation/PlanetGenerator.js:481 `        const auroraIntensity = Math.min(1.0, magneticField * windIntensity * 0.15);`,
+// src/generation/PlanetGenerator.js:502 `        const auroraIntensity = Math.min(1.0, magneticField * windIntensity * 0.15);`,
 // scales the field by stellar-wind flux — and `uvFlux` appears NOWHERE under src/worldengine/, so
 // it never crosses the condition seam and is not expressible by a pack at all. The LAB's uses the
 // field alone. The ledger row already ruled the consequence: "the lab's law wins by default and
@@ -25,7 +25,7 @@
 // straight off the shipped `deriveUniforms` bundle, so the magnitude law has exactly one expression
 // and it is still labCore's. The three shape/colour laws are the lab's post-process, moved verbatim
 // from world-engine-lab.html:2614-2630 — and they are the SAME expressions the game generator carries
-// at src/generation/PlanetGenerator.js:502 `          const ringLatitude = 0.7 + magneticField * 0.2; // 0.7 to 0.9 (in normalized Y)`
+// at src/generation/PlanetGenerator.js:523 `          const ringLatitude = 0.7 + magneticField * 0.2; // 0.7 to 0.9 (in normalized Y)`
 // and :503, which is what makes this row a wiring row rather than a law choice.
 //
 // ⛔⛔ THE ONE PIECE OF THE LAB'S LAW THAT IS DELIBERATELY NOT HERE, NAMED SO IT CANNOT BE MISTAKEN

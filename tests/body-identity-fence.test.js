@@ -94,7 +94,7 @@ const BULK_SEEDS = Array.from({ length: 192 }, (_, i) => `wd-${i}`);
 
 const PINNED_SEEDS = [
   // Rare planet types. Each is its own branch in `cloudChance`/`ringChance`/
-  // `maxMoonsByType` (PlanetGenerator.js:516 `const cloudChance = {`, :539 `const ringChance = {`,
+  // `maxMoonsByType` (PlanetGenerator.js:537 `const cloudChance = {`, :560 `const ringChance = {`,
   // :587 `const maxMoonsByType = {`), so each
   // is its own draw pattern.
   ['wd-356', 'type: shattered'],
@@ -593,7 +593,7 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
       // fence was covering — it was a single artefact of the defect. The DETECTOR above stays, so
       // the day a genuinely airless planet appears the class returns and this assertion reds.
       // ⚠ The corollary is a real open question and is NOT this pin's to answer: the escape branch
-      // at PlanetGenerator.js:449 `if (atmoPhysics.retained) {` is now unreached for planets.
+      // at PlanetGenerator.js:470 `if (atmoPhysics.retained) {` is now unreached for planets.
       ['wd-45', null],                                       // kept: the hex swap + retained moon (B7's wd-45/0/0)
       ['wd-1403', null],                                     // terrestrial moon
       ['gc-7', map.deriveGalaxyContext(GALAXY_POSITIONS[7])], // galaxy context
@@ -808,7 +808,7 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
   // "A gate that has never failed is not a gate." (plan, Step 0 gate)
   //
   // The plan's manual version is: insert a throwaway `rng.range(0,1)` before
-  // PlanetGenerator.js:526 `const hasClouds = atmoPhysics.retained && rng.chance(cloudChance[type] || 0);`
+  // PlanetGenerator.js:547 `const hasClouds = atmoPhysics.retained && rng.chance(cloudChance[type] || 0);`
   // and confirm B goes red. That needs a production edit.
   // This does the same thing from inside the test — the wrapper burns one extra
   // value out of the Alea stream at a chosen draw index, which is bit-for-bit

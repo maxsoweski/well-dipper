@@ -469,16 +469,16 @@ const ALIASES = [
        + 'watches one of a matched pair reports a green that means nothing about the other.',
   },
   // ── F37 aurora. Four pairs, u-prefix aside identical spellings, and the plan (§2) records them
-  //    as TWO DIVERGENT LAWS today (PlanetGenerator.js:490 `const auroraColors` … :503
+  //    as TWO DIVERGENT LAWS today (PlanetGenerator.js:511 `const auroraColors` … :503
   //    `const ringWidth` vs world-engine-lab.html:2585-2611,
   //    under a lab comment claiming it mirrors the game). They are the same FEATURE and the same
   //    slot in the shader; they are not yet the same law. Watched game-side, `record` tier — see
   //    the fingerprint-shadow caveat above. Listed here rather than left off so that when Step 4+
   //    unifies the law, the rows already exist and the movement is measured, not discovered.
-  { game: 'auroraColor',     lab: 'uAuroraColor',     tier: 'record', why: 'F37 emission colour — planetData.aurora.color (PlanetGenerator.js:490 `const auroraColors`) ↔ planet-lod-uniforms.js:58 `uAuroraColor`.' },
+  { game: 'auroraColor',     lab: 'uAuroraColor',     tier: 'record', why: 'F37 emission colour — planetData.aurora.color (PlanetGenerator.js:511 `const auroraColors`) ↔ planet-lod-uniforms.js:58 `uAuroraColor`.' },
   { game: 'auroraIntensity', lab: 'uAuroraIntensity', tier: 'record', why: 'F37 ring strength — planetData.aurora.intensity ↔ planet-lod-uniforms.js:57 `uAuroraIntensity`.' },
   { game: 'auroraRingLat',   lab: 'uAuroraRingLat',   tier: 'record', why: 'F37 oval magnetic latitude — planetData.aurora.ringLatitude ↔ planet-lod-uniforms.js:59 `uAuroraRingLat`.' },
-  { game: 'auroraRingWidth', lab: 'uAuroraRingWidth', tier: 'record', why: 'F37 oval half-width — planetData.aurora.ringWidth ↔ planet-lod-uniforms.js:60 `uAuroraRingWidth`. The lab floors it at 0.07 (PlanetGenerator.js:503 `const ringWidth` does not). This is the §2 drift row.' },
+  { game: 'auroraRingWidth', lab: 'uAuroraRingWidth', tier: 'record', why: 'F37 oval half-width — planetData.aurora.ringWidth ↔ planet-lod-uniforms.js:60 `uAuroraRingWidth`. The lab floors it at 0.07 (PlanetGenerator.js:524 `const ringWidth` does not). This is the §2 drift row.' },
 ];
 
 /** Game uniforms with NO lab counterpart at all. Watched game-side-only (before vs after). */
