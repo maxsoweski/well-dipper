@@ -146,3 +146,70 @@ the plate model that would place ranges along real convergent boundaries.
 physics-first rule says derive what physics can answer; *which* of two internally-consistent scales
 the field should carry is not one of those — it decides what kind of galaxy the game has. That one
 goes to Max.
+
+---
+
+# ADDENDUM — the seam is far wider than F1, and Max has ruled on the direction
+
+Max, 2026-09-04, asked whether the galaxy should contain Earth-like worlds:
+
+> **"yes; I want this to be a simulation of the milky way galaxy with a wide variety of
+> physically-plausible worlds"**
+
+That converts the fork in the section above from a product call into a **derivation target**, and it
+raises the stakes, because the seam is not confined to the plate gate.
+
+## Every temperate world in Well Dipper is a desert to the world engine
+
+The world engine anchors this field at **Earth = 0.15** in three independent places:
+
+- `src/worldengine/base/passiveMargins.js:54` — *"anchored to 1.0 at Earth's volatile fraction
+  (D_EARTH.volatileFraction = 0.15)"*, `MARGIN_VF0 = 0.15`
+- `src/worldengine/base/labCore.js:693` — `volatileGate = smoothstep(0.05, 0.2, V)`, *"D2 — bone-dry
+  floor at 0.05"*
+- `driver-presets.js` — `"Rocky (Earthlike)"` `volatileFraction: 0.15`
+
+Run the generator's output through the engine's OWN gate, 1,183 solid bodies from 200 seeds:
+
+| | all solid | **temperate (250–320 K)** |
+|---|---|---|
+| `volatileGate == 0` — at or under the bone-dry floor | 626 (52.9 %) | **106 (78.5 %)** |
+| `0 < gate < 0.25` — essentially dry | 185 (15.6 %) | **29 (21.5 %)** |
+| `0.25 ≤ gate < 0.75` | 56 (4.7 %) | **0** |
+| `gate ≥ 0.75` — the engine reads this as WET | 316 (26.7 %) | **0** |
+
+⭐⭐ **Not one temperate world in 1,183 reads as wet, and 100 % read as dry or essentially dry.** The
+generator CAN make wet worlds — 26.7 % of all solid bodies clear the gate — but every one of them is
+frozen. The population is bimodal: **hot deserts and cold ice, with nothing in between.**
+
+The same seam shows in the shelf model: every temperate body's `shelfWidthFactor` lands in
+0.652–0.774 against an Earth anchor of 1.0, so every temperate world in the game gets a narrower
+continental shelf than Earth, none wider, and the spread is 0.12 wide where the model allows 0.3–3.0.
+
+This is not an F1 problem with a side effect. It is the input half of the fluvial stack, karst, dunes,
+dust, coastal margins and the plate gate all reading the same field off a scale the generator does
+not share.
+
+## The physics, and therefore the shape of the fix
+
+The current law (`PhysicsEngine.deriveComposition`) is not wrong so much as **doing two jobs with one
+field**:
+
+- **Accreted bulk ice fraction** — genuinely a function of where the body formed relative to the frost
+  line. The existing law models this correctly and should keep doing so.
+- **Surface volatile inventory** — what a body actually has available as water. Inside the frost line a
+  terrestrial planet accretes essentially dry and then **receives** its volatiles: Earth's water is
+  delivered late, from outer-system material scattered inward, and amounts to only ~0.02 % of Earth's
+  mass. That delivery is stochastic and largely decoupled from the body's own frost ratio.
+
+The current law has only the first, so "temperate" implies "formed inside the frost line" implies
+"dry", by construction, with no delivery term to break the implication. **That missing term is the
+whole defect, and adding it is exactly the "wide variety of physically-plausible worlds" Max asked
+for**: temperate worlds would draw a *distribution* of water — mostly low, occasionally Earth-like —
+governed by real mechanisms (the system's giant-planet architecture doing the scattering, the body's
+mass governing retention, its temperature governing loss) rather than by a single monotone dial.
+
+⛔ **This is a NEW multi-system workstream, not a patch.** It changes composition on every body, and
+composition feeds the fluvial / karst / dune / dust / margin / plate populations this session just
+wired. It needs `dev-collab-scope`, a parent capture of the current population before any edit, and
+acceptance measured on the DRAWN population rather than on a preset — the charter's own rule.
