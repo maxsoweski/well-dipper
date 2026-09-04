@@ -5,7 +5,7 @@
  * left-to-right, top-to-bottom. No border, no background — just
  * big chunky bold letters punched onto the screen.
  */
-
+import { displayClassOf } from '../generation/worldClass.js';
 const PLANET_TYPE_NAMES = {
   'rocky': 'Rocky World',
   'gas-giant': 'Gas Giant',
@@ -55,7 +55,7 @@ export class BodyInfo {
   }
 
   showPlanet(data, index, name) {
-    const typeName = PLANET_TYPE_NAMES[data.type] || data.type;
+    const typeName = PLANET_TYPE_NAMES[displayClassOf(data)] || displayClassOf(data);   // ⭐ THE DERIVED CLASS, never `data.type` — `type` is the formation roll that chose this body's size and moons BEFORE its physics existed, so it names what the generator set out to make. Measured: 11 of the 14 warm wet worlds showed here under another name and all 7 "Ocean World"s were hot and dry. generation/worldClass.js.
     const title = name ? `${name} \u2014 ${typeName}` : typeName;
     const parts = [];
     if (data.radiusEarth != null) {

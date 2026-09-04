@@ -1,4 +1,4 @@
-import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
+import { conditionFromBody } from '../worldengine/port/conditionFromBody.js'; import { worldClassOf } from './worldClass.js';   // ⚠ SECOND STATEMENT ON THIS LINE ON PURPOSE — this file carries 858 line-anchored citations and a new import line drifts every one of them (trap #16). Same idiom, same reason, as e1Regime.js:22.
 import { surfacePaletteOf, icenessOf, meltTemperatureOf, crustTemperatureOf, ICE_ALBEDO, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { applyAlbedoTransfer } from '../worldengine/display/albedoTransfer.js';
 import { emissiveBlackbody } from '../worldengine/base/emission-e.js';
@@ -848,6 +848,21 @@ export class PlanetGenerator {
     planetData.iceness = icenessOf(condition);
     planetData.lavaGlowColor = emissiveBlackbody(meltTemperatureOf(condition));
     planetData.lavaCrustColor = emissiveBlackbody(crustTemperatureOf(condition));
+
+    // ── THE DERIVED CLASS. Written LAST, on purpose, and the position is the guarantee. ────────────
+    // `type` above is the FORMATION SEED: it was rolled FIRST and then chose this body's radius range,
+    // its mass, its atmosphere strength, its cloud/ring chance, its max moon count and its legacy
+    // palette. It is upstream of every number on this record, which is why it cannot also be a
+    // description of them — see worldClass.js's opening note for the full statement of the split.
+    // `worldClass` is the answer to "what IS this world", read back off the finished physics.
+    //
+    // ⛔ NOTHING ABOVE THIS LINE MAY READ IT, and nothing below this line exists. That is the whole
+    // enforcement: it is assigned on the last statement before the return, so a future edit that feeds
+    // it into a physical law has to visibly move it upward past every quantity it was derived from.
+    // Doing so rebuilds the label→physics→label loop this split exists to cut.
+    //
+    // No rng, no draw, not even a namespaced one: worldClassOf is a pure function of `condition`.
+    planetData.worldClass = worldClassOf(condition);
 
     return planetData;
   }

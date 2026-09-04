@@ -30,7 +30,7 @@ import {
   orbitVisibilityFactor,
 } from './camera/orreryEntryGeometry.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
-import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
+import { StarSystemGenerator } from './generation/StarSystemGenerator.js'; import { isHabitableClass } from './generation/worldClass.js';   // ⛔ APPENDED TO THIS LINE, never inserted below it — same reason as :7.
 import { resolveArrivalSystemAsync } from './generation/arrivalResolution.js';
 import { PlanetGenerator } from './generation/PlanetGenerator.js';
 import { MoonGenerator } from './generation/MoonGenerator.js';
@@ -8460,9 +8460,9 @@ debugPanel.setSpawnCallbacks({
           match = testData.isBinary;
           break;
         case 'habitable':
-          match = testData.planets.some(p =>
-            p.planetData.type === 'terrestrial' || p.planetData.type === 'ocean'
-          );
+          // ⭐ THE DERIVED CLASS, not the formation roll. Reading `type` made this filter wrong in
+          // BOTH directions: 7 of 7 systems it called habitable had only a hot dry `ocean`, and it
+          match = testData.planets.some(p => isHabitableClass(p.planetData));   // missed 11 of 14.
           break;
         case 'rings':
           match = testData.planets.some(p => p.planetData.rings);

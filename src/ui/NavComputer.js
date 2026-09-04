@@ -1,4 +1,4 @@
-import { generateSystemName } from '../generation/NameGenerator.js';
+import { generateSystemName } from '../generation/NameGenerator.js';  import { displayClassOf } from '../generation/worldClass.js';   // ⚠ second statement on this line to keep line numbers stable — the orrery dot colour is the DERIVED class, so a habitable world can be spotted on the map before you fly to it
 import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
@@ -2553,7 +2553,7 @@ export class NavComputer {
     for (const { planet: p, index: i, sp, wx, wz } of planetProj) {
       const pd = p.planetData;
       const baseR = Math.max(4, Math.min(12, 3 + Math.log2(Math.max(0.5, pd.radiusEarth)) * 2.5));
-      const pColor = planetColors[pd.type] || '#808080';
+      const pColor = planetColors[displayClassOf(pd)] || '#808080';
 
       // Planet body
       ctx.fillStyle = pColor;
@@ -2989,7 +2989,7 @@ export class NavComputer {
       const sp = project(Math.cos(angle) * r, 0, Math.sin(angle) * r);
       const pd = p.planetData || {};
       const baseR = Math.max(3, Math.min(10, 3 + Math.log2(Math.max(0.5, pd.radiusEarth || 1)) * 2.5));
-      ctx.fillStyle = planetColors[pd.type] || '#808080';
+      ctx.fillStyle = planetColors[displayClassOf(pd)] || '#808080';
       ctx.beginPath(); ctx.arc(sp.x, sp.y, baseR, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.3)';
       ctx.lineWidth = 1;
@@ -3069,7 +3069,7 @@ export class NavComputer {
       'gas-giant': '#c09060', 'hot-jupiter': '#e06030', 'sub-neptune': '#5090c0',
       'carbon': '#606060', 'volcanic': '#b03010', 'eyeball': '#80a0c0',
     };
-    const pColor = planetColors[pd.type] || '#808080';
+    const pColor = planetColors[displayClassOf(pd)] || '#808080';
 
     // Planet body
     ctx.fillStyle = pColor;
