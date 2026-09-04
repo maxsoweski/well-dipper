@@ -80,3 +80,32 @@ Built — solo it live. (1) Use the second Chrome on :9223 (chrome-devtools MCP,
 - Tweaks applied: none needed
 - Re-verify: n/a
 - Status: VERIFIED_PENDING_MAX
+
+### Deferrals — recorded here 2026-09-05 because the CODE ALREADY CITED THIS SECTION AND IT WAS EMPTY
+
+⛔ `src/worldengine/shaders/planetShaders.glsl.js:448` says *"(Frozen-sea / eyeball ice-ring variant
+deferred — **flagged in card §7 for the integration pass**)"*. It was never flagged here. The citation
+pointed at nothing for as long as it has existed, so the deferral lived only in a shader comment and
+never reached a backlog anyone reads. Filed now, with what 2026-09-05 measured:
+
+1. **Frozen sea / sea ice — DEFERRED, and actively BLOCKED.** `:452` does
+   `frostCover *= 1.0 - liquidMask`, so frost is zeroed on all standing liquid. Its reasoning is right
+   for Titan (94 K methane seas ARE liquid and must stay radar-dark against frosted ground) but the
+   test is UNCONDITIONAL where the rule should be *"suppress frost on liquid ABOVE its own freeze
+   point"*. Cost of leaving it: on an ocean-poled world the cap cannot form at all — measured on
+   `Ocean (temperate)` seed 1 (267 K), 78 % of the surface poleward of 60° is sea and 43 % of the
+   sphere is cold ocean with frost forced to zero.
+2. **⭐ AN ICE SHEET AS GEOMETRY IS NOT DEFERRED — IT WAS NEVER SCOPED, and that is a real gap rather
+   than a missing tick.** §2's "NOT yet built" list is seasonal phase, the frostAge tint LUT and the
+   terminator melt ring — **all three are albedo**. §4 states the design position outright: *"this is
+   a COVERAGE term, not relief"*. So F22 can re-tint terrain but can never bury it. Max, 2026-09-05,
+   looking at a warm wet world: *"I'm not seeing an ice cap; this is just coloring applied to
+   continents that would be there either way."* He is right, and the source agrees — `frostCoverage()`
+   writes no `h` and no `grad`, and its single consumer is one `mix()` at `:610`. F17 glacial is the
+   only ice GEOMETRY, and turned on live it moves the height field by **0.26 % rms**.
+
+⚠ **AND THE 🟢 ABOVE IS NOT CONTRADICTED BY THIS, which is the part worth carrying.** That rating was
+taken on `Rocky (Earthlike)` and `Europa` — both **land**-poled. On a land pole, tinting the ground
+white IS a convincing cap, and the verdict was honest. The ocean-poled case simply did not exist to
+look at until the volatile-delivery and frost-budget work put a warm wet world on screen. Same shape
+as every finding in that arc: the wiring did not break this, it made it visible.
