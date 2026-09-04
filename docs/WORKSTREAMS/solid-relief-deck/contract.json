@@ -2,7 +2,7 @@
   "workstream": "solid-relief-deck",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "shipped",
   "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master). ⛔ ~/projects/well-dipper-trunk is master and deploys; untouched by this workstream.",
   "plan": "docs/FEATURES/one-pipeline-two-frontends-PLAN.md — § THE COVERAGE AUDIT, MEASURED (EOF) names the thirteen unforwarded master gates and calls this ONE pack-shaped job. F-spine rows F1/F4/F5/F6/F8/F15/F16/F18/F19/F21 re-scored on close; the record goes in a '§ THE SOLID RELIEF DECK, WIRED' addendum appended at EOF (§10: line-count-neutral below :24). docs/FEATURES/lab-pipeline-into-game-PLAN.md is the plan of record MEMORY names.",
   "ruling": "Max 2026-09-04: 'I want all rendering features wired in so planets are distinct and variable. Much more development is needed but this lays the groundwork.' — the laws move VERBATIM; the LOOK of any of the eleven (dune strength, dust veil, relief amplitudes) is NOT this workstream's gate. And '2 yes': mountains (F1) ride along, reversing their hold-out in the 2026-09-04 handoff, because the population read found the generation block is in the BAKE's plate path, not in the runtime gate.",
@@ -158,7 +158,30 @@
     "note": "The workflow audits headless ACs and the recorded liveEvidence; it cannot drive Chrome. AC-5 / AC-6 / AC-7 are driven by working-Claude from the main thread and their artifacts committed in-repo under live-pair-<date>/; AC-9 is always deferred-to-max. Every workflow agent pins model opus (Max, 2026-09-03). ⛔ Do not edit any file a running workflow reads."
   },
   "greenlight": {
-    "date": null,
-    "max": "pending"
-  }
+    "date": "2026-09-04",
+    "max": "yes",
+    "onScopeCommit": "4d81784",
+    "decisionsStanding": "all scoping decisions in intent.md stand as written; none overruled"
+  },
+  "buildCommits": [
+    "1428533 the deck wired (pack #11 + surfaceProcesses + reliefAxesFor)",
+    "938a98b Instrument A re-recorded",
+    "4b7e6dc the A/B key `[` + _labRelief"
+  ],
+  "uat": {
+    "date": "2026-09-04",
+    "by": "Max",
+    "verdict": "PASS",
+    "words": "They work, but worth noting these features are ones that are not yet fully developed (they are just applied over the underlying world engine generative models and don't actually communicate with that process AFAIK). So they're wired up",
+    "reading": "The WIRE is closed — 'they work', 'they're wired up'. The second clause is a FOLLOW-UP, not a defect in this workstream: his own greenlight framing was 'much more development is needed but this lays the groundwork'. Same shape as the river wire's close on 2026-09-02 ('the rivers are not fully developed but the wiring appears to be working here')."
+  },
+  "followUp": [
+    "⭐ THE ELEVEN ARE PAINTED OVER THE GENERATIVE MODEL, NOT GROWN FROM IT — Max's UAT observation, measured and written up in FOLLOWUP-not-fully-developed.md. Precisely: all eleven DO read the province cube (gProvince, baked from real history) with per-feature polarity, and three (karst, dunes, mass-wasting) also read the accumulated surface; but the mask is 3 coarse channels with 15-50% floors, EIGHT of the eleven read neither the accumulated height nor its gradient, and NONE reads the generative landform geometry the bake actually draws (plates.js uplift lines, stagnantLid rift corridors, shellRelief lineaments). Three separable next steps (a) per-feature suitability field (b) make the eight surface-blind combiners read the accumulated relief (c) let the generative writers PLACE the landforms. (c) is the same question as the next arc, F1 mountains.",
+    "F19 mass-wasting is WIRED BUT RENDERS NOTHING — the master is a flat 1.0 and the lab half measured .00006. Lab-side defect; the F-spine row must not read as shipped.",
+    "F43 crystal facets held out: 0 of 124 bodies clear the four-term predicate. Queue (c), world generation.",
+    "F46 bioluminescence held out: the gate is OPEN on 68 bodies (the recorded 'habGate identically 0' was WRONG) but the AMOUNT is a lil-gui slider with no law on either side. Needs a law, not a wire.",
+    "The pressure ramp smoothstep(0.05,0.3,pressure) in the dune/dust laws is saturated or floored on 0 of 18 presets and 123 of 124 bodies — a binary switch in practice, which is why dunes read a median of 1.0. Lab law-shape defect.",
+    "AC-5/AC-6's instrumented live pair was never captured (chrome-devtools dropped; the first attempt was rotation-confounded and discarded). Max ran the walk himself and returned the UAT above, which closes the workstream, but the recorded pixel evidence is absent — see live-pair-2026-09-04/STATUS.md."
+  ],
+  "deviationsRef": "DEVIATIONS.md"
 }

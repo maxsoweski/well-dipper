@@ -1371,3 +1371,72 @@ Written because Max asked the only question that matters after a wiring pass —
 ### (v) The honest answer to the question
 
 **No — not all world-engine rendering is in the game, and it cannot all be, by wiring alone.** Three different reasons, and they need three different kinds of work: **carriage** (the thirteen gates — one wiring workstream), **generation** (F1's mobile-lid band; queue (c)'s `retained === false` and `habGate`; the 41 sub-0.22 R⊕ bodies with no crossover), and **the lab itself** (F44–F49 are BLOCKED there — no preset, no archetype — and F52 does not exist in the lab at all, so there is nothing to wire until each is built). The wiring pass that closed on 2026-09-03 finished the queues this plan triaged; it did not finish the spine, and the two were conflated.
+
+---
+
+## § THE SOLID RELIEF DECK, WIRED (2026-09-04)
+
+**Max's greenlight framing, and the bar the scope was held to:** *"I want all rendering features
+wired in so planets are distinct and variable. Much more development is needed but this lays the
+groundwork."* **His UAT, on the live A/B:** *"They work, but worth noting these features are ones
+that are not yet fully developed (they are just applied over the underlying world engine generative
+models and don't actually communicate with that process AFAIK). So they're wired up"* — the wire is
+CLOSED; the second clause is the follow-up row, recorded in
+`docs/WORKSTREAMS/solid-relief-deck/FOLLOWUP-not-fully-developed.md` with the measurement behind it.
+
+**What shipped.** `src/worldengine/drivers/solidRelief.js`, driver pack **#11**, forwarding
+**twenty-three names** across ten F-rows: F1 `uMountainAmp`/`uOrogenyStrength`/`uOrogenyAxis`,
+F4 `uChasmaDepth`/`uChasmaCount`/`uChasmaAxis`, F5 `uScarpStrength`/`uScarpStyle`/`uScarpAxis`,
+F6 `uPlateauStrength`/`uTesseraStrength`/`uTesseraAxis`, F8 `uLavaCoverage`/`uLavaActivity`/`uLavaAxis`,
+F15 `uDuneDensity`, F16 `uDustDepth`, F18 `uSubStrength`, F19 `uMassWastDensity`/`uRepose`/`uLdaFat`,
+F21 `uKarstDensity`/`uKarstMaturity`. Every one was measured ABSENT from every pack at the parent
+(`tests/fixtures/solidrelief-pack-drivers-baseline.json`, `newNamesAlreadyWritten: []`).
+
+**Two modules had to exist first.**
+- `src/worldengine/base/surfaceProcesses.js` — the ONE definition of the four laws (karst, dunes,
+  dust, mass-wasting) that lived only inside `world-engine-lab.html` and which no module in `src/`
+  could reach. That is why the coverage audit found them unforward**able**, not merely unforwarded.
+- `labCore`'s `reliefAxesFor(seed)` + its spread on `labPackCtx` — the four seeded axis families.
+  ⭐ **MEASURED: 124 distinct orientations over the 124 corpus solid bodies.** Off the condition
+  bundle they would have been ONE — the "1484 identical rift orientations, wired, green" failure
+  `solidFeatures.js` refused F10's axes over, and the direct enemy of Max's own criterion.
+
+**The population, recomputed from the pack's real output** (matches the scoping read exactly):
+`uChasmaDepth` 124/124, `uPlateauStrength` 124, `uScarpStrength` 122, `uMountainAmp` 103 (42 distinct),
+`uLavaCoverage` 103, `uKarstDensity`/`uDuneDensity`/`uDustDepth` 68, `uTesseraStrength` 46,
+`uSubStrength` 37, `uMassWastDensity` 124. ⭐ **All 23 land in `material-parity-list`'s `labVarying`
+and NOT ONE in the written-and-constant residue** — the instrument that caught `fluvialDeck`'s
+dead-input defect is clean here.
+
+**⛔ THREE ROWS OF THE COVERAGE AUDIT ARE CORRECTED BY MEASUREMENT.**
+1. **F46 bioluminescence is NOT queue-(c) dead.** `habGate ≡ 0` is false: `condition.habitability` is
+   a real number on **68 of 124** bodies (min 0.55), so the gate returns exactly 1.0 on all 68. It is
+   held out for a DIFFERENT reason — the AMOUNT is a lil-gui slider (0.45) with no law on either side.
+2. **F1's RUNTIME gate is live on 103 of 124.** The generation block is in the BAKE's `plate()`
+   closure, not in `uMountainAmp`. Shown this, Max reversed the hold-out — *"2 yes"* — and mountains
+   rode along.
+3. **F43 IS dead, 0 of 124** — but by `world-engine-lab.html:2748`'s four-term predicate, not by
+   `retained === false`, which never occurs (68 `retained:true`, 56 no atmosphere).
+
+**⛔ THE PRESET-NAME RELEVANCE TABLE DOES NOT TRAVEL, and it is the pack's one declared divergence.**
+The lab multiplies five masters by `ASSOCIATIONS[key].rendersOn` membership — a list of preset NAMES.
+Measured over all 18 presets it is not composition class, not atmosphere, not temperature, not iron
+and not volatiles: it is a curation list, not physics. Max 2026-07-19 governs — *"presets remain dev
+fixtures / named-body canonical locks, NOT the product"* — and `GAME_RELEVANCE` is frozen empty, so a
+driver keyed on it would throw. The game therefore renders these five on MORE bodies than the lab's
+preset view shows; the per-preset disagreement set is enumerated in the pack's header.
+
+**Nothing else moved.** 0 of 10,492 pre-existing driver values differ from the parent capture; the
+suite's failing set is byte-identical to the parent's 20 per test ID in both directions; instruments
+B and C green; A re-recorded naming its three declared additions.
+
+**Declared deviations:** `docs/WORKSTREAMS/solid-relief-deck/DEVIATIONS.md` — the lab's four laws
+become seed-live (`_fp`→`_dp`, pack #9's ruling) and F19's repose becomes radius-aware (the lab
+catching up to its own `:1964` ruling and to ROOT-0 fix 4; **no delta in the game**).
+
+⚠ **The recorded live pair is ABSENT.** Max ran the walk himself and returned the UAT above, which is
+what closes the workstream, but the instrumented ON/OFF pixel evidence was never captured — the first
+attempt was rotation-confounded and discarded, and the chrome-devtools connection dropped before a
+frozen pair could be taken. `live-pair-2026-09-04/STATUS.md` records what IS confirmed live (8
+materials registered, `uniformValues === packValues` on all eleven masters, 7 distinct orogeny axes
+across 8 bodies) and what the pair must still do.
