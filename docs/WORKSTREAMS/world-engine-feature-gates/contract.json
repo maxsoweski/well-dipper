@@ -2,7 +2,7 @@
   "workstream": "world-engine-feature-gates",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verifying",
+  "status": "shipped",
   "summary": "A per-feature GAME gate for world-engine features, so a feature can go on being developed in the lab while drawing nothing in the game until it is ready. Generalises the ONE-entry GATE_RULINGS map (drivers/index.js:475) that F35's TERMINATOR_ENABLED already established, on the same 'one declared value, read by every producer' pattern. Max's bar, ruled 2026-09-04: ON only if the feature reads the bake's accumulated landforms, not just the province mask.",
   "ruling": {
     "by": "Max, 2026-09-04",
@@ -24,18 +24,18 @@
         "F6 tessera",
         "F8 lava plains",
         "F16 dust mantles",
-        "F18 sublimation"
+        "F18 sublimation",
+        "F15 dunes",
+        "F21 karst"
       ],
       "why": "read neither the accumulated height nor its gradient \u2014 they synthesise their own noise and amplitude-modulate it by the 3-channel province mask, with floors of 0.15-0.50 so they still render where the mask says they do not belong",
       "waitingFor": "any of the three jobs in solid-relief-deck/FOLLOWUP-not-fully-developed.md; (b) \u2014 make the combiner read the accumulated relief \u2014 is the one that clears this bar"
     },
     "STAY_ON_reactive": {
       "features": [
-        "F21 karst",
-        "F15 dunes",
         "F19 mass-wasting"
       ],
-      "why": "karst and dunes take lowGround off the running height (height.glsl.js:1194, :1255); mass-wasting takes the host-slope residual gradIn - gradBase (:1364). Genuinely reactive to the generated terrain."
+      "why": "mass-wasting reads the host-slope RESIDUAL gradIn - gradBase (height.glsl.js:1364), which is zero on flat ground, so the combiner returns before writing. It is the only one of the eleven whose terrain read CLOSES as relief goes to zero."
     },
     "ALREADY_DEAD": {
       "features": [
@@ -155,5 +155,15 @@
     "The gate mechanism ALREADY EXISTED and had never been used: solidRelief declared all eleven gate names, gatesFor answered GATE_RULINGS[g] ?? true, and index.js:267's own comment said 'all eleven default ON and none is ruled off today'. The work was the RULING plus splitting the two kinds of ruling apart \u2014 not building a switch.",
     "GATE_RULINGS was read by BOTH front-ends through one shared runPacks, so the first cut silenced the lab. Caught by material-parity-list as eight names leaving LEDGER.labVarying. Fixed by giving each sink its own rulings map.",
     "The game's own preview provenance string (main.js:4071) was printing GATE_RULINGS \u2014 after the split that is the LAB's map, so the preview would have quietly described the wrong front-end. Re-pointed to GAME_GATE_RULINGS."
-  ]
+  ],
+  "uatCorrection": {
+    "max": "Everything still has the dunes drawn across the surface. Otherwise seems about right. (2026-09-04)",
+    "whatItFound": "The bar as first applied admitted dunes and karst because they 'read the accumulated surface'. But their gates (lowGround, gentle) are smoothsteps DOWN from relief: turning the other eight off FLATTENED the field they read, both terms went to 1, and only the province floor (0.30 / 0.25) remained. The first cut made dunes WORSE, by its own doing.",
+    "theSharpenedBar": "Reacting to relief is not the same as reacting to its absence. PERMISSIVE gates (lowGround/gentle) open on flat ground; RESIDUAL gates (gradIn - gradBase) close. Only the latter survives its neighbours being switched off.",
+    "karst": "NOT named by Max. Ruled off on the character-identical gate rather than waiting for the next UAT to find it; one flip returns it."
+  },
+  "shipped": {
+    "commit": "pending",
+    "uat": "Max 2026-09-04: \"Otherwise seems about right\" \u2014 accepted with the dune defect named, which this commit fixes."
+  }
 }

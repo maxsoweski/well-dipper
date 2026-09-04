@@ -355,9 +355,30 @@ export const SOLID_RELIEF_UNIFORMS = Object.freeze([
 //
 // ⛔ WHICH SIDE OF THE BAR EACH ROW FALLS ON WAS MEASURED IN THE SHADER, NOT TAKEN FROM PROSE —
 // `src/worldengine/shaders/height.glsl.js`, per combiner:
-//     karst        :1194  `lowGround` off the running height          → reactive, stays ON
-//     dunes        :1255  `lowGround` off the running height          → reactive, stays ON
-//     massWasting  :1364  `hostGrad = gradIn - gradBase`              → reactive, stays ON
+//     massWasting  :1364  `hostGrad = gradIn - gradBase`              → RESIDUAL, stays ON
+//     karst        :1194  `lowGround * gentle` off the running height → PERMISSIVE, ruled OFF 2026-09-04
+//     dunes        :1255  `lowGround * gentle` off the running height → PERMISSIVE, ruled OFF 2026-09-04
+//
+// ⭐⭐ THE BAR GOT SHARPER ON MAX'S UAT, AND THE CORRECTION IS THE USEFUL PART. "Reads the accumulated
+// surface" is NOT one property — it is two, and they behave in OPPOSITE directions when the surface
+// goes flat, which is exactly what turning the other eight off does:
+//
+//   PERMISSIVE (`lowGround`, `gentle`) — these are smoothsteps DOWN from relief, so on flat ground
+//     they evaluate to 1 and the gate OPENS. The dune combiner's own comment says so in as many
+//     words: *"No absolute-h floor anywhere ⇒ low-relief worlds (Titan) pass the masks."* With the
+//     eight surface-blind features off, `hIn` and `gradIn` are nearly flat, both terms go to 1, and
+//     the only modulation left is the province floor — 0.30 for dunes, 0.25 for karst. The feature
+//     covers the world.
+//   RESIDUAL (`gradIn - gradBase`) — the host-relief gradient MINUS the base. On flat ground it is
+//     zero and the combiner returns before writing anything (height.glsl.js:1369, *"flats +
+//     pure-solo: exact-zero, base byte-identical"*). It cannot spread over a world that has no relief
+//     for it to cling to, because it is a response TO relief rather than a response to its absence.
+//
+// ⛔ SO THE FIRST CUT OF THIS REGISTRY MADE THE GAME WORSE FOR DUNES, NOT BETTER. Max's UAT, 2026-09-04:
+// *"Everything still has the dunes drawn across the surface. Otherwise seems about right."* He is
+// right, and the mechanism is this file's own doing: turning the eight off flattened the very field
+// dunes were being trusted to read. Karst was NOT named by him and is ruled off on the same evidence,
+// because its gate is character-identical to the dune one and the next UAT would have found it.
 //   the other eight synthesise their own noise and amplitude-modulate it by `provinceWeight(...)`
 //   alone, with floors of 0.15–0.50 so they still render where the mask says they do not belong.
 //
@@ -408,20 +429,23 @@ export const SOLID_RELIEF_GAME_GATES = Object.freeze({
     waitingFor: 'FOLLOWUP (b), and a floor that is not 0.5',
   }),
 
-  // ── ON. These three clear the bar today: each reads the bake's accumulated surface. ──
-  [KARST_GATE]: Object.freeze({
-    on: true,
-    why: 'takes lowGround off the running height (height.glsl.js:1194) — dolines pool in ground that is really low',
-    waitingFor: null,
-  }),
+  // ── OFF on a PERMISSIVE gate. These two do read the accumulated surface — but downward, so a flat
+  //    surface opens them all the way. See the PERMISSIVE/RESIDUAL note in the header.
   [DUNE_GATE]: Object.freeze({
-    on: true,
-    why: 'takes lowGround off the running height (height.glsl.js:1255) — sand pools in real basins and flows around real relief',
-    waitingFor: null,
+    on: false,
+    why: 'gate is `lowGround * gentle * belt * provinceWeight` (height.glsl.js:1258) — every terrain term is a smoothstep DOWN from relief, so with the eight above off the terrain is flat, both terms go to 1 and only the 0.30 province floor is left. MAX SAW THIS: "Everything still has the dunes drawn across the surface" (UAT 2026-09-04). Its own comment concedes the shape: "No absolute-h floor anywhere ⇒ low-relief worlds pass the masks."',
+    waitingFor: 'the eight above coming back (its field is only flat because they are off), OR a gate that closes on flat ground the way massWasting\'s residual does',
   }),
+  [KARST_GATE]: Object.freeze({
+    on: false,
+    why: 'gate is `lowGround * gentle * uKarstDensity * pw` (height.glsl.js:1196) — CHARACTER-IDENTICAL to the dune gate above, so it has the same failure for the same reason. ⚠ NOT named in Max\'s UAT; ruled off on the shared mechanism rather than waiting for him to find it twice. One flip returns it.',
+    waitingFor: 'the same as dunes',
+  }),
+
+  // ── ON. The one feature whose reactivity is RESTRICTIVE rather than permissive. ──
   [MASSWAST_GATE]: Object.freeze({
     on: true,
-    why: 'takes the host-slope residual gradIn - gradBase (height.glsl.js:1364) — talus banks at the foot of relief that is really there',
+    why: 'takes the host-slope RESIDUAL gradIn - gradBase (height.glsl.js:1364) — talus banks at the foot of relief that is really there. On flat ground the residual is zero and the combiner returns before writing ("flats + pure-solo: exact-zero, base byte-identical", :1369), so it CANNOT spread over a world with no relief. That is what makes it survive the other ten being off.',
     waitingFor: null,
   }),
 });

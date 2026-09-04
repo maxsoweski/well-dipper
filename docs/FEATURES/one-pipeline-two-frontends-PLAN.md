@@ -1459,8 +1459,8 @@ registry; this section explains it.
 ## The bar
 
 **"Grown from the engine, not painted on."** A feature is ON in the GAME only if it reads the bake's
-**accumulated landforms** — the running height or its gradient — and not merely the 3-channel province
-mask with a floor under it. Max ruled this on 2026-09-04, over two alternatives (off = anything whose
+**accumulated landforms** — and, per the correction below, only if that read **closes** as relief goes
+to zero rather than opening. Not merely the 3-channel province mask with a floor under it. Max ruled this on 2026-09-04, over two alternatives (off = anything whose
 LOOK he had not passed; off = only the provably dead), and **having been told the cost**: it removes
 most of the landform detail he accepted the day before, and the game looks barer until each row lands.
 
@@ -1495,9 +1495,32 @@ Bodies reached is out of the 124-body solid corpus, as measured when Max was sho
 | lava | `uLavaCoverage` | 103 | ⛔ OFF | surface-blind — a lava plain does not know which basin it is flooding |
 | sublimation | `uSubStrength` | 40 | ⛔ OFF | surface-blind |
 | dust | `uDustDepth` | 68 | ⛔ OFF | surface-blind, and the worst-modulated: floor **0.50**, half strength everywhere regardless of province |
-| **karst** | `uKarstDensity` | 68 | ✅ ON | reads `lowGround` off the running height (`height.glsl.js:1194`) |
-| **dunes** | `uDuneDensity` | 68 | ✅ ON | reads `lowGround` off the running height (`:1255`) |
-| **massWasting** | `uMassWastDensity` | 124 | ✅ ON | reads the host-slope residual `gradIn - gradBase` (`:1364`) |
+| dunes | `uDuneDensity` | 68 | ⛔ OFF | ⭐ **PERMISSIVE gate** — see below. Max's UAT 2026-09-04: *"Everything still has the dunes drawn across the surface."* |
+| karst | `uKarstDensity` | 68 | ⛔ OFF | gate character-identical to dunes'. ⚠ Not named by Max; ruled off on the shared mechanism |
+| **massWasting** | `uMassWastDensity` | 124 | ✅ ON | **RESIDUAL gate** — reads `gradIn - gradBase` (`:1364`), which is zero on flats |
+
+## ⭐⭐ The correction Max's UAT forced, and it is the sharpest thing in this section
+
+The first cut of this ruling kept karst, dunes and mass-wasting on the grounds that all three "read
+the accumulated surface". **That is not one property. It is two, and they behave in OPPOSITE
+directions when the surface goes flat — which is precisely what turning the other eight off does.**
+
+| | gate | on flat ground | result |
+|---|---|---|---|
+| **PERMISSIVE** | `lowGround`, `gentle` — smoothsteps DOWN from relief | evaluate to **1** | the gate **OPENS**; only the province floor is left (0.30 dunes, 0.25 karst) → the feature covers the world |
+| **RESIDUAL** | `gradIn - gradBase` — the host-relief gradient minus the base | evaluates to **0** | the combiner **returns before writing** (`:1369` *"flats + pure-solo: exact-zero, base byte-identical"*) → the feature cannot spread |
+
+⛔ **So the first cut made the game WORSE for dunes, not better**, and by its own doing: turning the
+eight off flattened the very field dunes were being trusted to read. The dune combiner's own comment
+had conceded the shape all along — *"No absolute-h floor anywhere ⇒ low-relief worlds (Titan) pass the
+masks."*
+
+Karst was **not** in Max's UAT. It is ruled off on the shared mechanism rather than waiting for the
+next walk to find it; one flip returns it if he disagrees.
+
+⭐ **The generalisable rule, for the next feature that asks to be switched on:** *reacting to relief*
+is not the same as *reacting to its absence*. A gate that opens when the terrain is flat is painted
+on, however many terrain terms it multiplies. Ask which way the gate moves as relief goes to zero.
 
 ⚠ **The three ON rows are not a taste judgement** — which side of the bar each falls on was measured
 per combiner in the shader, not taken from prose.

@@ -89,7 +89,7 @@ const ruled = countNonZero(gameGates);                                          
         .not.toBe(allOn[g] ?? 0);
     }
     const offCount = Object.values(SOLID_RELIEF_GAME_GATES).filter((r) => !r.on).length;
-    expect(offCount, 'a run with nothing switched off would pass every test above vacuously').toBe(8);
+    expect(offCount, 'a run with nothing switched off would pass every test above vacuously').toBe(10);   // ⭐ 8 -> 10 on Max's UAT 2026-09-04: dunes ("Everything still has the dunes drawn across the surface") and karst, whose gate is character-identical. Only massWasting clears the sharpened bar — its gate reads a RESIDUAL, which closes on flat ground instead of opening.
   });
 
   it('AC-5 — flipping ONE value is the whole ship action', () => {
