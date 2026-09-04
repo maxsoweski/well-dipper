@@ -2,7 +2,7 @@
   "workstream": "frost-budget",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verifying",
+  "status": "shipped",
   "acceptanceCriteria": [
     {
       "id": "AC-1",
@@ -95,7 +95,7 @@
   "verification": {
     "at": "2026-09-05",
     "integration": "GREEN — AC-1/2/3/5 headless (frost-census.mjs), AC-4/AC-6 live (LIVE-CHECK.md). Suite: 20 pre-existing failures before and after, zero new.",
-    "uatPending": "AC-7 — Max flies to PVX J3DK6GAO+RBJGI5M c and to a frozen world. No agent closes it.",
+    "uatPending": null,
     "acNotes": {
       "AC-1": "MISSED, and the AC's own numbers are why — see DEVIATIONS §1. Rocky (Earthlike) lands at 19.8% extent / 53 deg snowline against the AC's 5-15% / poleward-of-55. The AC was written before I understood that frostCover is an OPACITY, not an area, so it collapsed two independent quantities into one bound. Not retuned to hit an invented number.",
       "AC-2": "PASS — monotonic and continuous across a 350 K -> 100 K sweep.",
@@ -103,7 +103,8 @@
       "AC-4": "PASS on the criterion (high ground frosts where low ground beside it is bare, 180 K spread at 58.4 deg) — AND its required measurement is the open finding: the lapse spans 215.6 K across h, making altitude the dominant term. LIVE-CHECK.md.",
       "AC-5": "PASS as restated by distance below the freeze point (DEVIATIONS §2): 0 of 118 genuinely frozen bodies move; only the 12 within 10 K of the line, 8 of them, each named. The census exits non-zero if the temperate band does NOT move down.",
       "AC-6": "PASS — 0.834 -> 0.619 whiteness, 26 deg -> 60 deg snowline, uIcenessMix still 0, oceans drawn.",
-      "AC-7": "deferred-to-max"
-    }
+      "AC-7": "PASS — Max, live, both a warm wet world and a frozen one."
+    },
+    "uat": "PASSED 2026-09-05, Max: \"Ice worlds still look like ice; that world you parked at...I don't think I'd say it looks 'right' because of all the semi-developed features e.g. rivers but the mountains are ice/snow-covered so I'd say that's a success.\" ⭐ The reservation he names is NOT this law — it is the half-built features around it (rivers). The frost criterion itself he calls a success."
   }
 }
