@@ -326,3 +326,111 @@ export const SOLID_RELIEF_UNIFORMS = Object.freeze([
   'uDuneDensity', 'uDustDepth',
   'uMassWastDensity', 'uRepose', 'uLdaFat',
 ]);
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════
+// THE GAME GATES — which of these eleven the GAME draws, and what each OFF row is waiting for.
+//
+// ⭐ MAX'S BAR, ruled 2026-09-04: **"grown from the engine, not painted on"**. A feature is ON in the
+// game only if it reads the bake's ACCUMULATED LANDFORMS — the running height or its gradient — and
+// not merely the 3-channel province mask with a floor under it. He chose this over "off = anything
+// whose look I haven't passed" and over "off = only the provably dead", and he chose it having been
+// told the cost: it removes most of the landform detail he had accepted the session before, and the
+// game looks barer until each row is developed.
+//
+// His words, on the UAT that opened this: *"they are just applied over the underlying world engine
+// generative models and don't actually communicate with that process AFAIK. So they're wired up"*.
+//
+// ⛔ THIS IS A GAME-SIDE GATE ONLY. THE LAB KEEPS EVERY FEATURE ON — that is where the development
+// happens, and being able to keep developing there while the game stays quiet is the entire point:
+// *"I want to be able to continue developing the features in the lab then seamlessly be able to
+// switch them on in game when ready."* The lab drives these through its own per-feature `*Enabled`
+// state (world-engine-lab.html:5369ff) and never reads this map.
+//
+// ⚠⚠ EVERY `on: false` ROW IS **DEBT**, NOT A DECISION. Per `converge-dont-declare-divergence` a
+// lab/game divergence is debt until proven otherwise; it is sanctioned here only because each row
+// carries a named exit. A row that sits OFF for months with `waitingFor` untouched is a defect in
+// this registry, not a steady state. Flipping one `on` to `true` is the whole ship action — the gate
+// plumbing already exists (`gatesFor` answers `GATE_RULINGS[g] ?? true`; a false gate makes
+// `resolveDriver` return 0 at writePackUniforms.js:186).
+//
+// ⛔ WHICH SIDE OF THE BAR EACH ROW FALLS ON WAS MEASURED IN THE SHADER, NOT TAKEN FROM PROSE —
+// `src/worldengine/shaders/height.glsl.js`, per combiner:
+//     karst        :1194  `lowGround` off the running height          → reactive, stays ON
+//     dunes        :1255  `lowGround` off the running height          → reactive, stays ON
+//     massWasting  :1364  `hostGrad = gradIn - gradBase`              → reactive, stays ON
+//   the other eight synthesise their own noise and amplitude-modulate it by `provinceWeight(...)`
+//   alone, with floors of 0.15–0.50 so they still render where the mask says they do not belong.
+//
+// The three jobs that would clear the bar are written up, in increasing cost, in
+// `docs/WORKSTREAMS/solid-relief-deck/FOLLOWUP-not-fully-developed.md`: (a) a per-feature suitability
+// FIELD instead of a mask with floors; (b) make the surface-blind combiners read the accumulated
+// relief, as the three reactive ones already do; (c) have the generative writers PLACE the landforms.
+// **(b) is the one that clears it** — it is the bar, restated as work.
+export const SOLID_RELIEF_GAME_GATES = Object.freeze({
+  [MOUNTAIN_GATE]: Object.freeze({
+    on: false,
+    why: 'reads neither the accumulated height nor its gradient — it does not know where two plates converged, only that the province mask reads craton-ish here (floor 0.15)',
+    waitingFor: 'FOLLOWUP (b) — read the accumulated relief. ⚠ ALSO generation-blocked from the other side: the bake\'s plate path claims 0 of 124 corpus bodies, so F1 needs BOTH halves.',
+  }),
+  [CANYON_GATE]: Object.freeze({
+    on: false,
+    why: 'surface-blind; the bake\'s own rift corridors (stagnantLid) are drawn separately and this combiner reads none of them',
+    waitingFor: 'FOLLOWUP (b)',
+  }),
+  [SCARP_GATE]: Object.freeze({
+    on: false,
+    why: 'surface-blind — a scarp does not know it is cutting a rift',
+    waitingFor: 'FOLLOWUP (b)',
+  }),
+  [PLATEAU_GATE]: Object.freeze({
+    on: false,
+    why: 'surface-blind — a plateau does not know it is sitting on a crater rim',
+    waitingFor: 'FOLLOWUP (b)',
+  }),
+  [TESSERA_GATE]: Object.freeze({
+    on: false,
+    why: 'surface-blind; its own generative source (stagnantLid tessera) reaches pixels through the bake independently',
+    waitingFor: 'FOLLOWUP (b)',
+  }),
+  [LAVA_GATE]: Object.freeze({
+    on: false,
+    why: 'surface-blind — a lava plain does not know which basin it is flooding',
+    waitingFor: 'FOLLOWUP (b)',
+  }),
+  [SUB_GATE]: Object.freeze({
+    on: false,
+    why: 'surface-blind',
+    waitingFor: 'FOLLOWUP (b)',
+  }),
+  [DUST_GATE]: Object.freeze({
+    on: false,
+    why: 'surface-blind, and the worst-modulated of the eleven — floor 0.50, i.e. half strength everywhere regardless of province',
+    waitingFor: 'FOLLOWUP (b), and a floor that is not 0.5',
+  }),
+
+  // ── ON. These three clear the bar today: each reads the bake's accumulated surface. ──
+  [KARST_GATE]: Object.freeze({
+    on: true,
+    why: 'takes lowGround off the running height (height.glsl.js:1194) — dolines pool in ground that is really low',
+    waitingFor: null,
+  }),
+  [DUNE_GATE]: Object.freeze({
+    on: true,
+    why: 'takes lowGround off the running height (height.glsl.js:1255) — sand pools in real basins and flows around real relief',
+    waitingFor: null,
+  }),
+  [MASSWAST_GATE]: Object.freeze({
+    on: true,
+    why: 'takes the host-slope residual gradIn - gradBase (height.glsl.js:1364) — talus banks at the foot of relief that is really there',
+    waitingFor: null,
+  }),
+});
+
+/**
+ * The `GATE_RULINGS` slice for this pack: gate name -> boolean, derived from the registry above so
+ * the two cannot disagree. ⛔ DERIVED, NEVER RESTATED — a hand-written second list is exactly the
+ * one-name-two-meanings shape this codebase keeps paying for.
+ */
+export const SOLID_RELIEF_RULINGS = Object.freeze(
+  Object.fromEntries(Object.entries(SOLID_RELIEF_GAME_GATES).map(([g, r]) => [g, r.on])),
+);

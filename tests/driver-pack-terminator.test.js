@@ -472,10 +472,29 @@ describe('AC-1 — one constant, read by the game\'s policy and by both of the l
 
   it('the game\'s provenance string names the RULED policy that actually ran', () => {
     const main = strip(src('src/main.js'));
-    expect(main).toMatch(/drivers\.gatesFor\(entry, drivers\.GATE_POLICY_RULED\)/);
+    // ⭐ 2026-09-04 the call gained a third argument — the GAME's rulings map. The policy it names is
+    // unchanged (RULED); what moved is WHICH map that policy answers from, and this preview reports
+    // the GAME, so it must not be reading the lab's.
+    expect(main).toMatch(/drivers\.gatesFor\(entry, drivers\.GATE_POLICY_RULED, drivers\.GAME_GATE_RULINGS\)/);
     expect(main).not.toMatch(/gatesFor\(entry, drivers\.GATE_POLICY_ALL_ON\)/);
-    // …and applyDriverPacks — the composition point both front-ends share — takes the default.
-    expect(strip(src('src/worldengine/drivers/index.js'))).toMatch(/const entryGates = gatesFor\(entry\);/);
+    // ⭐⭐ THIS ASSERTION CHANGED ON 2026-09-04 AND THE PREMISE IT RECORDED IS NOW DELIBERATELY FALSE.
+    // It used to read "applyDriverPacks — the composition point both front-ends share — takes the
+    // default", and pinned `gatesFor(entry)`. The composition point is STILL shared; the RULINGS are
+    // no longer, and that asymmetry is a ruling of Max's, not drift (workstream
+    // world-engine-feature-gates): the GAME takes GAME_GATE_RULINGS (convergence + the development
+    // gates), the LAB takes GATE_RULINGS (convergence only), so the lab keeps drawing the features it
+    // is still developing. `terminator` is unaffected — it is a CONVERGENCE ruling and lives in the
+    // map BOTH sinks read, which is asserted just below and is why F35 did not have to move.
+    const idx = strip(src('src/worldengine/drivers/index.js'));
+    expect(idx).toMatch(/const entryGates = gatesFor\(entry, GATE_POLICY_RULED, sink\.rulings \?\? GATE_RULINGS\);/);
+    // The terminator must stay in the map the LAB reads, or F35's convergence quietly becomes game-only.
+    expect(idx).toMatch(/export const GATE_RULINGS = Object\.freeze\(\{ terminator: TERMINATOR_ENABLED,/);
+    // ⚠ `stripKeepText`, not `strip`: the two sinks are told apart by their LABEL, which is a string
+    // literal, and `strip` blanks literal text (blankLiteralText: true). Same reason the import scans
+    // above use it. Matched on `strip` first, this pair failed on blanked quotes, not on the code.
+    const idxText = stripKeepText(src('src/worldengine/drivers/index.js'));
+    expect(idxText).toMatch(/label: 'applyDriverPacksToState', rulings: GATE_RULINGS,/);
+    expect(idxText).toMatch(/label: 'applyDriverPacks', rulings: GAME_GATE_RULINGS,/);
   });
 });
 

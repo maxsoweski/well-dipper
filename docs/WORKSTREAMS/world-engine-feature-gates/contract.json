@@ -1,0 +1,159 @@
+{
+  "workstream": "world-engine-feature-gates",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "verifying",
+  "summary": "A per-feature GAME gate for world-engine features, so a feature can go on being developed in the lab while drawing nothing in the game until it is ready. Generalises the ONE-entry GATE_RULINGS map (drivers/index.js:475) that F35's TERMINATOR_ENABLED already established, on the same 'one declared value, read by every producer' pattern. Max's bar, ruled 2026-09-04: ON only if the feature reads the bake's accumulated landforms, not just the province mask.",
+  "ruling": {
+    "by": "Max, 2026-09-04",
+    "bar": "Grown from the engine, not painted on.",
+    "informedOf": "that it removes most of the landform detail he accepted the session before, and the game will look barer until each feature is developed",
+    "rejected": [
+      "off = anything whose LOOK he has not passed (would also take the rivers)",
+      "off = only the provably dead (F43 facets, F46 mats)"
+    ]
+  },
+  "theList": {
+    "measuredIn": "src/worldengine/shaders/height.glsl.js, verified per combiner rather than taken from prose",
+    "OFF_painted_over": {
+      "features": [
+        "F1 mountains",
+        "F4 canyons",
+        "F5 scarps",
+        "F6 plateaus",
+        "F6 tessera",
+        "F8 lava plains",
+        "F16 dust mantles",
+        "F18 sublimation"
+      ],
+      "why": "read neither the accumulated height nor its gradient \u2014 they synthesise their own noise and amplitude-modulate it by the 3-channel province mask, with floors of 0.15-0.50 so they still render where the mask says they do not belong",
+      "waitingFor": "any of the three jobs in solid-relief-deck/FOLLOWUP-not-fully-developed.md; (b) \u2014 make the combiner read the accumulated relief \u2014 is the one that clears this bar"
+    },
+    "STAY_ON_reactive": {
+      "features": [
+        "F21 karst",
+        "F15 dunes",
+        "F19 mass-wasting"
+      ],
+      "why": "karst and dunes take lowGround off the running height (height.glsl.js:1194, :1255); mass-wasting takes the host-slope residual gradIn - gradBase (:1364). Genuinely reactive to the generated terrain."
+    },
+    "ALREADY_DEAD": {
+      "features": [
+        "F43 crystalline facets",
+        "F46 bioluminescent mats"
+      ],
+      "why": "their inputs are identically zero, so they render nothing today; they get a gate row for honesty rather than a behaviour change"
+    },
+    "NOT_IN_SCOPE_OF_THE_BAR": {
+      "why": "the bar is about landform features painted over the relief bake. Atmosphere, optics, aurora, storms and rings are driven straight off the condition vector, which IS the engine's own output \u2014 'reads the accumulated relief' is not a meaningful test for them. They keep their current state and get a gate row recording that."
+    }
+  },
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "statement": "The features that are just painted over the world engine draw nothing in the game.",
+      "verifyVia": {
+        "input": "Headless: resolve the driver packs over the corpus with the gates applied.",
+        "observable": "Each of the eight OFF features publishes its master gate as 0 on every body (baseline: they publish live values on 10-103 bodies each). The three reactive ones and every non-relief feature are unchanged."
+      },
+      "layer": "unit",
+      "verification": {
+        "verdict": "PASS",
+        "how": "tests/world-engine-feature-gates.test.js over the 124-body solid corpus: each of the eight OFF masters reaches 0 bodies (was 103/124/122/124/46/103/40/68); the three reactive ones are unmoved by value. Resolved through the same writer the game runs, not read off a flag."
+      }
+    },
+    {
+      "id": "AC-2",
+      "statement": "The switch actually controls the render \u2014 it is not a flag that reads itself back.",
+      "verifyVia": {
+        "input": "SABOTAGE, both directions, on a body where the feature is live: force one gate OFF and measure the rendered contribution; force it back ON and measure again.",
+        "observable": "OFF removes the feature's pixels and ON restores them, on the same body and the same frame budget. A gate that cannot be shown to bite FAILS this AC \u2014 reading the constant back does not count."
+      },
+      "layer": "integration",
+      "live": true,
+      "verification": {
+        "verdict": "PASS (headless, with a discriminating control) \u2014 the live half NOT captured",
+        "how": "The gate is proven to bite: RULED must DIFFER from ALL_ON on every OFF row and go all the way to zero, and AC-5 flips one back to its full count. \u26d4 The FIRST cut of this instrument was VACUOUS and is the reason the control is shaped that way: it fed ray-pack-corpus's already-resolved numbers back into resolveDriver, so the gate branch never saw a descriptor, and it reported mountains:103 with the gate OFF while its own liveness check passed. Fixed by taking descriptors from solidReliefPack. \u26a0 NOT closed in the browser: repeated attempts to read the mounted game material's relief uniforms via bodySurfaces/previewPack returned nothing usable, so 'the pixels are gone on a live body' is asserted headlessly, not seen."
+      }
+    },
+    {
+      "id": "AC-3",
+      "statement": "I can carry on developing those features in the lab exactly as before.",
+      "verifyVia": {
+        "input": "Load the lab and drive the same features.",
+        "observable": "Every feature still renders and still responds to its lab control; the lab's own per-feature *Enabled state is untouched. The gate is GAME-side only \u2014 asserted, because this is the one divergence the workstream deliberately creates."
+      },
+      "layer": "integration",
+      "live": true,
+      "verification": {
+        "verdict": "PASS (live)",
+        "how": "In the running lab, hard-reloaded: with the lab's own feature checkboxes on (_lab.enableAllFeatures), every game-gated feature is alive on Mars \u2014 uMountainAmp 0.4775, uChasmaDepth 0.0362, uScarpStrength 0.0762, uPlateauStrength 0.0258, uLavaCoverage 0.15, uSubStrength 0.0222. gatesFor's default map answers all eleven true for the lab while the game's map answers eight false, read in-page. \u2b50 This is the claim the workstream exists for and it is the one verified live."
+      }
+    },
+    {
+      "id": "AC-4",
+      "statement": "There is one place that tells me, per feature, whether it is on in the game and what it is waiting for \u2014 and it lives with the world engine.",
+      "verifyVia": {
+        "input": "Read the registry module and the F-spine table.",
+        "observable": "Every gated feature has a row carrying its state, the reason, and its named exit condition. A test asserts the registry and the F-spine table cannot disagree, and that no gated feature is missing a row \u2014 so the documentation cannot rot silently."
+      },
+      "layer": "unit",
+      "verification": {
+        "verdict": "PASS",
+        "how": "SOLID_RELIEF_GAME_GATES carries state + reason + exit per row; the rulings map is DERIVED from it, never restated. Tests fail if a gate has no row, if an OFF row names no exit, or if an ON row is still waiting for something. Prose home: the PLAN's THE GAME GATES section."
+      }
+    },
+    {
+      "id": "AC-5",
+      "statement": "When a feature is ready, switching it on in the game is one change, not a re-wiring job.",
+      "verifyVia": {
+        "input": "Flip one feature's declared value and re-resolve the packs.",
+        "observable": "That feature's master gate returns to its live per-body values with no other edit anywhere. Demonstrated in a test that flips a gate and asserts the values come back."
+      },
+      "layer": "unit",
+      "verification": {
+        "verdict": "PASS",
+        "how": "Flipping `mountains` alone returns it to all 103 bodies with no other edit, and disturbs no other row."
+      }
+    },
+    {
+      "id": "AC-6",
+      "statement": "Flying around, the game still looks coherent \u2014 barer, but nothing broken or half-drawn.",
+      "verifyVia": {
+        "input": "Max flies the live build and looks at several solid worlds.",
+        "observable": "Holistic: the worlds read as simpler rather than damaged \u2014 no missing-texture look, no features half-present, no world that now reads as a bare sphere when it should not."
+      },
+      "layer": "uat",
+      "verification": {
+        "verdict": "deferred-to-max",
+        "how": "UAT. No agent closes this \u2014 and it is the one that matters here, because the game is deliberately barer."
+      }
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/worldengine/drivers/index.js:475 GATE_RULINGS \u2014 the existing one-entry registry this generalises; its own docblock says 'ONE ENTRY TODAY' and describes the three-producer pattern",
+      "src/worldengine/drivers/solidOptics.js:247 TERMINATOR_ENABLED \u2014 the precedent: one declared constant beside the pack that emits the uniform, carrying Max's words on the line",
+      "src/worldengine/drivers/solidRelief.js \u2014 the eleven master gates the bar applies to",
+      "src/worldengine/shaders/height.glsl.js \u2014 where 'reads the accumulated surface' was measured per combiner",
+      "docs/FEATURES/one-pipeline-two-frontends-PLAN.md \u2014 the F-row spine table, the documentation home"
+    ],
+    "outputs": [
+      "a game-side gate registry module, one declared value per feature, with its reason and exit condition",
+      "the pack writer that zeroes an OFF feature's master gate (the shape TERMINATOR_ENABLED already uses)",
+      "the F-spine table rows, which gain the game-gate state"
+    ],
+    "mustStayWorking": [
+      "THE LAB. It keeps every feature on \u2014 that is where development continues, and it is the whole point. This is the one deliberate lab/game divergence in the codebase with a sanctioned exit; per converge-dont-declare-divergence every OFF row is DEBT with a named condition, never a steady state.",
+      "The three reactive features (karst, dunes, mass-wasting) and every non-relief feature must be untouched \u2014 verified by value, not by inspection.",
+      "The shared RNG draw stream \u2014 the gate is a read-time multiply, it must not touch generation. Instrument B's DRAW STREAM channel must stay green.",
+      "Pack contract shape \u2014 the packs still publish every uniform they publish today; an OFF feature publishes its gate as 0, it does not stop publishing the name (a vanishing uniform would break the pack-contract tests and the lab's read-back).",
+      "The lab's own read-back of the packs (world-engine-lab.html imports several pack modules) must not start seeing zeroed game gates."
+    ]
+  },
+  "foundWhileBuilding": [
+    "The gate mechanism ALREADY EXISTED and had never been used: solidRelief declared all eleven gate names, gatesFor answered GATE_RULINGS[g] ?? true, and index.js:267's own comment said 'all eleven default ON and none is ruled off today'. The work was the RULING plus splitting the two kinds of ruling apart \u2014 not building a switch.",
+    "GATE_RULINGS was read by BOTH front-ends through one shared runPacks, so the first cut silenced the lab. Caught by material-parity-list as eight names leaving LEDGER.labVarying. Fixed by giving each sink its own rulings map.",
+    "The game's own preview provenance string (main.js:4071) was printing GATE_RULINGS \u2014 after the split that is the LAB's map, so the preview would have quietly described the wrong front-end. Re-pointed to GAME_GATE_RULINGS."
+  ]
+}

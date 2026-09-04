@@ -1440,3 +1440,86 @@ attempt was rotation-confounded and discarded, and the chrome-devtools connectio
 frozen pair could be taken. `live-pair-2026-09-04/STATUS.md` records what IS confirmed live (8
 materials registered, `uniformValues === packValues` on all eleven masters, 7 distinct orogeny axes
 across 8 bodies) and what the pair must still do.
+
+---
+
+# THE GAME GATES — what the game draws, and what it is waiting for
+
+**Added 2026-09-04.** Max: *"We need to turn off the world engine features that have not yet been
+developed/worked into the pipeline … and then we'll flip them on once developed. Part of the point of
+wiring these up is I want to be able to continue developing the features in the lab then seamlessly be
+able to switch them on in game when ready."*
+
+⛔ **THIS SECTION IS PROSE. THE SOURCE OF TRUTH IS `src/worldengine/drivers/solidRelief.js`
+`SOLID_RELIEF_GAME_GATES`**, which carries each row's state, its reason and its exit condition beside
+the pack that emits the uniform. `tests/world-engine-feature-gates.test.js` fails if this table and
+that registry disagree in substance, if a gate has no row, or if an OFF row names no exit. Edit the
+registry; this section explains it.
+
+## The bar
+
+**"Grown from the engine, not painted on."** A feature is ON in the GAME only if it reads the bake's
+**accumulated landforms** — the running height or its gradient — and not merely the 3-channel province
+mask with a floor under it. Max ruled this on 2026-09-04, over two alternatives (off = anything whose
+LOOK he had not passed; off = only the provably dead), and **having been told the cost**: it removes
+most of the landform detail he accepted the day before, and the game looks barer until each row lands.
+
+## The two kinds of ruling, and why one map could not carry both
+
+| | map | read by | means |
+|---|---|---|---|
+| **CONVERGENCE** | `GATE_RULINGS` | BOTH front-ends | the feature is **wrong everywhere**; both sides stop drawing it |
+| **DEVELOPMENT** | `GAME_GATE_RULINGS` | the GAME only | the feature is **fine in the lab, not ready for the game** |
+
+`terminator` (F35) is the only convergence ruling — Max 2026-07-16, *"disable terminator gradient
+totally; it doesn't work"*. The eight below are development gates.
+
+⛔ **Conflating them breaks one of them, and both failure modes were measured while building this.**
+Flipping the lab composer to `ALL_ON` to protect development resurrects the terminator and reverses a
+ruling. Leaving the lab on the ruled map silences the lab — that was the first cut, and it showed up
+as **eight names vanishing from `LEDGER.labVarying`** in `material-parity-list`. The two sinks part
+company at exactly one line: `drivers/index.js` `const entryGates = gatesFor(entry, GATE_POLICY_RULED,
+sink.rulings ?? GATE_RULINGS);`.
+
+## The rows
+
+Bodies reached is out of the 124-body solid corpus, as measured when Max was shown the deck.
+
+| gate | master uniform | bodies | game | why |
+|---|---|---:|---|---|
+| mountains | `uMountainAmp` | 103 | ⛔ OFF | surface-blind. ⚠ **also generation-blocked** — the bake's plate path claims 0 of 124, so F1 needs both halves |
+| canyons | `uChasmaDepth` | 124 | ⛔ OFF | surface-blind; the bake's own rift corridors are drawn separately and this reads none of them |
+| scarps | `uScarpStrength` | 122 | ⛔ OFF | surface-blind — a scarp does not know it is cutting a rift |
+| plateaus | `uPlateauStrength` | 124 | ⛔ OFF | surface-blind — a plateau does not know it is sitting on a crater rim |
+| tessera | `uTesseraStrength` | 46 | ⛔ OFF | surface-blind |
+| lava | `uLavaCoverage` | 103 | ⛔ OFF | surface-blind — a lava plain does not know which basin it is flooding |
+| sublimation | `uSubStrength` | 40 | ⛔ OFF | surface-blind |
+| dust | `uDustDepth` | 68 | ⛔ OFF | surface-blind, and the worst-modulated: floor **0.50**, half strength everywhere regardless of province |
+| **karst** | `uKarstDensity` | 68 | ✅ ON | reads `lowGround` off the running height (`height.glsl.js:1194`) |
+| **dunes** | `uDuneDensity` | 68 | ✅ ON | reads `lowGround` off the running height (`:1255`) |
+| **massWasting** | `uMassWastDensity` | 124 | ✅ ON | reads the host-slope residual `gradIn - gradBase` (`:1364`) |
+
+⚠ **The three ON rows are not a taste judgement** — which side of the bar each falls on was measured
+per combiner in the shader, not taken from prose.
+
+## Turning one on
+
+Flip its `on` to `true` in `SOLID_RELIEF_GAME_GATES`. That is the whole ship action — nothing else is
+edited anywhere, and `world-engine-feature-gates.test.js` AC-5 demonstrates the feature's full body
+count coming back from that one boolean. **Clear the bar first:** the work is FOLLOWUP **(b)** in
+`WORKSTREAMS/solid-relief-deck/FOLLOWUP-not-fully-developed.md` — make the combiner read the
+accumulated relief, as the three ON rows already do.
+
+## ⚠ Every OFF row is DEBT
+
+Per `converge-dont-declare-divergence` a lab/game divergence is debt until proven otherwise. This one
+is sanctioned because each row names its exit — **a row that sits OFF for months with `waitingFor`
+untouched is a defect in this registry, not a steady state.** This is the codebase's one deliberate
+lab/game divergence; there should never be a second kind.
+
+## Reading `material-parity-list` after this change
+
+The eight moved out of `LEDGER.labVarying` and into the **written-and-constant residue**, whose
+documented meaning is "a dying wire". ⛔ **They are there for the opposite reason** — laws live, inputs
+varying, still reaching their full body counts in the lab, constant only because the game's map
+resolves them to zero. The tell that separates the two: flip the boolean and the name comes back.

@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { corpus, resolvedPacks, presetRows, MESH } from './fixtures/ray-pack-corpus.mjs';
 import { labPackCtx } from '../src/objects/Planet.js';
 import { PACKS, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js';
+import { SOLID_RELIEF_GAME_GATES } from '../src/worldengine/drivers/solidRelief.js';
+import { GATE_POLICY_RULED, GAME_GATE_RULINGS } from '../src/worldengine/drivers/index.js';
 import { resolveDriver, PackContractError } from '../src/worldengine/port/writePackUniforms.js';
 import { deriveUniforms, reliefAxesFor, chasmaRiftsFor } from '../src/worldengine/base/labCore.js';
 import { surfaceProcessesOf } from '../src/worldengine/base/surfaceProcesses.js';
@@ -282,9 +284,36 @@ describe('solidRelief — §E gates, and the master-only rule', () => {
     }
   });
 
-  it('every declared gate is answered by gatesFor and defaults ON', () => {
-    const g = gatesFor(SOLID_RELIEF_ENTRY);
-    for (const name of SOLID_RELIEF_GATES) expect(g[name], name).toBe(true);
+  it('every declared gate is answered by gatesFor — and answers with the RULING, not a default', () => {
+    // ⭐ THIS TEST USED TO ASSERT "defaults ON", and that stopped being true on 2026-09-04. Max ruled
+    // the bar "grown from the engine, not painted on": eight of these eleven are painted over the
+    // relief bake (they read neither the accumulated height nor its gradient) and are OFF in the GAME
+    // until FOLLOWUP (b) lands. The registry beside the pack carries each row's reason and its exit.
+    // ⛔ Asserted AGAINST the registry, never as a restated list of booleans — a second list is a
+    // second thing to disagree with, and that is the bug shape this codebase keeps paying for.
+    // ⛔ THE GAME'S MAP, EXPLICITLY. `gatesFor`'s DEFAULT map is the CONVERGENCE one, which the LAB
+    // takes and under which all eleven are still ON — that asymmetry is the workstream's whole point.
+    const g = gatesFor(SOLID_RELIEF_ENTRY, GATE_POLICY_RULED, GAME_GATE_RULINGS);
+    const lab = gatesFor(SOLID_RELIEF_ENTRY);
+    for (const name of SOLID_RELIEF_GATES) {
+      expect(g, name).toHaveProperty(name);                       // answered at all — never absent
+      expect(g[name], name).toBe(SOLID_RELIEF_GAME_GATES[name].on);
+      expect(lab[name], `${name} must stay ON for the lab`).toBe(true);
+    }
+    // ...and ALL_ON still means all-on, so the cross-commit fixture harnesses keep their pre-ruling answer.
+    const allOn = gatesFor(SOLID_RELIEF_ENTRY, GATE_POLICY_ALL_ON);
+    for (const name of SOLID_RELIEF_GATES) expect(allOn[name], name).toBe(true);
+  });
+
+  it('the registry covers every declared gate, and every OFF row names what it is waiting for', () => {
+    // The documentation cannot rot silently: a gate with no row, or an OFF row with no exit condition,
+    // fails here. An OFF row without a `waitingFor` is a permanent divergence wearing a temporary hat.
+    expect(Object.keys(SOLID_RELIEF_GAME_GATES).sort()).toEqual([...SOLID_RELIEF_GATES].sort());
+    for (const [name, row] of Object.entries(SOLID_RELIEF_GAME_GATES)) {
+      expect(typeof row.on, name).toBe('boolean');
+      expect(row.why, name).toBeTruthy();
+      if (row.on === false) expect(row.waitingFor, `${name} is OFF and must name its exit`).toBeTruthy();
+    }
   });
 });
 

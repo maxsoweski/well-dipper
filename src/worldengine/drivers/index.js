@@ -56,7 +56,7 @@ import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
 import { SOLID_OPTICS_ENTRY, TERMINATOR_ENABLED } from './solidOptics.js';   // ⛔ TERMINATOR_ENABLED RIDES THIS LINE — the ruled gate value below, appended to an existing import statement rather than spending a new line: fifteen live symbol-anchored refs point INTO this file by line and a new row reds them as some other block's failure (the rule stated in full three lines down).
 import { CRATER_DECK_ENTRY } from './craterDeck.js';
-import { SOLID_FEATURES_ENTRY } from './solidFeatures.js'; import { GIANT_SURFACE_ENTRY } from './giantSurface.js'; import { FLUVIAL_DECK_ENTRY } from './fluvialDeck.js'; import { STORM_DECK_ENTRY } from './stormDeck.js'; import { SOLID_RELIEF_ENTRY } from './solidRelief.js';   // ⛔ TWO import STATEMENTS ON ONE LINE, ON PURPOSE. Fifteen live symbol-anchored refs point INTO this file by line — src/worldengine/drivers/limbDeck.js:173 `import plus one array element at` is one of them — so a new line here reds fifteen citations as some other block's failure. The same discipline world-engine-lab.html:188 keeps.
+import { SOLID_FEATURES_ENTRY } from './solidFeatures.js'; import { GIANT_SURFACE_ENTRY } from './giantSurface.js'; import { FLUVIAL_DECK_ENTRY } from './fluvialDeck.js'; import { STORM_DECK_ENTRY } from './stormDeck.js'; import { SOLID_RELIEF_ENTRY, SOLID_RELIEF_RULINGS } from './solidRelief.js';   // ⛔ TWO import STATEMENTS ON ONE LINE, ON PURPOSE. Fifteen live symbol-anchored refs point INTO this file by line — src/worldengine/drivers/limbDeck.js:173 `import plus one array element at` is one of them — so a new line here reds fifteen citations as some other block's failure. The same discipline world-engine-lab.html:188 keeps.
 import {
   writePackUniforms, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';
@@ -299,7 +299,7 @@ export function applyDriverPacks(material, condition, ctx = {}) {
     );
   }
   return runPacks(condition, ctx, {
-    label: 'applyDriverPacks',
+    label: 'applyDriverPacks', rulings: GAME_GATE_RULINGS,   // ⭐ THE GAME'S MAP — convergence rulings PLUS the development gates. See GAME_GATE_RULINGS at EOF.
     write: (entry, result, packCtx) => { writePackUniforms(uniforms, result.drivers, packCtx); },
   });
 }
@@ -350,7 +350,7 @@ export function applyDriverPacksToState(state, condition, ctx = {}) {
   }
   const stateWritten = [];
   return runPacks(condition, ctx, {
-    label: 'applyDriverPacksToState',
+    label: 'applyDriverPacksToState', rulings: GATE_RULINGS,   // ⭐⭐ CONVERGENCE RULINGS ONLY — the LAB does NOT take the development gates, and that asymmetry is the whole point (see GAME_GATE_RULINGS at EOF). It is also why this is not simply ALL_ON: `terminator` is a CONVERGENCE ruling and the lab must keep honouring it.
     stateWritten,
     write: (entry, result) => {
       if (typeof entry.labState !== 'function') {
@@ -401,7 +401,7 @@ function runPacks(condition, ctx, sink) {
 
   for (const entry of PACKS) {
     if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }
-    const entryGates = gatesFor(entry);
+    const entryGates = gatesFor(entry, GATE_POLICY_RULED, sink.rulings ?? GATE_RULINGS);   // ⛔ PER SINK, NOT A CONSTANT: the game and the lab answer the same gate names differently ON PURPOSE (development gates), and this is the ONE line where they part company.
     const packCtx = { ...ctx, gates: entryGates };
     const result = assertPackResult(entry.pack(condition, packCtx), entry.name);
 
@@ -472,4 +472,48 @@ export const GATE_POLICY_RULED = 'ruled';
  * constant through `buildDefaultDressing` (planet-feature-associations.js) and through its state
  * literal (world-engine-lab.html:1053). Three producers, one declared value.
  */
-export const GATE_RULINGS = Object.freeze({ terminator: TERMINATOR_ENABLED });
+export const GATE_RULINGS = Object.freeze({ terminator: TERMINATOR_ENABLED,   // ⛔ THE EXPORT STAYS ON THIS LINE — it is cited as index.js:475; the map grows downward instead.
+  // ⭐⭐ NO LONGER ONE ENTRY. Max, 2026-09-04: *"We need to turn off the world engine features that
+  // have not yet been developed/worked into the pipeline … and then we'll flip them on once
+  // developed. Part of the point of wiring these up is I want to be able to continue developing the
+  // features in the lab then seamlessly be able to switch them on in game when ready."*
+  //
+  // His bar: **grown from the engine, not painted on** — ON in the game only if the feature reads the
+  // bake's accumulated landforms, not just the province mask. Eight of solidRelief's eleven fail it.
+  //
+  // ⛔ SPREAD FROM THE PACK'S OWN REGISTRY, NEVER RETYPED HERE. Each row's state, its reason and its
+  // exit condition live beside the pack that emits the uniform (solidRelief.js `SOLID_RELIEF_GAME_GATES`),
+  // exactly as `terminator` lives beside solidOptics — one declared value per feature, and this map is
+  // only how the game's writer reaches them. Restating the booleans here would be a second list to
+  // disagree with, which is the one-name-two-meanings shape this codebase keeps paying for.
+  //
+  // ⚠ `gatesFor` answers `rulings[g] ?? true`, so a gate NOT named here is still ON — the default is
+  // unchanged and no other pack's behaviour moves. A `false` here makes `resolveDriver` return 0 at
+  // writePackUniforms.js:186, which is what "off" means: the uniform is still published, at zero.
+});
+
+/**
+ * ⭐⭐ THE GAME'S GATE MAP — the convergence rulings ABOVE, plus the DEVELOPMENT GATES the lab does
+ * not take. `applyDriverPacks` reads this; `applyDriverPacksToState` reads `GATE_RULINGS`.
+ *
+ * ⛔⛔ THE TWO KINDS OF RULING ARE DIFFERENT AND CONFLATING THEM BREAKS ONE OF THEM.
+ *
+ *   CONVERGENCE  (`GATE_RULINGS`, both front-ends) — the feature is WRONG EVERYWHERE and both sides
+ *                must stop drawing it. `terminator` is the only one: Max 2026-07-16, *"disable
+ *                terminator gradient totally; it doesn't work"*. Turning it back on in the lab would
+ *                reverse a ruling he made.
+ *   DEVELOPMENT  (here, GAME only) — the feature is FINE in the lab and NOT READY for the game. The
+ *                lab must keep drawing it, because the lab is where it is being developed. Max
+ *                2026-09-04: *"I want to be able to continue developing the features in the lab then
+ *                seamlessly be able to switch them on in game when ready."*
+ *
+ * A single map cannot express both: flipping the lab composer to ALL_ON to protect development would
+ * resurrect the terminator, and leaving it RULED (which is what the first cut of this did) silences
+ * the lab — measured, as eight names vanishing from `LEDGER.labVarying` in material-parity-list.
+ *
+ * ⚠ THIS IS THE CODEBASE'S ONE SANCTIONED LAB/GAME DIVERGENCE, and per `converge-dont-declare-divergence`
+ * every row in it is DEBT with a named exit, never a steady state. The exits live with the pack:
+ * `solidRelief.js` `SOLID_RELIEF_GAME_GATES`, one `waitingFor` per row, enforced by
+ * tests/world-engine-feature-gates.test.js.
+ */
+export const GAME_GATE_RULINGS = Object.freeze({ ...GATE_RULINGS, ...SOLID_RELIEF_RULINGS });
