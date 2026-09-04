@@ -6190,6 +6190,7 @@ function formatSettingValue(key, value) {
     return `${sign}${mag}×${tag}`;
   }
   if (key === 'zoomSensitivity') return `${value.toFixed(1)}x`;
+  if (key === 'pixelScale') { const w = Math.ceil(window.innerWidth / value), h = Math.ceil(window.innerHeight / value); return `${value}x - ${w}x${h}${h >= 216 && h <= 264 ? ' - 240p' : (h >= 432 && h <= 528 ? ' - 480p' : '')}`; }  if (key === 'posterizeLevels') { const vals = value + 1, bits = Math.log2(vals); return `${value} - ${vals} vals/ch - ${Number.isInteger(bits) ? `${bits}-bit` : `~${bits.toFixed(1)}-bit`}${value === 31 ? ' - RGB555' : ''}`; }   // ⭐ THE ERA BAR, MADE READABLE AT THE SLIDER. Both of these knobs are judged BY EYE against a sourced target (Max 2026-08-21: RGB555 = 5 bits = 32 values = levels 31; and 240p, the mode the PSX, N64 and Saturn all shipped in) and a bare "3" or "31" says nothing about where you are against it. pixelScale is a DIVISOR, so its era-accuracy depends on the WINDOW — 3 is 480p on a 1440-tall window and something else on any other — which is exactly why the resulting w×h is printed rather than the divisor alone. ⛔ BOTH RIDE THIS LINE: main.js carries ~700 line-anchored citations and a new line shifts every one below it.
   if (key === 'starDensity') return `${Math.round(value / 1000)}k`;
   if (key === 'masterVolume' || key === 'musicVolume' || key === 'sfxVolume')
     return `${Math.round(value * 100)}%`;

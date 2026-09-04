@@ -99,8 +99,18 @@
         <div class="settings-section">
           <h3>VISUAL</h3>
           <div class="settings-grid">
+            <!-- max was 5, which could not REACH the era target: pixelScale is a divisor, so 240p
+                 (the mode the PSX, N64 and Saturn all shipped in) needs 6 on a 1440-tall window and
+                 more on a taller one. 8 covers 240p from 1080 up to 2160. -->
             <label>Pixel Scale</label>
-            <input type="range" data-setting="pixelScale" min="1" max="5" step="1">
+            <input type="range" data-setting="pixelScale" min="1" max="8" step="1">
+            <span class="setting-value"></span>
+            <!-- Color Depth had NO control at all, though the setting, its clamp and its live DOM
+                 handler have all shipped since 2026-08-21 — so the one knob carrying Max's RGB555
+                 ruling was the one knob he could not turn. Bounds are the shipped clamp verbatim
+                 (POSTERIZE_LEVELS_MIN/MAX, src/rendering/posterizeLevels.js). -->
+            <label>Color Depth</label>
+            <input type="range" data-setting="posterizeLevels" min="2" max="64" step="1">
             <span class="setting-value"></span>
             <label>Star Density</label>
             <input type="range" data-setting="starDensity" min="2000" max="10000" step="1000">
