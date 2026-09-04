@@ -2,7 +2,7 @@
   "workstream": "derived-world-class",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verifying",
+  "status": "shipped",
   "summary": "Split PlanetGenerator's `type` into its two jobs: it stays the FORMATION SEED (it legitimately decides radius, mass, atmosphere, moon count, palette) and a new derived `worldClass`, computed from the finished body's condition vector, becomes what every descriptive surface reads \u2014 the info panel, the orrery, and the seed search. Same bug shape as the volatile-delivery split just shipped.",
   "baseline": {
     "measuredOn": "2026-09-04, 200 seeds `rocky-0..199`, 476 solid planets (gas excluded via compositionClass)",
@@ -165,5 +165,16 @@
       "All 858 line-anchored citations into PlanetGenerator \u2014 editing this file drifts every one of them (trap #16). Repair by locating the SYMBOL, never by bumping the integer; some refs use the short `:539 `symbol`` form a naive File.js:NNN search misses."
     ]
   },
-  "verifiedAt": "23453f4 (+ cockpit TYPE row, this commit)"
+  "verifiedAt": "23453f4 (+ cockpit TYPE row, this commit)",
+  "shipped": {
+    "commit": "6d7f427",
+    "uat": "Max, 2026-09-04: \"1 works\" \u2014 asked to click rocky-126's second planet (it reads TERRESTRIAL where it read Ice World) and to run the Habitable Planet search.",
+    "followUp": [
+      "AC-5 (orrery dots) was NOT closed and is NOT a defect of this change: the orrery renders a different planet list than the scene (it drew Sol while the scene was rocky-126). Max ruled 2026-09-04 it gets its own session (\"2. yes\").",
+      "The cockpit TYPE row is wired but was never seen populated \u2014 the survey rows render blank for an unscanned target. Unit-covered only.",
+      "The derived `carbon` branch is written but fires on nothing: C/O tops out at 0.769 across 200 seeds while the roll labels 126 bodies carbon. Unproven code.",
+      "A second one-name-two-meanings pair found and deliberately not fixed: compositionClass cuts carbon at C/O > 1.0, deriveComposition at 0.8.",
+      "Moons still name themselves by their formation roll (MoonGenerator._pickType) \u2014 out of scope this pass."
+    ]
+  }
 }
