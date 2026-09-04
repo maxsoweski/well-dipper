@@ -86,6 +86,8 @@ function plainVec3(v) {
  * @param {{focusIndex:number, focusMoonIndex:number, focusStarIndex:number}} focus
  * @returns {{kind:string, name:string, data:object, physics:object|null}|null}
  */
+import { displayClassOf } from '../generation/worldClass.js';
+
 export function resolveFocusedBody(system, focus = {}) {
   if (!system) return null;
   // Deep sky has no star/planets to read a dossier from — the same early return
@@ -268,7 +270,7 @@ export function buildCockpitSnapshot(sources = {}) {
     survey: {
       kind: body?.kind ?? null,
       name: body?.name ?? null,
-      type: bodyData?.type ?? null,
+      type: bodyData ? displayClassOf(bodyData) : null,   // ⭐ THE DERIVED CLASS, not the formation roll — in HELM this row IS "the panel" Max reads while flying, and `type` names what the generator set out to make rather than what it made. Falls back to `type` for stars/moons/hand-authored bodies.
       tEq: typeof bodyData?.T_eq === 'number' ? bodyData.T_eq : null,
       composition: plainCopy(physics?.composition ?? null),
       atmosphere: plainCopy(physics?.atmosphere ?? null),

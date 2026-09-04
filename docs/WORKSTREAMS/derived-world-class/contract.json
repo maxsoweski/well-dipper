@@ -2,7 +2,7 @@
   "workstream": "derived-world-class",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verifying",
   "summary": "Split PlanetGenerator's `type` into its two jobs: it stays the FORMATION SEED (it legitimately decides radius, mass, atmosphere, moon count, palette) and a new derived `worldClass`, computed from the finished body's condition vector, becomes what every descriptive surface reads \u2014 the info panel, the orrery, and the seed search. Same bug shape as the volatile-delivery split just shipped.",
   "baseline": {
     "measuredOn": "2026-09-04, 200 seeds `rocky-0..199`, 476 solid planets (gas excluded via compositionClass)",
@@ -50,7 +50,11 @@
         "input": "Re-run the 200-seed census (census.mjs) over the generator, headless.",
         "observable": "Zero bodies classed `ocean` or `terrestrial` fail the warm-and-wet gates (baseline 7); zero classed `lava` sit below 400 K (baseline 15); zero classed `ice` sit above 273 K (baseline 6). census.mjs exits non-zero while any remain."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "verification": {
+        "verdict": "PASS",
+        "how": "census.mjs, 200 seeds / 476 solid planets, headless. ocean-or-terrestrial-but-not-habitable 7->0; lava below 400 K 15->0; ice above 273 K 6->0. Also asserted in tests/world-class.test.js."
+      }
     },
     {
       "id": "AC-2",
@@ -59,7 +63,11 @@
         "input": "Same 200-seed census.",
         "observable": "All 14 warm-and-wet bodies carry a `worldClass` of `ocean` or `terrestrial` (baseline 3), and no body outside that set does (baseline 7 false positives)."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "verification": {
+        "verdict": "PASS",
+        "how": "Same census. All 14 warm-wet worlds now carry ocean/terrestrial (was 3); zero false positives (was 7)."
+      }
     },
     {
       "id": "AC-3",
@@ -68,7 +76,11 @@
         "input": "Regenerate the same 200 seeds and diff every generated field except the new one; run the draw-stream instrument (Instrument B).",
         "observable": "Byte-identical radius, mass, moon count, rings, palette and atmosphere on all 476 bodies, and ZERO seeds move their per-yield draw profile. `worldClass` is the only added key. (Trap #15: a fresh `new SeededRandom(...)` moves the draw stream with no values moved \u2014 use `namespacedFloat` if any draw is needed at all; the intent is that none is.)"
       },
-      "layer": "unit"
+      "layer": "unit",
+      "verification": {
+        "verdict": "PASS",
+        "how": "additive-check.mjs: with worldClass stripped, all 1577 body records hash identical to HEAD (4b68e420...). LIVENESS CONTROL: with the strip disabled the hash moves (c9e53ed8...), so the equality is the strip's doing, not the script's blindness. Instrument B's DRAW STREAM channel stayed GREEN while value+shape went red - the signature body-identity-fence.test.js documents as proof an addition was additive. Baseline re-blessed on that basis."
+      }
     },
     {
       "id": "AC-4",
@@ -78,7 +90,11 @@
         "observable": "The info panel's type line reads Ocean World or Terrestrial, not Rocky World / Ice World / Carbon World."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "verification": {
+        "verdict": "PASS",
+        "how": "Live, hard-reloaded. rocky-126 planet 1 - the exact world Max UAT'd - reads TERRESTRIAL where it read Ice World. Also rocky->VENUSIAN, carbon->ICE WORLD. See LIVE-CHECK.md."
+      }
     },
     {
       "id": "AC-5",
@@ -88,7 +104,11 @@
         "observable": "The habitable world's dot is drawn in the ocean/terrestrial colour (blue/green), distinguishable from the rocky and ice dots around it. Both planetColors sites in NavComputer read the derived class."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "verification": {
+        "verdict": "NOT CLOSED",
+        "how": "The lookup is wired and verified three ways (source, in-page displayClassOf on live records, and ~300 instrumented frames showing class colours filled). But a KNOWN habitable world was never seen drawn green, because the orrery's planet list does not match the scene's - it drew Sol while the scene was rocky-126. That divergence is about WHICH SYSTEM the orrery renders and predates this change. Needs its own session; see LIVE-CHECK.md."
+      }
     },
     {
       "id": "AC-6",
@@ -98,7 +118,11 @@
         "observable": "Every system it returns contains at least one body that passes the warm-and-wet gates; today the filter reads the formation roll and returns systems whose only 'ocean' is hot and dry."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "verification": {
+        "verdict": "PASS",
+        "how": "Live. Clicked the real 'Habitable Planet' button; it warped and returned a world at 268 K surface, volatiles 0.235, 0.90 R-earth - passesWarmWetGates true."
+      }
     },
     {
       "id": "AC-7",
@@ -107,7 +131,11 @@
         "input": "Max flies the live build, looks at several worlds and goes looking for a habitable one.",
         "observable": "Holistic: the names the galaxy gives its worlds cohere with what he finds when he gets there, and finding somewhere worth visiting feels possible rather than random."
       },
-      "layer": "uat"
+      "layer": "uat",
+      "verification": {
+        "verdict": "deferred-to-max",
+        "how": "UAT. No agent closes this."
+      }
     }
   ],
   "architecturalConnections": {
@@ -124,7 +152,8 @@
       "ui/BodyInfo.js:58 \u2014 PLANET_TYPE_NAMES lookup (the info panel type line)",
       "ui/NavComputer.js:2331 and :2978 \u2014 both planetColors tables (the orrery dots)",
       "main.js:8462 \u2014 the 'habitable' case of the seed-search filter, currently `type === 'terrestrial' || type === 'ocean'`",
-      "ui/DebugPanel.js:482 \u2014 the 'Habitable Planet' filter option this drives"
+      "ui/DebugPanel.js:482 \u2014 the 'Habitable Planet' filter option this drives",
+      "cockpit/CockpitSnapshot.js:271 \u2014 the HELM info panel's TYPE row (found live during verification; in HELM this row IS \"the panel\" from Max's success criterion, so it was wired rather than left)"
     ],
     "mustStayWorking": [
       "The formation roll itself \u2014 _pickType stays exactly as it is, including its Kepler occurrence rates. It still chooses radius range, estimateMassEarth, atmosphere strength, cloud/ring chance, max moon count and the legacy palette.",
@@ -135,5 +164,6 @@
       "The exotic-overlay types (fungal, city-lights, ecumenopolis, hex, machine, crystal, shattered) are applied AFTER natural generation and are not physical classes. They must survive the split without being re-derived away.",
       "All 858 line-anchored citations into PlanetGenerator \u2014 editing this file drifts every one of them (trap #16). Repair by locating the SYMBOL, never by bumping the integer; some refs use the short `:539 `symbol`` form a naive File.js:NNN search misses."
     ]
-  }
+  },
+  "verifiedAt": "23453f4 (+ cockpit TYPE row, this commit)"
 }
