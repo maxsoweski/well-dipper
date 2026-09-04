@@ -1,0 +1,153 @@
+{
+  "workstream": "volatile-delivery",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master). ⛔ ~/projects/well-dipper-trunk is master and deploys; untouched by this workstream.",
+  "plan": "docs/FEATURES/planet-lod-CHARTER.md § INTENT FRAME is the governing frame (Max's 2026-09-04 ruling, a7bfe5d). The finding this repairs is docs/WORKSTREAMS/f1-mountains-generation-2026-09-04/REPORT.md + its ADDENDUM. This is a GENERATION workstream, not a wiring one — it is not a row on one-pipeline-two-frontends-PLAN.md's F-spine.",
+  "ruling": "Max 2026-09-04, asked whether the galaxy should contain Earth-like worlds at all having been shown it contains none: 'yes; I want this to be a simulation of the milky way galaxy with a wide variety of physically-plausible worlds'. Recorded in the charter's INTENT FRAME with its new operational test — a generation law is wrong if it makes a whole class of physically-real world unreachable, even when every body it produces is individually defensible.",
+
+  "derivations": {
+    "note": "⭐ Per feedback_physics-first-worldengine-scoping and the charter's INTENT FRAME, these are DECISIONS MADE, not questions pending. Each is derived from the code or from published physics and is stated here so Max can overrule any of them at greenlight rather than be interviewed about them.",
+
+    "D1_two_fields_not_one": "THE FIX IS A FIELD SPLIT, AND THIS IS FORCED, NOT PREFERRED. MoonGenerator.js:265 computes `moon.massEarth = radiusEarth**3 * (composition.density / RHO_EARTH_KGM3)` and PhysicsEngine's density is a harmonic-mean ice/rock VOLUME mixture of `volatileFraction`. Raising Earth's volatileFraction from ≤0.06 to 0.15 as ONE field drops an Earth analogue's bulk density from ~4870 to ~3090 kg/m³ — which (a) re-rolls every moon's mass, and through checkTidalLock every moon's `locked` flag, which the relief dispatch tests FIRST, and (b) pushes Earth analogues under surfaceMaterial.js's DENS_ROCK_LO 3.5 g/cc so they start reading partly ICY. So `deriveComposition` must return TWO fields: `iceFraction` (accreted bulk ice — the existing frost-ratio law, kept verbatim, and the ONLY input to density and to the ice-rock surfaceType test) and `volatileFraction` (surface volatile inventory — the new law).",
+
+    "D2_reconciliation_direction": "THE GENERATOR MOVES TO THE ENGINE'S SCALE, NOT THE REVERSE. The REPORT left this open. It is settled by which side is anchored. The engine's scale is calibrated on SIX real bodies recorded in driver-presets.js — Earth 0.15, Mars 0.10, Venus 0.02, Moon/Mercury 0.02, Titan 0.40, Europa 0.50 — and surfaceMaterial.js:347-367 records a whole re-derivation of the oxidiser window against four of them, INCLUDING an explicitly REFUSED corpus-fitted alternative with the reason written down: 'Fitting the law to our own generator is how a world-generation defect becomes a palette law.' The generator's scale is a piecewise ramp in frostRatio with no reference body on it anywhere. The anchored side wins. ⇒ zero edits under src/worldengine/; the entire change is in src/generation/.",
+
+    "D3_the_law_shape": "SURFACE INVENTORY = (in-situ accreted + delivered) × retained. (i) IN-SITU: the existing frost-ratio term, which is right beyond the frost line and correctly ~0 inside it — this is what keeps Titan and Europa where they are. (ii) DELIVERED: late accretion of volatile-rich planetesimals scattered inward from beyond the frost line; a SYSTEM-level property, weakly dependent on the receiving body's own orbit. Its physical drivers are the system's solid reservoir and its giant-planet architecture, and the giant-planet–metallicity correlation is one of the best-established results in exoplanet science. ⭐ BOTH INPUTS ALREADY EXIST ON `zones`: `metallicity`, and `solidInventory` (StarSystemGenerator.js:467, computed from starMassSolar × formation.solidFraction and marked UNREAD BY DESIGN, plan B3 — this workstream is its reader). (iii) RETAINED: loss governed by T_eq and by escape velocity over age. The five inner-system anchors DERIVE the shape rather than fit it — Mars (0.107 M⊕, 210 K) is wetter than Venus (0.815 M⊕, 737 K), so TEMPERATURE dominates mass in the inner system, which is the runaway-greenhouse / photodissociation loss channel; and Moon/Mercury (~0.03 M⊕) at 0.02 is the Jeans/airless channel. (iv) STOCHASTIC: delivery is a few large impactors, so its variance is large — that variance IS the 'wide variety' Max asked for, and it is what turns a single monotone dial into a distribution.",
+
+    "D4_no_new_rng_draw": "⛔ THE DELIVERY TERM CONSUMES ZERO NEW DRAWS FROM THE SHARED STREAM. PlanetGenerator.js:364 passes `rng.float()` off the shared planet stream; adding a second draw there shifts every downstream value and silently regenerates the entire galaxy. Any stochastic component comes from a namespaced sub-seed keyed on stable identity — the precedent is in the same file (PlanetGenerator.js `eccSeed`, whose comment states the rule) and in MoonGenerator.js:256 (`mooncomp:`).",
+
+    "D5_the_locked_gate_is_OUT_of_scope_and_this_was_MEASURED": "The REPORT's Block B — `if (locked) return shell('eyeball-despun')` sitting ABOVE both roads to plate() and eating 74 % of bodies — is NOT in this workstream, and the reason is a measurement taken during scoping (scope-probe.mjs, 200 seeds): of the 11 bodies that are both in the plate band's mass window AND temperate, **6 are UNLOCKED**. So the volatile fix ALONE opens the plate path; Block B is not a hard cap on it. Moving the locked test is a relief-DISPATCH redesign in a different module and belongs to its own workstream. AC-4 measures how many bodies reach plate() so we learn whether Block B is still binding.",
+
+    "D6_the_rate_is_reported_never_asserted": "Earth analogues will stay RARE — 11 of 1,183 bodies are even in the mass+temperate window, so the ceiling is ~1 per 18 systems before wetness is considered. That is the real occurrence rate and Max's ruling ('a simulation of the milky way galaxy') selects it. ⭐ THE HEADLINE IS NOT EARTH TWINS: it is the 135 TEMPERATE BODIES — 11.4 % of all solid bodies, ~6 per system — going from 100 % bone-dry to a distribution. Those Max meets constantly. No AC asserts a rate; AC-4 asserts REACHABILITY and reports the rate, per the refusal recorded at surfaceMaterial.js:364."
+  },
+
+  "scopingRead": "Measured at a980edc before any edit. 200 seeds → 1,183 solid bodies. temperate ∩ wet = 0 (wettest temperate V=0.0595, warmest wet T=186 K). Through labCore.js:693's own gate, of 135 temperate bodies: 106 (78.5 %) at/under the bone-dry floor, 29 (21.5 %) essentially dry, 0 wet — while 316 (26.7 %) of all solid bodies read wet, every one frozen. mass-band ∩ temperate = 11, all planets, 6 unlocked. plate() reached by 0 of 124 corpus bodies. 23 files / 81 sites read composition.volatileFraction. Probe: docs/WORKSTREAMS/volatile-delivery/scope-probe.mjs.",
+
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "THE SPLIT, AND THE FROST-LINE LAW SURVIVES VERBATIM. `deriveComposition` returns both `iceFraction` (accreted bulk ice) and `volatileFraction` (surface inventory). The existing three-bucket frostRatio ramp becomes iceFraction's law UNCHANGED — same buckets, same coefficients, same clamp — and `density` (the harmonic-mean ice/rock volume mixture) and the `volatileFraction > 0.4 → 'ice-rock'` surfaceType test both read `iceFraction`. The new surface law is a separate expression. ⛔ ZERO edits under src/worldengine/: the engine's scale is the anchored one (derivation D2) and every population move must be caused by the INPUT, not by an engine edit.",
+      "verifyVia": {
+        "input": "Static: diff PhysicsEngine.deriveComposition and assert the three frostRatio buckets (0.01+f*0.05 / 0.05+(r-0.5)*0.4+f*0.1 / 0.25+min(r-1,2)*0.15+f*0.1) and the 0.7 clamp appear verbatim as iceFraction's law; assert `specificVolume` and the surfaceType ice-rock test read iceFraction, not volatileFraction. `git diff --name-only <parent>..HEAD` filtered to src/.",
+        "observable": "The three buckets and the clamp byte-identical; density and surfaceType read iceFraction; `git diff --name-only` names zero files under src/worldengine/ and zero under src/rendering/ or src/objects/."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-1",
+      "statement": "⭐⭐ BULK DENSITY, MOON MASS AND TIDAL LOCK DO NOT MOVE — the load-bearing regression, because MoonGenerator.js:265 derives `moon.massEarth` FROM `composition.density` and checkTidalLock reads that mass, so a density move re-rolls the moon population and its `locked` flags, which writeBodyRelief's dispatch tests FIRST. Over the 200-seed sweep, every body's density, massEarth, radiusEarth, orbit, type, eccentricity, atmosphere and tidalState.locked deep-equals a capture taken at the PARENT commit.",
+      "verifyVia": {
+        "input": "Headless: capture script run at the parent BEFORE any src edit → tests/fixtures/volatile-delivery-parent-population.json (200 seeds, all 1,183 solid bodies + the gas bodies, every scalar named above); re-run at HEAD and deep-compare to 12 decimal places. [CONTROL — vacuity] perturb iceFraction by 0.01 in a scratch build and assert density DOES move on ≥ 1,000 bodies, so a compare that passes because nothing is being read cannot pass this AC (feedback_identical-output-needs-a-liveness-probe).",
+        "observable": "Max delta exactly 0 on all eight fields over every body; the vacuity control moves density on ≥ 1,000 bodies."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-2",
+      "statement": "⛔ NO NEW DRAW ON THE SHARED RNG STREAM. Any stochastic component of the delivery term comes from a namespaced sub-seed keyed on the body's stable identity (the PlanetGenerator `eccSeed` and MoonGenerator `mooncomp:` precedents), never from the passed-in `rng`. Determinism holds: the same seed produces the same galaxy across two runs and across a process restart.",
+      "verifyVia": {
+        "input": "Static: count `rng.float()` / `rng.range()` / `rng.pick()` call sites reachable inside PlanetGenerator.generate and MoonGenerator.generate at parent and at HEAD. Dynamic: AC-1's byte-identity of radius/orbit/type/eccentricity/atmosphere IS the stream-position proof. Plus a same-seed re-run in a fresh process, deep-compared. [CONTROL] assert the new sub-seed is actually seeded — two bodies with different stable identities in the same system draw different delivery values.",
+        "observable": "Draw counts identical at parent and HEAD; AC-1's non-composition fields at delta 0; two fresh-process runs of the same 200 seeds deep-equal; the control shows ≥ 2 distinct delivery draws within a single system."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-3",
+      "statement": "THE LAW REPRODUCES THE SIX REAL BODIES IT IS ANCHORED TO. Fed each real body's own mass, radius, T_eq, orbit and frost line, the new surface law lands inside a bound DERIVED FROM THE GATE THAT BODY MUST SIT ON — never a round number chosen for looks (feedback_match-ac-tolerance-to-artifact-tier). Earth **0.12 ≤ V ≤ 0.20** (must clear e1Regime BAND.V_MIN 0.12; passiveMargins MARGIN_VF0 anchors 1.0 at 0.15). Venus **V ≤ 0.05** (at/under labCore.js:693's bone-dry floor; stagnantLid.js:94 makes Venus the engine's dryness reference at 0.02). Mars **0.05 ≤ V ≤ 0.14** (must clear the bone-dry floor — Mars has ground ice — and surfaceMaterial's OX_VOL_HI SATURATES on Mars at 0.10, so it must reach it and stay under Earth). Moon/Mercury **V ≤ 0.03** (OX_VOL_LO sits ON them at 0.02 and they must read EXACTLY zero oxidiser). Titan and Europa **V ≥ 0.30** — both beyond the frost line, so this arm proves the delivery term did not eat the in-situ law.",
+      "verifyVia": {
+        "input": "Headless: a table driving the new law with each real body's driver-presets.js values (for the two moons, the PARENT's orbit AU, matching MoonGenerator.js:258's `parentAU` argument), asserting each bound. [CONTROL] zero the delivery term and assert Earth FAILS its bound (falls to ≤0.06) while Titan and Europa still PASS — the control that separates the two terms and would catch a delivery term wired to nothing.",
+        "observable": "All six bounds hold; the zeroed-delivery control reds Earth and greens Titan/Europa."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-4",
+      "statement": "⭐⭐ THE UNREACHABLE CLASS BECOMES REACHABLE — the charter's own operational test. Over the same 200-seed sweep: (a) temperate ∩ wet ≥ 1 body, against 0 today; (b) ≥ 1 body reaches `plate()` through writeBodyRelief's dispatch, against 0 of 124 today; (c) the temperate population's volatiles are a DISTRIBUTION — its spread (p95 − min) exceeds the parent's 0.042 — not a cliff; (d) the engine's own gate table (labCore.js:693) shows a non-zero `gate ≥ 0.75` count among temperate bodies, against 0 today. ⛔ THE RATE IS REPORTED, NEVER ASSERTED: no AC pins how many Earth analogues the galaxy has, because fitting a number to our own generator is the move surfaceMaterial.js:364 explicitly refuses.",
+      "verifyVia": {
+        "input": "Headless: re-run docs/WORKSTREAMS/f1-mountains-generation-2026-09-04/tv-sweep.mjs and diagnose.mjs unmodified at HEAD (they are the parent's own instruments, so the compare is a compare of CODE), plus the dispatch census over the 124-body corpus. [CONTROL — the frozen worlds must stay frozen] assert the wet-and-frozen population (316 bodies today) has not collapsed: cold bodies beyond the frost line keep V ≥ 0.25, so 'reachable' was not bought by flattening the distribution.",
+        "observable": "temperate ∩ wet ≥ 1; plate() reached by ≥ 1; temperate spread > 0.042; temperate `gate ≥ 0.75` count > 0; the frozen-worlds control holds. Every one of these four numbers reported next to its parent value in POPULATION.md."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-5",
+      "statement": "⚠ THE BLAST RADIUS IS MEASURED, NOT MINIMISED — it is the point of the workstream, not a risk to contain. POPULATION.md carries a before/after column for every population this field feeds: the fluvial stack (routed / wet / relict / airless), karst, dunes, dust, coastal margins and the shelf-width spread, the plate path, `icenessOf`, and the oxidiser window. Every moved number is accounted for in one sentence. The parent column is captured BEFORE any src edit.",
+      "verifyVia": {
+        "input": "Headless: the parent capture from AC-1 extended to the resolved driver packs over the 124-body corpus (the tests/fixtures/ray-pack-corpus.mjs harness IMPORTED, never copied, and under the same GATE_POLICY_ALL_ON — comparing under a different gate policy would read a policy change as a code change). Re-resolve at HEAD and table the deltas.",
+        "observable": "POPULATION.md with both columns and a one-line account per moved row; the diff confined to src/generation/ (AC-0's arm), so every move is attributable to the input; all four instruments (`npm run check:instruments`) exit 0."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-6",
+      "statement": "⛔ THE FOUR SHIPPED BASELINE FIXTURES ARE RE-CAPTURED DELIBERATELY, ONE AT A TIME, WITH THE DELTA RECORDED. tests/fixtures/pack-drivers-baseline.json, ray-pack-drivers-baseline.json, term-pack-drivers-baseline.json and solidrelief-pack-drivers-baseline.json each pin a SHIPPED workstream's driver values captured from the corpus, and composition moves on every body — so each WILL red. Each is re-captured at this workstream's ship commit with its own before/after delta enumerated in DEVIATIONS.md and its `capturedFrom` advanced. ⛔ No fixture is re-captured silently and none is deleted — the capture script's own header names silent re-capture as the failure mode ('would silently rewrite a shipped suite's expectation inside a workstream whose whole claim is that nothing else moves').",
+      "verifyVia": {
+        "input": "Headless: run each shipped suite at HEAD before re-capture and record which values red and by how much; re-capture; re-run. [CONTROL] a diff-of-diffs — every moved value must trace to a composition field; any value that moved for another reason is a defect, not a re-capture.",
+        "observable": "A per-fixture row in DEVIATIONS.md naming how many values moved and the max delta; every suite green after re-capture; the diff-of-diffs shows zero moves not attributable to composition."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-7",
+      "statement": "A WARM WORLD RENDERS WET IN THE GAME. The build names one seed and body that read as bare desert at the parent and reads wet at HEAD, and the pair is captured live. ⛔ `_lab.freezeFrame()` FIRST — a screenshot pair of a rotating body measures the rotation, which is how a 60.5 %-of-pixels 'delta' got produced and discarded on 2026-09-04.",
+      "verifyVia": {
+        "input": "Live, chrome-devtools: `_lab.spawnProceduralSystem('<seed>')`, frame the named body, `_lab.freezeFrame()`, capture; repeat on a build at the parent commit. [CONTROL ×2] a frozen body beyond the frost line and an airless body must both read ~0 px between the two builds — they are outside the delivery term's reach.",
+        "observable": "A non-trivial pixel delta inside the disc and 0 px outside it; the water-driven uniforms (uSeaLevel / uCoastStrength / uKarstDensity / uDuneDensity) non-zero at HEAD where they were zero at the parent, read back off the live material; both controls at ~0 px."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-8",
+      "statement": "Max's gate, and no agent passes it: flying around, do warm worlds now have water on them — does the galaxy read as 'a wide variety of physically-plausible worlds' rather than hot deserts and cold ice? The build supplies the walk: a named system and body to fly to, and the same body on the parent build for the side-by-side.",
+      "verifyVia": {
+        "input": "Max flies to the named body in the live game, and to the same body on a parent build.",
+        "observable": "Max's word. Holistic acceptance — the workflow never drives or PASSes this; it is always deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+
+  "architecturalConnections": {
+    "inputs": [
+      "zones.metallicity (StarSystemGenerator.js:462) — already passed; the giant-planet–metallicity correlation is the delivery term's system-level driver",
+      "⭐ zones.solidInventory (StarSystemGenerator.js:467) — ALREADY COMPUTED and marked 'UNREAD BY DESIGN (plan B3)'; this workstream is its first reader. The system's solid reservoir is the scatterable material.",
+      "zones.frostLine + orbitRadiusAU — the in-situ accretion term, unchanged",
+      "T_eq (equilibriumTemperature, computed at PlanetGenerator.js:369 and MoonGenerator.js:267) — the loss channel. ⚠ ORDERING: T_eq is computed AFTER deriveComposition at both call sites today; it depends only on luminosity and orbit, so it can be hoisted above the composition call with no stream effect.",
+      "massEarth / radiusEarth — escape velocity, the retention channel. ⚠ ORDERING: estimateMassEarth is a pure mass–radius relation (PhysicsEngine.js:449 comment) and runs BEFORE deriveComposition in PlanetGenerator, so mass is available. ⛔ In MoonGenerator the arrow REVERSES — moon.massEarth is derived FROM composition.density — so the moon path must use the moon's RADIUS (available) and the bulk iceFraction density, never its post-composition mass.",
+      "zones.ageGyr — integrated loss over time",
+      "a namespaced sub-seed keyed on stable identity — the delivery stochasticity (derivation D4)"
+    ],
+    "outputs": [
+      "composition.volatileFraction (surface) → 23 files / 81 sites: e1Regime lidStrength + inSeededBand + regimeWeights, passiveMargins shelfWidthFactor, plates CONTINENTAL_FRACTION, stagnantLid dryness, surfaceMaterial biosphereOf + the oxidiser window, labCore volatileGate/frost/scarpStyle/ejectaRampart/craterRelaxation, surfaceProcesses ldaFat, fluvialDeck liquidStability, atmosphereOptics, shellRelief, giant-drivers, craterUniforms, InfoReadout",
+      "composition.iceFraction (NEW, bulk) → PhysicsEngine density, the ice-rock surfaceType test",
+      "composition.density → ⭐ MoonGenerator.js:265 moon.massEarth → checkTidalLock → tidalState.locked → writeBodyRelief's FIRST dispatch test; and conditionFromBody's g/cc conversion → surfaceMaterial.icenessOf",
+      "the drawn population's fluvial / karst / dune / dust / margin / plate counts — the deliberate blast radius"
+    ],
+    "mustStayWorking": [
+      "⭐⭐ Bulk density byte-identical over the 200-seed sweep — else every moon's mass and locked flag re-rolls (AC-1)",
+      "⛔ The shared RNG stream unmoved — no new draw at either call site, else the whole galaxy regenerates (AC-2)",
+      "The 18 driver presets in driver-presets.js untouched — they are dev fixtures and the engine's real-body anchors; this workstream moves the GENERATOR to them, never them to the generator",
+      "Zero edits under src/worldengine/ — the engine's scale is the anchored side (derivation D2)",
+      "Titan / Europa / the 316 wet-and-frozen bodies stay wet — reachability must not be bought by flattening the distribution (AC-4 control)",
+      "The four shipped baseline fixtures re-captured deliberately with deltas recorded, never silently (AC-6)",
+      "`npm run check:instruments` exit 0 on all four; `npx vitest run --dir tests --root /home/ax/projects/well-dipper`"
+    ]
+  },
+
+  "outOfScope": [
+    "⛔ The REPORT's Block B — moving `if (locked) return shell('eyeball-despun')` below the seeded band in dispatch/bodyRelief.js. Measured out of scope: 6 of the 11 mass-band temperate bodies are UNLOCKED, so the volatile fix alone opens the plate path (derivation D5). It is a relief-dispatch redesign in a different module and gets its own workstream.",
+    "Re-anchoring e1Regime's BAND.V_MIN (the REPORT's fork 1). The band is calibrated to the engine's real-body scale; this workstream moves the generator onto that scale instead, so V_MIN needs no change.",
+    "The solid-relief follow-up's jobs (a)/(b)/(c) — the eleven relief features being painted over the generative model rather than placed by it (FOLLOWUP-not-fully-developed.md). (c) is the same question as the plate path but is a RENDERING job, not a generation one.",
+    "Any change to how wet worlds LOOK. This workstream changes which worlds are wet. The look of rivers, karst, dunes and margins is already shipped and is deferred by Max's 2026-09-02 wiring-first ruling."
+  ]
+}
