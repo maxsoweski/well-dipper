@@ -2,29 +2,20 @@
   "workstream": "volatile-delivery",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "scoping",
+  "status": "verifying",
   "lane": "A — feature/world-engine-production-L1 (~/projects/well-dipper, NOT master). ⛔ ~/projects/well-dipper-trunk is master and deploys; untouched by this workstream.",
   "plan": "docs/FEATURES/planet-lod-CHARTER.md § INTENT FRAME is the governing frame (Max's 2026-09-04 ruling, a7bfe5d). The finding this repairs is docs/WORKSTREAMS/f1-mountains-generation-2026-09-04/REPORT.md + its ADDENDUM. This is a GENERATION workstream, not a wiring one — it is not a row on one-pipeline-two-frontends-PLAN.md's F-spine.",
   "ruling": "Max 2026-09-04, asked whether the galaxy should contain Earth-like worlds at all having been shown it contains none: 'yes; I want this to be a simulation of the milky way galaxy with a wide variety of physically-plausible worlds'. Recorded in the charter's INTENT FRAME with its new operational test — a generation law is wrong if it makes a whole class of physically-real world unreachable, even when every body it produces is individually defensible.",
-
   "derivations": {
     "note": "⭐ Per feedback_physics-first-worldengine-scoping and the charter's INTENT FRAME, these are DECISIONS MADE, not questions pending. Each is derived from the code or from published physics and is stated here so Max can overrule any of them at greenlight rather than be interviewed about them.",
-
     "D1_two_fields_not_one": "THE FIX IS A FIELD SPLIT, AND THIS IS FORCED, NOT PREFERRED. MoonGenerator.js:265 computes `moon.massEarth = radiusEarth**3 * (composition.density / RHO_EARTH_KGM3)` and PhysicsEngine's density is a harmonic-mean ice/rock VOLUME mixture of `volatileFraction`. Raising Earth's volatileFraction from ≤0.06 to 0.15 as ONE field drops an Earth analogue's bulk density from ~4870 to ~3090 kg/m³ — which (a) re-rolls every moon's mass, and through checkTidalLock every moon's `locked` flag, which the relief dispatch tests FIRST, and (b) pushes Earth analogues under surfaceMaterial.js's DENS_ROCK_LO 3.5 g/cc so they start reading partly ICY. So `deriveComposition` must return TWO fields: `iceFraction` (accreted bulk ice — the existing frost-ratio law, kept verbatim, and the ONLY input to density and to the ice-rock surfaceType test) and `volatileFraction` (surface volatile inventory — the new law).",
-
     "D2_reconciliation_direction": "THE GENERATOR MOVES TO THE ENGINE'S SCALE, NOT THE REVERSE. The REPORT left this open. It is settled by which side is anchored. The engine's scale is calibrated on SIX real bodies recorded in driver-presets.js — Earth 0.15, Mars 0.10, Venus 0.02, Moon/Mercury 0.02, Titan 0.40, Europa 0.50 — and surfaceMaterial.js:347-367 records a whole re-derivation of the oxidiser window against four of them, INCLUDING an explicitly REFUSED corpus-fitted alternative with the reason written down: 'Fitting the law to our own generator is how a world-generation defect becomes a palette law.' The generator's scale is a piecewise ramp in frostRatio with no reference body on it anywhere. The anchored side wins. ⇒ zero edits under src/worldengine/; the entire change is in src/generation/.",
-
     "D3_the_law_shape": "SURFACE INVENTORY = (in-situ accreted + delivered) × retained. (i) IN-SITU: the existing frost-ratio term, which is right beyond the frost line and correctly ~0 inside it — this is what keeps Titan and Europa where they are. (ii) DELIVERED: late accretion of volatile-rich planetesimals scattered inward from beyond the frost line; a SYSTEM-level property, weakly dependent on the receiving body's own orbit. Its physical drivers are the system's solid reservoir and its giant-planet architecture, and the giant-planet–metallicity correlation is one of the best-established results in exoplanet science. ⭐ BOTH INPUTS ALREADY EXIST ON `zones`: `metallicity`, and `solidInventory` (StarSystemGenerator.js:467, computed from starMassSolar × formation.solidFraction and marked UNREAD BY DESIGN, plan B3 — this workstream is its reader). (iii) RETAINED: loss governed by T_eq and by escape velocity over age. The five inner-system anchors DERIVE the shape rather than fit it — Mars (0.107 M⊕, 210 K) is wetter than Venus (0.815 M⊕, 737 K), so TEMPERATURE dominates mass in the inner system, which is the runaway-greenhouse / photodissociation loss channel; and Moon/Mercury (~0.03 M⊕) at 0.02 is the Jeans/airless channel. (iv) STOCHASTIC: delivery is a few large impactors, so its variance is large — that variance IS the 'wide variety' Max asked for, and it is what turns a single monotone dial into a distribution.",
-
     "D4_no_new_rng_draw": "⛔ THE DELIVERY TERM CONSUMES ZERO NEW DRAWS FROM THE SHARED STREAM. PlanetGenerator.js:364 passes `rng.float()` off the shared planet stream; adding a second draw there shifts every downstream value and silently regenerates the entire galaxy. Any stochastic component comes from a namespaced sub-seed keyed on stable identity — the precedent is in the same file (PlanetGenerator.js `eccSeed`, whose comment states the rule) and in MoonGenerator.js:256 (`mooncomp:`).",
-
     "D5_the_locked_gate_is_OUT_of_scope_and_this_was_MEASURED": "The REPORT's Block B — `if (locked) return shell('eyeball-despun')` sitting ABOVE both roads to plate() and eating 74 % of bodies — is NOT in this workstream, and the reason is a measurement taken during scoping (scope-probe.mjs, 200 seeds): of the 11 bodies that are both in the plate band's mass window AND temperate, **6 are UNLOCKED**. So the volatile fix ALONE opens the plate path; Block B is not a hard cap on it. Moving the locked test is a relief-DISPATCH redesign in a different module and belongs to its own workstream. AC-4 measures how many bodies reach plate() so we learn whether Block B is still binding.",
-
     "D6_the_rate_is_reported_never_asserted": "Earth analogues will stay RARE — 11 of 1,183 bodies are even in the mass+temperate window, so the ceiling is ~1 per 18 systems before wetness is considered. That is the real occurrence rate and Max's ruling ('a simulation of the milky way galaxy') selects it. ⭐ THE HEADLINE IS NOT EARTH TWINS: it is the 135 TEMPERATE BODIES — 11.4 % of all solid bodies, ~6 per system — going from 100 % bone-dry to a distribution. Those Max meets constantly. No AC asserts a rate; AC-4 asserts REACHABILITY and reports the rate, per the refusal recorded at surfaceMaterial.js:364."
   },
-
   "scopingRead": "Measured at a980edc before any edit. 200 seeds → 1,183 solid bodies. temperate ∩ wet = 0 (wettest temperate V=0.0595, warmest wet T=186 K). Through labCore.js:693's own gate, of 135 temperate bodies: 106 (78.5 %) at/under the bone-dry floor, 29 (21.5 %) essentially dry, 0 wet — while 316 (26.7 %) of all solid bodies read wet, every one frozen. mass-band ∩ temperate = 11, all planets, 6 unlocked. plate() reached by 0 of 124 corpus bodies. 23 files / 81 sites read composition.volatileFraction. Probe: docs/WORKSTREAMS/volatile-delivery/scope-probe.mjs.",
-
   "acceptanceCriteria": [
     {
       "id": "AC-0",
@@ -116,7 +107,6 @@
       "layer": "uat"
     }
   ],
-
   "architecturalConnections": {
     "inputs": [
       "zones.metallicity (StarSystemGenerator.js:462) — already passed; the giant-planet–metallicity correlation is the delivery term's system-level driver",
@@ -143,11 +133,25 @@
       "`npm run check:instruments` exit 0 on all four; `npx vitest run --dir tests --root /home/ax/projects/well-dipper`"
     ]
   },
-
   "outOfScope": [
     "⛔ The REPORT's Block B — moving `if (locked) return shell('eyeball-despun')` below the seeded band in dispatch/bodyRelief.js. Measured out of scope: 6 of the 11 mass-band temperate bodies are UNLOCKED, so the volatile fix alone opens the plate path (derivation D5). It is a relief-dispatch redesign in a different module and gets its own workstream.",
     "Re-anchoring e1Regime's BAND.V_MIN (the REPORT's fork 1). The band is calibrated to the engine's real-body scale; this workstream moves the generator onto that scale instead, so V_MIN needs no change.",
     "The solid-relief follow-up's jobs (a)/(b)/(c) — the eleven relief features being painted over the generative model rather than placed by it (FOLLOWUP-not-fully-developed.md). (c) is the same question as the plate path but is a RENDERING job, not a generation one.",
     "Any change to how wet worlds LOOK. This workstream changes which worlds are wet. The look of rivers, karst, dunes and margins is already shipped and is deferred by Max's 2026-09-02 wiring-first ruling."
-  ]
+  ],
+  "verification": {
+    "at": "2026-09-04",
+    "commit": "7484842",
+    "instruments": "All four green (A per-test-ID, B body-identity, C shipped-uniform delta ZERO + all 858 citations resolve). tests/volatile-delivery.test.js 17/17. In the full tests/ suite the only remaining reds are ones already red at the parent.",
+    "AC-0": "PASS — the three frostRatio buckets and the 0.7 clamp survive verbatim as iceFraction; density and the ice-rock surfaceType test read iceFraction; the diff names zero files under src/worldengine/.",
+    "AC-1": "PASS — all eight structural fields byte-identical on all 1,577 bodies over 200 seeds. Vacuity control: perturbing iceFraction moves density.",
+    "AC-2": "PASS — no new draw on the shared stream; Instrument B DRAW STREAM green. The first cut used a fresh SeededRandom and moved the profile on 212 of 221 seeds with zero values moved; switched to namespacedFloat.",
+    "AC-3": "PASS — Earth 0.1500 · Venus 0.0200 · Mars 0.1082 · Moon/Mercury 0.0200 · Titan 0.4400 · Europa 0.3100, each inside a bound derived from the gate it must sit on. Two-term control behaves.",
+    "AC-4": "PASS — temperate AND wet 0 -> 14; plate band 0 -> 5; plate() 0 of 124 -> 4 of 124; temperate spread 0.0478 -> 0.309; engine-gate temperate wet 0 -> 10. Frozen-worlds control holds (238 -> 295). Rate reported, never asserted.",
+    "AC-5": "PASS — 919 of 12,481 resolved driver values moved (7.4 %); attribution control residual 0; diff confined to src/generation/. POPULATION.md.",
+    "AC-6": "PASS — four fixtures re-captured values-only, 792 body values each, ZERO preset values in any. DEVIATIONS.md.",
+    "AC-7": "PASS — live on rocky-126 planet 2: solved sea 0.0982, liquid mask 0.6191 bit-identical to the headless prediction, coast/delta/strand all live; the dry control one planet in is unchanged. LIVE-CHECK.md. WARNING: freezeFrame timed out, so the images are single frames rather than an ON/OFF pixel pair; the numeric arm carries the claim.",
+    "AC-8": "deferred-to-max — the UAT gate. No agent passes it.",
+    "note": "The verify-workstream workflow was NOT run: this session operates under an instruction not to launch workflows unless asked. Verification above was driven by hand, with a control on every arm."
+  }
 }
