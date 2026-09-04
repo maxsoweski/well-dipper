@@ -97,6 +97,20 @@ theories/speculation about what else is out there in the universe." Operationall
 - Max's gates: greenlight + UAT. Everything between is physics + verification.
 Full rule + provenance: `feedback_physics-first-worldengine-scoping.md` (Claude memory, Rule 12 link).
 
+⭐⭐ **THE INTENT, RESTATED AND WIDENED BY MAX 2026-09-04** — asked whether the galaxy should contain
+Earth-like worlds at all, given the measurement that it currently contains none:
+
+> **"yes; I want this to be a simulation of the milky way galaxy with a wide variety of
+> physically-plausible worlds"**
+
+This is the 2026-07-19 frame with the emphasis moved from *fidelity per feature* to **variety across
+the drawn population**. Operationally it adds one test to the ones above: **a generation law is wrong
+if it makes a whole class of physically-real world unreachable**, even when every individual body it
+produces is defensible. The finding that forced it — `WORKSTREAMS/f1-mountains-generation-2026-09-04/`
+— is that volatiles are a pure function of orbital distance while temperature is a function of the
+same variable inverted, so *temperate ⇒ dry* holds by construction and **not one of 1,183 generated
+bodies is both temperate and wet**. Bimodal galaxy: hot deserts and cold ice, nothing between.
+
 ## The program (where the arc is going)
 1. **Catalog — ✅ DONE (2026-06-14).** All 47 manifest features re-based on the canonical
    D1–D16 model; `planet-feature-associations.js` declares `processes:[P#]` and DERIVES
