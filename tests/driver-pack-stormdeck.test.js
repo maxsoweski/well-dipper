@@ -58,7 +58,7 @@ const PACK_FIXTURE = JSON.parse(src('tests/fixtures/pack-drivers-baseline.json')
 
 const MESH = { positions: fibonacciSphere(MESH_N, 1.0), count: MESH_N, radius: 1.0 };
 const ALL_ON = () => ({ [GREAT_SPOT_GATE]: true, [STORM_TRAIN_GATE]: true });
-const F3_RAY_NAMES = ['uRayBrightness', 'uRayCount', 'uRaySharp'];   // ⭐ 2026-09-03 (workstream wire-ejecta-rays-lab-into-game, AC-0) — the three names the crater driver block gained AFTER this file's fixture was captured at 520f2c0. ⛔ RIDES THESE LINES: this file is cited by line and a new declaration row would shift every ref below it.
+const F3_RAY_NAMES = ['uRayBrightness', 'uRayCount', 'uRaySharp', 'uFrostLatChill'];   // ⭐ uFrostLatChill JOINS THE DECLARED-STRIP LIST (2026-09-05, workstream frost-budget) for exactly the reason the ray names are on it: the compare below is `toEqual` over a WHOLE PACK OBJECT, so any name added to a pack reds it regardless of value, and a parent capture carries no such name either. It stopped being a lab knob and is now driven per body from atmospheric pressure; its own compare is tests/driver-pack-solidfeatures.test.js.   // ⭐ 2026-09-03 (workstream wire-ejecta-rays-lab-into-game, AC-0) — the three names the crater driver block gained AFTER this file's fixture was captured at 520f2c0. ⛔ RIDES THESE LINES: this file is cited by line and a new declaration row would shift every ref below it.
 const noRays = (pk) => { if (!pk || !pk.drivers) return pk; const d = { ...pk.drivers }; for (const n of F3_RAY_NAMES) delete d[n]; return { ...pk, drivers: d }; };   // ⚠ THE COMPARE IS `toEqual` OVER A WHOLE PACK OBJECT, so ANY name added to a pack reds it regardless of value — re-capturing the fixture would not help (a parent capture has no ray names either) and would move this suite's :149 commit pin. So the three DECLARED names are removed from the HEAD side and every other name still compares byte-for-byte. Their own compare is tests/driver-pack-ejectarays.test.js against a fixture captured at dc03fc6.
 const fnv = (arr) => { const b = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength); let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193) >>> 0; } return h; };
 
@@ -162,7 +162,16 @@ describe('AC-1 — the pack contract learns exactly ONE new value shape and noth
     // attribution control (restore that ONE field and all 12,481 resolved values return to
     // byte-identity) are recorded in docs/WORKSTREAMS/volatile-delivery/DEVIATIONS.md.
     // WAS '520f2c0' (the shipped capture).
-    expect(PACK_FIXTURE.capturedFrom).toBe('36ffec2');
+
+    // ⭐ THE PROVENANCE PIN MOVED, DELIBERATELY AND ONCE — workstream frost-budget, 2026-09-05.
+    // The fixture was NOT regenerated: `frostMaxCoverage` gained its missing temperature term, so the
+    // frost budget moves on WARM bodies (it was MEASURED identical from 100 K to 1200 K at the same
+    // volatileFraction). Values were patched in place while structure, pack scope and key set stayed
+    // byte-identical. 40 body values moved (20 uFrostMaxCoverage + the 20 uPldStrength that follow it)
+    // and 4 PRESET values did — `Ocean (temperate)` and `Rocky (Earthlike)`, both DECLARED by name in
+    // docs/WORKSTREAMS/frost-budget/recapture-fixtures.mjs, which REFUSES to write if any other moves.
+    // WAS '36ffec2'.
+    expect(PACK_FIXTURE.capturedFrom).toBe('aad21bb');
     let compared = 0;
     for (const b of CORPUS) {
       const now = resolvedPacks(b.cond, labPackCtx(b.d, b.cond, MESH));

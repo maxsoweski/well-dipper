@@ -465,7 +465,16 @@ describe('AC-3 — every pre-existing driver of every pack is byte-inert', () =>
     // attribution control (restore that ONE field and all 12,481 resolved values return to
     // byte-identity) are recorded in docs/WORKSTREAMS/volatile-delivery/DEVIATIONS.md.
     // WAS 'dc03fc6' (the shipped capture).
-    expect(PACK_FIXTURE.capturedFrom).toBe('36ffec2');
+
+    // ⭐ THE PROVENANCE PIN MOVED, DELIBERATELY AND ONCE — workstream frost-budget, 2026-09-05.
+    // The fixture was NOT regenerated: `frostMaxCoverage` gained its missing temperature term, so the
+    // frost budget moves on WARM bodies (it was MEASURED identical from 100 K to 1200 K at the same
+    // volatileFraction). Values were patched in place while structure, pack scope and key set stayed
+    // byte-identical. 40 body values moved (20 uFrostMaxCoverage + the 20 uPldStrength that follow it)
+    // and 4 PRESET values did — `Ocean (temperate)` and `Rocky (Earthlike)`, both DECLARED by name in
+    // docs/WORKSTREAMS/frost-budget/recapture-fixtures.mjs, which REFUSES to write if any other moves.
+    // WAS '36ffec2'.
+    expect(PACK_FIXTURE.capturedFrom).toBe('aad21bb');
     let cells = 0; const differ = []; const added = new Set();
     for (const b of CORPUS) {
       const was = PACK_FIXTURE.bodies[b.id];
@@ -503,7 +512,8 @@ describe('AC-3 — every pre-existing driver of every pack is byte-inert', () =>
     expect([...added].sort()).toEqual([
       'craterDeck.uRayBrightness', 'craterDeck.uRayCount', 'craterDeck.uRaySharp',
       'rockySurface.uRayBrightness', 'rockySurface.uRayCount', 'rockySurface.uRaySharp',
-    ]);
+      'solidFeatures.uFrostLatChill',   // ⭐ ONE DECLARED ADDITION (2026-09-05, workstream frost-budget): uFrostLatChill stopped being a lab knob (shaders/uniforms.js:268 said so outright) and is now DRIVEN per body from atmospheric pressure. Subtracted BY NAME rather than the assertion being loosened — an UNDECLARED new driver still reds, which is the whole point of this gate.
+    ].sort());
     // [CONTROL — non-empty] the compare is not a claim about the empty set
     expect(cells).toBeGreaterThan(8000);
     expect(cells).toBe(9970);   // RECORDED: 8,957 body cells + 1,013 preset cells, counted off the dc03fc6 fixture

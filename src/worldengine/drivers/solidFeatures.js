@@ -185,6 +185,13 @@ export function solidFeaturesPack(condition, ctx) {
     // — handing out a live array is how one body's frost tint follows another's.
     uFrostAlbedo: u.frostAlbedo.slice(),
     uPlanetTempEq: u.tempEq,
+    // ⭐ EX-LAB-KNOB, DRIVEN FROM THIS COMMIT. uFrostLatChill was a flat 0.35 for every body in the
+    // galaxy (shaders/uniforms.js:268 said "lab knob" outright); it is now the pole-to-equator
+    // gradient derived from atmospheric pressure in labCore. ⛔ UNGATED, deliberately, and for the
+    // same reason uSeaLevel is (fluvialDeck.js:41): it is not an AMOUNT, it is the shape of the
+    // temperature field, and a gated-off value of 0 would mean an ISOTHERMAL world — frost
+    // everywhere or nowhere — which is a louder wrong answer than the factory default.
+    uFrostLatChill: u.frostLatChill,
     uFrostLocked: u.frostLocked,
 
     // ── F22 polar-layered deposits (1) ─────────────────────────────────────────────────────────
@@ -259,7 +266,7 @@ export const SOLID_FEATURES_UNIFORMS = Object.freeze([
   'uVolcanismStrength', 'uEdificeMaxHeight', 'uShieldStratoMix',
   'uCryoActivity', 'uChaosRaftJitter',
   'uFrostMaxCoverage', 'uFrostCondensationT', 'uFrostLatitudeBias', 'uFrostAlbedo',
-  'uPlanetTempEq', 'uFrostLocked',
+  'uPlanetTempEq', 'uFrostLocked', 'uFrostLatChill',
   'uPldStrength',
   'uGlacialStrength', 'uGlacialFlowVigor',
 ]);
@@ -276,7 +283,7 @@ export const SOLID_FEATURES_UNIFORMS = Object.freeze([
  * out of its own loop, which is the lab's entire reason to exist. So the pack result is mirrored
  * into `state` and the lab's frame loop keeps writing the uniforms exactly as it always has.
  *
- * ⚠ ALL FOURTEEN MIRROR, so `solidFeaturesDirectDrivers` returns `{}`. That is a RESULT, not a gap —
+ * ⚠ ALL FIFTEEN MIRROR (fourteen until uFrostLatChill stopped being a lab knob), so `solidFeaturesDirectDrivers` returns `{}`. That is a RESULT, not a gap —
  * this pack emits nothing the lab's frame loop does not already own — and the suite asserts the
  * emptiness so the day it stops being empty is loud instead of silent.
  */
@@ -290,7 +297,7 @@ export const SOLID_FEATURES_LAB_BINDING = Object.freeze({
   uFrostCondensationT: 'frostCondensationT',
   uFrostLatitudeBias: 'frostLatitudeBias',
   uFrostAlbedo: 'frostAlbedo',
-  uPlanetTempEq: 'tempEq',
+  uPlanetTempEq: 'tempEq', uFrostLatChill: 'frostLatChill',
   uFrostLocked: 'frostLocked',
   uPldStrength: 'pldStrength',
   uGlacialStrength: 'glacialStrength',

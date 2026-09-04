@@ -193,6 +193,7 @@ describe('C — every driver is a forward of labCore, not a second law', () => {
       uChaosRaftJitter: 'chaosRaftJitter', uFrostMaxCoverage: 'frostMaxCoverage',
       uFrostCondensationT: 'frostCondensationT', uFrostLatitudeBias: 'frostLatitudeBias',
       uFrostAlbedo: 'frostAlbedo', uPlanetTempEq: 'tempEq', uFrostLocked: 'frostLocked',
+      uFrostLatChill: 'frostLatChill',
       uPldStrength: 'pldStrength', uGlacialStrength: 'glacialStrength',
       uGlacialFlowVigor: 'glacialFlowVigor',
     };
@@ -276,7 +277,13 @@ describe('D — the wire reaches a real lab material and the bodies stop being i
     // ⛔ THE THREE THAT ARE FLAT ON MOONS AND WHY — asserted so the leg report's caption cannot
     // drift from the code. `condition.habitability` is undefined on every plain moon;
     // every plain moon reads tidally locked; a plain-moon record carries no tilt key at all.
-    const FLAT_ON_MOONS = ['uShieldStratoMix', 'uFrostLocked', 'uFrostLatitudeBias'];
+    // ⭐ FOUR NOW, AND THE FOURTH IS NAMED RATHER THAN EXEMPTED QUIETLY. uFrostLatChill is derived
+    // from ATMOSPHERIC PRESSURE (labCore, workstream frost-budget), and a plain-moon record carries
+    // no atmosphere at all — so every moon reads pressure 0 and takes the identical airless gradient
+    // (0.60). That is the law answering correctly, not failing: airless bodies DO all have steep
+    // pole-to-equator gradients. It is the same shape as uFrostLatitudeBias' entry above (no tilt
+    // key on a moon record) and it moves the moment a moon record carries an atmosphere.
+    const FLAT_ON_MOONS = ['uShieldStratoMix', 'uFrostLocked', 'uFrostLatitudeBias', 'uFrostLatChill'];
     for (const n of FLAT_ON_MOONS) expect(distinct(cols[n]), `${n} is flat on the moon half`).toBe(1);
     for (const n of SOLID_FEATURES_UNIFORMS) {
       if (FLAT_ON_MOONS.includes(n)) continue;

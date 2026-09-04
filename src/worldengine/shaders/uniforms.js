@@ -265,7 +265,7 @@ export function makeUniforms(WORLD_LIGHT) {
       uFrostAlbedo:      { value: new THREE.Color(0.93, 0.94, 0.96) },  // frost tint (driven by species)
       uPlanetTempEq:     { value: 280.0 }, // T_eq baseline for localT (driven)
       uFrostLocked:      { value: 0 },     // 1 = tidally-locked eyeball cap (driven)
-      uFrostLatChill:    { value: 0.35 },  // equator→pole temp falloff fraction — lab knob
+      uFrostLatChill:    { value: 0.35 },  // equator→pole temp falloff — ⭐ NO LONGER A LAB KNOB: DRIVEN per body from atmospheric pressure (labCore's frostLatChill, via solidFeatures). The 0.35 survives only as the factory default a body with no pack sees; every driven body now gets 0.07 (90 bar) … 0.60 (airless). It was 0.35 for every world at once, which put a 293 K ocean world's snowline at 26° latitude.
       uFrostLapseRate:   { value: 0.3 },   // altitude snowline weight — lab knob
       uFrostEdgeSoftness:{ value: 0.08 },  // sharp↔diffuse snowline (× T_eq = K band) — lab knob
       uFrostNoiseAmp:    { value: 0.06 },  // boundary breakup amplitude (× T_eq, K) — lab knob

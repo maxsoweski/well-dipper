@@ -1252,7 +1252,7 @@
       cryoRidgeAxis0: [1,0,0],
       cryoRidgeAxis1: [0,1,0],
       // ── Cryo step 2: frost-coverage mask (F23/F22) — driven budget/condensationT/bias/albedo/
-      // locked/tempEq from the preset; latChill/lapse/edge/noise are lab knobs. ──
+      // locked/tempEq/latChill from the preset (latChill stopped being a knob 2026-09-05); lapse/edge/noise are lab knobs. ──
       frostMaxCoverage: 0.0,
       frostCondensationT: 0.0,
       frostLatitudeBias: 0.0,
@@ -2095,7 +2095,7 @@
       state.cryoRidgeAxis0 = u.cryoRidgeAxes[0];
       state.cryoRidgeAxis1 = u.cryoRidgeAxes[1];
       // Cryo step 2 frost-coverage (F23/F22) — budget/condensationT/bias/albedo/locked/tempEq are pack-owned
-      // (:2075) and reach the uniforms through the same frame loop as before; latChill/lapse/edge/noise stay lab knobs.
+      // (:2075) and reach the uniforms through the same frame loop as before; lapse/edge/noise stay lab knobs (latChill is now DRIVEN).
       // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.frostMaxCoverage   = u.frostMaxCoverage;` — F23 frost budget (gated on `frost`). Neutralised, not deleted: §10 line-stability.
       // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.frostCondensationT = u.frostCondensationT;` — F23 condensation temperature — ungated on purpose: a gated-off body would otherwise carry the PREVIOUS body’s value behind a zero. Neutralised, not deleted: §10 line-stability.
       // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.frostLatitudeBias  = u.frostLatitudeBias;` — F23 latitude bias — live only since the `axialTilt`/`axialTiltDeg` spelling fix; still 0 on all 632 plain moons, and that is a generator fact. Neutralised, not deleted: §10 line-stability.
@@ -3516,14 +3516,14 @@
     fCryoRidge.add({ roll(){ state.cryoRidgeOffsetV = randOffset(); } }, 'roll').name('🎲 randomize');
     // ▸ Cryo / Frost (F23/F22) — the frost-coverage mask: an albedo OVERLAY (luminance-routed, not
     // relief) painting a bright cap where localT < condensationT. Budget/condensationT/latBias/albedo/
-    // tempEq/locked are DRIVEN (sync from the preset via .listen()); latChill/lapse/edge/noise are lab
+    // tempEq/locked/latChill are DRIVEN (sync from the preset via .listen()); lapse/edge/noise are lab
     // knobs. The ✓ enable gate zeroes the budget for a clean A/B. Showcase presets: Frozen / Titan /
     // Europa (full cap); Rocky / Ocean (warm worlds → cold-pole water caps).
     const fFrost = fRelief.addFolder('Cryo / Frost (F23/F22)'); fFrost.close();
     fFrost.add(state, 'frostMaxCoverage', 0, 1, 0.01).name('frost budget (D2)').listen();
     fFrost.add(state, 'frostCondensationT', 0, 273, 1).name('condensation T (K)').listen();
     fFrost.add(state, 'frostLatitudeBias', 0, 1, 0.01).name('lat bias (axial tilt)').listen();
-    fFrost.add(state, 'frostLatChill', 0, 0.8, 0.01).name('equator→pole chill');
+    fFrost.add(state, 'frostLatChill', 0, 0.8, 0.01).name('equator→pole chill').listen();   // ⭐ .listen() ADDED: driven from atmospheric pressure as of 2026-09-05, so the slider must FOLLOW the preset the way tempEq/locked already do. Max keeps override authority — the frame loop still reads `state`, which is the lab's whole point.
     fFrost.add(state, 'frostLapseRate', 0, 1, 0.01).name('altitude lapse');
     fFrost.add(state, 'frostEdgeSoftness', 0.01, 0.4, 0.01).name('snowline softness');
     fFrost.add(state, 'frostNoiseAmp', 0, 0.2, 0.01).name('boundary breakup');

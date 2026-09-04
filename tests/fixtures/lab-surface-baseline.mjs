@@ -164,6 +164,9 @@ export const APPLY_DRIVERS_STATE_FIELDS = [
   'fluvialOffset',
   'frostAlbedo',
   'frostCondensationT',
+  // uFrostLatChill stopped being a lab knob 2026-09-05 (workstream frost-budget): the equator→pole
+  // gradient is now DERIVED from atmospheric pressure in labCore and mirrored here like tempEq/locked.
+  'frostLatChill',
   'frostLatitudeBias',
   'frostLocked',
   'frostMaxCoverage',

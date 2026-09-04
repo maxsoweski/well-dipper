@@ -3017,7 +3017,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         // test (reusing the frost uniforms) so a UNIFORMLY cold world (Pluto/Frozen) etches broadly
         // while a warm-poled world etches only its cold cap. Cosmetic-gradient mask (slowly varying,
         // not chain-ruled). h is the accumulated relief this frame → free altitude lapse (frost climbs).
-        float localT  = uPlanetTempEq * (1.0 - uFrostLatChill * coldFactor) - h * uFrostLapseRate * uPlanetTempEq;
+        float localT  = uPlanetTempEq * (1.0 - uFrostLatChill * (coldFactor - 0.3333333)) - h * uFrostLapseRate * uPlanetTempEq;   // (cf - 1/3): the area-average of sin^2(lat) over a sphere IS 1/3, so uPlanetTempEq is the world's MEAN surface temperature, not its equator. Without it the equator was pinned AT the mean and every latitude read cold. ⛔ ONE OF THREE IDENTICAL COPIES (frostCoverage, sublimationCombiner, glacialCombiner) — they must move together or F17/F18 relief detaches from the frost it sits inside.
         float coldnes = uFrostCondensationT - localT;                 // >0 ⇒ volatile is solid here
         float band    = uSubColdGate * uPlanetTempEq;                 // confinement edge softness (K)
         float capMask = smoothstep(-band, band, coldnes);
@@ -3096,7 +3096,7 @@ export const HEIGHT_GLSL = /* glsl */ `
           float sinLat = normalize(pos).y;
           coldFactor = mix(sinLat * sinLat, 1.0, uFrostLatitudeBias * 0.6);
         }
-        float localT  = uPlanetTempEq * (1.0 - uFrostLatChill * coldFactor) - h * uFrostLapseRate * uPlanetTempEq;
+        float localT  = uPlanetTempEq * (1.0 - uFrostLatChill * (coldFactor - 0.3333333)) - h * uFrostLapseRate * uPlanetTempEq;   // (cf - 1/3): the area-average of sin^2(lat) over a sphere IS 1/3, so uPlanetTempEq is the world's MEAN surface temperature, not its equator. Without it the equator was pinned AT the mean and every latitude read cold. ⛔ ONE OF THREE IDENTICAL COPIES (frostCoverage, sublimationCombiner, glacialCombiner) — they must move together or F17/F18 relief detaches from the frost it sits inside.
         float coldnes = uFrostCondensationT - localT;                 // >0 ⇒ ice is solid here
         float band    = uGlacialColdGate * uPlanetTempEq;
         float capMask = smoothstep(-band, band, coldnes);
@@ -3168,7 +3168,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         bandCoord = coldFactor;
         // localT: equilibrium temp cooled toward the cold point, minus an altitude lapse (frost
         // climbs mountains — heightField is the accumulated relief, already computed this frame).
-        float localT = uPlanetTempEq * (1.0 - uFrostLatChill * coldFactor)
+        float localT = uPlanetTempEq * (1.0 - uFrostLatChill * (coldFactor - 0.3333333))   // (cf - 1/3) ⇒ uPlanetTempEq is the MEAN, not the equator (sphere-average of sin^2(lat) = 1/3); one of three identical copies
                      - heightField * uFrostLapseRate * uPlanetTempEq;
         float coldness = uFrostCondensationT - localT;                     // >0 ⇒ volatile freezes here
         // fractal boundary breakup (kills the drawn-on latitude-circle tell), in Kelvin units

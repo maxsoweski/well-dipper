@@ -1,5 +1,5 @@
 {
- "capturedFrom": "36ffec2",
+ "capturedFrom": "aad21bb",
  "capturedAt": "2026-09-04T02:01:17.080Z",
  "note": "solid-relief-deck AC-4 parent baseline. GATE_POLICY_ALL_ON, pinned by the imported harness.",
  "meshN": 512,
@@ -1687,7 +1687,7 @@
       "uShieldStratoMix": 0.6,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.3,
-      "uFrostMaxCoverage": 0.0039190264635486855,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.11414467977687749,
       "uFrostAlbedo": [
@@ -1697,7 +1697,7 @@
       ],
       "uPlanetTempEq": 1199.1519417883735,
       "uFrostLocked": 1,
-      "uPldStrength": 0.0012344933360178359,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.4
      },
@@ -1849,7 +1849,7 @@
       "uShieldStratoMix": 0.85,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.3,
-      "uFrostMaxCoverage": 0.0163159935992313,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.23937004762964267,
       "uFrostAlbedo": [
@@ -1859,7 +1859,7 @@
       ],
       "uPlanetTempEq": 914.8119324121611,
       "uFrostLocked": 1,
-      "uPldStrength": 0.0051395379837578595,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.4
      },
@@ -2248,7 +2248,7 @@
       "uShieldStratoMix": 0.7999999999999999,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.543008461597877,
-      "uFrostMaxCoverage": 0.09381986968149385,
+      "uFrostMaxCoverage": 0.013605264332638716,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.23470403458063885,
       "uFrostAlbedo": [
@@ -2258,7 +2258,7 @@
       ],
       "uPlanetTempEq": 318.60752637597994,
       "uFrostLocked": 1,
-      "uPldStrength": 0.02955325894967056,
+      "uPldStrength": 0.004285658264781195,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.6430084615978771
      },
@@ -3536,7 +3536,7 @@
       "uShieldStratoMix": 1,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.3873794763451753,
-      "uFrostMaxCoverage": 0.5612094723669447,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.20607120167374482,
       "uFrostAlbedo": [
@@ -3546,7 +3546,7 @@
       ],
       "uPlanetTempEq": 810.1134006000942,
       "uFrostLocked": 0,
-      "uPldStrength": 0.17678098379558757,
+      "uPldStrength": 0,
       "uGlacialStrength": 0.16212116149580139,
       "uGlacialFlowVigor": 0.4873794763451753
      },
@@ -4599,7 +4599,7 @@
       "uShieldStratoMix": 1,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.4556321581741619,
-      "uFrostMaxCoverage": 0.02900378868789307,
+      "uFrostMaxCoverage": 0.024762504199895778,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.13408750702546793,
       "uFrostAlbedo": [
@@ -4609,7 +4609,7 @@
       ],
       "uPlanetTempEq": 287.4591322121676,
       "uFrostLocked": 0,
-      "uPldStrength": 0.009136193436686316,
+      "uPldStrength": 0.00780018882296717,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.5556321581741619
      },
@@ -8993,7 +8993,7 @@
       "uShieldStratoMix": 0.95,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.3,
-      "uFrostMaxCoverage": 0.17644953895208346,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.1551256791714529,
       "uFrostAlbedo": [
@@ -9003,7 +9003,7 @@
       ],
       "uPlanetTempEq": 400.4845522209811,
       "uFrostLocked": 0,
-      "uPldStrength": 0.055581604769906284,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.4
      },
@@ -9991,7 +9991,7 @@
       "uShieldStratoMix": 0.95,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.5019875613619393,
-      "uFrostMaxCoverage": 0.01824326481211689,
+      "uFrostMaxCoverage": 0.012898898884323315,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.17463356744421635,
       "uFrostAlbedo": [
@@ -10001,7 +10001,7 @@
       ],
       "uPlanetTempEq": 294.48972362525814,
       "uFrostLocked": 0,
-      "uPldStrength": 0.0057466284158168195,
+      "uPldStrength": 0.004063153148561844,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.6019875613619393
      },
@@ -11690,7 +11690,7 @@
       "uShieldStratoMix": 0.6,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.4029130341706874,
-      "uFrostMaxCoverage": 0.006571009232958532,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.0260132708205779,
       "uFrostAlbedo": [
@@ -11700,7 +11700,7 @@
       ],
       "uPlanetTempEq": 1212.9559020135405,
       "uFrostLocked": 1,
-      "uPldStrength": 0.0020698679083819374,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.5029130341706874
      },
@@ -11823,7 +11823,7 @@
       "uShieldStratoMix": 0.95,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.46293436992507286,
-      "uFrostMaxCoverage": 0.06274882352415141,
+      "uFrostMaxCoverage": 0.01604554130171557,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.13273776885687924,
       "uFrostAlbedo": [
@@ -11833,7 +11833,7 @@
       ],
       "uPlanetTempEq": 313.16000998715805,
       "uFrostLocked": 0,
-      "uPldStrength": 0.019765879410107694,
+      "uPldStrength": 0.005054345510040404,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.5629343699250728
      },
@@ -14307,7 +14307,7 @@
       "uShieldStratoMix": 0.6,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.32247000439453877,
-      "uFrostMaxCoverage": 0.04733159610278791,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.3009725451696467,
       "uFrostAlbedo": [
@@ -14317,7 +14317,7 @@
       ],
       "uPlanetTempEq": 1199.958858620753,
       "uFrostLocked": 1,
-      "uPldStrength": 0.014909452772378191,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.4224700043945388
      },
@@ -14602,7 +14602,7 @@
       "uShieldStratoMix": 1,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.4218087364709635,
-      "uFrostMaxCoverage": 0.7304986185821806,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.1656323140082094,
       "uFrostAlbedo": [
@@ -14612,7 +14612,7 @@
       ],
       "uPlanetTempEq": 909.1913643477734,
       "uFrostLocked": 0,
-      "uPldStrength": 0.23010706485338686,
+      "uPldStrength": 0,
       "uGlacialStrength": 0.31403728674565473,
       "uGlacialFlowVigor": 0.5218087364709636
      },
@@ -14764,7 +14764,7 @@
       "uShieldStratoMix": 1,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.34064148697786206,
-      "uFrostMaxCoverage": 0.27494678406246376,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.13009171266242908,
       "uFrostAlbedo": [
@@ -14774,7 +14774,7 @@
       ],
       "uPlanetTempEq": 703.7797668290164,
       "uFrostLocked": 0,
-      "uPldStrength": 0.08660823697967608,
+      "uPldStrength": 0,
       "uGlacialStrength": 0.01012739498853323,
       "uGlacialFlowVigor": 0.4406414869778621
      },
@@ -16277,7 +16277,7 @@
       "uShieldStratoMix": 0.85,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.37633522674019476,
-      "uFrostMaxCoverage": 0.01561734338214516,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.05632476708675455,
       "uFrostAlbedo": [
@@ -16287,7 +16287,7 @@
       ],
       "uPlanetTempEq": 865.669680400483,
       "uFrostLocked": 1,
-      "uPldStrength": 0.004919463165375725,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.4763352267401948
      },
@@ -16734,7 +16734,7 @@
       "uShieldStratoMix": 0.7999999999999999,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.48806637180771545,
-      "uFrostMaxCoverage": 0.1261701723594483,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.2377331022298238,
       "uFrostAlbedo": [
@@ -16744,7 +16744,7 @@
       ],
       "uPlanetTempEq": 913.0069091067468,
       "uFrostLocked": 1,
-      "uPldStrength": 0.039743604293226216,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.5880663718077155
      },
@@ -18067,7 +18067,7 @@
       "uShieldStratoMix": 0.6,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.3,
-      "uFrostMaxCoverage": 0.003266606521050126,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.20322254929155234,
       "uFrostAlbedo": [
@@ -18077,7 +18077,7 @@
       ],
       "uPlanetTempEq": 1302.9310271110487,
       "uFrostLocked": 1,
-      "uPldStrength": 0.0010289810541307895,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.4
      },
@@ -20419,7 +20419,7 @@
       "uShieldStratoMix": 1,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.380754419093293,
-      "uFrostMaxCoverage": 0.12056082837733255,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.21684132988225768,
       "uFrostAlbedo": [
@@ -20429,7 +20429,7 @@
       ],
       "uPlanetTempEq": 852.7556048740872,
       "uFrostLocked": 0,
-      "uPldStrength": 0.03797666093885975,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.48075441909329303
      },
@@ -20552,7 +20552,7 @@
       "uShieldStratoMix": 1,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.3,
-      "uFrostMaxCoverage": 0.8149432190616129,
+      "uFrostMaxCoverage": 0.5122132614491113,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.16149602807896343,
       "uFrostAlbedo": [
@@ -20562,7 +20562,7 @@
       ],
       "uPlanetTempEq": 297.80708272053795,
       "uFrostLocked": 0,
-      "uPldStrength": 0.2567071140044081,
+      "uPldStrength": 0.16134717735647006,
       "uGlacialStrength": 0.40965357170895605,
       "uGlacialFlowVigor": 0.4
      },
@@ -21112,7 +21112,7 @@
       "uShieldStratoMix": 1,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.3,
-      "uFrostMaxCoverage": 0.08874419430131383,
+      "uFrostMaxCoverage": 0.08057652811860076,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.243663821446089,
       "uFrostAlbedo": [
@@ -21122,7 +21122,7 @@
       ],
       "uPlanetTempEq": 284.2336400551852,
       "uFrostLocked": 0,
-      "uPldStrength": 0.027954421204913857,
+      "uPldStrength": 0.025381606357359237,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.4
      },
@@ -22683,7 +22683,7 @@
       "uShieldStratoMix": 0.85,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.42500454141138033,
-      "uFrostMaxCoverage": 0.007503104854459232,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.11912130501653688,
       "uFrostAlbedo": [
@@ -22693,7 +22693,7 @@
       ],
       "uPlanetTempEq": 1033.115315362169,
       "uFrostLocked": 1,
-      "uPldStrength": 0.002363478029154658,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.5250045414113804
      },
@@ -22845,7 +22845,7 @@
       "uShieldStratoMix": 0.85,
       "uCryoActivity": 0,
       "uChaosRaftJitter": 0.3453302205015969,
-      "uFrostMaxCoverage": 0.13695756939303438,
+      "uFrostMaxCoverage": 0,
       "uFrostCondensationT": 273,
       "uFrostLatitudeBias": 0.29278147208289773,
       "uFrostAlbedo": [
@@ -22855,7 +22855,7 @@
       ],
       "uPlanetTempEq": 768.4704198498536,
       "uFrostLocked": 1,
-      "uPldStrength": 0.04314163435880583,
+      "uPldStrength": 0,
       "uGlacialStrength": 0,
       "uGlacialFlowVigor": 0.44533022050159693
      },
@@ -25535,7 +25535,7 @@
      "uShieldStratoMix": 0.7,
      "uCryoActivity": 0,
      "uChaosRaftJitter": 0.35,
-     "uFrostMaxCoverage": 0.1982507288629737,
+     "uFrostMaxCoverage": 0.16727405247813407,
      "uFrostCondensationT": 273,
      "uFrostLatitudeBias": 0,
      "uFrostAlbedo": [
@@ -25545,7 +25545,7 @@
      ],
      "uPlanetTempEq": 288,
      "uFrostLocked": 0,
-     "uPldStrength": 0.06244897959183671,
+     "uPldStrength": 0.052691326530612224,
      "uGlacialStrength": 0,
      "uGlacialFlowVigor": 0.45
     },
@@ -25793,7 +25793,7 @@
      "uShieldStratoMix": 0.9,
      "uCryoActivity": 0,
      "uChaosRaftJitter": 0.3,
-     "uFrostMaxCoverage": 0.944606413994169,
+     "uFrostMaxCoverage": 0.6567463556851311,
      "uFrostCondensationT": 273,
      "uFrostLatitudeBias": 0,
      "uFrostAlbedo": [
@@ -25803,7 +25803,7 @@
      ],
      "uPlanetTempEq": 295,
      "uFrostLocked": 0,
-     "uPldStrength": 0.2314285714285714,
+     "uPldStrength": 0.16090285714285707,
      "uGlacialStrength": 0.6064139941690961,
      "uGlacialFlowVigor": 0.4
     },
@@ -28286,11 +28286,11 @@
   }
  },
  "recapture": {
-  "at": "2026-09-04",
-  "workstream": "volatile-delivery",
-  "previousCapturedFrom": "4d81784",
-  "reason": "deriveComposition gained a surface-volatile delivery term (PhysicsEngine §3b), so composition.volatileFraction moves on every body. VALUES ONLY — structure, pack scope and key set are unchanged; this fixture still pins exactly the packs it was written to pin.",
-  "bodyValuesMoved": 792,
-  "presetValuesMoved": 0
+  "at": "2026-09-05",
+  "workstream": "frost-budget",
+  "previousCapturedFrom": "36ffec2",
+  "reason": "frostMaxCoverage gained its missing temperature term (frostPermanence, labCore): the budget was MEASURED identical from 100 K to 1200 K at the same volatileFraction, so a warm world scored a frozen world's snow budget. uPldStrength follows because it is frostMaxCoverage x (1-resurfacing) x 0.35. VALUES ONLY — structure, pack scope and key set are unchanged; uFrostLatChill is NEW and is deliberately NOT introduced here, so each fixture still pins exactly the packs and names it was written to pin.",
+  "bodyValuesMoved": 40,
+  "presetValuesMoved": 4
  }
 }
