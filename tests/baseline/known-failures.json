@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-09-03T22:36:55.612Z",
+  "recordedAt": "2026-09-04T02:35:37.671Z",
   "recordedFromCommit": {
-    "sha": "eb58ac9cff75181bb1730776a085645a667eb299",
+    "sha": "1428533b47147821576f79c554e1dfebf82dcf06",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -28,12 +28,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 349,
+      "collectedFiles": 350,
       "failingFiles": 12,
       "nonCollectingFiles": 15,
-      "tests": 5922,
+      "tests": 5945,
       "failed": 47,
-      "passed": 5871,
+      "passed": 5894,
       "skipped": 4,
       "todo": 0
     },
@@ -280,10 +280,11 @@
       "tests/driver-pack-rockysurface.test.js": 37,
       "tests/driver-pack-solidfeatures.test.js": 38,
       "tests/driver-pack-solidoptics.test.js": 26,
+      "tests/driver-pack-solidrelief.test.js": 21,
       "tests/driver-pack-stormdeck.test.js": 27,
       "tests/driver-pack-terminator.test.js": 32,
       "tests/feature-associations.test.js": 17,
-      "tests/gas-body-lab-material.test.js": 71,
+      "tests/gas-body-lab-material.test.js": 72,
       "tests/gen-feature-cards.test.js": 3,
       "tests/giant-regime-classifier.test.js": 22,
       "tests/gravity-provenance-fence.test.js": 6,
@@ -409,7 +410,7 @@
       "tests/worldengine-e1-gate-fidelity.test.js": 11,
       "tests/worldengine-e1-regime.test.js": 104,
       "tests/worldengine-e1-seeded-middle.test.js": 10,
-      "tests/worldengine-e1-shadow-audit.test.js": 44,
+      "tests/worldengine-e1-shadow-audit.test.js": 45,
       "tests/worldengine-effectivel.test.js": 8,
       "tests/worldengine-inc3-depth-law.test.js": 11,
       "tests/worldengine-inc3-relief-envelope.test.js": 15,
