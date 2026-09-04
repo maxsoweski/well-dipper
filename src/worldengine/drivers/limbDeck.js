@@ -13,7 +13,7 @@
 // This module is that line, made into a pack so the composition point stays an array entry.
 //
 // ⛔ NOTHING HERE IS DESIGNED. Every input already exists on the game side and no producer moves:
-//   · STRENGTH — the lab's only producer is planet-lod-lab-core.js:1100 `limbStrength: hasAtmo ? 0.7 : 0.0,`
+//   · STRENGTH — the lab's only producer is planet-lod-lab-core.js:1103 `limbStrength: hasAtmo ? 0.7 : 0.0,`
 //     inside `deriveUniforms`, picked up at world-engine-lab.html:2001 `state.emissive = u.emissive; state.specStrength = u.specStrength; state.limbStrength = u.limbStrength;`
 //     — INSIDE `applyDrivers`, i.e. inside the pack-legal region and NOT inside the fenced storm
 //     writer. Its one input is planet-lod-lab-core.js:644 `const hasAtmo = !!d.atmosphere;`, which
@@ -80,7 +80,7 @@ export const LIMB_GATE = 'limb';
 // ── The lab's strength constants, transcribed from its ONE producer ──────────
 // These two numbers are the only values this file owns, and they are owned because the lab's
 // producer is a literal ternary with no module behind it. Everything else is forwarded.
-// Both branches of planet-lod-lab-core.js:1100 `limbStrength: hasAtmo ? 0.7 : 0.0,`, split in two:
+// Both branches of planet-lod-lab-core.js:1103 `limbStrength: hasAtmo ? 0.7 : 0.0,`, split in two:
 export const LIMB_STRENGTH_WITH_AIR = 0.7;   // the `hasAtmo` branch — a retained atmosphere glows
 export const LIMB_STRENGTH_AIRLESS = 0.0;    // the else branch — no air, hard dark silhouette
 

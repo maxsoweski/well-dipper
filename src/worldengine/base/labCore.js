@@ -802,9 +802,12 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // so a planet's ranges share a coherent grain. Lab-tunable downstream via an angle
   // knob; production passes the real planet seed. Deterministic, magnitude 1.
   const seed = d.seed ?? 0;
-  const sa = Math.sin(seed * 12.9898 + 1.7) * 43758.5453;
-  const orogenyAngle = (sa - Math.floor(sa)) * Math.PI * 2;      // [0, 2π)
-  const orogenyAxis = [Math.cos(orogenyAngle), Math.sin(orogenyAngle)];
+  // ⭐ THE FOUR SEEDED AXIS FAMILIES ARE ONE EXPRESSION, TWO CALLERS (solid-relief-deck, 2026-09-04).
+  // Lifted to `reliefAxesFor` at EOF so the game can answer them from its own macroSeed on `ctx` — a
+  // condition vector carries no `seed`, so the bundle's answer here is the seed-0 answer on every
+  // game body. Byte-inert in the lab: same seed in, same four out. Rationale + the text fence that
+  // pins the binding forms: see `reliefAxesFor`.
+  const { orogenyAxis, scarpAxis, tesseraAxes, lavaAxis } = reliefAxesFor(seed);
 
   // ── F4 canyons / rifts (Stage-C step 3, Relief domain — relief doc §F4.b) ───
   // The tectonic-graben variant of canyons (I own this; Fluvial incised gorges + Cryo
@@ -847,7 +850,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
 
   // scarpAxis: a seeded unit-vec3; the scarp fronts are iso-contours of dot(pos, axis), so
   // they run as parallel fault lines ⊥ this axis. Seed-deterministic (stable per planet).
-  const scarpAxis = seededUnitVec3(seed + 7);
+  // scarpAxis: destructured above from `reliefAxesFor(seed)` — `seededUnitVec3(seed + 7)`, unchanged.
 
   // ── F6 plateaus / highlands / tessera (Stage-C step 3, Relief — relief doc §F6.b) ──
   // Plateaus/highlands are THICKENED crust — they grow with tectonic activity (crustal
@@ -865,7 +868,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
 
   // tesseraAxes: 2 seeded unit-vec3 — the two lattice orientations whose intersecting
   // warped ridges form the crosscutting tessera grid (seed-deterministic per planet).
-  const tesseraAxes = [seededUnitVec3(seed + 8), seededUnitVec3(seed + 9)];
+  // tesseraAxes: destructured above from `reliefAxesFor(seed)` — `seededUnitVec3(seed + 8/+9)`, unchanged.
 
   // ── F7 volcanic edifices (Stage-C step 3, Relief — relief doc §F7.b) ────────
   // volcanismStrength: the edifice density/size gate (≤0 ⇒ combiner early-out). Volcanic
@@ -912,7 +915,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // lavaAxis: the wrinkle-ridge strike direction (seeded unit-vec3). Wrinkle ridges are
   // linear compressional ridges on the basalt plain (deferred from F5 to F8); the GLSL
   // combiner carves a warped directional field ⊥ this axis, mirroring F5/F6's pattern.
-  const lavaAxis = seededUnitVec3(seed + 12);
+  // lavaAxis: destructured above from `reliefAxesFor(seed)` — `seededUnitVec3(seed + 12)`, unchanged.
 
   // ── Cryo step 1: cryoActivity (P7 cryovolcanism) — OWNS the shared uCryoActivity gate ──
   // The icy-resurfacing activity F9/F10 read (registry RESERVED→LIVE; replaces the option-A
@@ -1318,4 +1321,43 @@ export function lodPredictionAt(distanceRadii, qualityTier = 1.0) {
     // written as a bound so a future eased ramp that asymptotes cannot silently stop reporting it.
     saturated: ramp >= 1.0,
   };
+}
+
+// ── THE SEEDED RELIEF AXES, FROM A SEED ALONE (workstream solid-relief-deck, 2026-09-04) ─────────
+// `reliefAxesFor(seed)` is `chasmaRiftsFor`'s sibling and is lifted for the SAME measured reason,
+// three years of comment above it notwithstanding: these are quantities a CONDITION VECTOR CANNOT
+// ANSWER. `deriveUniforms` reads its seed from `d.seed` (src/worldengine/base/labCore.js:804), and
+// `condition.seed` is `undefined` on every game body — src/worldengine/drivers/solidFeatures.js
+// measured it at 1484 of 1484 and refused to forward F10's axes on exactly this ground:
+//
+//     "forwarding the bundle's answer would put every body in the galaxy on the seed-0 pair —
+//      1484 identical rift orientations, wired, green, and indistinguishable from the
+//      'these are all identical' UAT this block exists to end."
+//
+// ⭐ THAT REFUSAL IS WHY THIS FUNCTION EXISTS RATHER THAN A SECOND ONE BEING REFUSED. The
+// `solidRelief` deck forwards uScarpStrength / uTesseraStrength / uLavaCoverage, whose GLSL
+// combiners orient their fault fronts, lattice grooves and wrinkle ridges off exactly these axes.
+// Forwarding the strengths while leaving the axes at their shared defaults would give every world
+// in the galaxy one scarp direction, one tessera lattice and one wrinkle strike — the precise
+// failure Max's criterion for this workstream names ("planets are distinct and variable"). So the
+// seed is carried by the FRONT-END, as the domain offsets and F4's rift pair already are
+// (src/objects/Planet.js `labPackCtx`), and this is the ONE expression both callers share.
+//
+// ⛔ EVERY BINDING KEEPS ITS ORIGINAL `const NAME = …` FORM. tests/ws4-expression-only.test.js
+// scrapes THIS FILE AS TEXT for `orogenyAxis = [Math.cos(orogenyAngle)`, `scarpAxis = seededUnitVec3`,
+// `tesseraAxes = [seededUnitVec3` and `lavaAxis = seededUnitVec3` (:140, :142-:144), on the stated
+// grounds that the seed-derived axis hashes must SURVIVE as the strength=0 endpoint. A property
+// shorthand in the return literal renders identical values and REDS that fence — the same measured
+// trap `chasmaRiftsFor`'s header records paying for.
+// ⛔ THE HASH CONSTANTS AND SEED OFFSETS MOVE UNCHANGED: orogeny 12.9898/+1.7, scarp +7, tessera
+// +8/+9, lava +12. `cryoRidgeAxes` (+13/+14) is F10's and is NOT lifted here — it is not this
+// workstream's family and a half-answered seam is worse than a named one.
+export function reliefAxesFor(seed) {
+  const sa = Math.sin(seed * 12.9898 + 1.7) * 43758.5453;
+  const orogenyAngle = (sa - Math.floor(sa)) * Math.PI * 2;      // [0, 2π)
+  const orogenyAxis = [Math.cos(orogenyAngle), Math.sin(orogenyAngle)];   // F1 — per-planet strike (unit vec2)
+  const scarpAxis = seededUnitVec3(seed + 7);                    // F5 — fault-front normal
+  const tesseraAxes = [seededUnitVec3(seed + 8), seededUnitVec3(seed + 9)];   // F6 — 2 lattice orientations
+  const lavaAxis = seededUnitVec3(seed + 12);                    // F8 — wrinkle-ridge strike
+  return { orogenyAxis, scarpAxis, tesseraAxes, lavaAxis };
 }

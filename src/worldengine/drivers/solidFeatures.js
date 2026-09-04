@@ -34,7 +34,7 @@
 // 0.0017 ms/body, and it runs once per material build rather than once per frame.
 //
 // ⛔ `qualityTier` IS LEFT AT ITS DEFAULT AND THAT IS A CHECKED CLAIM, NOT AN OMISSION. The
-// parameter reaches exactly one place — src/worldengine/base/labCore.js:1105 `    ...qualityKnobs(qualityTier),`
+// parameter reaches exactly one place — src/worldengine/base/labCore.js:1108 `    ...qualityKnobs(qualityTier),`
 // — whose three outputs are `craterCells`, `atmosphereModel` and `maxOctaves`. None of the fourteen
 // fields below is one of them and none is computed from them, so a tier the game has no opinion
 // about cannot reach a value this pack emits.

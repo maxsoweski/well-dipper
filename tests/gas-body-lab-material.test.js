@@ -32,7 +32,7 @@ import {
   LAB_GAS_BODIES_DEFAULT, LAB_GAS_BODIES_KEY, SOL_SYSTEM_SEED,
   GAME_ANIM_RATE, GAME_RELEVANCE,
 } from '../src/objects/Planet.js';
-import { PACKS, applyDriverPacks, applyDriverPacksToState, selectPacks, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js'; import { ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; import { SOLID_OPTICS_UNIFORMS } from '../src/worldengine/drivers/solidOptics.js'; import { SOLID_FEATURES_UNIFORMS } from '../src/worldengine/drivers/solidFeatures.js'; import { FLUVIAL_DECK_UNIFORMS } from '../src/worldengine/drivers/fluvialDeck.js'; // ⛔ RIDES THIS PHYSICAL ROW: this file is cited BY LINE from four files outside CITE_SOURCES, so a new import line rots refs the fence cannot see.
+import { PACKS, applyDriverPacks, applyDriverPacksToState, selectPacks, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js'; import { ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; import { SOLID_OPTICS_UNIFORMS } from '../src/worldengine/drivers/solidOptics.js'; import { SOLID_FEATURES_UNIFORMS } from '../src/worldengine/drivers/solidFeatures.js'; import { FLUVIAL_DECK_UNIFORMS } from '../src/worldengine/drivers/fluvialDeck.js'; import { SOLID_RELIEF_UNIFORMS } from '../src/worldengine/drivers/solidRelief.js'; // ⛔ RIDES THIS PHYSICAL ROW: this file is cited BY LINE from four files outside CITE_SOURCES, so a new import line rots refs the fence cannot see.
 import { buildLabPlanetMaterial, isLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 import { BodyRenderer } from '../src/rendering/objects/BodyRenderer.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
@@ -119,7 +119,7 @@ describe('6a — PACKS is an array with pinned MEMBERSHIP, not a pinned length',
     // (world-engine-lab.html:2123-2167) as one law. APPENDED, because the array order is the
     // composition order; its predicate is `!== 'gas'`, identical to rockySurface's, so it moves no
     // body between materials and only ADDS ten previously-unwritten names on the solid half.
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures', 'giantSurface', 'fluvialDeck', 'stormDeck']);   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures', 'giantSurface', 'fluvialDeck', 'stormDeck', 'solidRelief']);   // ⭐⭐ AN ELEVENTH, 2026-09-04 — `solidRelief` (F1/F4/F5/F6/F8/F15/F16/F18/F19/F21, the 23-name relief deck; workstream solid-relief-deck), predicate `!== 'gas'`, so it joins the SOLID applied list and the GAS skipped list and moves no body between materials.   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.
   });
 
   it('every entry carries the four contract fields, and the array is frozen', () => {
@@ -262,7 +262,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface', 'stormDeck']);   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.
     // ⭐ `solidOptics` joins the SKIPPED list here and nowhere else on a gas body: its predicate is
     // the complement of gas, so a gas body must never see it. That is the whole of its scope claim.
-    expect(res.skipped).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck']);   // ⭐ `fluvialDeck` joins the SKIPPED list on a gas body, 2026-09-02 — same `!== 'gas'` predicate as the three above it, so a gas body never sees a sea level.
+    expect(res.skipped).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck', 'solidRelief']);   // ⭐ `fluvialDeck` joins the SKIPPED list on a gas body, 2026-09-02 — same `!== 'gas'` predicate as the three above it, so a gas body never sees a sea level.
     expect(material.uniforms.uBandStrength.value).toBe(1.0);
     expect(material.uniforms.uJetStrength.value).toBe(1.0);
     // ⭐ MEASURED, NOT ASSUMED — `rockySurface` declares `craters` and `ejecta`, and NEITHER KEY IS
@@ -335,13 +335,13 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     // claims it also claims — and the collision guard in applyDriverPacks is therefore LIVE here
     // rather than inert. That it does not throw is the assertion; the two emitted name sets are
     // disjoint, which both pack suites check by name lookup.
-    expect(res.applied).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck']);   // ⭐ FOUR PACKS SINCE 2026-09-02 — `fluvialDeck` carries the identical predicate, so the collision guard is live for it too; its ten names are disjoint from the other three's, asserted by name lookup in tests/driver-pack-fluvialdeck.test.js.
+    expect(res.applied).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck', 'solidRelief']);   // ⭐ FOUR PACKS SINCE 2026-09-02 — `fluvialDeck` carries the identical predicate, so the collision guard is live for it too; its ten names are disjoint from the other three's, asserted by name lookup in tests/driver-pack-fluvialdeck.test.js.
     // ⭐ `craterDeck` JOINS THE SKIPPED LIST at B3 leg 2: its predicate is `=== 'gas'`, so on a solid
     // body the impact family keeps its single writer (`rockySurface`) and the collision throw stays
     // inert for that pair by construction.
     expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface', 'stormDeck']);   // ⭐ A TENTH, 2026-09-03 — `stormDeck` (F27/F28, the uStorm* family; workstream wire-storm-slice-lab-into-game), predicate `=== 'gas'`, so it joins the GAS applied list and the SOLID skipped list and moves no body between materials.
     // The gate map is the applied packs' names ONLY — the three skipped decks contribute none.
-    expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: false, aurora: true, edifices: true, chaos: true, frost: true, glacial: true, deltas: true, coast: true, outflow: true });   // ⭐ THREE NEW NAMES 2026-09-02 — fluvialDeck's. ⛔ There is NO `lakes` key and that is the pack's own ruling: an off gate resolves to +0 and the lab's no-liquid value is -1, so `uSeaLevel` is emitted ungated (src/worldengine/drivers/fluvialDeck.js header).   // ⭐ 2026-09-03 `terminator` RE-POINTED true -> false (F35) — Max 2026-07-16: "We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway." This is `applyDriverPacks`, the GAME's composition point, so it takes `gatesFor`'s default, which is now GATE_POLICY_RULED. Every other gate is still true — the ruling answers ONE name, it does not weaken ruling #4.
+    expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: false, aurora: true, edifices: true, chaos: true, frost: true, glacial: true, deltas: true, coast: true, outflow: true, mountains: true, canyons: true, scarps: true, plateaus: true, tessera: true, lava: true, sublimation: true, karst: true, dunes: true, dust: true, massWasting: true });   // ⭐ THREE NEW NAMES 2026-09-02 — fluvialDeck's. ⛔ There is NO `lakes` key and that is the pack's own ruling: an off gate resolves to +0 and the lab's no-liquid value is -1, so `uSeaLevel` is emitted ungated (src/worldengine/drivers/fluvialDeck.js header).   // ⭐ 2026-09-03 `terminator` RE-POINTED true -> false (F35) — Max 2026-07-16: "We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway." This is `applyDriverPacks`, the GAME's composition point, so it takes `gatesFor`'s default, which is now GATE_POLICY_RULED. Every other gate is still true — the ruling answers ONE name, it does not weaken ruling #4.
     // ⛔ NO ATTRIBUTE IS BAKED ON A SOLID BODY. `aBand`/`aMush`/`aShear` are the gas deck's, and the
     // ctx here carries no geometry at all; a pack that baked one anyway would be reaching for
     // vertex data it was not given.
@@ -369,7 +369,12 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     // union grows again for the same reason it grew at leg 1 and the gate keeps its strength.
     // ⭐ FOUR PACKS SINCE 2026-09-02 — `fluvialDeck`, same predicate again, so the union grows once
     // more and the gate keeps its strength for the same stated reason.
-    const DECLARED = new Set([...ROCKY_SURFACE_UNIFORMS, ...SOLID_OPTICS_UNIFORMS, ...SOLID_FEATURES_UNIFORMS, ...FLUVIAL_DECK_UNIFORMS]);
+    // ⭐ FIVE PACKS SINCE 2026-09-04 — `solidRelief` (pack #11, workstream solid-relief-deck), same
+    // `!== 'gas'` predicate again, so the union grows once more and the gate keeps its strength for
+    // the same stated reason. Its twenty-three names are disjoint from the other four's, measured at
+    // the parent in tests/fixtures/solidrelief-pack-drivers-baseline.json and re-asserted by name
+    // lookup in tests/driver-pack-solidrelief.test.js.
+    const DECLARED = new Set([...ROCKY_SURFACE_UNIFORMS, ...SOLID_OPTICS_UNIFORMS, ...SOLID_FEATURES_UNIFORMS, ...FLUVIAL_DECK_UNIFORMS, ...SOLID_RELIEF_UNIFORMS]);
     expect(moved.filter((n) => !DECLARED.has(n))).toEqual([]);
     // …and the pack may not name a uniform outside its own published family in the first place, so a
     // driver that is emitted CONDITIONALLY (only on an icy condition, say) reds on the WRITE rather
@@ -747,9 +752,9 @@ describe('6e — ⭐ the flag is ON by default since B7 (was OFF), and either va
     const b = GEN_SOLID[0];
     const { material, lab } = planetAt(b.d, true);
     expect(isLabPlanetMaterial(material)).toBe(true);
-    expect(lab.packsApplied).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck']);
-    expect(lab.gates).toEqual({ craters: true, ejecta: true, terminator: false, aurora: true, edifices: true, chaos: true, frost: true, glacial: true, deltas: true, coast: true, outflow: true });   // ⭐ 2026-09-03 `terminator` RE-POINTED true -> false (F35) — Max 2026-07-16: "We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway." This is `applyDriverPacks`, the GAME's composition point, so it takes `gatesFor`'s default, which is now GATE_POLICY_RULED. Every other gate is still true — the ruling answers ONE name, it does not weaken ruling #4.
-    expect(labPipelineAdmits(b.d, b.cond).packs).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck']);
+    expect(lab.packsApplied).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck', 'solidRelief']);
+    expect(lab.gates).toEqual({ craters: true, ejecta: true, terminator: false, aurora: true, edifices: true, chaos: true, frost: true, glacial: true, deltas: true, coast: true, outflow: true, mountains: true, canyons: true, scarps: true, plateaus: true, tessera: true, lava: true, sublimation: true, karst: true, dunes: true, dust: true, massWasting: true });   // ⭐ 2026-09-03 `terminator` RE-POINTED true -> false (F35) — Max 2026-07-16: "We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway." This is `applyDriverPacks`, the GAME's composition point, so it takes `gatesFor`'s default, which is now GATE_POLICY_RULED. Every other gate is still true — the ruling answers ONE name, it does not weaken ruling #4.
+    expect(labPipelineAdmits(b.d, b.cond).packs).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck', 'solidRelief']);
     // …and with the flag OFF it is still the legacy material. Registration widened WHICH bodies the
     // pipeline claims; it did not touch the flag that decides whether the pipeline runs at all.
     expect(isLabPlanetMaterial(planetAt(b.d, false).material)).toBe(false);
@@ -769,7 +774,7 @@ describe('6e — ⭐ the flag is ON by default since B7 (was OFF), and either va
       if (banded) shrouded++;
       const adm = labPipelineAdmits(x.d, xc);
       expect(adm.packs, `${x.id} must be CLAIMED, or this control proves nothing`)
-        .toEqual(banded ? ['giantDeck', 'rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck'] : ['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck']);
+        .toEqual(banded ? ['giantDeck', 'rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck', 'solidRelief'] : ['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck', 'solidRelief']);
       expect(adm.admitted, `${x.id} must be refused by provenance`).toBe(false);
       expect(isLabPlanetMaterial(planetAt(x.d, true).material), x.id).toBe(false);
     }
@@ -807,7 +812,7 @@ describe('6e — ⭐ the flag is ON by default since B7 (was OFF), and either va
         const banded = PACKS.find((e) => e.name === 'giantDeck').applies(b.cond) === true;
         if (banded) bandedSolid++;
         expect(packs, b.id).toEqual(banded
-          ? ['giantDeck', 'rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck'] : ['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck']);
+          ? ['giantDeck', 'rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck', 'solidRelief'] : ['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck', 'solidRelief']);
         // the three GAS-ONLY packs never reach a non-gas body, which is the half that is still exact
         for (const n of ['limbDeck', 'polarDeck', 'craterDeck']) expect(packs, `${b.id}/${n}`).not.toContain(n);
       }

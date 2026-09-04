@@ -130,7 +130,12 @@ describe('AC-0 — one pipeline: the storm slice has ONE definition under src/, 
   });
   it('registered: STORM_DECK_ENTRY is in PACKS by IDENTITY, last, as pack #10, with both gates', () => {
     expect(PACKS.includes(STORM_DECK_ENTRY)).toBe(true);
-    expect(PACKS[PACKS.length - 1]).toBe(STORM_DECK_ENTRY);
+    // ⭐ NO LONGER LAST, 2026-09-04: `solidRelief` (pack #11) was APPENDED after this one, which is the
+    // registry's own rule (never prepend — four assertions index PACKS positionally). What this test
+    // is actually protecting is that the entry is the EXPORTED object and not a retyped copy, so the
+    // assertion moves from a position to an identity-by-lookup and gets stronger, not weaker.
+    expect(PACKS.find((e) => e.name === 'stormDeck')).toBe(STORM_DECK_ENTRY);
+    expect(PACKS.indexOf(STORM_DECK_ENTRY)).toBe(PACKS.length - 2);
     expect(STORM_DECK_ENTRY.name).toBe('stormDeck');
     expect([...STORM_DECK_ENTRY.gates]).toEqual([GREAT_SPOT_GATE, STORM_TRAIN_GATE]);
     expect(PACK_SRC).toContain('DRIVER PACK #10');
@@ -158,9 +163,13 @@ describe('AC-1 — the pack contract learns exactly ONE new value shape and noth
         expect(noRays(now[name]), `${b.id} ${name}`).toEqual(was[name]);
         compared++;
       }
-      // the ONLY new name on any body is stormDeck, and only on gas bodies
+      // The new names since the 520f2c0 fixture: `stormDeck` on gas bodies, and — since 2026-09-04 —
+      // `solidRelief` (pack #11) on solid ones. ⭐ THE POINT OF THIS ARM IS UNCHANGED: it still says
+      // that nothing OLD moved and that only the DECLARED new packs appear, which is exactly what a
+      // fixture from before both of them can testify to. Naming the second one here rather than
+      // loosening the assertion to "anything may appear" is what keeps it a gate.
       const added = Object.keys(now).filter((n) => !(n in was));
-      expect(added, b.id).toEqual(compositionClass(b.cond) === 'gas' ? ['stormDeck'] : []);
+      expect(added, b.id).toEqual(compositionClass(b.cond) === 'gas' ? ['stormDeck'] : ['solidRelief']);
     }
     for (const name of Object.keys(DRIVER_PRESETS)) {
       const fp = DRIVER_PRESETS[name]; const R = fp.radiusEarth ?? 1;
@@ -172,16 +181,41 @@ describe('AC-1 — the pack contract learns exactly ONE new value shape and noth
     }
     expect(compared).toBeGreaterThan(600);
   });
-  it('stormDeck is the ONLY pack that emits the nested shape, on every gas body', () => {
+  it('stormDeck is the ONLY pack that emits the nested shape ON A GAS BODY', () => {
+    // ⭐ NARROWED 2026-09-04, AND THE NARROWING IS THE HONEST FORM. This read "the ONLY pack" full
+    // stop, which was true while stormDeck was the shape's sole user. `solidRelief` (pack #11) is its
+    // second: `uChasmaAxis` is 3 rows of 3 and `uTesseraAxis` is 2 rows of 3, the same array-of-vectors
+    // uniforms the writer's `writeVectorRows` was built for. The two never meet — stormDeck's predicate
+    // is `=== 'gas'` and solidRelief's is its complement — so the property this test protects (a gas
+    // body's nested shape has exactly one author) survives intact and is now stated where it is true.
+    // The disjointness of their NAME sets is asserted in each pack's own suite.
     const nested = (v) => Array.isArray(v) && v.length > 0 && Array.isArray(v[0]);
+    let gasChecked = 0, solidChecked = 0;
     for (const b of CORPUS) {
       const ctx = labPackCtx(b.d, b.cond, MESH);
+      const isGas = compositionClass(b.cond) === 'gas';   // ⚠ NOT `b.cls` — this file's own corpus() sets no `cls` key (the shared ray-pack-corpus harness does); the first draft read it, got `undefined` on every body, and put every gas body through the solid arm.
       for (const entry of PACKS) {
         if (entry.applies(b.cond, ctx) !== true) continue;
         const r = entry.pack(b.cond, { ...ctx, gates: gatesFor(entry) });
         const has = Object.values(r.drivers).some(nested);
-        expect(has, `${b.id} ${entry.name}`).toBe(entry.name === 'stormDeck' && r.meta.count > 0);
+        if (isGas) {
+          expect(has, `${b.id} ${entry.name}`).toBe(entry.name === 'stormDeck' && r.meta.count > 0);
+          gasChecked++;
+        } else {
+          expect(has, `${b.id} ${entry.name}`).toBe(entry.name === 'solidRelief');
+          solidChecked++;
+        }
       }
+    }
+    // …and neither arm is vacuous.
+    expect(gasChecked).toBeGreaterThan(0);
+    expect(solidChecked).toBeGreaterThan(0);
+    // ⛔ AND THE TWO NEVER CO-APPLY, which is what makes "exactly one author" a structural fact
+    // rather than a coincidence of this corpus.
+    for (const b of CORPUS) {
+      const ctx = labPackCtx(b.d, b.cond, MESH);
+      const names = PACKS.filter((e) => e.applies(b.cond, ctx) === true).map((e) => e.name);
+      expect(names.includes('stormDeck') && names.includes('solidRelief'), b.id).toBe(false);
     }
   });
   it('[CONTROL] the writer refuses the three wrong shapes and keeps the material\'s Vector slots as OBJECTS', () => {

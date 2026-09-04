@@ -465,37 +465,35 @@ describe('2. the collapse in per-body variation', () => {
     // in the pack (tests/driver-pack-fluvialdeck.test.js §F) and they now vary on 66 and 122 bodies.
     // ⛔ THIS LIST IS THE INSTRUMENT THAT CAUGHT IT: a wire that lands on a dead input is invisible to
     // every count and to the pack's own laws, and shows up here and only here as written-and-constant.
-    expect(LEDGER.labVarying).toEqual([   // ⭐⭐ ONE NAME LEFT THIS LIST ON 2026-09-02, AND IT IS THE FIRST TO LEAVE IT BY BEING DEFERRED RATHER THAN BY DYING. `uSeaLevel` has TWO writers now: driver pack #9 at mount, and the river router's histogram solve at the body's FIRST DRAW, which wins on a wet body (intent.md decision 3, docs/WORKSTREAMS/wire-river-router-lab-into-game/). `attachLabBake` therefore takes the slot to −1 at mount and writes the solved level at bake, so the sea arrives WITH the rivers that drain into it instead of jumping from one shoreline to another mid-flight. ⛔ THIS LEDGER NEVER DRAWS A BODY, so it can only ever see the mount half — where every body now reads −1 and the name is constant; it reappears in the residue below for the same reason. The instrument that gates the OTHER half is tests/river-bake-host.test.js AC-7, which bakes a wet body and asserts `uSeaLevel.value === bundle.seaLevel` and `uCoastStrength.value === 1`; if the deferred write ever stopped landing, that suite reds and this one would not notice.
+    expect(LEDGER.labVarying).toEqual([   // ⭐⭐ AND TWENTY-THREE MORE ON 2026-09-04, `solidRelief` (pack #11, workstream solid-relief-deck) — the whole F1/F4/F5/F6/F8/F15/F16/F18/F19/F21 relief deck. ⛔ ALL TWENTY-THREE LAND HERE AND NOT ONE IN THE WRITTEN-AND-CONSTANT RESIDUE BELOW, WHICH IS THIS INSTRUMENT'S VERDICT ON THE WIRE: a forwarded gate whose input is dead shows up in the residue and nowhere else (that is how fluvialDeck's two-spelling erosion defect was caught), and none of these did. Six of them are the seeded relief AXES, which vary only because src/objects/Planet.js `labPackCtx` answers them from the game's own macroSeed — read off the condition bundle instead they would be ONE value on every body in the galaxy and would sit in the residue as six dead wires.
       'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM',
       'uBandPhaseJet', 'uBandRough', 'uBandS2', 'uBandSEq',
       'uBandStrength', 'uBandTint', 'uBandWarp', 'uBioGroundColor',
-      'uBioGroundCover', 'uBodyRadius', 'uChaosRaftJitter', 'uCoarseCut', 'uCoastStrength', 'uCraterAmp',
-      'uCraterComplexD', 'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation',
-      'uCraterScale', 'uCratonColor', 'uCryoActivity', 'uDeltaDensity', 'uDetailOffset',
+      'uBioGroundCover', 'uBodyRadius', 'uChaosRaftJitter', 'uChasmaAxis',
+      'uChasmaCount', 'uChasmaDepth', 'uCoarseCut', 'uCoastStrength',
+      'uCraterAmp', 'uCraterComplexD', 'uCraterDensity', 'uCraterOffset',
+      'uCraterRelaxation', 'uCraterScale', 'uCratonColor', 'uCryoActivity',
+      'uDeltaDensity', 'uDetailOffset', 'uDuneDensity', 'uDustDepth',
       'uEdificeMaxHeight', 'uEjectaAmp', 'uEjectaRampart', 'uEjectaStrength',
-      'uFluvialActivity', 'uFluvialDepth', 'uFluvialMeander',
-      'uFreshColor', 'uFrostAlbedo', 'uFrostCondensationT', 'uFrostLatitudeBias',
-      'uFrostLocked', 'uFrostMaxCoverage', 'uGlacialFlowVigor', 'uGlacialStrength',
-      'uIcenessMix', 'uJetFestoon', 'uJetShearTurb', 'uJetSpeed',
-      'uJetStrength', 'uLightDir', 'uLimbColor', 'uLimbExponent',
-      'uLimbStrength', 'uLiquidMask', 'uMacroOffset', 'uNoiseScale', 'uOutflowActivity', 'uOutflowDensity', 'uPerturb',
-      'uPlanetTempEq', 'uPldStrength', 'uPolarMode', 'uPolarPhase',
-      'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
-      'uPolarStrength', 'uPolarTint', 'uSedColor', 'uShieldStratoMix',
-      'uStarBrightness2', 'uStarColor1', 'uStarColor2', 'uStormAux', 'uStormColor', 'uStormCount', 'uStormParams', 'uStormPosSize', 'uStrandStrength', 'uTermColor',
-      // ⭐⭐ `uTermStrength` LEFT THIS LIST ON 2026-08-21 AND THE DIRECTION IS THE WHOLE POINT — a name
-      // leaving `labVarying` normally means a wire died, and here it means one landed. The lab used
-      // to write TWO values across the corpus: 0.15 on the 163 solid bodies `solidOptics` claimed,
-      // and the factory 0 on the 103 gas bodies NO pack claimed. That is what made it "vary".
-      // `giantSurface` gives the gas half the same producer, `columnFraction` saturates above 0.3 bar
-      // and every body in this corpus is above it, so the lab now writes the CONSTANT 0.15 — which is
-      // exactly what the game writes, and `gameVarying` has never contained this name either.
-      // ⚠ SO THE AGREEMENT ON IT IS THE WEAK KIND (Instrument C's caveat: green is weak evidence on a
-      // constant), and ledger P-11 says so rather than counting it as per-body character.
-      'uTermWidth', 'uThermalDir', 'uVolcanismStrength',
-      'uWeatheredColor',
-      // ⭐⭐ THE THREE NAMES B4-1 ADDS, AND THEY ARE THIS BLOCK'S ENTIRE CLAIM — `uStarColor1` VARYING PER BODY on the lab material is exactly the thing ledger P-01 said was lost ("every swapped body renders under implicit white light"). ⛔ NOTE WHICH TWO OF THE FIVE DID **NOT** JOIN, because that is the control: `uStarBrightness1` is a literal 1.0 on every primary StarSystemGenerator draws, so it is constant BY CONSTRUCTION and a build in which it started varying would mean the generator moved, not the port; and `uLightDir2` is constructed at (0,0,0) on every body and only ever written by the PER-FRAME seam (src/main.js copies it inside its binary branch), so this construction-time pass cannot see it and must not pretend to — P-02's direction half is fenced at the seam instead, in tests/lab-shader-perframe-seam.test.js.
+      'uFluvialActivity', 'uFluvialDepth', 'uFluvialMeander', 'uFreshColor',
+      'uFrostAlbedo', 'uFrostCondensationT', 'uFrostLatitudeBias', 'uFrostLocked',
+      'uFrostMaxCoverage', 'uGlacialFlowVigor', 'uGlacialStrength', 'uIcenessMix',
+      'uJetFestoon', 'uJetShearTurb', 'uJetSpeed', 'uJetStrength',
+      'uKarstDensity', 'uKarstMaturity', 'uLavaActivity', 'uLavaAxis',
+      'uLavaCoverage', 'uLdaFat', 'uLightDir', 'uLimbColor',
+      'uLimbExponent', 'uLimbStrength', 'uLiquidMask', 'uMacroOffset',
+      'uMassWastDensity', 'uMountainAmp', 'uNoiseScale', 'uOrogenyAxis',
+      'uOrogenyStrength', 'uOutflowActivity', 'uOutflowDensity', 'uPerturb',
+      'uPlanetTempEq', 'uPlateauStrength', 'uPldStrength', 'uPolarMode',
+      'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing',
+      'uPolarSides', 'uPolarStrength', 'uPolarTint', 'uRepose',
+      'uScarpAxis', 'uScarpStrength', 'uScarpStyle', 'uSedColor',
+      'uShieldStratoMix', 'uStarBrightness2', 'uStarColor1', 'uStarColor2',
+      'uStormAux', 'uStormColor', 'uStormCount', 'uStormParams',
+      'uStormPosSize', 'uStrandStrength', 'uSubStrength', 'uTermColor',
+      'uTermWidth', 'uTesseraAxis', 'uTesseraStrength', 'uThermalDir',
+      'uVolcanismStrength', 'uWeatheredColor',
     ]);
     // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 76 of the 80 uniforms the seven writing
     // packs emit vary per body — ⭐⭐ COUNTED, NOT INHERITED (2026-09-02, the whole-branch review). This
@@ -563,26 +561,35 @@ describe('2. the collapse in per-body variation', () => {
     // review). The array below is 80 names counted, all ten of the pack's are in it, so the pre-pack
     // union was 70. The count is not asserted — membership is (see the note above) — which is exactly
     // why a wrong number could sit in the prose while the test stayed green.
-    expect(LEDGER.written).toEqual([
+    expect(LEDGER.written).toEqual([   // ⭐⭐ 80 -> 103 ON 2026-09-04. `solidRelief` declares twenty-three names and NOT ONE was written by any pack before this commit — MEASURED at the parent in tests/fixtures/solidrelief-pack-drivers-baseline.json, whose `newNamesAlreadyWritten` is empty over 156 bodies x 18 presets — so the union grows by exactly its contract set, the same shape leg 1, leg 3 and 2026-09-02 had. An overlap would show up here as a union that grew by less than twenty-three, and in `applyDriverPacks` as a throw.
       'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM',
       'uBandPhaseJet', 'uBandRough', 'uBandS2', 'uBandSEq',
       'uBandStrength', 'uBandTint', 'uBandWarp', 'uBioGroundColor',
-      'uBioGroundCover', 'uChaosRaftJitter', 'uCoarseCut', 'uCoastStrength', 'uCraterAmp', 'uCraterComplexD',
-      'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation', 'uCraterScale',
-      'uCratonColor', 'uCryoActivity', 'uDeltaDensity', 'uDetailOffset', 'uEdificeMaxHeight',
+      'uBioGroundCover', 'uChaosRaftJitter', 'uChasmaAxis', 'uChasmaCount',
+      'uChasmaDepth', 'uCoarseCut', 'uCoastStrength', 'uCraterAmp',
+      'uCraterComplexD', 'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation',
+      'uCraterScale', 'uCratonColor', 'uCryoActivity', 'uDeltaDensity',
+      'uDetailOffset', 'uDuneDensity', 'uDustDepth', 'uEdificeMaxHeight',
       'uEjectaAmp', 'uEjectaLump', 'uEjectaRampart', 'uEjectaStrength',
-      'uFluvialActivity', 'uFluvialDepth', 'uFluvialMeander',
-      'uFreshColor', 'uFrostAlbedo', 'uFrostCondensationT', 'uFrostLatitudeBias',
-      'uFrostLocked', 'uFrostMaxCoverage', 'uGlacialFlowVigor', 'uGlacialStrength',
-      'uIcenessMix', 'uJetFestoon', 'uJetShearTurb', 'uJetSpeed',
-      'uJetStrength', 'uLimbColor', 'uLimbExponent', 'uLimbStrength',
-      'uLiquidMask', 'uMacroOffset', 'uNoiseScale', 'uOutflowActivity', 'uOutflowDensity', 'uPerturb', 'uPlanetTempEq',
-      'uPldStrength', 'uPolarMode', 'uPolarPhase', 'uPolarPole',
-      'uPolarR0', 'uPolarRing', 'uPolarSides', 'uPolarStrength',
-      'uPolarTint', 'uRayBrightness', 'uRayCount', 'uRaySharp', 'uSeaLevel', 'uSedColor', 'uShieldStratoMix', 'uStormAux', 'uStormColor', 'uStormCount', 'uStormParams', 'uStormPosSize', 'uStrandStrength', 'uTermColor',   // ⭐⭐ AND FIVE MORE 2026-09-03, `stormDeck` (driver pack #10, workstream wire-storm-slice-lab-into-game): uStormAux, uStormColor, uStormCount, uStormParams, uStormPosSize — the F27/F28 carriage, written by NOTHING before this commit (uStormCount was 0 on every game body, so every GLSL storm term no-op'd). All five VARY per gas body (count 2–7; slots re-derived per (macroSeed, GAME_STORM_SEED)), so they land in `labVarying` too and the residue below is unchanged.   ⭐⭐ AND THREE MORE 2026-09-03, F3's ray half through `craterDriverBlock` (workstream wire-ejecta-rays-lab-into-game): the union grows by exactly three, which is the check that the block's addition collides with nothing — an overlap with an existing writer would show up here as a union that grew by less, and in `applyDriverPacks` as a throw. All three land on BOTH crater packs, so no body gains a writer it did not already have. ⛔ THE THREE NAMES RIDE THIS LINE: docs/FEATURES/step6-parity-ledger.md cites this file at :630, :715, :829 and :1004, and a new row here shifts every one of them.
-      'uTermStrength', 'uTermWidth', 'uTerraceCount', 'uVolcanismStrength',
-      'uWeatheredColor',
+      'uFluvialActivity', 'uFluvialDepth', 'uFluvialMeander', 'uFreshColor',
+      'uFrostAlbedo', 'uFrostCondensationT', 'uFrostLatitudeBias', 'uFrostLocked',
+      'uFrostMaxCoverage', 'uGlacialFlowVigor', 'uGlacialStrength', 'uIcenessMix',
+      'uJetFestoon', 'uJetShearTurb', 'uJetSpeed', 'uJetStrength',
+      'uKarstDensity', 'uKarstMaturity', 'uLavaActivity', 'uLavaAxis',
+      'uLavaCoverage', 'uLdaFat', 'uLimbColor', 'uLimbExponent',
+      'uLimbStrength', 'uLiquidMask', 'uMacroOffset', 'uMassWastDensity',
+      'uMountainAmp', 'uNoiseScale', 'uOrogenyAxis', 'uOrogenyStrength',
+      'uOutflowActivity', 'uOutflowDensity', 'uPerturb', 'uPlanetTempEq',
+      'uPlateauStrength', 'uPldStrength', 'uPolarMode', 'uPolarPhase',
+      'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
+      'uPolarStrength', 'uPolarTint', 'uRayBrightness', 'uRayCount',
+      'uRaySharp', 'uRepose', 'uScarpAxis', 'uScarpStrength',
+      'uScarpStyle', 'uSeaLevel', 'uSedColor', 'uShieldStratoMix',
+      'uStormAux', 'uStormColor', 'uStormCount', 'uStormParams',
+      'uStormPosSize', 'uStrandStrength', 'uSubStrength', 'uTermColor',
+      'uTermStrength', 'uTermWidth', 'uTerraceCount', 'uTesseraAxis',
+      'uTesseraStrength', 'uVolcanismStrength', 'uWeatheredColor',
     ]);
     // P-18's three `carried` names must actually VARY on the post-swap material, or "carried" is a
     // claim about a constant.

@@ -165,12 +165,12 @@ describe('registration 4 — every drivers module is in the runtime PACKS array'
     expect(orphanEntries).toEqual([]);
   });
 
-  it('CONTROL: the scan is non-vacuous — it reads the REAL drivers tree, all ten of them', () => {
+  it('CONTROL: the scan is non-vacuous — it reads the REAL drivers tree, all eleven of them', () => {
     // Pass an EMPTY registration list against the real tree: every module must then be reported.
     // This proves the walker sees the subject, which the green above cannot.
     const allUnregistered = unregisteredDrivers(DRIVERS_DIR, []);
     expect(allUnregistered.map((v) => v.module).sort()).toEqual(
-      ['craterDeck', 'fluvialDeck', 'giantDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics', 'stormDeck'],   // ⭐ TEN SINCE 2026-09-03 — `stormDeck` (F27/F28, pack #10) joined the tree and the registry in the same commit (workstream wire-storm-slice-lab-into-game).   // ⭐ NINE SINCE 2026-09-02 — `fluvialDeck` joined the tree. This answer GROWS as packs are added, which is the property that keeps the control from going vacuous.
+      ['craterDeck', 'fluvialDeck', 'giantDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics', 'solidRelief', 'stormDeck'],   // ⭐ ELEVEN SINCE 2026-09-04 — `solidRelief` (F1/F4/F5/F6/F8/F15/F16/F18/F19/F21, pack #11) joined the tree and the registry in the same commit (workstream solid-relief-deck).   // ⭐ TEN SINCE 2026-09-03 — `stormDeck` (F27/F28, pack #10) joined the tree and the registry in the same commit (workstream wire-storm-slice-lab-into-game).   // ⭐ NINE SINCE 2026-09-02 — `fluvialDeck` joined the tree. This answer GROWS as packs are added, which is the property that keeps the control from going vacuous.
     );
   });
 

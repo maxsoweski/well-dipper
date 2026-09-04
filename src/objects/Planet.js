@@ -11,7 +11,7 @@ import {
 import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
 import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js'; import { terminatorOpticsOf } from '../worldengine/base/terminatorOptics.js';  // ⛔ B3-1 RIDES THIS LINE: a new import line would shift every line-anchored citation that points below it, in this lane and in the concurrent one.
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
-import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js'; import { craterRelevanceOf } from '../worldengine/base/bombardment.js'; import { chasmaRiftsFor } from '../worldengine/base/labCore.js'; // ⛔ RIDES THIS LINE: a new import line shifts every cited line below (see :2085-2090)
+import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js'; import { craterRelevanceOf } from '../worldengine/base/bombardment.js'; import { chasmaRiftsFor, reliefAxesFor } from '../worldengine/base/labCore.js'; // ⛔ RIDES THIS LINE: a new import line shifts every cited line below (see :2085-2090)
 import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } from '../rendering/LabPlanetMaterial.js'; import { POSTERIZE_QUANTUM } from '../rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: a new import line shifts every cited line below it.
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2273,7 +2273,7 @@ export function labPackCtx(d, condition, mesh) {
     // src/worldengine/drivers/polarDeck.js:88 and from the rocky-surface pack's DECISION 1 note
     // point INTO the lines above; inserting anywhere among them rots refs that are correct today,
     // and a repair-by-offset is how a citation stops meaning anything.
-    ...labReliefOffsets(d), ...chasmaRiftsFor(labMacroSeed(d)),   // ⭐ B3-3: F4's rift pair RIDES THIS LINE — appended below `mesh`, never inserted, for the citation reason above; the pack tree cannot answer it because a condition carries no `seed`.
+    ...labReliefOffsets(d), ...chasmaRiftsFor(labMacroSeed(d)), ...reliefAxesFor(labMacroSeed(d)),   // ⭐ solid-relief-deck 2026-09-04: the FOUR seeded axis families (orogeny/scarp/tessera/lava) RIDE THIS LINE for the identical reason the rift pair does — a condition carries no `seed`, so a pack deriving them would put the whole galaxy on the seed-0 orientation (solidFeatures.js measured that at 1484/1484 and refused F10's axes on it). ⭐ B3-3: F4's rift pair RIDES THIS LINE — appended below `mesh`, never inserted, for the citation reason above; the pack tree cannot answer it because a condition carries no `seed`.
   };
 }
 

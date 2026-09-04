@@ -82,7 +82,7 @@
 // ⛔ THREE-FREE, AND NO ENTROPY. The import closure is `base/` + `display/` + `port/`. Measured on
 // this file's own imports rather than assumed:
 //   · `base/labCore.js` imports exactly ONE module —
-//     src/worldengine/base/labCore.js:1121 `import { R_EARTH_KM, featureFrequencyFromKm } from './featureScale.js';`
+//     src/worldengine/base/labCore.js:1124 `import { R_EARTH_KM, featureFrequencyFromKm } from './featureScale.js';`
 //     — and `featureScale.js` imports nothing at all. So the 1264-line module adds ZERO npm deps and
 //     ZERO renderer surface to the closure. The alternative was weighed BEFORE writing — extract
 //     `reliefEnvelope` and its four constants into a leaf module rather than pull a 1264-line file
@@ -104,7 +104,7 @@
 //   The contract's whole shape is that the pack states a SIZE and the writer resolves the FREQUENCY.
 //
 // ⚠ CARRIED DEFECT, NOT FIXED HERE. `reliefEnvelope`'s first parameter is dead:
-// src/worldengine/base/labCore.js:1197 `// for call-site symmetry with the old reliefNorm signature but is UNUSED in the return (radius via`
+// src/worldengine/base/labCore.js:1200 `// for call-site symmetry with the old reliefNorm signature but is UNUSED in the return (radius via`
 // — the radius reaches the answer only through g. It is filed as a defect in the gravity/self-
 // compression workstream's evidence folder,
 // docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/evidence/FINDING-uperturb-radius-blind.md.

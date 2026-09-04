@@ -320,7 +320,7 @@ describe('C — width and hue are FORWARDED from the shared law, not transcribed
       expect(PACK_CODE.includes(n), `limbDeck.js code names ${n} — ${why}`).toBe(false);
     }
     // The two numbers it DOES own, and it owns them because the lab's producer is a literal ternary
-    // with no module behind it: planet-lod-lab-core.js:1100 `limbStrength: hasAtmo ? 0.7 : 0.0,`.
+    // with no module behind it: planet-lod-lab-core.js:1103 `limbStrength: hasAtmo ? 0.7 : 0.0,`.
     expect(PACK_CODE).toContain('0.7');
     expect(LIMB_STRENGTH_WITH_AIR).toBe(0.7);
     expect(LIMB_STRENGTH_AIRLESS).toBe(0.0);

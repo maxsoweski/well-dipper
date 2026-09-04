@@ -490,7 +490,11 @@ describe('AC-2 — every other driver of every pack is byte-inert', () => {
       const was = PACK_FIXTURE.bodies[b.id];
       expect(was, b.id).toBeDefined();
       const now = resolvedUnder(b.cond, ctxOf(b), GATE_POLICY_RULED);
-      expect(Object.keys(now).sort(), b.id).toEqual(Object.keys(was).sort());
+      // ⭐ THE PACK SET MAY GROW; THE OLD PACKS MAY NOT MOVE. `solidRelief` (pack #11,
+      // workstream solid-relief-deck, 2026-09-04) postdates this fixture, so it is subtracted here
+      // BY NAME rather than the assertion being loosened — every pack the fixture knows must still
+      // be present and byte-inert, and an UNDECLARED new pack still reds.
+      expect(Object.keys(now).filter((n) => n !== 'solidRelief').sort(), b.id).toEqual(Object.keys(was).sort());
       for (const pack of Object.keys(was)) {
         for (const n of Object.keys(now[pack])) if (!(n in was[pack].drivers)) added.add(`${pack}.${n}`);
         for (const n of Object.keys(was[pack].drivers)) {

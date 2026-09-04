@@ -462,7 +462,11 @@ describe('AC-3 — every pre-existing driver of every pack is byte-inert', () =>
       const was = PACK_FIXTURE.bodies[b.id];
       expect(was, b.id).toBeDefined();
       const now = resolvedPacks(b.cond, labPackCtx(b.d, b.cond, MESH));
-      expect(Object.keys(now).sort(), b.id).toEqual(Object.keys(was).sort());
+      // ⭐ THE PACK SET MAY GROW; THE OLD PACKS MAY NOT MOVE. `solidRelief` (pack #11,
+      // workstream solid-relief-deck, 2026-09-04) postdates this fixture, so it is subtracted here
+      // BY NAME rather than the assertion being loosened — every pack the fixture knows must still
+      // be present and byte-inert, and an UNDECLARED new pack still reds.
+      expect(Object.keys(now).filter((n) => n !== 'solidRelief').sort(), b.id).toEqual(Object.keys(was).sort());
       for (const pack of Object.keys(was)) {
         for (const n of Object.keys(now[pack].drivers)) if (!(n in was[pack].drivers)) added.add(`${pack}.${n}`);
         const nowStripped = stripRays(now[pack]);
@@ -612,6 +616,14 @@ describe('AC-6 — the cost of the three uniforms, measured against dc03fc6', ()
     expect(Object.keys(labPackCtx(CORPUS[0].d, CORPUS[0].cond, MESH))).toEqual([
       'macroSeed', 'displayRadiusEarth', 'animRate', 'relevance', 'rotationHours',
       'rotationScale', 'mesh', 'macroOffset', 'detailOffset', 'craterOffset', 'chasmaCount', 'chasmaAxes',
+      // ⭐ FOUR ADDED 2026-09-04 BY A LATER WORKSTREAM, AND LISTED RATHER THAN THE ASSERTION LOOSENED.
+      // This test is the RAY workstream's own cost claim — "the rays added no ctx field" — and it
+      // stays exactly that: the four below belong to `solidRelief` (pack #11, workstream
+      // solid-relief-deck), which carries the seeded relief axes on ctx for the same reason
+      // `chasmaCount`/`chasmaAxes` are already here — a condition vector has no `seed`, so a pack
+      // deriving them would put the whole galaxy on the seed-0 orientation. Their presence says
+      // nothing about the rays, and a field added by anything else still cannot make this pass.
+      'orogenyAxis', 'scarpAxis', 'tesseraAxes', 'lavaAxis',
     ]);
     // neither crater pack bakes an attribute — the rays are three floats on a material already
     // declaring them (src/worldengine/shaders/uniforms.js:177-179), so the VRAM delta is zero.

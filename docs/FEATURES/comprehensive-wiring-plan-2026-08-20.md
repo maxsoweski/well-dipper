@@ -103,7 +103,7 @@ moons** (`condition.eccentricity === 0`). Sol excluded by construction.
 | `deriveUniforms().cryoActivity` | **1 distinct / 0 nonzero** | 32 distinct / 40 nonzero |
 | counterfactual `clamp01(rawTidalIoRatio)` | **77 distinct / 81 nonzero** | 85 distinct / 93 nonzero |
 
-*Layer 1 — the law.* src/worldengine/base/labCore.js:820 `const tidalProxy = clamp01(tidalHeat);`
+*Layer 1 — the law.* src/worldengine/base/labCore.js:823 `const tidalProxy = clamp01(tidalHeat);`
 reads a `tidalHeat` that src/worldengine/base/labCore.js:668 `const ecc = d.eccentricity ?? 0;`
 recomputes from a planet-around-star formula fed an eccentricity that is exactly zero on every plain
 moon. The already-forwarded `rawTidalIoRatio` is real and per-body, and
@@ -319,7 +319,7 @@ re-measurement.
 
 **GATE** · **Instrument C** shipped-uniform delta **byte-identical on all four packs** — a gate that CAN
 be met, because of F-3: `deriveUniforms` is not on the game's path, and the only `labCore` export that
-reaches a pack is `reliefEnvelope` (src/worldengine/base/labCore.js:1224 `export function reliefEnvelope(radiusEarth, surfaceGravity) {`,
+reaches a pack is `reliefEnvelope` (src/worldengine/base/labCore.js:1227 `export function reliefEnvelope(radiusEarth, surfaceGravity) {`,
 a pure function of two arguments) at `src/worldengine/drivers/rockySurface.js:122`. ⛔ If it goes red the
 change leaked out of the seam and must be split; never loosen the gate · **Instrument A** the 32
 red-by-design set unchanged, everything else green · **Instrument B** body-identity fence green ·

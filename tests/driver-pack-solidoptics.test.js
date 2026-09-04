@@ -28,7 +28,7 @@ import {
   writePackUniforms, isPackDriver, PackContractError,
 } from '../src/worldengine/port/writePackUniforms.js';
 import { PACKS, gatesFor, GATE_POLICY_ALL_ON, GATE_POLICY_RULED, GATE_RULINGS, selectPacks } from '../src/worldengine/drivers/index.js';
-import { ROCKY_SURFACE_ENTRY, ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; import { SOLID_FEATURES_UNIFORMS } from '../src/worldengine/drivers/solidFeatures.js'; import { FLUVIAL_DECK_UNIFORMS } from '../src/worldengine/drivers/fluvialDeck.js';   // ⛔ RIDES THIS LINE: a new import line shifts every cited line below it.
+import { ROCKY_SURFACE_ENTRY, ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; import { SOLID_FEATURES_UNIFORMS } from '../src/worldengine/drivers/solidFeatures.js'; import { FLUVIAL_DECK_UNIFORMS } from '../src/worldengine/drivers/fluvialDeck.js'; import { SOLID_RELIEF_UNIFORMS } from '../src/worldengine/drivers/solidRelief.js';   // ⛔ RIDES THIS LINE: a new import line shifts every cited line below it. ⛔ AND IT GOES BEFORE THIS COMMENT, NOT AFTER — appended past the `//` the import lands INSIDE the comment, dead, and every headless gate stays green until something reads the symbol. Done exactly that way on the first try, 2026-09-04.
 import { LIMB_UNIFORMS } from '../src/worldengine/drivers/limbDeck.js';
 import { Planet, labPackCtx, setLabGasBodiesOverride } from '../src/objects/Planet.js';
 import {
@@ -495,12 +495,12 @@ describe('F — the entry is registry-ready and its collision guard is LIVE', ()
     const b = SOLID[0];
     const built = buildLabPlanetMaterial({ bodyRadius: b.d.radius });
     const res = applyDriverPacks(built.material, b.cond, labPackCtx(b.d, b.cond, undefined));
-    expect(res.applied).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck']);   // ⭐ FOUR SINCE 2026-09-02 — `fluvialDeck` carries the same `!== 'gas'` predicate.
-    expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: false, aurora: true, edifices: true, chaos: true, frost: true, glacial: true, deltas: true, coast: true, outflow: true });   // ⭐ 2026-09-03 `terminator` RE-POINTED true -> false — Max 2026-07-16: "We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway." This is applyDriverPacks, i.e. the GAME's own composition point, so it takes `gatesFor`'s default (RULED) and this row is what the game now writes. Every OTHER gate is still true: the ruling answers one name, it does not weaken the policy.
+    expect(res.applied).toEqual(['rockySurface', 'solidOptics', 'solidFeatures', 'fluvialDeck', 'solidRelief']);   // ⭐ FIVE SINCE 2026-09-04 — `solidRelief` (pack #11) carries the same `!== 'gas'` predicate, so the collision guard is live for it too; its twenty-three names are disjoint from the other four's.   // ⭐ FOUR SINCE 2026-09-02 — `fluvialDeck` carries the same `!== 'gas'` predicate.
+    expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: false, aurora: true, edifices: true, chaos: true, frost: true, glacial: true, deltas: true, coast: true, outflow: true, mountains: true, canyons: true, scarps: true, plateaus: true, tessera: true, lava: true, sublimation: true, karst: true, dunes: true, dust: true, massWasting: true });   // ⭐ 2026-09-03 `terminator` RE-POINTED true -> false — Max 2026-07-16: "We need to disable terminator gradient totally; it doesn't work but also this is ultimately something that will need to be rendered in the lighting engine of the main game anyway." This is applyDriverPacks, i.e. the GAME's own composition point, so it takes `gatesFor`'s default (RULED) and this row is what the game now writes. Every OTHER gate is still true: the ruling answers one name, it does not weaken the policy.
     // The write log is the UNION of both contract sets and nothing outside them.
     // ⭐ THREE PACKS SINCE B3 LEG 3: `solidFeatures` shares this predicate, so the union it is
     // compared against has to include its contract set or the assertion reds on a declared write.
-    const declared = new Set([...ROCKY_SURFACE_UNIFORMS, ...SOLID_OPTICS_UNIFORMS, ...SOLID_FEATURES_UNIFORMS, ...FLUVIAL_DECK_UNIFORMS]);   // ⭐ and a FOURTH contract set, 2026-09-02, for the reason the line above states.
+    const declared = new Set([...ROCKY_SURFACE_UNIFORMS, ...SOLID_OPTICS_UNIFORMS, ...SOLID_FEATURES_UNIFORMS, ...FLUVIAL_DECK_UNIFORMS, ...SOLID_RELIEF_UNIFORMS]);   // ⭐ and a FIFTH contract set, 2026-09-04 (`solidRelief`, pack #11), for the reason the line above states.   // ⭐ and a FOURTH contract set, 2026-09-02, for the reason the line above states.
     expect(res.uniformsWritten.filter((n) => !declared.has(n))).toEqual([]);
     for (const n of SOLID_OPTICS_UNIFORMS) expect(res.uniformsWritten, n).toContain(n);
   });
