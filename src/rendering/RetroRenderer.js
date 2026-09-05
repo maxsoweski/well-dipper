@@ -334,15 +334,20 @@ export class RetroRenderer {
         uTargetUV: { value: new THREE.Vector2(0.5, 0.5) },    // UV of selected star
         uTargetBlink: { value: 0.0 },                          // 0 = off, 1 = on
         uTargetSize: { value: 0.0 },                           // bracket size in pixels
-        // ── THE FRAMEBUFFER DEPTH (Max, 2026-09-06: "3 yes") ─────────────
-        // ON by default — this is now how the game quantises. `]` turns it off
-        // so the old per-material world can be compared against it directly.
+        // ── THE FRAMEBUFFER DEPTH — OFF by default (Max, 2026-09-06: "Yes, off") ──
+        // ⛔ HE SAID YES TO THIS AND THEN RULED IT OFF, AND BOTH WERE RIGHT — what changed is that I
+        // measured it. I sold it as a free win; it is not. It re-bands the emissive terms
+        // planetShaders.glsl.js:203 deliberately exempts (95% of a star's mid-tones move), and on the
+        // starfield it mostly just crushes the faint end of ProceduralGlowLayer's galaxy band — the
+        // integrated light of unresolved stars, which is what tells you where you are in the galaxy —
+        // to pure black. Large cost, small benefit. `]` still toggles it, because the coverage
+        // argument is real and the day the bypass terms are separable this becomes the right default.
         // ⭐ SPLITTING RESOLUTION FROM COLOUR IS WHAT MADE THE RULING CLEAN: the
         // sky broke the era bar on both axes, and had one key moved both, "super
         // chunky stars look quite bad" would have been un-attributable between
         // them. It landed squarely on resolution, which is retired, and left
         // colour — this — free to ship.
-        uQuantizeAll: { value: 1 },
+        uQuantizeAll: { value: 0 },
         // ⭐ THE SHARED OBJECT ITSELF, not a copy — the same POSTERIZE_QUANTUM
         // the six body programs read. The question being asked is "does the sky
         // look right quantised LIKE THE WORLD", so it has to be the world's
