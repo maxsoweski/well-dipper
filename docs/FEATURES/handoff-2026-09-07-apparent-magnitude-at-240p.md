@@ -147,6 +147,22 @@ area) · 28 (a citation can point at nothing) · 29 (lab presets are archetypes)
    while moving.
 5. ⚠ `~/.claude/state/dev-collab/active-workstream.json` already points at `rendering-scale-aesthetic`.
 
+## 6b. ⏭ QUEUED BEHIND THE STARFIELD — Max's ruling, 2026-09-06
+
+> *"yes we still need to do this once we figure out the starfield"*
+
+**The cockpit and the menus** are the two of the original seven surfaces nothing has been done about.
+Both still draw at FULL native resolution against a 240p world (`cockpitTarget` = window size;
+menus are DOM/CSS vector text). The inventory measured them (§1 of
+`rendering-scale-seven-surface-INVENTORY.md`) and their reasons are written at their sites —
+`RetroRenderer.js:253` says the cockpit is full-res *"because the panels carry text the pilot has to
+read at 17 degrees"* — but **nobody has judged either against the 240p world now shipping.**
+
+⭐ **ORDER IS HIS AND IT IS DELIBERATE:** the starfield first, this after. Do not open it early — the
+cockpit is in shot constantly in HELM, so it is the more visible of the two when the time comes.
+⚠ The cockpit's `PhosphorDither` one-ink law is a SEPARATE, deliberate, current design position
+(lane F) and is NOT what this item is about; this is about the cockpit's RESOLUTION.
+
 ## 7. Suggested skills
 
 - **`superpowers:brainstorming`** — §1 is a genuine design question ("how should apparent magnitude
