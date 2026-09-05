@@ -1,56 +1,64 @@
 /**
  * GLOW_GRADIENT_MODE — how an emissive glow renders its FALLOFF once the buffer is 240p.
  *
- * Max, 2026-09-07, on the hard-edged halo that replaced the checkerboard: *"it looks bad. Dithering
- * accomplishes a simple transparency/glow gradient, we just need one that works with this
- * resolution. It reads pasted-on now."*
+ * Max, 2026-09-07, across three judgements in one session, each of which retired the answer before
+ * it: the Bayer stipple was a checkerboard; flattening its threshold "reads pasted-on"; quantising
+ * the falloff left the "star surrounded by a bunch of discs ... just get rid of those discs".
+ * The requirement, in his words, never moved: *"Dithering accomplishes a simple transparency/glow
+ * gradient, we just need one that works with this resolution."*
  *
- * ── WHY DITHER CANNOT BE THAT TECHNIQUE AT 240p ─────────────────────────────────────────────────
+ * ── WHY NO STIPPLE CAN BE THAT TECHNIQUE AT 240p ────────────────────────────────────────────────
  *
  * A Bayer stipple encodes a gradient in COVERAGE: it lights a varying FRACTION of the pixels and
- * lets the eye average them. That trade only works while the cell is small enough on screen to
- * average. At 240p the composite magnifies with NearestFilter, so one buffer pixel is 4.5 SCREEN
- * pixels and a 4x4 cell is an 18-screen-pixel block. Nothing averages it — it reads as a literal
- * checkerboard, which is what he saw across the whole R*30 flare quad.
+ * lets the eye average them. That trade needs a cell small enough on screen to average. At 240p the
+ * composite magnifies with NearestFilter, so one buffer pixel is 4.5 SCREEN pixels and a 4x4 cell is
+ * an 18-screen-pixel block. Nothing averages it — it reads as a literal checkerboard across the
+ * whole R*30 flare quad, which is what he saw.
  *
- * ⭐ SO THE GRADIENT HAS TO MOVE FROM COVERAGE INTO VALUE. The material is already AdditiveBlending
- * with alpha 1, so the framebuffer computes `src.rgb + dst.rgb` — the falloff is ALREADY carried by
- * the magnitude of `color`, and the dither was only punching holes in it. Deleting the stipple does
- * not remove a gradient, it stops destroying one.
+ * ── ⭐⭐⭐ WHAT THE STIPPLE WAS ACTUALLY DOING, WHICH TOOK TWO WRONG ANSWERS TO SEE ────────────────
  *
- * ── WHY BANDED IS THE DEFAULT AND NOT SMOOTH ────────────────────────────────────────────────────
+ * The line is `if (dither > brightness) discard`. It lights a pixel with probability `brightness`
+ * and, when lit, writes `brightness`. Its EXPECTED VALUE over the cell is therefore
+ * `brightness * brightness`. The dither was never only a texture — it was a GAMMA, and it is what
+ * held every faint feature down.
  *
- * A bare additive falloff is a correct gradient but a modern-looking one: smooth to 8 bits, which no
- * fifth-generation machine could hold. Quantising it puts the gradient back in the era WITHOUT
- * reintroducing a screen-space pattern, because the steps live in brightness, not in pixels — so it
- * is resolution-independent by construction and does not decay as the buffer coarsens.
+ * That explains both failed answers as one mistake. Deleting the stipple LINEARISES the falloff, so
+ * the lens-ghost ring at 4R (alpha 0.15) and the outer halo — features that had always been there,
+ * rendered as sparse speckle — get drawn SOLID. Those are the discs. Quantising on top of that
+ * added steps to an already-too-bright field and made it worse, and flattening the threshold to 0.5
+ * went the other way and AMPUTATED the halo outright, since the entire glow sits under 0.5.
  *
- * ⭐ AND THE STEP COUNT IS NOT A NEW TUNING CONSTANT. It is POSTERIZE_QUANTUM, the colour-depth
- * number Max already owns and has already ruled on (31 = RGB555). That also hands the mode its
- * termination for free: anything below one quantum floors to zero and is discarded, so the glow ends
- * where the colour depth says it ends rather than at an invented threshold. This is the one surface
- * where re-including the emissive term in posterisation is deliberate — `planetShaders.glsl.js:203`
- * exempts emissive on purpose, and that exemption is still right for a lit surface.
+ * ⭐ SO THE HONEST TRANSLATION OF A COVERAGE DITHER INTO VALUE IS ITS EXPECTED VALUE: multiply by
+ * brightness. One multiply. It reproduces exactly what the stipple averaged to, at ANY resolution,
+ * with no screen-space pattern and no threshold — which is the requirement as he stated it. The core
+ * (brightness ~1) is untouched; only the faint regions come back down, which is precisely where the
+ * discs were.
  *
- * ⛔ NOT A SETTING, AN A/B INSTRUMENT. The `[` key cycles these so the choice can be judged in
- * motion against the live star, per his standing rule that a static artifact cannot carry a
- * look that depends on movement. BANDED is the shipped answer; the other three exist to be
- * compared against it, including BAYER, which is the defect itself kept as the reference point.
+ * ⚠ AND THE DISCARD HAS TO SIT BELOW ONE 8-BIT LEVEL. A cut at 0.01 is 2.5/255 — small but not
+ * zero, so it draws a faint hard-edged circle where the glow stops, magnified 4.5x. Cutting at
+ * 1/255 puts the boundary below the smallest value the framebuffer can hold, so there is nothing
+ * left to see. That is in StarFlare.js, not here.
+ *
+ * ⛔ NOT A SETTING, AN A/B INSTRUMENT. The left-bracket key cycles these so the choice is judged in
+ * motion against a live star, per his standing rule that a static artifact cannot carry a look that
+ * depends on movement. COVERAGE ships; the other three are the three rejected answers, kept so the
+ * comparison has a floor and so nobody re-proposes one of them.
  */
+
 
 /** The pre-2026-09-07 behaviour: full Bayer stipple. THE DEFECT — kept so the A/B has a floor. */
 export const GLOW_MODE_BAYER = 0;
 /** cc06693: threshold flattened to 0.5. De-checkers the star, cuts the halo to a hard disc. */
 export const GLOW_MODE_HARD = 1;
-/** No cut at all — the raw additive falloff. Correct, but smooth to 8 bits and reads modern. */
-export const GLOW_MODE_SMOOTH = 2;
-/** The additive falloff quantised to the colour-depth setting. Era-correct and resolution-free. */
-export const GLOW_MODE_BANDED = 3;
+/** The raw additive falloff, no correction. THE ONE THAT GREW THE DISCS — kept as the reference. */
+export const GLOW_MODE_LINEAR = 2;
+/** SHIPPED: the stipple's expected value (brightness squared). Pattern-free at any resolution. */
+export const GLOW_MODE_COVERAGE = 3;
 
-export const GLOW_MODE_NAMES = ['BAYER (pre-fix)', 'HARD CUT', 'SMOOTH', 'BANDED'];
+export const GLOW_MODE_NAMES = ['BAYER (checkerboard)', 'HARD CUT (no halo)', 'LINEAR (discs)', 'COVERAGE'];
 
 /** ⭐ Max, 2026-09-07 — the answer to "one that works with this resolution". */
-export const GLOW_GRADIENT_MODE_DEFAULT = GLOW_MODE_BANDED;
+export const GLOW_GRADIENT_MODE_DEFAULT = GLOW_MODE_COVERAGE;
 
 /**
  * THE SHARED OBJECT. Same argument as `posterizeLevels.js` and `pixelScaleUniform.js`: these
@@ -64,7 +72,7 @@ export const GLOW_GRADIENT_MODE = { value: GLOW_GRADIENT_MODE_DEFAULT };
 export function clampGlowGradientMode(mode) {
   const n = Math.round(Number(mode));
   if (!Number.isFinite(n)) return GLOW_GRADIENT_MODE_DEFAULT;
-  return Math.min(GLOW_MODE_BANDED, Math.max(GLOW_MODE_BAYER, n));
+  return Math.min(GLOW_MODE_COVERAGE, Math.max(GLOW_MODE_BAYER, n));
 }
 
 /**

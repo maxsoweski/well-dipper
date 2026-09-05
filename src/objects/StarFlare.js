@@ -343,45 +343,46 @@ export class StarFlare {
           // flare disc. The billboard got the 2026-09-06 dither-authority fade; this did not, so
           // that fix landed on exactly the representation Max was NOT looking at.
           //
-          // ⭐ AND THE FADE WAS THE WRONG INSTRUMENT HERE ANYWAY. Max, 2026-09-07, on the result:
-          // "it looks bad ... it reads pasted-on now", and the requirement in his own words:
-          // "Dithering accomplishes a simple transparency/glow gradient, we just need one that
-          // works with this resolution." The other five sites stipple a shape's EDGE, so flattening
-          // their threshold to 0.5 buys them a hard rim and that is all it does. Here the stipple
-          // was the whole GRADIENT, keyed to brightness across the entire quad, so flattening it
-          // cut the halo to a hard brightness-0.5 silhouette — the pasted-on disc.
+          // ⭐⭐⭐ WHAT THE STIPPLE WAS ACTUALLY DOING, WHICH TOOK ME TWO WRONG ANSWERS TO SEE.
+          // The line "if (dither > brightness) discard" lights a pixel with probability brightness
+          // and, when lit, writes brightness. Its EXPECTED VALUE over the cell is therefore
+          // brightness * brightness. The dither was never only a texture — it was a GAMMA, and it
+          // is what held every faint feature down. Delete it and the falloff linearises: the
+          // lens-ghost ring at 4R (alpha 0.15) and the outer halo, which used to be sparse
+          // speckle, get drawn SOLID. Max, 2026-09-07: "star is now surrounded by a bunch of
+          // discs ... just get rid of those discs." Those discs are pre-existing features that my
+          // de-stippling promoted from speckle to solid geometry. Banding them made it worse by
+          // adding steps on top.
           //
-          // The mode branch and the argument for BANDED live in glowGradientMode.js. In short: a
-          // stipple encodes a gradient in COVERAGE and needs a cell small enough on screen to
-          // average, which 4.5x nearest-neighbour magnification destroys; so the gradient moves
-          // into VALUE, where additive blending was already carrying it, and the era look comes
-          // back from quantising that value rather than from a screen-space pattern.
-          // ⛔ THE BRANCH IS AN A/B INSTRUMENT ON THE LEFT-BRACKET KEY, NOT A SETTING. BANDED ships.
+          // ⭐ SO THE HONEST TRANSLATION OF A COVERAGE DITHER INTO VALUE IS ITS EXPECTED VALUE:
+          // multiply by brightness. That reproduces what the stipple averaged to, exactly, at ANY
+          // resolution and with no screen-space pattern — which is the whole requirement in his
+          // words, "a simple transparency/glow gradient ... that works with this resolution".
+          // The core (brightness ~1) is untouched; only the faint regions come back down, which is
+          // precisely where the discs were.
+          //
+          // ⚠ AND THE CUT HAS TO BE BELOW ONE 8-BIT LEVEL, NOT AT 0.01. A discard boundary at 0.01
+          // is 2.5/255 — small, but not zero, so it draws a faint hard-edged circle where the glow
+          // stops, magnified 4.5x by the composite. Cutting at 1/255 puts the boundary below the
+          // smallest value the framebuffer can hold, so there is nothing there to see.
+          // ⛔ THE BRANCH IS AN A/B INSTRUMENT ON THE LEFT-BRACKET KEY, NOT A SETTING.
           float brightness = max(max(color.r, color.g), color.b);
-          if (brightness < 0.01) discard;
+          if (brightness < 0.0039) discard;   // 1/255 — one 8-bit level; below this nothing renders
 
           if (uGlowMode < 0.5) {
-            // BAYER — the defect, kept as the A/B floor. A full-authority stipple over the quad.
+            // BAYER — the checkerboard defect, kept as the A/B floor.
             if (bayerDither(gl_FragCoord.xy) > brightness) discard;
           } else if (uGlowMode < 1.5) {
-            // HARD CUT — cc06693. De-checkers the star; cuts the halo to a hard disc.
+            // HARD CUT — cc06693. Amputates the halo: the whole glow is under 0.5, so only the
+            // core survives and the star becomes a bare cross.
             float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uDitherScale);
             if (mix(0.5, bayerDither(gl_FragCoord.xy), ditherAuthority) > brightness) discard;
           } else if (uGlowMode > 2.5) {
-            // BANDED — the shipped answer. Quantise the falloff to the colour depth. Anything under
-            // one quantum floors to black, so the glow TERMINATES where the colour depth says it
-            // does; there is no threshold of mine anywhere in this branch.
-            // ⚠ QUANTISE THE INTENSITY, NOT THE THREE CHANNELS. Flooring r, g and b independently
-            // lets them cross their last step at different radii, so a warm white glow sheds a
-            // green ring and then a red one on the way out — measured, 2026-09-07, and it reads as
-            // a colour-banding fault rather than as a designed falloff. Scaling the colour by a
-            // quantised SCALAR holds the hue and bands only the brightness, which is the ring
-            // structure the era actually produced.
-            float banded = floor(brightness * uPosterizeLevels.x) * uPosterizeLevels.y;
-            if (banded <= 0.0) discard;
-            color *= banded / brightness;
+            // COVERAGE — SHIPPED. The stipple's expected value, in one multiply.
+            color *= brightness;
           }
-          // SMOOTH (mode 2) falls through: the raw additive falloff, no cut and no quantisation.
+          // LINEAR (mode 2) falls through: the raw additive falloff with no gamma. Kept because it
+          // is the honest "no correction at all" reference — it is the one that grew the discs.
           gl_FragColor = vec4(color, 1.0);
         }
       `,
