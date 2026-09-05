@@ -377,17 +377,59 @@ export class StarFlare {
             // core survives and the star becomes a bare cross.
             float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uDitherScale);
             if (mix(0.5, bayerDither(gl_FragCoord.xy), ditherAuthority) > brightness) discard;
-          } else if (uGlowMode > 2.5) {
-            // COVERAGE — SHIPPED. The stipple's expected value, in one multiply.
-            color *= brightness;
           }
-          // LINEAR (mode 2) falls through: the raw additive falloff with no gamma. Kept because it
-          // is the honest "no correction at all" reference — it is the one that grew the discs.
-          gl_FragColor = vec4(color, 1.0);
+          // LINEAR (mode 2) falls through: raw falloff, alpha 1. Kept as the honest "no correction
+          // at all" reference — it is the one that shows both faults, the solid rings AND the disc.
+
+          // ── ⭐⭐⭐ THE ALPHA IS NOT DECORATION HERE, IT DECIDES WHETHER THE STARFIELD SURVIVES ──
+          // Max, 2026-09-05: "there's still a big black disk around the star."
+          //
+          // RetroRenderer's composite is mix(bg.rgb, scene.rgb, scene.a) — the SKY is bg, this
+          // material draws into scene, and scene.a decides how much of the sky is REPLACED. Writing
+          // alpha 1.0 across a quad of radius 15R therefore stamps "fully opaque world" over the
+          // starfield everywhere this shader does not discard, and where the glow has fallen to
+          // near-black that reads as a big black disc with a hard circular edge at the quad clip.
+          //
+          // ⭐ SO THE STIPPLE HAD A THIRD JOB, AND THIS IS THE ONE I MISSED TWICE. Beyond being a
+          // texture and a gamma, its discard held scene.a at ZERO across most of the quad, which is
+          // what let the starfield show through the flare at all. Dropping the threshold to 1/255
+          // to kill a faint edge ring turned almost the whole quad opaque and made the disc huge.
+          //
+          // Writing the glow's own coverage as alpha fixes it at the root: faint regions barely
+          // replace the sky, the bright core still fully does. And the coverage GAMMA comes out of
+          // the same term for free, because the composite multiplies by scene.a — mix(sky, color, b)
+          // is b*color + (1-b)*sky, which is precisely what the stipple averaged to. One term now
+          // does all three of the dither's jobs, with no screen-space pattern and no threshold.
+          // ⛔ WHICH IS WHY THERE IS NO color *= brightness HERE. The composite already applies it;
+          // doing it in the shader too gives b*b*color and a star dimmer than it has ever been.
+          float alphaOut = (uGlowMode > 2.5) ? brightness : 1.0;
+          gl_FragColor = vec4(color, alphaOut);
         }
       `,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      // ⭐ CUSTOM BLENDING, BECAUSE THE COLOUR AND THE COVERAGE NEED DIFFERENT FACTORS AND THREE
+      // IGNORES blendSrc/blendDst ENTIRELY UNLESS blending IS CustomBlending. A preset cannot say
+      // "add the colour, accumulate the coverage", which is exactly what this material needs.
+      //
+      // ⭐⭐ THE RGB FACTOR IS One, NOT SrcAlpha, AND THAT IS ARITHMETIC RATHER THAN TASTE. The look
+      // being matched is the pre-2026-09-06 one Max approved, where the stipple averaged to
+      //     b * color + (1 - b) * sky        [P(lit) = b, and a lit pixel wrote color at alpha 1]
+      // The composite is mix(sky, scene.rgb, scene.a), so writing alpha = b reproduces that term
+      // for term ONLY if scene.rgb is color itself. With SrcAlpha the buffer would hold color * b
+      // and the composite would deliver b*b*color — measured, and the star came out visibly dimmer
+      // than it had ever been, which is the wrong direction given magnitude is the open complaint.
+      // ⚠ NO EFFECT ON THE OTHER THREE MODES: they write alpha 1, where One and SrcAlpha agree.
+      //
+      // ⚠ AND ALPHA CANNOT RIDE ON THE RGB FACTORS: it would come out src.a * src.a, squaring the
+      // coverage. OneMinusSrcAlpha on the destination is ordinary coverage compositing and
+      // saturates at 1, so overlapping flares cannot push scene.a past 1 and make mix() extrapolate.
+      blending: THREE.CustomBlending,
+      blendEquation: THREE.AddEquation,
+      blendSrc: THREE.OneFactor,
+      blendDst: THREE.OneFactor,
+      blendEquationAlpha: THREE.AddEquation,
+      blendSrcAlpha: THREE.OneFactor,
+      blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
