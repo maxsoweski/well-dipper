@@ -2330,7 +2330,7 @@ window._lab = {
       if (titleEl) titleEl.style.display = 'none';
       splashActive = false;
       titleScreenActive = false;
-      if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+      if (skyRenderer._glowLayer?.mesh) { skyRenderer._glowLayer.mesh.visible = true; skyRenderer._glowLayer.mesh._hiddenForTitle = false; }   // ⭐⭐ BOTH FIELDS, AND THE FLAG IS THE ONE THAT MATTERS. `visible` alone is a WRITE THAT DOES NOT SURVIVE A FRAME: RetroRenderer's sky pass re-derives visibility from `_hiddenForTitle` every render (RetroRenderer.js:1016-1017 `const glowHidden = glowMesh?._hiddenForTitle;` then forces `visible = false`), so setting visible without clearing the flag is overwritten before anything is drawn. Max, 2026-09-06: "glow is still missing, I'm getting into Sol first via holding D at the beginning screen and then warping, the glow never shows up" — that is exactly this path. ⛔ PRE-EXISTING, and confirmed so by checking out 6220500 and reproducing it there. ⚠ FOUR SITES CARRIED THE HALF-WRITE (lab enterSol x2, the splash D-skip, _bootSkipToSol) against ONE that did it properly (the warp-reveal restore); a single writer would have made this impossible and is the real fix.
     }
     const solPos = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
     const knownSol = KnownSystems.findAt(solPos);
@@ -2362,7 +2362,7 @@ window._lab = {
       if (titleEl) titleEl.style.display = 'none';
       splashActive = false;
       titleScreenActive = false;
-      if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+      if (skyRenderer._glowLayer?.mesh) { skyRenderer._glowLayer.mesh.visible = true; skyRenderer._glowLayer.mesh._hiddenForTitle = false; }   // ⭐⭐ BOTH FIELDS, AND THE FLAG IS THE ONE THAT MATTERS. `visible` alone is a WRITE THAT DOES NOT SURVIVE A FRAME: RetroRenderer's sky pass re-derives visibility from `_hiddenForTitle` every render (RetroRenderer.js:1016-1017 `const glowHidden = glowMesh?._hiddenForTitle;` then forces `visible = false`), so setting visible without clearing the flag is overwritten before anything is drawn. Max, 2026-09-06: "glow is still missing, I'm getting into Sol first via holding D at the beginning screen and then warping, the glow never shows up" — that is exactly this path. ⛔ PRE-EXISTING, and confirmed so by checking out 6220500 and reproducing it there. ⚠ FOUR SITES CARRIED THE HALF-WRITE (lab enterSol x2, the splash D-skip, _bootSkipToSol) against ONE that did it properly (the warp-reveal restore); a single writer would have made this impossible and is the real fix.
     }
     if (galleryMode) exitGallery();
     const sysData = StarSystemGenerator.generate(seed);
@@ -5311,7 +5311,7 @@ function _handleSplashDismiss(e) {
     if (titleEl) titleEl.style.display = 'none';
     splashActive = false;
     titleScreenActive = false;
-    if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+    if (skyRenderer._glowLayer?.mesh) { skyRenderer._glowLayer.mesh.visible = true; skyRenderer._glowLayer.mesh._hiddenForTitle = false; }   // ⭐⭐ BOTH FIELDS, AND THE FLAG IS THE ONE THAT MATTERS. `visible` alone is a WRITE THAT DOES NOT SURVIVE A FRAME: RetroRenderer's sky pass re-derives visibility from `_hiddenForTitle` every render (RetroRenderer.js:1016-1017 `const glowHidden = glowMesh?._hiddenForTitle;` then forces `visible = false`), so setting visible without clearing the flag is overwritten before anything is drawn. Max, 2026-09-06: "glow is still missing, I'm getting into Sol first via holding D at the beginning screen and then warping, the glow never shows up" — that is exactly this path. ⛔ PRE-EXISTING, and confirmed so by checking out 6220500 and reproducing it there. ⚠ FOUR SITES CARRIED THE HALF-WRITE (lab enterSol x2, the splash D-skip, _bootSkipToSol) against ONE that did it properly (the warp-reveal restore); a single writer would have made this impossible and is the real fix.
     // Clear D key so it doesn't trigger WASD flight after skip
     _heldKeys.delete('KeyD');
     _heldKeys.delete('d');
@@ -5422,7 +5422,7 @@ function _bootSkipToSol(mode) {
   if (titleEl) titleEl.style.display = 'none';
   splashActive = false;
   titleScreenActive = false;
-  if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+  if (skyRenderer._glowLayer?.mesh) { skyRenderer._glowLayer.mesh.visible = true; skyRenderer._glowLayer.mesh._hiddenForTitle = false; }   // ⭐⭐ BOTH FIELDS, AND THE FLAG IS THE ONE THAT MATTERS. `visible` alone is a WRITE THAT DOES NOT SURVIVE A FRAME: RetroRenderer's sky pass re-derives visibility from `_hiddenForTitle` every render (RetroRenderer.js:1016-1017 `const glowHidden = glowMesh?._hiddenForTitle;` then forces `visible = false`), so setting visible without clearing the flag is overwritten before anything is drawn. Max, 2026-09-06: "glow is still missing, I'm getting into Sol first via holding D at the beginning screen and then warping, the glow never shows up" — that is exactly this path. ⛔ PRE-EXISTING, and confirmed so by checking out 6220500 and reproducing it there. ⚠ FOUR SITES CARRIED THE HALF-WRITE (lab enterSol x2, the splash D-skip, _bootSkipToSol) against ONE that did it properly (the warp-reveal restore); a single writer would have made this impossible and is the real fix.
 
   // Resolve + generate Sol exactly as the mode-blind D-skip does — spawnSystem
   // forWarp:false PLUS currentGalaxyStar / _currentSystemName / playerGalacticPos

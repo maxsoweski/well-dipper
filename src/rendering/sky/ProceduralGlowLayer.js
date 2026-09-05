@@ -884,8 +884,18 @@ export class ProceduralGlowLayer {
           brightness = totalBright;
 
           // ── Retro dithering ──
+          // ⭐ Same law as the nebula stipple: the dither's authority falls away as a buffer pixel
+          // outgrows the eye's ability to blend the pattern. Here it perturbs a QUANTISER rather than
+          // a discard, so fading it toward 0.5 leaves plain rounding — banded, but banded smoothly
+          // along the glow's gradient instead of checkered across it.
           vec2 ditherCoord = floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale));
-          float dither = bayerDither(ditherCoord);
+          float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uDitherScale);   // ⭐ THE CURVE IS PINNED TO THE SHIPPED DEFAULT. 1.0 at scale <= 3 means the look Max already
+          // approved is BYTE-IDENTICAL — this must not quietly restyle the game at its own default —
+          // and it reaches 0 by 4.5, which is 240p on his window, because that is the resolution he
+          // says the dithering was not designed for. Between them it eases rather than steps.
+          // ⚠ A CHOSEN CURVE, NOT A DERIVED ONE: the endpoints are principled (shipped default /
+          // the resolution he rejected it at), the easing between them is taste and is his to move.
+          float dither = mix(0.5, bayerDither(ditherCoord), ditherAuthority);
           float levels = 8.0;
           brightness = floor(brightness * levels + dither) / levels;
 

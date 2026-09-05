@@ -794,8 +794,30 @@ export class SkyFeatureLayer {
           // Dither at the retro pixel resolution — snap gl_FragCoord to the
           // low-res grid so nebulae look the same chunky resolution as
           // near-field scene objects (planets, moons, etc.)
-          vec2 retroCoord = floor(gl_FragCoord.xy / max(1.0, 3.0 / uPixelScale));   // ⭐ ~3 SCREEN px, not 3 BUFFER px — see pixelScaleUniform.js
-          float threshold = bayerDither(retroCoord);
+          // ⭐⭐ THE DITHER FADES OUT AS THE PIXELS GROW, AND THAT IS THE WHOLE POINT.
+          // Max, 2026-09-06: "There's still a weird checkerboard effect on the nebulas... These
+          // dithering effects were not designed for this resolution." Exactly right, and sizing the
+          // CELL (my first fix) could not have helped: this is a BINARY STIPPLE — density is compared
+          // against a 4x4 Bayer threshold and the fragment is kept or discarded — so at density 0.5
+          // it keeps half the pixels in a regular grid. That IS a checkerboard, by construction. It
+          // reads as tone only while the cells are small enough for the eye to blend them; at 4.5
+          // screen pixels per cell the eye resolves the grid instead, and dithering has stopped
+          // buying tonal resolution and started costing spatial resolution.
+          // ⭐ AND THE STIPPLE IS REDUNDANT HERE: this shader already outputs PREMULTIPLIED ALPHA
+          // under NormalBlending (see gl_FragColor below), so the nebula blends properly on its own.
+          // The stipple is a style layer on top of a correct blend, which is what makes fading it
+          // safe — at low resolution the nebula simply resolves as smooth alpha instead of dots.
+          // uDitherAuthority: 1 at the resolution this was tuned for, falling to 0 as a buffer pixel
+          // grows past ~2 screen pixels. mix() toward 0.5 keeps the mean density identical, so the
+          // nebula neither thins nor thickens as it fades — only its graininess changes.
+          vec2 retroCoord = floor(gl_FragCoord.xy / max(1.0, 3.0 / uPixelScale));
+          float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uPixelScale);   // ⭐ THE CURVE IS PINNED TO THE SHIPPED DEFAULT. 1.0 at scale <= 3 means the look Max already
+          // approved is BYTE-IDENTICAL — this must not quietly restyle the game at its own default —
+          // and it reaches 0 by 4.5, which is 240p on his window, because that is the resolution he
+          // says the dithering was not designed for. Between them it eases rather than steps.
+          // ⚠ A CHOSEN CURVE, NOT A DERIVED ONE: the endpoints are principled (shipped default /
+          // the resolution he rejected it at), the easing between them is taste and is his to move.
+          float threshold = mix(0.5, bayerDither(retroCoord), ditherAuthority);
           if (density < threshold) discard;
 
           // Color: blend between primary and secondary using profile-driven mix

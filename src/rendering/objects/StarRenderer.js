@@ -430,7 +430,18 @@ class NeutronStar extends StarRendererBase {
 
           float total = beam + core * 0.5;
 
-          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale)));
+          float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uDitherScale);   // ⭐ THE CURVE IS PINNED TO THE SHIPPED DEFAULT. 1.0 at scale <= 3 means the look Max already
+          // approved is BYTE-IDENTICAL — this must not quietly restyle the game at its own default —
+          // and it reaches 0 by 4.5, which is 240p on his window, because that is the resolution he
+          // says the dithering was not designed for. Between them it eases rather than steps.
+          // ⚠ A CHOSEN CURVE, NOT A DERIVED ONE: the endpoints are principled (shipped default /
+          // the resolution he rejected it at), the easing between them is taste and is his to move.
+          // ⭐ Max, 2026-09-06: the checkerboard is "pronounced on the stars when you get close
+          // enough". A close star is a LARGE sprite, so the edge stipple that reads as a soft
+          // rim at 3px cells is applied across its whole disc at 4.5 — the sprite becomes a
+          // checkerboard rather than a star. Fading toward a fixed 0.5 threshold gives a hard
+          // circular edge instead, which is what a sprite at this resolution should be.
+          float threshold = mix(0.5, bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale))), ditherAuthority);
           if (total < threshold * 0.4) discard;
 
           gl_FragColor = vec4(uColor * total, 1.0);
@@ -579,7 +590,18 @@ class BlackHole extends StarRendererBase {
           float doppler = 1.0 + 0.3 * sin(angle + uTime * 0.5);
           brightness *= doppler;
 
-          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale)));
+          float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uDitherScale);   // ⭐ THE CURVE IS PINNED TO THE SHIPPED DEFAULT. 1.0 at scale <= 3 means the look Max already
+          // approved is BYTE-IDENTICAL — this must not quietly restyle the game at its own default —
+          // and it reaches 0 by 4.5, which is 240p on his window, because that is the resolution he
+          // says the dithering was not designed for. Between them it eases rather than steps.
+          // ⚠ A CHOSEN CURVE, NOT A DERIVED ONE: the endpoints are principled (shipped default /
+          // the resolution he rejected it at), the easing between them is taste and is his to move.
+          // ⭐ Max, 2026-09-06: the checkerboard is "pronounced on the stars when you get close
+          // enough". A close star is a LARGE sprite, so the edge stipple that reads as a soft
+          // rim at 3px cells is applied across its whole disc at 4.5 — the sprite becomes a
+          // checkerboard rather than a star. Fading toward a fixed 0.5 threshold gives a hard
+          // circular edge instead, which is what a sprite at this resolution should be.
+          float threshold = mix(0.5, bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale))), ditherAuthority);
           if (brightness < threshold * 0.6) discard;
 
           gl_FragColor = vec4(col * brightness, 1.0);
