@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assignName } from '../../util/scene-naming.js';
+import { SKY_PIXEL_SCALE } from '../skyPixelScale.js';   // ⭐ stars keep a constant SCREEN size as the sky's grid coarsens; see that file for why the first low-res sky read as 3x-bigger stars.
 
 /**
  * WarpTunnelStarfieldLayer — experimental variant of StarfieldLayer.
@@ -121,6 +122,7 @@ export class WarpTunnelStarfieldLayer {
       vertexColors: true,
 
       uniforms: {
+        uSkyPixelScale: SKY_PIXEL_SCALE,   // ⭐ the SHARED object — one setter moves every live sky material (skyPixelScale.js)
         uBrightness: { value: 1.0 },
         // Tunnel warp
         uTunnelPhase:   { value: 0.0 },
@@ -161,6 +163,8 @@ export class WarpTunnelStarfieldLayer {
         float hash1(vec3 p) {
           return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
         }
+
+        uniform float uSkyPixelScale;
 
         void main() {
           vColor = color;
@@ -259,7 +263,7 @@ export class WarpTunnelStarfieldLayer {
             float depthNorm = clamp(scrolled / (L * 0.5), 0.0, 1.0);
             depthScale = mix(1.8, 0.12, depthNorm * depthNorm);
           }
-          gl_PointSize = baseSize * (1.0 + uTunnelPhase * 0.3) * depthScale;
+          gl_PointSize = baseSize * (1.0 + uTunnelPhase * 0.3) * depthScale / uSkyPixelScale;   // ⭐ constant SCREEN size — see skyPixelScale.js
         }
       `,
 

@@ -118,6 +118,16 @@
                  handler have all shipped since 2026-08-21 — so the one knob carrying Max's RGB555
                  ruling was the one knob he could not turn. Bounds are the shipped clamp verbatim
                  (POSTERIZE_LEVELS_MIN/MAX, src/rendering/posterizeLevels.js). -->
+            <!-- ⭐ THE SKY'S OWN RESOLUTION, separate from Pixel Scale (Max, 2026-09-06: "I do want
+                 more sky resolution setting and I want to know the numbers"). 1 = full, the shipped
+                 default and his standing ruling. The first low-res sky he saw was 3x-bigger stars,
+                 not a coarser starfield — a gl_PointSize bug, fixed in skyPixelScale.js — so this
+                 slider is the first honest version of that question. ⚠ Its useful range has a REAL
+                 floor: a common star is 4 screen px, so past scale 4 it is under one buffer pixel
+                 and starts dropping out and twinkling as the camera moves. -->
+            <label>Sky Resolution</label>
+            <input type="range" data-setting="skyPixelScale" min="1" max="8" step="0.5">
+            <span class="setting-value"></span>
             <label>Color Depth</label>
             <input type="range" data-setting="posterizeLevels" min="2" max="64" step="1">
             <span class="setting-value"></span>

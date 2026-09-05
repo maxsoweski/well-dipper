@@ -3,6 +3,7 @@ import * as THREE from 'three';
 // what makes the composite quantise to exactly what the bodies quantise to — the same lattice, so the
 // per-material pass is a provable no-op — and what makes it track the Color Depth slider as it moves.
 import { POSTERIZE_QUANTUM } from './posterizeLevels.js';
+import { SKY_PIXEL_SCALE } from './skyPixelScale.js';   // ⭐ the sky's OWN divisor, independent of the world's — Max wants to tune the relationship, not inherit it.
 
 /**
  * RetroRenderer — dual-resolution multi-pass compositor.
@@ -61,6 +62,13 @@ export class RetroRenderer {
     this.scene = scene;
     this.camera = camera;
     this.pixelScale = 3; // Each render pixel = 3×3 screen pixels
+
+    // ⭐ THE SKY'S OWN RESOLUTION, SEPARATE FROM THE WORLD'S (Max, 2026-09-06). 1 = full, the shipped
+    // default. Separate rather than shared because the two surfaces fail differently: a planet is an
+    // AREA and coarsens gracefully, a starfield is a POINT CLOUD and starts dropping stars once a
+    // star is under one buffer pixel. He asked to keep tuning this, so it gets its own knob and its
+    // own numbers rather than being pinned to pixelScale. Read from SKY_PIXEL_SCALE so the setting,
+    // the point-size compensation and this allocation cannot disagree.
 
     // Separate scene for the starfield (rendered at full resolution)
     // Legacy: used directly when no SkyRenderer is set.
@@ -913,7 +921,12 @@ export class RetroRenderer {
     if (this.hudTarget) this.hudTarget.dispose();
     if (this.cockpitTarget) this.cockpitTarget.dispose();
 
-    this.bgTarget = new THREE.WebGLRenderTarget(width, height, {
+    // ⚠ Math.max(1, ...) — a 0-dimension target is a silent black frame, and skyScale can exceed the
+    // window's smaller dimension on a short window.
+    const skyScale = SKY_PIXEL_SCALE.value;
+    const bgW = Math.max(1, Math.ceil(width / skyScale));
+    const bgH = Math.max(1, Math.ceil(height / skyScale));
+    this.bgTarget = new THREE.WebGLRenderTarget(bgW, bgH, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
     });

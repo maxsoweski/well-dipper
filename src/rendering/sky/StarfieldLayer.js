@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assignName } from '../../util/scene-naming.js';
+import { SKY_PIXEL_SCALE } from '../skyPixelScale.js';   // ⭐ stars keep a constant SCREEN size as the sky's grid coarsens; see that file for why the first low-res sky read as 3x-bigger stars.
 
 /**
  * StarfieldLayer — background stars on a sky sphere.
@@ -85,6 +86,7 @@ export class StarfieldLayer {
       vertexColors: true,
 
       uniforms: {
+        uSkyPixelScale: SKY_PIXEL_SCALE,   // ⭐ the SHARED object — one setter moves every live sky material (skyPixelScale.js)
         uFoldAmount: { value: 0.0 },
         uBrightness: { value: 1.0 },
         uRiftCenter: { value: new THREE.Vector2(0.0, 0.0) },
@@ -137,6 +139,7 @@ export class StarfieldLayer {
         varying float vConverge;
         varying float vTunnelAmt;
         varying float vClipped;
+        uniform float uSkyPixelScale;
 
         // Stable pseudo-random from vec3 — gives on-axis stars a deterministic
         // azimuth when their perp component vanishes.
@@ -236,7 +239,10 @@ export class StarfieldLayer {
             float depthNorm = clamp(scrolled / (uTunnelLength * 0.5), 0.0, 1.0);
             depthScale = mix(1.8, 0.12, depthNorm * depthNorm);
           }
-          gl_PointSize = baseSize * convergeFactor * (1.0 + uTunnelPhase * 0.3) * depthScale;
+          // ⭐ / uSkyPixelScale — gl_PointSize is in TARGET pixels, so without this a star drawn
+          // into a 1/N buffer comes out N times bigger on screen after the composite's Nearest
+          // magnify. Dividing holds the star's SCREEN size fixed and coarsens only its lattice.
+          gl_PointSize = baseSize * convergeFactor * (1.0 + uTunnelPhase * 0.3) * depthScale / uSkyPixelScale;
         }
       `,
 

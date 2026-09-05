@@ -968,14 +968,17 @@ export class SkyFeatureLayer {
       blending: THREE.AdditiveBlending,
       uniforms: {
         uBrightness: { value: brightness },
+        uSkyPixelScale: SKY_PIXEL_SCALE,   // ⭐ shared object — skyPixelScale.js
       },
       vertexShader: /* glsl */ `
         attribute float aSize;
         varying vec3 vColor;
+        uniform float uSkyPixelScale;
+
         void main() {
           vColor = color;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = max(2.0, aSize);
+          gl_PointSize = max(2.0, aSize) / uSkyPixelScale;   // ⭐ constant SCREEN size — see skyPixelScale.js
         }
       `,
       fragmentShader: /* glsl */ `
@@ -1046,14 +1049,17 @@ export class SkyFeatureLayer {
       blending: THREE.AdditiveBlending,
       uniforms: {
         uBrightness: { value: brightness },
+        uSkyPixelScale: SKY_PIXEL_SCALE,   // ⭐ shared object — skyPixelScale.js
       },
       vertexShader: /* glsl */ `
         attribute float aSize;
         varying vec3 vColor;
+        uniform float uSkyPixelScale;
+
         void main() {
           vColor = color;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = max(2.0, aSize);
+          gl_PointSize = max(2.0, aSize) / uSkyPixelScale;   // ⭐ constant SCREEN size — see skyPixelScale.js
         }
       `,
       fragmentShader: /* glsl */ `
