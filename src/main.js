@@ -13475,20 +13475,13 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // ⭐ THE STARFIELD A/B (Max, 2026-09-06). `[` = resolution, `]` = colour. TWO keys, not one: the sky
-  // departs from the era bar on BOTH axes at once (full-res AND unquantised), and a single toggle
-  // would move both, leaving a "no, I don't like that" impossible to attribute. Bare-key A/B flipped
-  // while flying is the only instrument that has ever worked here — a static screenshot cannot carry
-  // whether a starfield CRAWLS, which is the actual risk the low-res case runs.
-  if (e.code === 'BracketLeft' && !titleScreenActive) {
-    const r = retroRenderer.setSkyLowRes(!retroRenderer.skyLowRes);
-    console.log(`[SKY A/B] resolution: ${r.skyLowRes ? 'WORLD (era)' : 'FULL (shipped)'} — bgTarget ${r.bgTarget[0]}x${r.bgTarget[1]}, sceneTarget ${retroRenderer.sceneTarget.width}x${retroRenderer.sceneTarget.height}`);
-    return;
-  }
+  // ⭐ `]` A/Bs THE FRAMEBUFFER (Max, 2026-09-06: "3 yes"). ON is the shipped state; off restores the
+  // old per-material world for comparison. ⛔ `[` (sky at the world's resolution) is RETIRED, not
+  // missing — he judged it the same day: "super chunky stars look quite bad, at least like this".
   if (e.code === 'BracketRight' && !titleScreenActive) {
-    const on = retroRenderer._compositeMesh.material.uniforms.uSkyQuantize.value < 0.5;
-    const r = retroRenderer.setSkyQuantize(on);
-    console.log(`[SKY A/B] colour: ${r.skyQuantize ? `QUANTISED to the world's ${r.levels} levels` : 'UNQUANTISED (shipped)'}`);
+    const u = retroRenderer._compositeMesh.material.uniforms;
+    const r = retroRenderer.setQuantizeAll(u.uQuantizeAll.value < 0.5);
+    console.log(`[FRAMEBUFFER] ${r.quantizeAll ? `ON — whole picture at ${r.levels} levels` : 'OFF — per-material only (pre-2026-09-06)'}`);
     return;
   }
 

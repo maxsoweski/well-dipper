@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-// ⭐ THE SKY A/B READS THE WORLD'S OWN LIVE QUANTUM. Handing the SHARED OBJECT (never a copy) is what
-// makes `]` mean "quantise the sky exactly like the world" instead of "quantise the sky to whatever
-// the level happened to be when the compositor was built" — it tracks the Color Depth slider live.
+// ⭐ THE FRAMEBUFFER READS THE WORLD'S OWN LIVE QUANTUM. Handing the SHARED OBJECT (never a copy) is
+// what makes the composite quantise to exactly what the bodies quantise to — the same lattice, so the
+// per-material pass is a provable no-op — and what makes it track the Color Depth slider as it moves.
 import { POSTERIZE_QUANTUM } from './posterizeLevels.js';
 
 /**
@@ -24,8 +24,36 @@ import { POSTERIZE_QUANTUM } from './posterizeLevels.js';
  * - Hyperspace 3D tunnel (ray-cylinder intersection, visible through portal)
  * - Exit reveal (fizzing dithered hole opening in tunnel)
  *
- * Dithering is NOT done here. Each object handles its own dithering
- * in its fragment shader for a more authentic retro look.
+ * ⭐ COLOUR QUANTISATION IS DONE HERE, ONCE, AT THE COMPOSITE (Max, 2026-09-06: "3 yes").
+ * It used to be per-material and that was the whole defect: a census of Sol found 35 materials
+ * quantising and ~250 NOT — the stars, the nebulae, the orbit lines, the HUD and Sol's 16 textured
+ * bodies had no colour reduction at all, not because they were set wrong but because nothing ever
+ * asked them. The consoles this game is imitating had ONE framebuffer at 15 bits and everything
+ * drawn into it was reduced, because there was nowhere else for a pixel to go; nothing could opt
+ * out. Quantising the finished picture reproduces that, and makes "a surface nobody wired" not a
+ * bug to be repaired but a state that cannot be reached.
+ *
+ * ⛔⛔ THIS IS NOT A NO-OP FOR BODIES, AND THE COMMENT HERE CLAIMED IT WAS. I argued from arithmetic
+ * that a body writing exactly k/L survives this pass byte-identically (floor(k + 0.4d + 0.5) = k for
+ * d in [-0.5,0.5]) and wrote "provable no-op". MEASURED, frozen frame, planet at 3 body radii:
+ * 24.22% of the disc's pixels MOVED, max 12/765. The control (on vs on) was 0, so that is real.
+ *
+ * ⭐ THE ARITHMETIC WAS FINE; THE PREMISE WAS FALSE. Bodies do NOT write k/L. planetShaders.glsl.js
+ * §3 states the invariant outright at :203 — "★ emissive terms are added AFTER the posterize split
+ * so they don't band into gray steps" — and the shader carries FOUR deliberate escapes from its own
+ * quantiser: uEmissiveBypass, uLimbBypass, uTermBypass, uSpecBypass. Glows, limb, terminator and
+ * speculars are OFF-LATTICE ON PURPOSE. A framebuffer-wide quantiser cannot honour an exemption it
+ * cannot see — it gets a final colour, not a channel breakdown — so it re-bands exactly the terms
+ * that were exempted to stop them banding.
+ *
+ * ⚠ SO THIS IS A REAL TRADE, NOT A FREE WIN, AND IT IS MAX'S TO MAKE. Hardware-faithful says glows
+ * DID band on a 15-bit framebuffer and nothing could opt out. The shipped shader says a banded glow
+ * reads as grey steps and was deliberately prevented. Both are defensible. What is NOT defensible is
+ * the claim I made first, that switching this on costs nothing.
+ * ⛔ THE SKY IS NOT DRAWN AT THE WORLD'S RESOLUTION, AND THAT IS MAX'S RULING, NOT AN OVERSIGHT.
+ * A `[` toggle allocating bgTarget at the world's size shipped for exactly one session and he
+ * judged it 2026-09-06: "super chunky stars look quite bad, at least like this". The full-res sky
+ * stays. His "at least like this" is the door left open — a MIDDLE resolution was never tried.
  */
 export class RetroRenderer {
   constructor(canvas, scene, camera) {
@@ -33,14 +61,6 @@ export class RetroRenderer {
     this.scene = scene;
     this.camera = camera;
     this.pixelScale = 3; // Each render pixel = 3×3 screen pixels
-
-    // ⭐ THE SKY A/B'S RESOLUTION HALF (Max, 2026-09-06). false = the shipped
-    // behaviour, sky at FULL resolution (the "tiny crisp star points" this
-    // file's own header argues for). true = the sky is allocated at the WORLD's
-    // resolution, which is what a single-framebuffer console actually did.
-    // Toggled by `[`; the colour half is `]`. Separate on purpose — see the
-    // uSkyQuantize block in _setupComposite.
-    this.skyLowRes = false;
 
     // Separate scene for the starfield (rendered at full resolution)
     // Legacy: used directly when no SkyRenderer is set.
@@ -169,26 +189,13 @@ export class RetroRenderer {
   }
 
   /**
-   * THE STARFIELD A/B — resolution half. `[` in game.
-   * Reallocates bgTarget at the world's resolution (on) or the screen's (off).
+   * THE FRAMEBUFFER DEPTH — on by default, `]` in game to A/B it against the old per-material world.
    * @param {boolean} on
-   * @returns {{ skyLowRes: boolean, bgTarget: number[] }} measured, so a caller can assert it moved
+   * @returns {{ quantizeAll: boolean, levels: number }}
    */
-  setSkyLowRes(on) {
-    this.skyLowRes = !!on;
-    this.resize();                                   // the target has to be REALLOCATED, not merely flagged
-    return { skyLowRes: this.skyLowRes, bgTarget: [this.bgTarget.width, this.bgTarget.height] };
-  }
-
-  /**
-   * THE STARFIELD A/B — colour half. `]` in game.
-   * Quantises the sky sample to the world's live posterize quantum.
-   * @param {boolean} on
-   * @returns {{ skyQuantize: boolean, levels: number }}
-   */
-  setSkyQuantize(on) {
-    this._compositeMesh.material.uniforms.uSkyQuantize.value = on ? 1 : 0;
-    return { skyQuantize: !!on, levels: this._compositeMesh.material.uniforms.uSkyLevels.value.x };
+  setQuantizeAll(on) {
+    this._compositeMesh.material.uniforms.uQuantizeAll.value = on ? 1 : 0;
+    return { quantizeAll: !!on, levels: this._compositeMesh.material.uniforms.uSkyLevels.value.x };
   }
 
   /**
@@ -319,17 +326,15 @@ export class RetroRenderer {
         uTargetUV: { value: new THREE.Vector2(0.5, 0.5) },    // UV of selected star
         uTargetBlink: { value: 0.0 },                          // 0 = off, 1 = on
         uTargetSize: { value: 0.0 },                           // bracket size in pixels
-        // ── THE STARFIELD A/B (Max, 2026-09-06) ──────────────────────────
-        // The sharpest surviving departure from the era bar: the sky draws at
-        // FULL resolution with NO colour quantisation, behind a 1/3-resolution
-        // 5-bit world. On real hardware there was ONE framebuffer and the stars
-        // were 15-bit and chunky like everything else — but RetroRenderer.js:7's
-        // reason is also real, since a point starfield at 240p aliases and
-        // crawls. Both sides are true, so this is Max's eye and nobody else's.
-        // TWO uniforms, not one, DELIBERATELY: resolution and colour are
-        // separable causes and a single toggle would move both at once, leaving
-        // "I don't like it" un-attributable. `[` moves resolution, `]` colour.
-        uSkyQuantize: { value: 0 },
+        // ── THE FRAMEBUFFER DEPTH (Max, 2026-09-06: "3 yes") ─────────────
+        // ON by default — this is now how the game quantises. `]` turns it off
+        // so the old per-material world can be compared against it directly.
+        // ⭐ SPLITTING RESOLUTION FROM COLOUR IS WHAT MADE THE RULING CLEAN: the
+        // sky broke the era bar on both axes, and had one key moved both, "super
+        // chunky stars look quite bad" would have been un-attributable between
+        // them. It landed squarely on resolution, which is retired, and left
+        // colour — this — free to ship.
+        uQuantizeAll: { value: 1 },
         // ⭐ THE SHARED OBJECT ITSELF, not a copy — the same POSTERIZE_QUANTUM
         // the six body programs read. The question being asked is "does the sky
         // look right quantised LIKE THE WORLD", so it has to be the world's
@@ -381,7 +386,7 @@ export class RetroRenderer {
         uniform float uTargetBlink;
         uniform float uTargetSize;
         // Sky A/B — see the uniform block above
-        uniform float uSkyQuantize;
+        uniform float uQuantizeAll;
         uniform vec2 uSkyLevels;
         // Color palette
         uniform int uColorPalette;
@@ -612,10 +617,6 @@ export class RetroRenderer {
 
         void main() {
           vec4 bg = texture2D(bgTexture, vUv);
-          // The sky A/B's colour half. Applied AT THE SAMPLE so it flows through the mix, the
-          // scene fade and the cockpit composite below — quantising after the mix would also
-          // re-quantise the world, which is already quantised, and would answer a different question.
-          if (uSkyQuantize > 0.5) bg.rgb = posterizeC(bg.rgb, uSkyLevels, gl_FragCoord.xy);
           vec4 scene = texture2D(sceneTexture, vUv);
 
           // Use alpha to decide what's "scene" vs "empty space".
@@ -874,6 +875,15 @@ export class RetroRenderer {
             result = mix(result, c, cockpit.a);
           }
 
+          // ── THE FRAMEBUFFER ──────────────────────────────────────────────
+          // Everything the game draws has now landed in "result": world, sky, HUD, cockpit. This is
+          // the 15-bit buffer, and it is the LAST thing before the display. Position is the whole
+          // argument: AFTER the cockpit, so the cabin obeys the same depth as the world it frames;
+          // AFTER the grain, so noise lands ON the lattice the way analog noise lands on discrete
+          // levels rather than smuggling in off-lattice values; BEFORE applyPalette, because a
+          // palette is a DISPLAY remap of what the buffer already holds, not part of the buffer.
+          if (uQuantizeAll > 0.5) result = posterizeC(result, uSkyLevels, gl_FragCoord.xy);
+
           result = applyPalette(result, uColorPalette);
           gl_FragColor = vec4(result, 1.0);
         }
@@ -903,12 +913,7 @@ export class RetroRenderer {
     if (this.hudTarget) this.hudTarget.dispose();
     if (this.cockpitTarget) this.cockpitTarget.dispose();
 
-    // ⚠ THE SKY'S SIZE IS NOW A QUESTION, NOT A CONSTANT. NearestFilter on the
-    // magnify side is what makes the low-res case read as chunky pixels rather
-    // than a blur, which is the whole point of the comparison.
-    const bgW = this.skyLowRes ? renderWidth : width;
-    const bgH = this.skyLowRes ? renderHeight : height;
-    this.bgTarget = new THREE.WebGLRenderTarget(bgW, bgH, {
+    this.bgTarget = new THREE.WebGLRenderTarget(width, height, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
     });

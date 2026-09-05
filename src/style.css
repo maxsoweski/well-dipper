@@ -468,7 +468,19 @@ html, body {
   width: 90%;
   max-height: 85vh;
   overflow-y: auto;
-  padding: 12px 0;
+  /* ⭐⭐ THE SECOND HALF OF "240 and 480 never appear" (Max, 2026-09-06, after the first fix).
+     Widening the value column stopped the TEXT overflowing its own box, and I measured exactly that
+     (scrollWidth === clientWidth) and called it done — but that measurement cannot see this bug.
+     THIS panel is the scrolling container and it had ZERO horizontal padding, so the scrollbar is
+     drawn ON TOP of the right edge of the content, and the rightmost grid column is the value
+     readout — whose tail is, again, the era tag. Unclipped text, still-invisible tag.
+     ⛔ scrollWidth-vs-clientWidth IS THE WRONG INSTRUMENT for occlusion: it asks "does the text fit
+     its box", not "is the box under the scrollbar". The right check compares the span's right edge
+     against the panel's CONTENT-box right edge (offsetWidth - clientWidth = scrollbar width).
+     `scrollbar-gutter: stable` reserves the space whether or not the bar is showing, so the layout
+     does not shift when a section expands. */
+  scrollbar-gutter: stable;
+  padding: 12px 20px;
 }
 
 .settings-panel h2 {
