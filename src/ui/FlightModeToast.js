@@ -27,6 +27,21 @@ export class FlightModeToast {
    */
   setSuppressed(on) { this._suppressed = !!on; }
 
+  /**
+   * ⭐ SUPPRESSION-BYPASSING READOUT, FOR DEBUG A/B KEYS ONLY. The suppression above is a ruling
+   * about THIS BANNER's own content — the cockpit's DRIVE panel already says MODE persistently, so
+   * a 1.6 s flash of the same thing is noise. A bare-key A/B readout is not that: nothing else on
+   * screen names which variant is showing, and the A/B is worthless if you cannot tell. Added
+   * 2026-09-07 for the `[` star-glow cycle, whose whole point is judging a look WHILE FLYING, which
+   * is HELM, which is exactly where the suppression would have silenced it.
+   * ⛔ Do not reach for this to bring flight-mode announcements back into HELM.
+   */
+  showDebug(label, hint) {
+    const was = this._suppressed;
+    this._suppressed = false;
+    try { this.show(label, hint); } finally { this._suppressed = was; }
+  }
+
   show(label, hint) {
     if (!this._el || this._suppressed) return;
     clearTimeout(this._fadeTimer);

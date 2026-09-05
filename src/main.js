@@ -67,6 +67,7 @@ import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
 import { FlightModeToast } from './ui/FlightModeToast.js';
+import { cycleGlowGradientMode } from './rendering/glowGradientMode.js';
 import { alignStep, alignDot } from './flight/aimAssist.js';
 import { Ship } from './core/Ship.js';
 import { ShipChoreographer } from './auto/ShipChoreographer.js';
@@ -13490,6 +13491,20 @@ window.addEventListener('keydown', (e) => {
     const u = retroRenderer._compositeMesh.material.uniforms;
     const r = retroRenderer.setQuantizeAll(u.uQuantizeAll.value < 0.5);
     console.log(`[FRAMEBUFFER] ${r.quantizeAll ? `ON — whole picture at ${r.levels} levels` : 'OFF — per-material only (pre-2026-09-06)'}`);
+    return;
+  }
+
+  // ⭐ `[` A/Bs THE STAR'S GLOW GRADIENT (Max, 2026-09-07: the hard-cut halo "reads pasted-on").
+  // Cycles BAYER (the checkerboard defect, kept as the floor) -> HARD CUT (cc06693) -> SMOOTH ->
+  // BANDED, which is the shipped answer. The reasoning is in `glowGradientMode.js`.
+  // ⚠ THIS KEY WAS RETIRED, NOT FREE-BY-ACCIDENT: it used to put the sky at the world's resolution
+  // and he judged that the same day ("super chunky stars look quite bad"). That control came back
+  // as the `Sky Pixel Scale` slider, so the key itself was spare. Re-used deliberately.
+  if (e.code === 'BracketLeft' && !titleScreenActive) {
+    const { mode, name } = cycleGlowGradientMode();
+    // ⛔ Max does not read the console. The toast is the readout; the log is only for replays.
+    flightModeToast.showDebug('STAR GLOW', `${name}  (${mode + 1}/4)`);
+    console.log(`[STAR GLOW] ${name} (mode ${mode})`);
     return;
   }
 

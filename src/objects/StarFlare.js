@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { assignName, resolveStarId } from '../util/scene-naming.js';
 import { PIXEL_SCALE } from '../rendering/pixelScaleUniform.js';
+import { POSTERIZE_QUANTUM } from '../rendering/posterizeLevels.js';
+import { GLOW_GRADIENT_MODE } from '../rendering/glowGradientMode.js';   // ⭐ how the halo renders its falloff at 240p; see that file for why a stipple cannot.
 
 /**
  * StarFlare — star with lens diffraction spikes and rainbow chromatic dispersion.
@@ -186,6 +188,11 @@ export class StarFlare {
         // pixelScaleUniform.js: this material is built once and mutated, so a build-time read
         // would strand it at whatever the slider said when the star mounted.
         uDitherScale: PIXEL_SCALE,
+        // ⭐ BOTH SHARED BY IDENTITY, for the same reason as uDitherScale above. uPosterizeLevels
+        // is the colour-depth number Max already owns (31 = RGB555); the banded halo takes its
+        // step count AND its termination from it rather than from a constant invented here.
+        uPosterizeLevels: POSTERIZE_QUANTUM,
+        uGlowMode: GLOW_GRADIENT_MODE,
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -203,6 +210,8 @@ export class StarFlare {
         uniform float uBrightPulse;
         uniform float uLumFactor;
         uniform float uDitherScale;
+        uniform vec2  uPosterizeLevels;   // x = levels, y = 1/levels
+        uniform float uGlowMode;
         uniform float uSpikeIntensity;
         varying vec2 vUv;
 
@@ -328,25 +337,51 @@ export class StarFlare {
           // Apply brightness pulse from camera motion
           color *= uBrightPulse;
 
-          // Dithered edges: use Bayer threshold against brightness to create
-          // stippled transparency at the edges of spikes, glow, and halo.
+          // ── THE FALLOFF ─────────────────────────────────────────────────────────────────────
+          // ⭐⭐ THIS IS THE PROGRAM THAT DRAWS A *CLOSE* STAR. StarFlare has two programs and swaps
+          // between them by distance (billboardSwitchDistance): far = _createBillboard, near = this
+          // flare disc. The billboard got the 2026-09-06 dither-authority fade; this did not, so
+          // that fix landed on exactly the representation Max was NOT looking at.
+          //
+          // ⭐ AND THE FADE WAS THE WRONG INSTRUMENT HERE ANYWAY. Max, 2026-09-07, on the result:
+          // "it looks bad ... it reads pasted-on now", and the requirement in his own words:
+          // "Dithering accomplishes a simple transparency/glow gradient, we just need one that
+          // works with this resolution." The other five sites stipple a shape's EDGE, so flattening
+          // their threshold to 0.5 buys them a hard rim and that is all it does. Here the stipple
+          // was the whole GRADIENT, keyed to brightness across the entire quad, so flattening it
+          // cut the halo to a hard brightness-0.5 silhouette — the pasted-on disc.
+          //
+          // The mode branch and the argument for BANDED live in glowGradientMode.js. In short: a
+          // stipple encodes a gradient in COVERAGE and needs a cell small enough on screen to
+          // average, which 4.5x nearest-neighbour magnification destroys; so the gradient moves
+          // into VALUE, where additive blending was already carrying it, and the era look comes
+          // back from quantising that value rather than from a screen-space pattern.
+          // ⛔ THE BRANCH IS AN A/B INSTRUMENT ON THE LEFT-BRACKET KEY, NOT A SETTING. BANDED ships.
           float brightness = max(max(color.r, color.g), color.b);
           if (brightness < 0.01) discard;
-          // ⭐⭐ THIS IS THE PROGRAM THAT DRAWS A *CLOSE* STAR, AND IT WAS THE ONE STARFLARE SITE
-          // THAT GOT NEITHER 2026-09-06 FIX. StarFlare has two programs and swaps between them by
-          // distance (billboardSwitchDistance): far = _createBillboard, near = this flare disc. The
-          // billboard got the dither-authority fade; this did not. So the fade landed on exactly the
-          // representation Max was NOT looking at when he said close stars still "look the same".
-          // ⚠ AND THIS STIPPLE IS A DIFFERENT KIND. The other five sites stipple an EDGE, so fading
-          // the threshold to a flat 0.5 buys them a hard rim. Here the stipple is keyed to BRIGHTNESS
-          // across the whole flare, so it is how the corona and spikes fade out into a hazy glow.
-          // Flattening it to 0.5 does not merely de-checker the star, it CUTS THE HALO to a hard
-          // brightness-0.5 silhouette. That is a real look change, it is arguably the correct one for
-          // 240p (the era drew a hard sun disc, not a stippled one), and it is Max's to judge in the
-          // live game while moving, not something to settle from a screenshot.
-          float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uDitherScale);
-          float dither = mix(0.5, bayerDither(gl_FragCoord.xy), ditherAuthority);
-          if (dither > brightness) discard;
+
+          if (uGlowMode < 0.5) {
+            // BAYER — the defect, kept as the A/B floor. A full-authority stipple over the quad.
+            if (bayerDither(gl_FragCoord.xy) > brightness) discard;
+          } else if (uGlowMode < 1.5) {
+            // HARD CUT — cc06693. De-checkers the star; cuts the halo to a hard disc.
+            float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uDitherScale);
+            if (mix(0.5, bayerDither(gl_FragCoord.xy), ditherAuthority) > brightness) discard;
+          } else if (uGlowMode > 2.5) {
+            // BANDED — the shipped answer. Quantise the falloff to the colour depth. Anything under
+            // one quantum floors to black, so the glow TERMINATES where the colour depth says it
+            // does; there is no threshold of mine anywhere in this branch.
+            // ⚠ QUANTISE THE INTENSITY, NOT THE THREE CHANNELS. Flooring r, g and b independently
+            // lets them cross their last step at different radii, so a warm white glow sheds a
+            // green ring and then a red one on the way out — measured, 2026-09-07, and it reads as
+            // a colour-banding fault rather than as a designed falloff. Scaling the colour by a
+            // quantised SCALAR holds the hue and bands only the brightness, which is the ring
+            // structure the era actually produced.
+            float banded = floor(brightness * uPosterizeLevels.x) * uPosterizeLevels.y;
+            if (banded <= 0.0) discard;
+            color *= banded / brightness;
+          }
+          // SMOOTH (mode 2) falls through: the raw additive falloff, no cut and no quantisation.
           gl_FragColor = vec4(color, 1.0);
         }
       `,
