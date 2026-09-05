@@ -139,6 +139,7 @@ export class StarfieldLayer {
         varying float vConverge;
         varying float vTunnelAmt;
         varying float vClipped;
+        varying float vPointPx;
         uniform float uSkyPixelScale;
 
         // Stable pseudo-random from vec3 — gives on-axis stars a deterministic
@@ -242,7 +243,15 @@ export class StarfieldLayer {
           // ⭐ / uSkyPixelScale — gl_PointSize is in TARGET pixels, so without this a star drawn
           // into a 1/N buffer comes out N times bigger on screen after the composite's Nearest
           // magnify. Dividing holds the star's SCREEN size fixed and coarsens only its lattice.
-          gl_PointSize = baseSize * convergeFactor * (1.0 + uTunnelPhase * 0.3) * depthScale / uSkyPixelScale;
+          float ptPx = baseSize * convergeFactor * (1.0 + uTunnelPhase * 0.3) * depthScale / uSkyPixelScale;
+          // ⭐⭐ NEVER SUB-PIXEL — THIS IS HALF THE FLICKER (Max, 2026-09-06: "the star flickering is a
+          // real issue"). Under 1.0 the rasteriser generates a fragment only when the point's centre
+          // happens to fall inside a pixel, so a star blinks in and out purely from sub-pixel drift as
+          // the camera turns. Clamping guarantees one fragment, always. The OTHER half is in the
+          // fragment shader, where a 1-pixel sprite samples gl_PointCoord exactly once.
+          ptPx = max(1.0, ptPx);
+          gl_PointSize = ptPx;
+          vPointPx = ptPx;
         }
       `,
 
@@ -257,6 +266,8 @@ export class StarfieldLayer {
         varying float vConverge;
         varying float vTunnelAmt;
         varying float vClipped;
+        varying float vPointPx;
+        uniform float uSkyPixelScale;
 
         float bayerDither(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
@@ -286,11 +297,27 @@ export class StarfieldLayer {
           float glow = 1.0 - smoothstep(0.1, 0.5, dist);          // soft halo
           float shape = coreBright * 0.6 + glow * 0.4;
 
-          // Dithered edge (retro feel)
-          float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
+          // ⭐⭐ THE OTHER HALF OF THE FLICKER FIX. A sprite one pixel across gets ONE fragment, so
+          // "shape" is a single sample of the radial falloff taken wherever the point's centre landed
+          // inside that pixel — near the middle it is bright, near the rim it is ~0 and the discard
+          // below deletes the star outright. Sub-pixel drift as the camera turns therefore reads as
+          // stars winking on and off. So below ~3 buffer pixels a star stops being a soft blob and
+          // becomes what a starfield at this resolution actually is: a lit PIXEL. "solid" ramps that
+          // in so nothing pops at the boundary between the two regimes.
+          float solid = 1.0 - smoothstep(1.0, 3.0, vPointPx);
+          shape = mix(shape, 1.0, solid);
+
+          // Dithered edge (retro feel).
+          // ⚠ THE /3.0 WAS A HARDCODED COPY OF pixelScale and it is wrong once the sky has its own.
+          // gl_FragCoord is in BUFFER pixels, so a fixed 3 makes the dither cell 3 buffer pixels —
+          // 9+ SCREEN pixels at sky scale 3, a visibly coarse checker over the whole sky. Dividing
+          // the cell by the sky's scale keeps it ~3 SCREEN pixels at every setting. Identity at 1.
+          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uSkyPixelScale)));
           float foldSmooth = clamp(uFoldAmount * 2.0, 0.0, 1.0);
           float cutoff = mix(threshold, 0.45, foldSmooth);
-          if (shape < cutoff * 0.5) discard;
+          // ⛔ A SOLID STAR IS NEVER DISCARDED. Dithering away the edge of a blob is a look; dithering
+          // away a star that IS one pixel is just deleting it, which is the flicker itself.
+          if (solid < 0.5 && shape < cutoff * 0.5) discard;
 
           // ── Direct brightness from vertex color ──
           // At rest (uTint=1, vTunnelAmt=0, vClipped=0) this collapses to the
