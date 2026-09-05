@@ -111,8 +111,26 @@
                  IS A WORKAROUND FOR THE DIVISOR, NOT A FIX FOR IT: the reachable set still changes
                  with window size, which is the argument for locking render height outright (see
                  docs/FEATURES/rendering-scale-seven-surface-INVENTORY.md §10.3). -->
-            <label>Pixel Scale</label>
-            <input type="range" data-setting="pixelScale" min="1" max="8" step="0.5">
+            <!-- ⭐ 2026-09-05: THE DIVISOR IS GONE, AND THE COMMENT ABOVE ASKED FOR THIS BY NAME
+                 ("the argument for locking render height outright"). Max approved it after asking
+                 whether a 320x240 image was being stretched across his ultrawide — it never was,
+                 both axes always divided by the same scalar, but his instinct was right about the
+                 OTHER axis: the era fixed the SCANLINE COUNT and varied horizontal resolution. A
+                 divisor held neither, so vertical resolution moved with the window. Now height IS
+                 the setting and width carries his aspect. Reasoning: src/rendering/renderLines.js.
+                 ⚠ A SELECT, NOT A RANGE: these are real modes (240 NTSC, 288 PAL, 480 progressive)
+                 and the values between them are not more era-accurate for being reachable. The
+                 half-step slider existed only to let a divisor LAND on them. -->
+            <label>Resolution</label>
+            <select data-setting="renderLines" class="setting-select">
+              <option value="144">144p</option>
+              <option value="180">180p</option>
+              <option value="240">240p — NTSC</option>
+              <option value="288">288p — PAL</option>
+              <option value="360">360p</option>
+              <option value="480">480p</option>
+              <option value="720">720p</option>
+            </select>
             <span class="setting-value"></span>
             <!-- Color Depth had NO control at all, though the setting, its clamp and its live DOM
                  handler have all shipped since 2026-08-21 — so the one knob carrying Max's RGB555
@@ -125,14 +143,25 @@
                  slider is the first honest version of that question. ⚠ Its useful range has a REAL
                  floor: a common star is 4 screen px, so past scale 4 it is under one buffer pixel
                  and starts dropping out and twinkling as the camera moves. -->
-            <!-- ⚠ NAMED "Sky Pixel Scale", NOT "Sky Resolution" (Max, 2026-09-06: "What is sky
-                 resolution 3?"). The value is a DIVISOR — 3 means the sky is drawn into a buffer a
-                 third the size of the window and scaled back up — so a bigger number is LESS
-                 resolution, and a control called "Resolution" whose number runs backwards is a
-                 control nobody can read. "Pixel Scale" is the name the world's identical knob
-                 already carries, so the two now read as the same kind of quantity, which they are. -->
-            <label>Sky Pixel Scale</label>
-            <input type="range" data-setting="skyPixelScale" min="1" max="8" step="0.5">
+            <!-- ⭐ RENAMED BACK TO "Sky Resolution" ON 2026-09-05, AND THE ORIGINAL OBJECTION IS
+                 WHAT LICENSES IT. It was called "Sky Pixel Scale" because Max asked "What is sky
+                 resolution 3?" — a fair complaint about a control whose NUMBER RAN BACKWARDS, since
+                 the value was a divisor and a bigger number meant LESS resolution. That is fixed at
+                 the root now: the value IS the line count, so it runs the right way and 240 is
+                 240p. The name that was wrong for a divisor is the correct name for a resolution.
+                 ⚠ Its useful range still has a real floor: a common star is 4 screen px, so once
+                 the magnification passes ~4 a star is under one buffer pixel and starts dropping
+                 out and twinkling as the camera moves. On a 1130-tall window that is around 240p. -->
+            <label>Sky Resolution</label>
+            <select data-setting="skyRenderLines" class="setting-select">
+              <option value="144">144p</option>
+              <option value="180">180p</option>
+              <option value="240">240p — NTSC</option>
+              <option value="288">288p — PAL</option>
+              <option value="360">360p</option>
+              <option value="480">480p</option>
+              <option value="720">720p</option>
+            </select>
             <span class="setting-value"></span>
             <label>Color Depth</label>
             <input type="range" data-setting="posterizeLevels" min="2" max="64" step="1">

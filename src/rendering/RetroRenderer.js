@@ -3,7 +3,9 @@ import * as THREE from 'three';
 // what makes the composite quantise to exactly what the bodies quantise to — the same lattice, so the
 // per-material pass is a provable no-op — and what makes it track the Color Depth slider as it moves.
 import { POSTERIZE_QUANTUM } from './posterizeLevels.js';
-import { SKY_PIXEL_SCALE } from './skyPixelScale.js';   // ⭐ the sky's OWN divisor, independent of the world's — Max wants to tune the relationship, not inherit it.
+import { bufferForLines, RENDER_LINES_DEFAULT, SKY_RENDER_LINES_DEFAULT } from './renderLines.js';   // ⭐ resolution is a LINE COUNT now, not a divisor; that file carries why.
+import { setPixelScale } from './pixelScaleUniform.js';
+import { setSkyPixelScale } from './skyPixelScale.js';   // ⭐ the sky's OWN line count, independent of the world's — Max wants to tune the relationship, not inherit it.
 
 /**
  * RetroRenderer — dual-resolution multi-pass compositor.
@@ -61,7 +63,13 @@ export class RetroRenderer {
     this.canvas = canvas;
     this.scene = scene;
     this.camera = camera;
-    this.pixelScale = 3; // Each render pixel = 3×3 screen pixels
+    // ⭐ LINES ARE THE SETTING; pixelScale IS DERIVED FROM THEM AND THE WINDOW. Kept as a field
+    // because ~700 citations, Billboard.update() and the dither uniform all read it as the
+    // magnification — that meaning is unchanged. What changed is who decides it: resize() does,
+    // from renderLines, so the number now follows the window instead of the window following it.
+    this.renderLines = RENDER_LINES_DEFAULT;
+    this.skyRenderLines = SKY_RENDER_LINES_DEFAULT;
+    this.pixelScale = 3; // DERIVED — recomputed every resize(). 3 only until the first one runs.
 
     // ⭐ THE SKY'S OWN RESOLUTION, SEPARATE FROM THE WORLD'S (Max, 2026-09-06). 1 = full, the shipped
     // default. Separate rather than shared because the two surfaces fail differently: a planet is an
@@ -916,8 +924,18 @@ export class RetroRenderer {
   resize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
-    const renderWidth = Math.ceil(width / this.pixelScale);
-    const renderHeight = Math.ceil(height / this.pixelScale);
+    // ⭐ HEIGHT IS THE SETTING, WIDTH CARRIES THE ASPECT — the era's invariant was the scanline
+    // count, not the magnification (renderLines.js). So this no longer changes resolution when the
+    // window changes size; it changes how much magnification the same 240 lines get.
+    const world = bufferForLines(width, height, this.renderLines);
+    const renderWidth = world.width;
+    const renderHeight = world.height;
+    // ⛔ THE SHADERS ARE UPDATED HERE, NOT AT THE SETTING. Every dither cell and point size divides
+    // by this magnification, and it now moves on WINDOW RESIZE as well as on a setting change —
+    // resize() is the only place that knows both. Writing it anywhere else reintroduces exactly the
+    // allocation-vs-shader disagreement that produced the 13.5px checker (pixelScaleUniform.js).
+    this.pixelScale = world.scale;
+    setPixelScale(world.scale);
 
     this.renderer.setSize(width, height, false);
 
@@ -928,9 +946,10 @@ export class RetroRenderer {
 
     // ⚠ Math.max(1, ...) — a 0-dimension target is a silent black frame, and skyScale can exceed the
     // window's smaller dimension on a short window.
-    const skyScale = SKY_PIXEL_SCALE.value;
-    const bgW = Math.max(1, Math.ceil(width / skyScale));
-    const bgH = Math.max(1, Math.ceil(height / skyScale));
+    const sky = bufferForLines(width, height, this.skyRenderLines);
+    setSkyPixelScale(sky.scale);   // ⭐ same argument as the world's, and the stars' size compensation reads it
+    const bgW = sky.width;
+    const bgH = sky.height;
     this.bgTarget = new THREE.WebGLRenderTarget(bgW, bgH, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,

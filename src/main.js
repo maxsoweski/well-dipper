@@ -133,7 +133,7 @@ import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/Materi
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
 import { warmPlanetPrograms, swapMaterialWhenReady, restoreMaterialSwap, MATERIAL_SWAPS } from './rendering/ShaderWarmup.js';
-import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js'; import { setPosterizeLevels } from './rendering/posterizeLevels.js'; import { setSkyPixelScale } from './rendering/skyPixelScale.js'; import { setPixelScale as setDitherPixelScale } from './rendering/pixelScaleUniform.js'; // ⛔ B2P RIDES THIS LINE: main.js carries ~700 line-anchored citations.
+import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js'; import { setPosterizeLevels } from './rendering/posterizeLevels.js';  import { migrateToRenderLines, clampRenderLines, describeRenderLines } from './rendering/renderLines.js'; // ⛔ B2P RIDES THIS LINE: main.js carries ~700 line-anchored citations.
 // Instrument E's reproduction line has to report BOTH quantities named `compositionClass`, because
 // PLAN §12.5 fact 6 measured them to be different populations (only 65 of 209 world-engine gas-class
 // bodies fall inside the game's own GAS_TYPES set) and an assertion written against the wrong one is
@@ -196,7 +196,7 @@ const retroRenderer = new RetroRenderer(canvas, scene, camera);
 // on a live drag, and the reset button re-applies it — but nothing read it at
 // boot. Move the slider, reload, and the picture silently came back at 3 with
 // the stored value still 5. Its neighbour on the next line always did this.
-retroRenderer.pixelScale = settings.get('pixelScale'); setDitherPixelScale(settings.get('pixelScale')); setSkyPixelScale(settings.get('skyPixelScale')); retroRenderer.resize();   // ⭐⭐ THE 2026-07-30 FIX ABOVE WAS ONLY HALF-APPLIED, AND THE OTHER HALF IS THIS CALL. Assigning the field restores the SETTING; it does not restore the PICTURE. `pixelScale` is not read anywhere per-frame — it is consumed once, in `resize()` (RetroRenderer.js:811), to ALLOCATE the render targets — so without a resize the constructor's hard-coded 3 stays on the GPU and the comment above describes a bug that was still live: stored 5, field 5, sceneTarget still 735x377 at 2205 wide, measured in the running game 2026-09-06. It only self-corrected on the next window resize, which is why it read as fixed. ⛔ THIS MATTERS RIGHT NOW, not academically: Max is choosing a render resolution by eye, and the defect makes the game boot showing a DIFFERENT resolution from the one the slider claims — i.e. it silently invalidates the very judgement the slider exists to support. ⛔ RIDES THIS LINE: main.js carries ~700 line-anchored citations.
+retroRenderer.renderLines = migrateToRenderLines(settings.get('renderLines'), settings.get('pixelScale'), window.innerHeight); retroRenderer.skyRenderLines = migrateToRenderLines(settings.get('skyRenderLines'), settings.get('skyPixelScale'), window.innerHeight); settings.set('renderLines', retroRenderer.renderLines); settings.set('skyRenderLines', retroRenderer.skyRenderLines); retroRenderer.resize();   // ⭐ 2026-09-05: RESOLUTION IS A LINE COUNT NOW, and resize() is what derives the magnification and pushes it to BOTH shared uniforms — so the two setDither/setSky calls that used to be here are gone, not dropped (renderLines.js, RetroRenderer.resize). ⛔ THE settings.set CALLS ARE THE MIGRATION LANDING: they persist the converted value under the new key so the conversion happens ONCE, while leaving the legacy pixelScale/skyPixelScale keys in storage untouched. Max's settings are read, never reset — his 4.5 becomes 240p, the mode he said he prefers. // ⭐⭐ THE 2026-07-30 FIX ABOVE WAS ONLY HALF-APPLIED, AND THE OTHER HALF IS THIS CALL. Assigning the field restores the SETTING; it does not restore the PICTURE. `pixelScale` is not read anywhere per-frame — it is consumed once, in `resize()` (RetroRenderer.js:811), to ALLOCATE the render targets — so without a resize the constructor's hard-coded 3 stays on the GPU and the comment above describes a bug that was still live: stored 5, field 5, sceneTarget still 735x377 at 2205 wide, measured in the running game 2026-09-06. It only self-corrected on the next window resize, which is why it read as fixed. ⛔ THIS MATTERS RIGHT NOW, not academically: Max is choosing a render resolution by eye, and the defect makes the game boot showing a DIFFERENT resolution from the one the slider claims — i.e. it silently invalidates the very judgement the slider exists to support. ⛔ RIDES THIS LINE: main.js carries ~700 line-anchored citations.
 retroRenderer.setColorPalette(settings.get('colorPalette'));  setPosterizeLevels(settings.get('posterizeLevels')); settings.onChange('posterizeLevels', setPosterizeLevels); // B2P — read on BOOT (the pixelScale defect above is exactly the boot-read being missing) and subscribed for CHANGE, so settings.set() and settings.reset() both reach the SIX game fragment programs (gas, rocky, exotic, ring, moon, belt — four `uniform vec2` declaration sites between them, FRAG_HEADER's one serving the three body programs) and the lab material through the TWO shared uniform objects: POSTERIZE_QUANTUM for the game's vec2 `uPosterizeLevels`, POSTERIZE_LEVELS for the lab's scalar `uLevels`, with setPosterizeLevels the single writer of both.
 
 // ── Texture Baker (runtime procedural → texture baking) ──
@@ -6191,7 +6191,7 @@ function formatSettingValue(key, value) {
     return `${sign}${mag}×${tag}`;
   }
   if (key === 'zoomSensitivity') return `${value.toFixed(1)}x`;
-  if (key === 'skyPixelScale') { const w = Math.ceil(window.innerWidth / value), h = Math.ceil(window.innerHeight / value); const sw = retroRenderer?.sceneTarget?.width, sh = retroRenderer?.sceneTarget?.height; return `${value}× · ${w}×${h}${(w === sw && h === sh) ? ' · = WORLD' : (value === 1 ? ' · full' : '')}`; }  if (key === 'pixelScale') { const w = Math.ceil(window.innerWidth / value), h = Math.ceil(window.innerHeight / value); return `${value}× · ${w}×${h}${h >= 216 && h <= 264 ? ' · 240p' : (h >= 432 && h <= 528 ? ' · 480p' : '')}`; }  if (key === 'posterizeLevels') { const bits = Math.log2(value + 1); return `${value} · ${Number.isInteger(bits) ? `${bits}-bit` : `~${bits.toFixed(1)}-bit`}${value === 31 ? ' RGB555' : ''}`; }   // ⭐ THE ERA BAR, MADE READABLE AT THE SLIDER. Both of these knobs are judged BY EYE against a sourced target (Max 2026-08-21: RGB555 = 5 bits = 32 values = levels 31; and 240p, the mode the PSX, N64 and Saturn all shipped in) and a bare "3" or "31" says nothing about where you are against it. pixelScale is a DIVISOR, so its era-accuracy depends on the WINDOW — 3 is 480p on a 1440-tall window and something else on any other — which is exactly why the resulting w×h is printed rather than the divisor alone. ⛔ BOTH RIDE THIS LINE: main.js carries ~700 line-anchored citations and a new line shifts every one below it.
+  if (key === 'skyRenderLines') { const d = describeRenderLines(value, window.innerWidth, window.innerHeight); return `${d}${Number(value) === Number(retroRenderer?.renderLines) ? ' · = WORLD' : ''}`; }  if (key === 'renderLines') { return describeRenderLines(value, window.innerWidth, window.innerHeight); }  if (key === 'posterizeLevels') { const bits = Math.log2(value + 1); return `${value} · ${Number.isInteger(bits) ? `${bits}-bit` : `~${bits.toFixed(1)}-bit`}${value === 31 ? ' RGB555' : ''}`; }   // ⭐ THE ERA BAR, MADE READABLE AT THE SLIDER. Both of these knobs are judged BY EYE against a sourced target (Max 2026-08-21: RGB555 = 5 bits = 32 values = levels 31; and 240p, the mode the PSX, N64 and Saturn all shipped in) and a bare "3" or "31" says nothing about where you are against it. pixelScale is a DIVISOR, so its era-accuracy depends on the WINDOW — 3 is 480p on a 1440-tall window and something else on any other — which is exactly why the resulting w×h is printed rather than the divisor alone. ⛔ BOTH RIDE THIS LINE: main.js carries ~700 line-anchored citations and a new line shifts every one below it.
   if (key === 'starDensity') return `${Math.round(value / 1000)}k`;
   if (key === 'masterVolume' || key === 'musicVolume' || key === 'sfxVolume')
     return `${Math.round(value * 100)}%`;
@@ -6218,6 +6218,12 @@ function populateSettingsUI() {
       input.checked = value;
     } else if (input.tagName === 'SELECT') {
       input.value = String(value);
+      // ⭐ SELECTS GET THEIR READOUT TOO, 2026-09-05. This branch used to return without touching the
+      // sibling label, which was invisible while every select was a bare enum. It stopped being
+      // harmless the moment Resolution became a select: its whole job is showing the derived buffer
+      // ("240p · 468×240"), and Max asked for exactly that — "I do want to know the numbers".
+      const selLabel = input.nextElementSibling;
+      if (selLabel?.classList.contains('setting-value')) selLabel.textContent = formatSettingValue(key, value);
     } else {
       // celestialTimeMultiplier slider stores raw DOM position in the
       // SIGNED range -40..0..+40, mapped to multiplier
@@ -6259,16 +6265,17 @@ function toggleSettings() {
 
 function applySettingChange(key, value) {
   switch (key) {
-    case 'pixelScale':
-      retroRenderer.pixelScale = value;
-      setDitherPixelScale(value);   // ⭐ the dither cell is sized in SCREEN pixels, so it has to follow the divisor — without this the cell is 3 BUFFER px and becomes a 13.5px checker at 4.5 (pixelScaleUniform.js)
+    case 'renderLines':
+      retroRenderer.renderLines = clampRenderLines(value);
+      // ⭐ NO setDitherPixelScale HERE ANY MORE, AND ITS ABSENCE IS THE FIX. The magnification is now DERIVED from lines + window height, so resize() is the only place that knows it — and it has to be reapplied on WINDOW resize too, which a handler on the setting could never do (RetroRenderer.resize, renderLines.js).
       retroRenderer.resize();
       break;
-    case 'skyPixelScale':
-      // ⭐ BOTH halves, and the order does not matter but the PAIR does: the shared uniform holds the
-      // stars' size compensation, the resize reallocates bgTarget. Do one without the other and you
-      // get either 3x-bigger stars (the bug Max rejected) or a coarser buffer nothing drew smaller for.
-      setSkyPixelScale(value);
+    case 'skyRenderLines':
+      // ⭐ THE PAIR THAT USED TO BE HERE COLLAPSED INTO ONE CALL. It set the shared uniform (the stars'
+      // size compensation) AND resized (bgTarget), because doing one without the other gave either
+      // 3x-bigger stars — the bug Max rejected — or a coarser buffer nothing drew smaller for. resize()
+      // now does both, from one derivation, so they cannot come apart (RetroRenderer.resize).
+      retroRenderer.skyRenderLines = clampRenderLines(value);
       retroRenderer.resize();
       break;
     case 'autoRotateSpeed':
@@ -6387,7 +6394,7 @@ function applySettingChange(key, value) {
     settingsEl.querySelector('.settings-reset')?.addEventListener('click', () => {
       settings.reset();
       // Re-apply all defaults
-      retroRenderer.pixelScale = settings.get('pixelScale');
+      retroRenderer.renderLines = clampRenderLines(settings.get('renderLines'));
       retroRenderer.resize();
       retroRenderer.setColorPalette(settings.get('colorPalette'));
       cameraController.autoRotateSpeed = settings.get('autoRotateSpeed');
