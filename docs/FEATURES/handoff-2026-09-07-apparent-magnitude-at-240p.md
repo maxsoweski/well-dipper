@@ -5,7 +5,8 @@
 > Supersedes `handoff-2026-09-06-rendering-scale-aesthetic.md`, whose arc — the seven-surface
 > inventory — is **DONE** (`docs/FEATURES/rendering-scale-seven-surface-INVENTORY.md`).
 > **Branch** `feature/world-engine-production-L1` (lane A, **NOT** master).
-> ⛔ **11 commits UNPUSHED.** Max has not been asked. Ask before pushing.
+> ✅ **PUSHED and verified** by `git ls-remote` — remote and local both at the session's final sha.
+> ⛔ Still ASK before any future push; his standing rule is that pushing is confirmed each time.
 > ⛔ **662 untracked stray PNGs are normal — NEVER `git add -A`.** Stage explicitly.
 > ⚠ ALWAYS `npx vitest run --dir tests --root /home/ax/projects/well-dipper`.
 
