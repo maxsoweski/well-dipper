@@ -101,9 +101,18 @@
           <div class="settings-grid">
             <!-- max was 5, which could not REACH the era target: pixelScale is a divisor, so 240p
                  (the mode the PSX, N64 and Saturn all shipped in) needs 6 on a 1440-tall window and
-                 more on a taller one. 8 covers 240p from 1080 up to 2160. -->
+                 more on a taller one. 8 covers 240p from 1080 up to 2160.
+                 ⭐ AND step is 0.5, NOT 1 — Max, 2026-09-06: "240 and 480 never appear". Half of
+                 that was the 40px value column clipping the tag (src/style.css .settings-grid); the
+                 OTHER half is arithmetic. A divisor can only land on the era line counts its window
+                 height happens to divide into: at his 1130-tall viewport, whole steps reach 240p at
+                 exactly ONE position (5x -> 226) and 480p at NONE (2x -> 565, 3x -> 377, straddling
+                 it). Half-steps put both in reach — 2.5x -> 452 (480p) and 4.5x -> 252 (240p). ⛔ THIS
+                 IS A WORKAROUND FOR THE DIVISOR, NOT A FIX FOR IT: the reachable set still changes
+                 with window size, which is the argument for locking render height outright (see
+                 docs/FEATURES/rendering-scale-seven-surface-INVENTORY.md §10.3). -->
             <label>Pixel Scale</label>
-            <input type="range" data-setting="pixelScale" min="1" max="8" step="1">
+            <input type="range" data-setting="pixelScale" min="1" max="8" step="0.5">
             <span class="setting-value"></span>
             <!-- Color Depth had NO control at all, though the setting, its clamp and its live DOM
                  handler have all shipped since 2026-08-21 — so the one knob carrying Max's RGB555

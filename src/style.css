@@ -464,7 +464,7 @@ html, body {
   position: relative;
   font-family: 'DotGothic16', monospace;
   color: #fff;
-  max-width: 380px;
+  max-width: 560px;
   width: 90%;
   max-height: 85vh;
   overflow-y: auto;
@@ -472,14 +472,14 @@ html, body {
 }
 
 .settings-panel h2 {
-  font-size: 20px;
+  font-size: 24px;
   letter-spacing: 0.15em;
   text-align: center;
   margin-bottom: 12px;
 }
 
 .settings-section h3 {
-  font-size: 11px;
+  font-size: 13px;
   color: rgba(100, 180, 255, 0.7);
   letter-spacing: 0.2em;
   margin: 14px 0 6px;
@@ -487,12 +487,17 @@ html, body {
   padding-bottom: 4px;
 }
 
+/* ⭐ THE VALUE COLUMN WAS 40px AND THAT IS WHY THE ERA TAGS "NEVER APPEARED" (Max, 2026-09-06).
+   The label strings were correct all along — `5x · 433x226 · 240p` — but 40px holds about five
+   characters at this font, and the era tag is the TAIL of the string, so it is the exact part the
+   column clips. A value column has to be sized for the longest value it will ever hold, not for
+   the shortest; the widest here is the colour-depth readout, ~24 chars. */
 .settings-grid {
   display: grid;
-  grid-template-columns: 1fr auto 40px;
-  gap: 8px 10px;
+  grid-template-columns: 1fr auto 168px;
+  gap: 8px 12px;
   align-items: center;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .settings-grid-toggle {
@@ -504,7 +509,7 @@ html, body {
 }
 
 .settings-grid input[type="range"] {
-  width: 100px;
+  width: 150px;
   accent-color: rgba(100, 180, 255, 0.8);
 }
 
@@ -516,13 +521,16 @@ html, body {
 }
 
 .setting-value {
-  color: rgba(0, 220, 130, 0.8);
-  font-size: 12px;
+  color: rgba(0, 220, 130, 0.85);
+  font-size: 14px;
   text-align: right;
+  white-space: nowrap;      /* a wrapped "240p" reads as a second row, not a tag */
+  overflow: visible;
 }
 
 .setting-select {
   grid-column: 2 / 4;
+  font-size: 14px;
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(100, 180, 255, 0.4);
   color: rgba(255, 255, 255, 0.9);

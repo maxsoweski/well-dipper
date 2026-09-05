@@ -195,7 +195,7 @@ const retroRenderer = new RetroRenderer(canvas, scene, camera);
 // on a live drag, and the reset button re-applies it — but nothing read it at
 // boot. Move the slider, reload, and the picture silently came back at 3 with
 // the stored value still 5. Its neighbour on the next line always did this.
-retroRenderer.pixelScale = settings.get('pixelScale');
+retroRenderer.pixelScale = settings.get('pixelScale'); retroRenderer.resize();   // ⭐⭐ THE 2026-07-30 FIX ABOVE WAS ONLY HALF-APPLIED, AND THE OTHER HALF IS THIS CALL. Assigning the field restores the SETTING; it does not restore the PICTURE. `pixelScale` is not read anywhere per-frame — it is consumed once, in `resize()` (RetroRenderer.js:811), to ALLOCATE the render targets — so without a resize the constructor's hard-coded 3 stays on the GPU and the comment above describes a bug that was still live: stored 5, field 5, sceneTarget still 735x377 at 2205 wide, measured in the running game 2026-09-06. It only self-corrected on the next window resize, which is why it read as fixed. ⛔ THIS MATTERS RIGHT NOW, not academically: Max is choosing a render resolution by eye, and the defect makes the game boot showing a DIFFERENT resolution from the one the slider claims — i.e. it silently invalidates the very judgement the slider exists to support. ⛔ RIDES THIS LINE: main.js carries ~700 line-anchored citations.
 retroRenderer.setColorPalette(settings.get('colorPalette'));  setPosterizeLevels(settings.get('posterizeLevels')); settings.onChange('posterizeLevels', setPosterizeLevels); // B2P — read on BOOT (the pixelScale defect above is exactly the boot-read being missing) and subscribed for CHANGE, so settings.set() and settings.reset() both reach the SIX game fragment programs (gas, rocky, exotic, ring, moon, belt — four `uniform vec2` declaration sites between them, FRAG_HEADER's one serving the three body programs) and the lab material through the TWO shared uniform objects: POSTERIZE_QUANTUM for the game's vec2 `uPosterizeLevels`, POSTERIZE_LEVELS for the lab's scalar `uLevels`, with setPosterizeLevels the single writer of both.
 
 // ── Texture Baker (runtime procedural → texture baking) ──
@@ -6190,7 +6190,7 @@ function formatSettingValue(key, value) {
     return `${sign}${mag}×${tag}`;
   }
   if (key === 'zoomSensitivity') return `${value.toFixed(1)}x`;
-  if (key === 'pixelScale') { const w = Math.ceil(window.innerWidth / value), h = Math.ceil(window.innerHeight / value); return `${value}x - ${w}x${h}${h >= 216 && h <= 264 ? ' - 240p' : (h >= 432 && h <= 528 ? ' - 480p' : '')}`; }  if (key === 'posterizeLevels') { const vals = value + 1, bits = Math.log2(vals); return `${value} - ${vals} vals/ch - ${Number.isInteger(bits) ? `${bits}-bit` : `~${bits.toFixed(1)}-bit`}${value === 31 ? ' - RGB555' : ''}`; }   // ⭐ THE ERA BAR, MADE READABLE AT THE SLIDER. Both of these knobs are judged BY EYE against a sourced target (Max 2026-08-21: RGB555 = 5 bits = 32 values = levels 31; and 240p, the mode the PSX, N64 and Saturn all shipped in) and a bare "3" or "31" says nothing about where you are against it. pixelScale is a DIVISOR, so its era-accuracy depends on the WINDOW — 3 is 480p on a 1440-tall window and something else on any other — which is exactly why the resulting w×h is printed rather than the divisor alone. ⛔ BOTH RIDE THIS LINE: main.js carries ~700 line-anchored citations and a new line shifts every one below it.
+  if (key === 'pixelScale') { const w = Math.ceil(window.innerWidth / value), h = Math.ceil(window.innerHeight / value); return `${w}×${h}${h >= 216 && h <= 264 ? ' · 240p' : (h >= 432 && h <= 528 ? ' · 480p' : '')}`; }  if (key === 'posterizeLevels') { const bits = Math.log2(value + 1); return `${value} · ${Number.isInteger(bits) ? `${bits}-bit` : `~${bits.toFixed(1)}-bit`}${value === 31 ? ' RGB555' : ''}`; }   // ⭐ THE ERA BAR, MADE READABLE AT THE SLIDER. Both of these knobs are judged BY EYE against a sourced target (Max 2026-08-21: RGB555 = 5 bits = 32 values = levels 31; and 240p, the mode the PSX, N64 and Saturn all shipped in) and a bare "3" or "31" says nothing about where you are against it. pixelScale is a DIVISOR, so its era-accuracy depends on the WINDOW — 3 is 480p on a 1440-tall window and something else on any other — which is exactly why the resulting w×h is printed rather than the divisor alone. ⛔ BOTH RIDE THIS LINE: main.js carries ~700 line-anchored citations and a new line shifts every one below it.
   if (key === 'starDensity') return `${Math.round(value / 1000)}k`;
   if (key === 'masterVolume' || key === 'musicVolume' || key === 'sfxVolume')
     return `${Math.round(value * 100)}%`;
@@ -13472,6 +13472,23 @@ window.addEventListener('keydown', (e) => {
   // Backtick key: toggle debug HUD (corner overlay)
   if (e.code === 'Backquote') {
     debugPanel.toggleHUD();
+    return;
+  }
+
+  // ⭐ THE STARFIELD A/B (Max, 2026-09-06). `[` = resolution, `]` = colour. TWO keys, not one: the sky
+  // departs from the era bar on BOTH axes at once (full-res AND unquantised), and a single toggle
+  // would move both, leaving a "no, I don't like that" impossible to attribute. Bare-key A/B flipped
+  // while flying is the only instrument that has ever worked here — a static screenshot cannot carry
+  // whether a starfield CRAWLS, which is the actual risk the low-res case runs.
+  if (e.code === 'BracketLeft' && !titleScreenActive) {
+    const r = retroRenderer.setSkyLowRes(!retroRenderer.skyLowRes);
+    console.log(`[SKY A/B] resolution: ${r.skyLowRes ? 'WORLD (era)' : 'FULL (shipped)'} — bgTarget ${r.bgTarget[0]}x${r.bgTarget[1]}, sceneTarget ${retroRenderer.sceneTarget.width}x${retroRenderer.sceneTarget.height}`);
+    return;
+  }
+  if (e.code === 'BracketRight' && !titleScreenActive) {
+    const on = retroRenderer._compositeMesh.material.uniforms.uSkyQuantize.value < 0.5;
+    const r = retroRenderer.setSkyQuantize(on);
+    console.log(`[SKY A/B] colour: ${r.skyQuantize ? `QUANTISED to the world's ${r.levels} levels` : 'UNQUANTISED (shipped)'}`);
     return;
   }
 
