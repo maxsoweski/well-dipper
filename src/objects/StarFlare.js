@@ -182,6 +182,10 @@ export class StarFlare {
         // fade the switch was a hard pop (lens flare → dot). Updated
         // per frame in update().
         uSpikeIntensity: { value: 1.0 },
+        // ⭐ THE SHARED WORLD PIXEL-SCALE OBJECT — identity, not a copy, for the reason in
+        // pixelScaleUniform.js: this material is built once and mutated, so a build-time read
+        // would strand it at whatever the slider said when the star mounted.
+        uDitherScale: PIXEL_SCALE,
       },
       vertexShader: /* glsl */`
         varying vec2 vUv;
@@ -198,6 +202,7 @@ export class StarFlare {
         uniform float uScreenAngle;
         uniform float uBrightPulse;
         uniform float uLumFactor;
+        uniform float uDitherScale;
         uniform float uSpikeIntensity;
         varying vec2 vUv;
 
@@ -327,7 +332,20 @@ export class StarFlare {
           // stippled transparency at the edges of spikes, glow, and halo.
           float brightness = max(max(color.r, color.g), color.b);
           if (brightness < 0.01) discard;
-          float dither = bayerDither(gl_FragCoord.xy);
+          // ⭐⭐ THIS IS THE PROGRAM THAT DRAWS A *CLOSE* STAR, AND IT WAS THE ONE STARFLARE SITE
+          // THAT GOT NEITHER 2026-09-06 FIX. StarFlare has two programs and swaps between them by
+          // distance (billboardSwitchDistance): far = _createBillboard, near = this flare disc. The
+          // billboard got the dither-authority fade; this did not. So the fade landed on exactly the
+          // representation Max was NOT looking at when he said close stars still "look the same".
+          // ⚠ AND THIS STIPPLE IS A DIFFERENT KIND. The other five sites stipple an EDGE, so fading
+          // the threshold to a flat 0.5 buys them a hard rim. Here the stipple is keyed to BRIGHTNESS
+          // across the whole flare, so it is how the corona and spikes fade out into a hazy glow.
+          // Flattening it to 0.5 does not merely de-checker the star, it CUTS THE HALO to a hard
+          // brightness-0.5 silhouette. That is a real look change, it is arguably the correct one for
+          // 240p (the era drew a hard sun disc, not a stippled one), and it is Max's to judge in the
+          // live game while moving, not something to settle from a screenshot.
+          float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uDitherScale);
+          float dither = mix(0.5, bayerDither(gl_FragCoord.xy), ditherAuthority);
           if (dither > brightness) discard;
           gl_FragColor = vec4(color, 1.0);
         }

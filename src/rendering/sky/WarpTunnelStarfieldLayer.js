@@ -302,7 +302,12 @@ export class WarpTunnelStarfieldLayer {
           float glow = 1.0 - smoothstep(0.1, 0.5, d);
           float shape = coreBright * 0.6 + glow * 0.4;
 
-          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale)));   // ⭐ cell held at ~3 SCREEN px: gl_FragCoord is in BUFFER px, so a bare /3.0 became a 13.5px checker at scale 4.5 (see pixelScaleUniform.js)
+          // ⭐ DITHER AUTHORITY — same curve, same argument as StarfieldLayer, which this layer is a
+          // warp-time copy of. It got the CELL-SIZE fix on 2026-09-06 and not the fade, so during
+          // HYPER a tunnel star large enough to span a cell still checkerboards. Not what Max was
+          // looking at (he was in normal flight) but the identical defect, so it moves with its twin.
+          float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uDitherScale);
+          float threshold = mix(0.5, bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale))), ditherAuthority);   // ⭐ cell held at ~3 SCREEN px: gl_FragCoord is in BUFFER px, so a bare /3.0 became a 13.5px checker at scale 4.5 (see pixelScaleUniform.js)
           if (shape < threshold * 0.5) discard;
 
           // During warp, brighten stars slightly — simulates energy.

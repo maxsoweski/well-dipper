@@ -328,7 +328,21 @@ export class StarfieldLayer {
           // gl_FragCoord is in BUFFER pixels, so a fixed 3 makes the dither cell 3 buffer pixels —
           // 9+ SCREEN pixels at sky scale 3, a visibly coarse checker over the whole sky. Dividing
           // the cell by the sky's scale keeps it ~3 SCREEN pixels at every setting. Identity at 1.
-          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uSkyPixelScale)));
+          // ⭐ DITHER AUTHORITY — the sixth and last site to get it; the other five (nebula shells,
+          // glow, StarFlare, PlanetBillboard, StarRenderer) landed 2026-09-06 and this one was missed.
+          // Same curve and same argument as those: 1.0 at scale <= 3 keeps the look Max already
+          // approved BYTE-IDENTICAL, and it reaches 0 by 4.5, which is 240p on his window, because
+          // that is the resolution he says the dithering was not designed for.
+          // ⭐⭐ WHY THE "solid" BYPASS BELOW WAS NOT ENOUGH. Max, 2026-09-06, after the authority
+          // fix had landed everywhere else: close stars "look the same". "solid" falls to 0 as a
+          // star grows, so it spares only SMALL stars — a CLOSE star still takes the full Bayer
+          // stipple across its whole disc and reads as a checkerboard rather than a star. Fading the
+          // threshold toward a flat 0.5 gives it a hard circular edge, which is what a sprite at
+          // this resolution should be. The two mechanisms are complementary, not redundant: "solid"
+          // protects the sub-pixel stars from being discarded at all, this protects the large ones
+          // from being stippled apart.
+          float ditherAuthority = 1.0 - smoothstep(3.0, 4.5, uSkyPixelScale);
+          float threshold = mix(0.5, bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uSkyPixelScale))), ditherAuthority);
           float foldSmooth = clamp(uFoldAmount * 2.0, 0.0, 1.0);
           float cutoff = mix(threshold, 0.45, foldSmooth);
           // ⛔ A SOLID STAR IS NEVER DISCARDED. Dithering away the edge of a blob is a look; dithering
