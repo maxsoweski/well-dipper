@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { PIXEL_SCALE } from '../rendering/pixelScaleUniform.js';
+import { SKY_PIXEL_SCALE } from '../rendering/skyPixelScale.js';
+import { planetTargetPx, MAGNITUDE_LAW } from '../rendering/apparentMagnitude.js';
 
 /**
  * PlanetBillboard — a shader-based billboard dot for distant planets.
@@ -24,12 +26,19 @@ export class PlanetBillboard {
    */
   constructor(color, sceneRadius) {
     const [r, g, b] = color;
-    this._targetPx = PlanetBillboard.computeTargetPixels(sceneRadius);
+    // ⚠ RADIUS STORED, SIZE NOT CACHED. computeTargetPixels now reads SKY_PIXEL_SCALE and the
+    // magnitude-law toggle, both of which move at RUNTIME — the resolution setting changes the
+    // former on every window resize and the backslash key flips the latter. A value cached here
+    // would strand every already-mounted planet at whatever they were when it spawned, which is
+    // the same build-time-read defect posterizeLevels.js and pixelScaleUniform.js both warn about.
+    // The star billboard already recomputes per frame; this now matches it.
+    this._sceneRadius = sceneRadius;
 
     const geometry = new THREE.PlaneGeometry(1, 1);
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uDitherScale: PIXEL_SCALE,
+        uMagnitudeLaw: MAGNITUDE_LAW,   // ⭐ shared object, so the backslash key reaches every already-mounted billboard
         uColor: { value: new THREE.Vector3(r, g, b) },
       },
       vertexShader: /* glsl */`
@@ -41,6 +50,7 @@ export class PlanetBillboard {
       `,
       fragmentShader: /* glsl */`
         uniform float uDitherScale;
+        uniform float uMagnitudeLaw;
         uniform vec3 uColor;
         varying vec2 vUv;
 
@@ -83,7 +93,15 @@ export class PlanetBillboard {
           float threshold = mix(0.5, bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale))), ditherAuthority);   // ⭐ cell held at ~3 SCREEN px: gl_FragCoord is in BUFFER px, so a bare /3.0 became a 13.5px checker at scale 4.5 (see pixelScaleUniform.js)
           if (shape < threshold * 0.5) discard;
           // Dimmer than stars — 1.2x HDR vs 1.8x for stars.
-          vec3 col = uColor * shape * 1.2;
+          // ⭐ 1.2 COULD NOT REACH THE CEILING AND THAT IS ARITHMETIC, NOT TASTE. uColor here is a
+          // BODY colour — a brown or blue-grey whose largest channel is already well under 1 —
+          // and shape peaks below 1 because a plane's fragment centres do not land on the exact
+          // peak at 240p. 1.2 times that clips at nothing: measured peaks were 204-221 against a
+          // background star's 255, so a planet read DIMMER than the stars behind it.
+          // ⚠ uMagnitudeLaw GATES IT so the backslash A/B compares against the shipped look.
+          // Planets stay under the STAR (1.8x on a near-white colour); the point is only to
+          // clear the STARFIELD, which is what the complaint was about.
+          vec3 col = uColor * shape * mix(1.2, 2.6, uMagnitudeLaw);
           gl_FragColor = vec4(min(col, vec3(1.0)), 1.0);
         }
       `,
@@ -108,11 +126,14 @@ export class PlanetBillboard {
    *   Gas giant (6–16 R⊕)     → 0.256–0.682
    */
   static computeTargetPixels(sceneRadius) {
-    // log10 range: ~-1.9 (smallest rocky) to ~-0.17 (largest gas giant)
-    const logR = Math.log10(Math.max(sceneRadius, 0.01));
-    // Map [-1.9, -0.17] → [4, 10]
-    const t = (logR + 1.9) / 1.73; // 1.73 = 1.9 - 0.17
-    return Math.max(4, Math.min(10, 4 + 6 * t));
+    // ⭐ THE LAW MOVED OUT TO apparentMagnitude.js, AND THE FLOOR IS THE REASON. 4 screen px is
+    // under one BUFFER pixel at 240p (4 / 4.7 = 0.85), and unlike StarfieldLayer — which clamps a
+    // sub-pixel star to a whole buffer pixel AND exempts it from the dither discard — this program
+    // had neither, so a rocky moon's dot landed at about half a pixel with a live discard and
+    // winked on and off with sub-pixel camera drift. Measured at 240p: planet dots peak at 204-221
+    // where a background star hits 255, and the smallest is 2x3 px against that star's 2x3. Both
+    // dimmer AND smaller than the sky behind them, which is Max's "still illegible" exactly.
+    return planetTargetPx(sceneRadius, SKY_PIXEL_SCALE.value);
   }
 
   /**
@@ -127,7 +148,7 @@ export class PlanetBillboard {
 
     const fovRad = camera.fov * Math.PI / 180;
     const pixelsPerRadian = (window.innerHeight / 2) / Math.tan(fovRad / 2);
-    const worldSize = (this._targetPx / pixelsPerRadian) * dist;
+    const worldSize = (PlanetBillboard.computeTargetPixels(this._sceneRadius) / pixelsPerRadian) * dist;
     this.mesh.scale.set(worldSize, worldSize, 1);
     this.mesh.quaternion.copy(camera.quaternion);
   }

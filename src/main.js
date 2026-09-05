@@ -133,7 +133,7 @@ import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/Materi
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
 import { warmPlanetPrograms, swapMaterialWhenReady, restoreMaterialSwap, MATERIAL_SWAPS } from './rendering/ShaderWarmup.js';
-import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js'; import { setPosterizeLevels } from './rendering/posterizeLevels.js';  import { migrateToRenderLines, clampRenderLines, describeRenderLines } from './rendering/renderLines.js'; // ⛔ B2P RIDES THIS LINE: main.js carries ~700 line-anchored citations.
+import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js'; import { setPosterizeLevels } from './rendering/posterizeLevels.js';  import { migrateToRenderLines, clampRenderLines, describeRenderLines } from './rendering/renderLines.js'; import { toggleMagnitudeLaw, MAGNITUDE_LAW } from './rendering/apparentMagnitude.js'; // ⛔ B2P RIDES THIS LINE: main.js carries ~700 line-anchored citations.
 // Instrument E's reproduction line has to report BOTH quantities named `compositionClass`, because
 // PLAN §12.5 fact 6 measured them to be different populations (only 65 of 209 world-engine gas-class
 // bodies fall inside the game's own GAS_TYPES set) and an assertion written against the wrong one is
@@ -13512,6 +13512,20 @@ window.addEventListener('keydown', (e) => {
     // ⛔ Max does not read the console. The toast is the readout; the log is only for replays.
     flightModeToast.showDebug('STAR GLOW', `${name}  (${mode + 1}/4)`);
     console.log(`[STAR GLOW] ${name} (mode ${mode})`);
+    return;
+  }
+
+  // ⭐ BACKSLASH A/Bs THE APPARENT-MAGNITUDE LAW (Max, 2026-09-04: "The star and planets should
+  // simply appear to be brighter than the other stars"). OFF restores the shipped sizes exactly,
+  // because he has rejected a size change before — "super chunky stars look quite bad" — and this
+  // one has to be judged in motion against the real starfield, not from a screenshot.
+  // ⚠ NOTHING TO REFRESH: both billboards derive their world scale per frame from targetPx, and
+  // the planet's stopped caching it for exactly this reason, so flipping the shared object is
+  // the whole operation. The brightness half rides a shared uniform and needs no write at all.
+  if (e.code === 'Backslash' && !titleScreenActive) {
+    const { on, name } = toggleMagnitudeLaw();
+    flightModeToast.showDebug('MAGNITUDE', name);
+    console.log(`[MAGNITUDE] ${name} (${on ? 'on' : 'off'})`);
     return;
   }
 

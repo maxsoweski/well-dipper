@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { assignName, resolveStarId } from '../util/scene-naming.js';
 import { PIXEL_SCALE } from '../rendering/pixelScaleUniform.js';
 import { POSTERIZE_QUANTUM } from '../rendering/posterizeLevels.js';
-import { GLOW_GRADIENT_MODE } from '../rendering/glowGradientMode.js';   // ⭐ how the halo renders its falloff at 240p; see that file for why a stipple cannot.
+import { GLOW_GRADIENT_MODE } from '../rendering/glowGradientMode.js';
+import { SKY_PIXEL_SCALE } from '../rendering/skyPixelScale.js';   // the ceiling the star must beat is the STARFIELD's, so the margin is measured in sky buffer pixels
+import { lumFactorOf, starTargetPx } from '../rendering/apparentMagnitude.js';   // ⭐ how the halo renders its falloff at 240p; see that file for why a stipple cannot.
 
 /**
  * StarFlare — star with lens diffraction spikes and rainbow chromatic dispersion.
@@ -71,6 +73,15 @@ export class StarFlare {
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uDitherScale: PIXEL_SCALE,
+        // ⭐⭐ THE MAGNITUDE TERM THIS PROGRAM NEVER HAD. lumFactor was computed in
+        // _createFlareDisc and spent ENTIRELY on billboardSwitchDistance, so an O-class supergiant
+        // and an M-dwarf wrote the IDENTICAL peak byte. The starfield carries a per-star magnitude
+        // baked into its colour; the system's own star carried none. Set in _createFlareDisc,
+        // ⚠ READ FROM this._lumFactor, WHICH IS ALREADY SET: the constructor builds the flare
+        // disc BEFORE the billboard (see the two _create calls), and _createFlareDisc stashes
+        // it. The 0.7 fallback is Sol's, so a reorder degrades to the shipped look rather than
+        // to a black star.
+        uLumFactor: { value: this._lumFactor || 0.7 },
         uColor: { value: new THREE.Vector3(r, g, b) },
       },
       vertexShader: /* glsl */`
@@ -83,6 +94,7 @@ export class StarFlare {
       fragmentShader: /* glsl */`
         uniform float uDitherScale;
         uniform vec3 uColor;
+        uniform float uLumFactor;
         varying vec2 vUv;
 
         // 4x4 Bayer dithering threshold (matches StarfieldLayer / Planet.js)
@@ -134,7 +146,14 @@ export class StarFlare {
           // while leaving the mid-falloff (shape ~0.3-0.5) clearly below
           // 1.0 so it dithers into a hazy glow halo around the bright
           // core, matching the brightest background stars' look.
-          vec3 col = uColor * shape * 1.8;
+          // ⭐ 1.8 WAS A CONSTANT WHERE A MAGNITUDE BELONGED. Its own comment called it "the same
+          // trick StarfieldLayer uses", which is wrong: StarfieldLayer has no constant multiplier,
+          // it has a per-star brightness. Scaling by luminosity keeps the bright stars saturating
+          // exactly as before and lets the dim ones fall below the ceiling, which is the only way
+          // value can say anything at all once the core clips at 255.
+          // ⚠ NORMALISED AT lumFactor 0.7 (Sol) SO THE SHIPPED LOOK IS THE FIXED POINT: a Sol-like
+          // star is byte-identical to before, an O-class is brighter, an M-dwarf dimmer.
+          vec3 col = uColor * shape * 1.8 * (uLumFactor / 0.7);
           gl_FragColor = vec4(min(col, vec3(1.0)), 1.0);
         }
       `,
@@ -158,7 +177,7 @@ export class StarFlare {
     //   A-class (20)   → ~0.96  — bright
     //   O-class (300K) → ~1.80  — huge, blazing flare
     const rawLum = this.data.luminosity || 1.0;
-    const lumFactor = Math.max(0.55, Math.min(2.0, 0.7 + 0.2 * Math.log10(rawLum)));
+    const lumFactor = lumFactorOf(rawLum);   // ⭐ shared clamp — apparentMagnitude.js
     // Save for distance-LOD threshold + billboard sizing in update().
     // Brighter stars get bigger background-star equivalents when they
     // shrink past the switch threshold.
@@ -457,7 +476,17 @@ export class StarFlare {
     //   G-class (Sol, lf ~0.7)   → 17 px
     //   A-class (~1.0)           → 19 px
     //   O-class (~1.5)           → 22 px (clamp ceiling)
-    const targetPx = Math.max(16, Math.min(22, 16 + 6 * (lf - 0.55)));
+    // ⭐ THE LAW MOVED OUT, AND THE COMMENT ABOVE IS WHY IT HAD TO. It calibrated this against
+    // aSize 8 = 16px, the ceiling of StarfieldLayer's LEGACY random path; the live starfield is
+    // built from generator data and its measured aSize histogram tops out at 10 = 20px, with the
+    // real-star catalog reaching 12 = 24px. So "always at least as big as the brightest BG star"
+    // was never true — measured at 240p, this star is 1x2 buffer px against the brightest
+    // background star's 2x3. apparentMagnitude.js anchors on the real ceiling plus a margin in
+    // BUFFER pixels, so the margin survives a resolution change.
+    // ⛔ AND IT IS SHARED NOW: orreryEntryGeometry.starGlowRadiusPx() re-implemented these two
+    // lines verbatim against citations that had already gone stale, and it feeds arrival framing —
+    // so changing the size here used to desync the orrery camera silently. It imports instead.
+    const targetPx = starTargetPx(lf, SKY_PIXEL_SCALE.value);
     // Visible glow diameter is renderRadius*6 (shader glowRadius*2);
     // switch when it projects below targetPx:
     //   (R*6/dist)*pixelsPerRadian < targetPx  ⇔  dist > this value.

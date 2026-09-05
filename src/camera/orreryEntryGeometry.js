@@ -1,3 +1,5 @@
+import { SKY_PIXEL_SCALE } from '../rendering/skyPixelScale.js';
+import { lumFactorOf, starTargetPx } from '../rendering/apparentMagnitude.js';   // ⛔ ONE source for the star's drawn size; this file used to keep a second copy.
 // ORRERY entry geometry (orrery-entry-orbits-2026-07-20, AC3).
 //
 // Pure screen-space geometry for the ratified ORRERY entry rule (Max, 2026-07-20):
@@ -72,21 +74,25 @@ export function screenOffsetPx({ orbitRadius, camDist, fovDeg, viewportH }) {
 }
 
 /**
- * Rendered glow-disc RADIUS of a star of luminosity `luminosity` (Sol = 1), in
- * screen px. Mirrors StarFlare.js exactly:
- *   lumFactor = clamp(0.7 + 0.2*log10(L), 0.55, 2.0)              (StarFlare.js:145)
- *   targetPx  = max(16, min(22, 16 + 6*(lumFactor - 0.55)))       (StarFlare.js:350)
- *   radius    = targetPx / 2
- * The px clamp pins the glow DIAMETER to [16, 22] regardless of distance, so the
- * radius lives in [8, 11]. This radius is the denominator of the visibility rule.
+ * Rendered glow-disc RADIUS of a star of luminosity `luminosity` (Sol = 1), in screen px.
+ *
+ * ⛔ THIS USED TO RE-IMPLEMENT StarFlare'S FORMULA VERBATIM AND IT WAS A TRAP. It carried its own
+ * copy of the lumFactor clamp and the targetPx expression, cited against StarFlare line numbers
+ * ("StarFlare.js:145", ":350") that had ALREADY DRIFTED to 161 and 460. Since this feeds
+ * arrivalSpawnDistance() and therefore the orrery's entry framing, changing the star's drawn size in
+ * StarFlare silently desynced the camera that frames it — two sources of truth, no test between them.
+ * It imports the one law now (apparentMagnitude.js). ⛔ Do not re-inline it.
+ *
+ * ⚠ THE RANGE IS NO LONGER [8, 11]. Under the magnitude law the diameter is anchored on the
+ * starfield's own ceiling plus a margin in buffer pixels, so it scales with the sky's resolution;
+ * at 240p on a 1130-tall window it is roughly 33-45 screen px, i.e. a radius near 16-23. Callers
+ * that assumed a bounded constant should read the function, not remember a number.
  *
  * @param {number} luminosity solar luminosities (L / L_sun)
- * @returns {number} glow-disc radius in px, in [8, 11]
+ * @returns {number} glow-disc radius in screen px
  */
 export function starGlowRadiusPx(luminosity) {
-  const lumFactor = Math.min(2.0, Math.max(0.55, 0.7 + 0.2 * Math.log10(luminosity)));
-  const targetPx = Math.max(16, Math.min(22, 16 + 6 * (lumFactor - 0.55)));
-  return targetPx / 2;
+  return starTargetPx(lumFactorOf(luminosity), SKY_PIXEL_SCALE.value) / 2;
 }
 
 /**
