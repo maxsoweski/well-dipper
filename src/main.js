@@ -132,7 +132,7 @@ import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/Materi
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
 import { warmPlanetPrograms, swapMaterialWhenReady, restoreMaterialSwap, MATERIAL_SWAPS } from './rendering/ShaderWarmup.js';
-import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js'; import { setPosterizeLevels } from './rendering/posterizeLevels.js'; import { setSkyPixelScale } from './rendering/skyPixelScale.js'; // ⛔ B2P RIDES THIS LINE: main.js carries ~700 line-anchored citations.
+import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js'; import { setPosterizeLevels } from './rendering/posterizeLevels.js'; import { setSkyPixelScale } from './rendering/skyPixelScale.js'; import { setPixelScale as setDitherPixelScale } from './rendering/pixelScaleUniform.js'; // ⛔ B2P RIDES THIS LINE: main.js carries ~700 line-anchored citations.
 // Instrument E's reproduction line has to report BOTH quantities named `compositionClass`, because
 // PLAN §12.5 fact 6 measured them to be different populations (only 65 of 209 world-engine gas-class
 // bodies fall inside the game's own GAS_TYPES set) and an assertion written against the wrong one is
@@ -195,7 +195,7 @@ const retroRenderer = new RetroRenderer(canvas, scene, camera);
 // on a live drag, and the reset button re-applies it — but nothing read it at
 // boot. Move the slider, reload, and the picture silently came back at 3 with
 // the stored value still 5. Its neighbour on the next line always did this.
-retroRenderer.pixelScale = settings.get('pixelScale'); setSkyPixelScale(settings.get('skyPixelScale')); retroRenderer.resize();   // ⭐⭐ THE 2026-07-30 FIX ABOVE WAS ONLY HALF-APPLIED, AND THE OTHER HALF IS THIS CALL. Assigning the field restores the SETTING; it does not restore the PICTURE. `pixelScale` is not read anywhere per-frame — it is consumed once, in `resize()` (RetroRenderer.js:811), to ALLOCATE the render targets — so without a resize the constructor's hard-coded 3 stays on the GPU and the comment above describes a bug that was still live: stored 5, field 5, sceneTarget still 735x377 at 2205 wide, measured in the running game 2026-09-06. It only self-corrected on the next window resize, which is why it read as fixed. ⛔ THIS MATTERS RIGHT NOW, not academically: Max is choosing a render resolution by eye, and the defect makes the game boot showing a DIFFERENT resolution from the one the slider claims — i.e. it silently invalidates the very judgement the slider exists to support. ⛔ RIDES THIS LINE: main.js carries ~700 line-anchored citations.
+retroRenderer.pixelScale = settings.get('pixelScale'); setDitherPixelScale(settings.get('pixelScale')); setSkyPixelScale(settings.get('skyPixelScale')); retroRenderer.resize();   // ⭐⭐ THE 2026-07-30 FIX ABOVE WAS ONLY HALF-APPLIED, AND THE OTHER HALF IS THIS CALL. Assigning the field restores the SETTING; it does not restore the PICTURE. `pixelScale` is not read anywhere per-frame — it is consumed once, in `resize()` (RetroRenderer.js:811), to ALLOCATE the render targets — so without a resize the constructor's hard-coded 3 stays on the GPU and the comment above describes a bug that was still live: stored 5, field 5, sceneTarget still 735x377 at 2205 wide, measured in the running game 2026-09-06. It only self-corrected on the next window resize, which is why it read as fixed. ⛔ THIS MATTERS RIGHT NOW, not academically: Max is choosing a render resolution by eye, and the defect makes the game boot showing a DIFFERENT resolution from the one the slider claims — i.e. it silently invalidates the very judgement the slider exists to support. ⛔ RIDES THIS LINE: main.js carries ~700 line-anchored citations.
 retroRenderer.setColorPalette(settings.get('colorPalette'));  setPosterizeLevels(settings.get('posterizeLevels')); settings.onChange('posterizeLevels', setPosterizeLevels); // B2P — read on BOOT (the pixelScale defect above is exactly the boot-read being missing) and subscribed for CHANGE, so settings.set() and settings.reset() both reach the SIX game fragment programs (gas, rocky, exotic, ring, moon, belt — four `uniform vec2` declaration sites between them, FRAG_HEADER's one serving the three body programs) and the lab material through the TWO shared uniform objects: POSTERIZE_QUANTUM for the game's vec2 `uPosterizeLevels`, POSTERIZE_LEVELS for the lab's scalar `uLevels`, with setPosterizeLevels the single writer of both.
 
 // ── Texture Baker (runtime procedural → texture baking) ──
@@ -6260,6 +6260,7 @@ function applySettingChange(key, value) {
   switch (key) {
     case 'pixelScale':
       retroRenderer.pixelScale = value;
+      setDitherPixelScale(value);   // ⭐ the dither cell is sized in SCREEN pixels, so it has to follow the divisor — without this the cell is 3 BUFFER px and becomes a 13.5px checker at 4.5 (pixelScaleUniform.js)
       retroRenderer.resize();
       break;
     case 'skyPixelScale':

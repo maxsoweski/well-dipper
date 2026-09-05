@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PIXEL_SCALE } from '../rendering/pixelScaleUniform.js';
 
 /**
  * PlanetBillboard — a shader-based billboard dot for distant planets.
@@ -28,6 +29,7 @@ export class PlanetBillboard {
     const geometry = new THREE.PlaneGeometry(1, 1);
     const material = new THREE.ShaderMaterial({
       uniforms: {
+        uDitherScale: PIXEL_SCALE,
         uColor: { value: new THREE.Vector3(r, g, b) },
       },
       vertexShader: /* glsl */`
@@ -38,6 +40,7 @@ export class PlanetBillboard {
         }
       `,
       fragmentShader: /* glsl */`
+        uniform float uDitherScale;
         uniform vec3 uColor;
         varying vec2 vUv;
 
@@ -66,7 +69,7 @@ export class PlanetBillboard {
           float glow = 1.0 - smoothstep(0.1, 0.5, dist);
           float shape = coreBright * 0.5 + glow * 0.5;
           // Bayer dither in 3-pixel screen blocks (matches star billboards)
-          float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
+          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale)));   // ⭐ cell held at ~3 SCREEN px: gl_FragCoord is in BUFFER px, so a bare /3.0 became a 13.5px checker at scale 4.5 (see pixelScaleUniform.js)
           if (shape < threshold * 0.5) discard;
           // Dimmer than stars — 1.2x HDR vs 1.8x for stars.
           vec3 col = uColor * shape * 1.2;

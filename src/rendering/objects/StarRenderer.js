@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assignBodyName } from '../../util/scene-naming.js';
+import { PIXEL_SCALE } from '../pixelScaleUniform.js';
 
 /**
  * StarRenderer — type-branched star rendering based on stellar evolution.
@@ -377,6 +378,7 @@ class NeutronStar extends StarRendererBase {
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       uniforms: {
+        uDitherScale: PIXEL_SCALE,
         uBeamAngle: { value: 0.0 },
         uColor: { value: new THREE.Vector3(0.6, 0.7, 1.0) },
       },
@@ -388,6 +390,7 @@ class NeutronStar extends StarRendererBase {
         }
       `,
       fragmentShader: /* glsl */ `
+        uniform float uDitherScale;
         uniform float uBeamAngle;
         uniform vec3 uColor;
         varying vec2 vUv;
@@ -427,7 +430,7 @@ class NeutronStar extends StarRendererBase {
 
           float total = beam + core * 0.5;
 
-          float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
+          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale)));
           if (total < threshold * 0.4) discard;
 
           gl_FragColor = vec4(uColor * total, 1.0);
@@ -513,6 +516,7 @@ class BlackHole extends StarRendererBase {
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       uniforms: {
+        uDitherScale: PIXEL_SCALE,
         uTime: { value: 0.0 },
         uInnerR: { value: innerR },
         uOuterR: { value: outerR },
@@ -528,6 +532,7 @@ class BlackHole extends StarRendererBase {
         }
       `,
       fragmentShader: /* glsl */ `
+        uniform float uDitherScale;
         uniform float uTime;
         uniform float uInnerR;
         uniform float uOuterR;
@@ -574,7 +579,7 @@ class BlackHole extends StarRendererBase {
           float doppler = 1.0 + 0.3 * sin(angle + uTime * 0.5);
           brightness *= doppler;
 
-          float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
+          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale)));
           if (brightness < threshold * 0.6) discard;
 
           gl_FragColor = vec4(col * brightness, 1.0);

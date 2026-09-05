@@ -140,6 +140,7 @@ export class StarfieldLayer {
         varying float vTunnelAmt;
         varying float vClipped;
         varying float vPointPx;
+        varying float vIdealPx;
         uniform float uSkyPixelScale;
 
         // Stable pseudo-random from vec3 — gives on-axis stars a deterministic
@@ -249,6 +250,7 @@ export class StarfieldLayer {
           // happens to fall inside a pixel, so a star blinks in and out purely from sub-pixel drift as
           // the camera turns. Clamping guarantees one fragment, always. The OTHER half is in the
           // fragment shader, where a 1-pixel sprite samples gl_PointCoord exactly once.
+          vIdealPx = ptPx;          // BEFORE the clamp — the size the star WANTED, which is its magnitude
           ptPx = max(1.0, ptPx);
           gl_PointSize = ptPx;
           vPointPx = ptPx;
@@ -267,6 +269,7 @@ export class StarfieldLayer {
         varying float vTunnelAmt;
         varying float vClipped;
         varying float vPointPx;
+        varying float vIdealPx;
         uniform float uSkyPixelScale;
 
         float bayerDither(vec2 coord) {
@@ -304,8 +307,21 @@ export class StarfieldLayer {
           // stars winking on and off. So below ~3 buffer pixels a star stops being a soft blob and
           // becomes what a starfield at this resolution actually is: a lit PIXEL. "solid" ramps that
           // in so nothing pops at the boundary between the two regimes.
+          // ⭐⭐ A SUB-PIXEL STAR LIGHTS A FRACTION OF ITS PIXEL, AND THAT FRACTION IS ITS BRIGHTNESS.
+          // Max, 2026-09-06: "because we have the same number but they're lower resolutions we've
+          // lost the relative brightness of closer/farther stars and the overall starfield seems much
+          // brighter". Both halves of that are one mistake of mine: the first version of this line
+          // was shape = 1.0, which lit EVERY collapsed star at full peak. Size is how this starfield
+          // encodes magnitude, so flattening size to one pixel without moving the brightness threw
+          // the magnitude away AND raised every faint star to maximum.
+          // The physical term is coverage: a star whose ideal footprint is 0.6 px across covers
+          // 0.36 of a pixel and should contribute 0.36 of its light. That restores the near/far
+          // gradation among faint stars and pulls the overall level back down, in one term with a
+          // reason rather than a tuning constant. Above 1 px ideal it saturates to 1 and this is
+          // exactly the previous behaviour, so nothing changes for the stars that were already fine.
           float solid = 1.0 - smoothstep(1.0, 3.0, vPointPx);
-          shape = mix(shape, 1.0, solid);
+          float coverage = clamp(vIdealPx * vIdealPx, 0.0, 1.0);
+          shape = mix(shape, coverage, solid);
 
           // Dithered edge (retro feel).
           // ⚠ THE /3.0 WAS A HARDCODED COPY OF pixelScale and it is wrong once the sky has its own.

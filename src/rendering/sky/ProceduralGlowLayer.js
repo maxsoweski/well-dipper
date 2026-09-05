@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assignName } from '../../util/scene-naming.js';
+import { SKY_PIXEL_SCALE } from '../skyPixelScale.js';
 
 /**
  * ProceduralGlowLayer — real-time galaxy glow from density integration.
@@ -66,6 +67,7 @@ export class ProceduralGlowLayer {
       side: THREE.BackSide,
 
       uniforms: {
+        uDitherScale: SKY_PIXEL_SCALE,
         // Camera's galactic position (kpc)
         uPlayerPos: { value: new THREE.Vector3(8.0, 0.025, 0.0) },
         // Brightness
@@ -154,6 +156,7 @@ export class ProceduralGlowLayer {
       `,
 
       fragmentShader: /* glsl */ `
+        uniform float uDitherScale;
         #define PI 3.14159265359
         #define NUM_STEPS 16
         #define MAX_DIST 18.0   // kpc — max ray-march distance
@@ -881,7 +884,7 @@ export class ProceduralGlowLayer {
           brightness = totalBright;
 
           // ── Retro dithering ──
-          vec2 ditherCoord = floor(gl_FragCoord.xy / 3.0);
+          vec2 ditherCoord = floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale));
           float dither = bayerDither(ditherCoord);
           float levels = 8.0;
           brightness = floor(brightness * levels + dither) / levels;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assignName } from '../../util/scene-naming.js';
+import { SKY_PIXEL_SCALE } from '../skyPixelScale.js';   // ⭐ stars keep a constant SCREEN size, and the nebula dither cell stays ~3 SCREEN px, as the sky's grid coarsens.
 
 /**
  * SkyFeatureLayer — renders nearby galactic features as sky overlays.
@@ -445,7 +446,11 @@ export class SkyFeatureLayer {
         // Without this, far nebulae create dark patches without enough emission
         // to justify them (dim but still opaque = dark blotch).
         uAbsorptionCoeff: { value: this._absorptionCoeffForType(feature.type) * (feature._distFade ?? 1.0) },
-        uPixelScale: { value: 3.0 }, // match RetroRenderer.pixelScale
+        // ⛔ WAS `{ value: 3.0 } // match RetroRenderer.pixelScale` — a HAND-COPIED constant that
+        // matched nothing once the sky got its own divisor, and Max saw the result directly:
+        // "the huge galactic structures like nebulas have some kind of dithering going on that
+        // breaks at this resolution, looks checkerboarded". Now the shared object itself.
+        uPixelScale: SKY_PIXEL_SCALE,
       },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
@@ -789,7 +794,7 @@ export class SkyFeatureLayer {
           // Dither at the retro pixel resolution — snap gl_FragCoord to the
           // low-res grid so nebulae look the same chunky resolution as
           // near-field scene objects (planets, moons, etc.)
-          vec2 retroCoord = floor(gl_FragCoord.xy / uPixelScale);
+          vec2 retroCoord = floor(gl_FragCoord.xy / max(1.0, 3.0 / uPixelScale));   // ⭐ ~3 SCREEN px, not 3 BUFFER px — see pixelScaleUniform.js
           float threshold = bayerDither(retroCoord);
           if (density < threshold) discard;
 

@@ -122,6 +122,7 @@ export class WarpTunnelStarfieldLayer {
       vertexColors: true,
 
       uniforms: {
+        uDitherScale: SKY_PIXEL_SCALE,
         uSkyPixelScale: SKY_PIXEL_SCALE,   // ⭐ the SHARED object — one setter moves every live sky material (skyPixelScale.js)
         uBrightness: { value: 1.0 },
         // Tunnel warp
@@ -268,6 +269,7 @@ export class WarpTunnelStarfieldLayer {
       `,
 
       fragmentShader: /* glsl */ `
+        uniform float uDitherScale;
         uniform float uBrightness;
         uniform vec3 uTint;
         varying vec3 vColor;
@@ -300,7 +302,7 @@ export class WarpTunnelStarfieldLayer {
           float glow = 1.0 - smoothstep(0.1, 0.5, d);
           float shape = coreBright * 0.6 + glow * 0.4;
 
-          float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
+          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale)));   // ⭐ cell held at ~3 SCREEN px: gl_FragCoord is in BUFFER px, so a bare /3.0 became a 13.5px checker at scale 4.5 (see pixelScaleUniform.js)
           if (shape < threshold * 0.5) discard;
 
           // During warp, brighten stars slightly — simulates energy.

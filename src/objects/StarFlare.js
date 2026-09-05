@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assignName, resolveStarId } from '../util/scene-naming.js';
+import { PIXEL_SCALE } from '../rendering/pixelScaleUniform.js';
 
 /**
  * StarFlare — star with lens diffraction spikes and rainbow chromatic dispersion.
@@ -67,6 +68,7 @@ export class StarFlare {
     const geometry = new THREE.PlaneGeometry(1, 1);
     const material = new THREE.ShaderMaterial({
       uniforms: {
+        uDitherScale: PIXEL_SCALE,
         uColor: { value: new THREE.Vector3(r, g, b) },
       },
       vertexShader: /* glsl */`
@@ -77,6 +79,7 @@ export class StarFlare {
         }
       `,
       fragmentShader: /* glsl */`
+        uniform float uDitherScale;
         uniform vec3 uColor;
         varying vec2 vUv;
 
@@ -108,7 +111,7 @@ export class StarFlare {
           float shape = coreBright * 0.6 + glow * 0.4;
           // Bayer dither in 3-pixel screen blocks — matches the retro
           // pipeline and StarfieldLayer's edge stippling exactly.
-          float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));
+          float threshold = bayerDither(floor(gl_FragCoord.xy / max(1.0, 3.0 / uDitherScale)));   // ⭐ cell held at ~3 SCREEN px: gl_FragCoord is in BUFFER px, so a bare /3.0 became a 13.5px checker at scale 4.5 (see pixelScaleUniform.js)
           if (shape < threshold * 0.5) discard;
           // Boost brightness past 1.0 and clamp — same trick StarfieldLayer
           // uses (HDR vColor → min(col, 1.0)). Without this, the peak
