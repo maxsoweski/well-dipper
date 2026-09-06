@@ -65,12 +65,32 @@ describe('PixelText coverage', () => {
     expect(missing).toEqual([]);
   });
 
-  it('maps lowercase onto the uppercase face rather than failing', () => {
+  it('draws real lowercase, and does not just re-use the capital', () => {
+    // ⭐ THIS TEST USED TO ASSERT THE OPPOSITE. Until 2026-09-07 the face was uppercase-only and
+    // `drawPixelText` upper-cased on the way in, so 'abc' and 'ABC' were byte-identical output —
+    // which is why the cockpit drew "0.50 C" for a speed the model calls "0.50 c", and "VESKOL B"
+    // for a planet designation that is conventionally lowercase. Max: *"I'd prefer to be able to
+    // use lowercase too"*.
     expect(hasGlyph('a')).toBe(true);
     const upper = recordingCtx(), lower = recordingCtx();
     drawPixelText(upper, 'ABC', 0, 0);
     drawPixelText(lower, 'abc', 0, 0);
-    expect(lower.rects).toEqual(upper.rects);
+    expect(lower.rects, 'lowercase is still being folded onto the capitals')
+      .not.toEqual(upper.rects);
+    // …and it is shorter, because a 3-row x-height is what a 5-row cell can spare.
+    expect(Math.max(...lower.rects.map((r) => r.y)))
+      .toBeLessThan(Math.max(...upper.rects.map((r) => r.y)) + 1);
+  });
+
+  it('still falls back to the capital for a character the face has no lowercase for', () => {
+    // ⛔ THE FALLBACK IS LOad-BEARING, not vestigial: it is what let this face be uppercase-only
+    // for its whole life without a caller knowing, and it is what keeps a face that has not
+    // authored lowercase working. Digits and punctuation have no case, so they exercise it.
+    const a = recordingCtx(), b2 = recordingCtx();
+    drawPixelText(a, '0.5%', 0, 0);
+    drawPixelText(b2, '0.5%', 0, 0);
+    expect(a.rects).toEqual(b2.rects);
+    expect(hasGlyph('\u00b0')).toBe(true);
   });
 });
 
@@ -181,6 +201,7 @@ describe('PixelText legibility floor', () => {
     };
     const chars = [];
     for (let c = 65; c <= 90; c++) chars.push(String.fromCharCode(c));
+    for (let c = 97; c <= 122; c++) chars.push(String.fromCharCode(c));   // lowercase, added 2026-09-07
     for (let d = 0; d <= 9; d++) chars.push(String(d));
     const bmp = new Map(chars.map((c) => [c, bitmapOf(c)]));
     const out = [];
@@ -199,9 +220,15 @@ describe('PixelText legibility floor', () => {
   it('the SHIPPED face keeps every letter and digit apart', () => {
     setPixelFace('5x5');
     const pairs = confusablePairs(2);
-    // D/O are near-identical in every typeface ever cut; that one is honest and is the only
-    // letter-pair allowed through. Any NEW entry here is a glyph that needs redrawing.
-    expect(pairs, `confusable at <=2px on the ${FACE.name} face: ${pairs.join(' ')}`).toEqual(['D/O=2px']);
+    // ⭐ THREE ALLOWED PAIRS, EACH FOR A STATED REASON — anything NEW here is a glyph that needs
+    // redrawing, not an expectation that needs widening.
+    //   D/O  near-identical in every typeface ever cut.
+    //   c/e  a 3-row x-height is all a 5-row cell leaves for lowercase; they differ by the bar.
+    //   h/n  distinguished by the ascender alone, which is 2 texels — as it is in every font.
+    // ⚠ The first lowercase draft scored EIGHT, with a/e and u/v one pixel apart. Redrawing eight
+    // glyphs took it to three; the cell was never the problem.
+    expect(pairs, `confusable at <=2px on the ${FACE.name} face: ${pairs.join(' ')}`)
+      .toEqual(['D/O=2px', 'c/e=2px', 'h/n=2px']);
   });
 
   it('the gate is not vacuous — loosen the threshold and it finds plenty', () => {
@@ -211,19 +238,22 @@ describe('PixelText legibility floor', () => {
     // without keeping a face nobody ships: if `confusablePairs` had stopped measuring similarity,
     // it would return nothing at ANY threshold.
     setPixelFace('5x5');
-    expect(confusablePairs(2)).toEqual(['D/O=2px']);
+    expect(confusablePairs(2)).toEqual(['D/O=2px', 'c/e=2px', 'h/n=2px']);
     expect(confusablePairs(6).length).toBeGreaterThan(10);
   });
 
   it('the taller A/B alternative clears the same bar, so the choice is size and not legibility', () => {
     setPixelFace('5x7');
-    expect(confusablePairs(2)).toEqual(['D/O=2px']);
+    // Seven rows buy a true descender and a roomier x-height, so it loses h/n and c/e and gains
+    // only c/o — the same shape of allowance, one fewer.
+    expect(confusablePairs(2)).toEqual(['D/O=2px', 'c/o=2px']);
     setPixelFace('5x5');
   });
 
   it('every face renders the same character set, so the A/B cannot throw on one of them', () => {
     // The in-game `;` A/B swaps the face under live draw calls that pass onMissing:'throw'.
-    const LITERALS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,:-\u2014/%+_<>';
+    const LITERALS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+      + ' .,:-\u2014/%+_<>!\'()*=?[]`|\u00b0\u00b7\u2295';
     for (const face of pixelFaceNames()) {
       setPixelFace(face);
       const missing = [...LITERALS].filter((ch) => !hasGlyph(ch));
