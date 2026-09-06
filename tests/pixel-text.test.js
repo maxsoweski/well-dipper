@@ -17,8 +17,14 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 import { describe, it, expect } from 'vitest';
 import {
-  drawPixelText, measurePixelText, pixelTextHeight, hasGlyph, GLYPH_W, GLYPH_H, ADVANCE,
+  drawPixelText, measurePixelText, pixelTextHeight, hasGlyph,
+  FACE, setPixelFace, pixelFaceNames,
 } from '../src/rendering/PixelText.js';
+
+// ⛔ READ LIVE, NEVER DESTRUCTURED. The face is switchable (there is an in-game A/B), so a
+// `const { w } = FACE` at import would freeze these at whichever face loaded first — the exact
+// bug the module's own header warns about for its consumers.
+const GW = () => FACE.w, GH = () => FACE.h, ADV = () => FACE.advance;
 
 /** Records fillRect calls so geometry can be asserted without a DOM. */
 function recordingCtx() {
@@ -82,7 +88,7 @@ describe('PixelText missing-glyph policy', () => {
     expect(ctx.rects.length).toBeGreaterThan(0);
     // The characters after the unmappable one still drew.
     const maxX = Math.max(...ctx.rects.map((r) => r.x));
-    expect(maxX).toBeGreaterThanOrEqual(ADVANCE * (EXOTIC.length - 1));
+    expect(maxX).toBeGreaterThanOrEqual(ADV() * (EXOTIC.length - 1));
   });
 
   it('restores fillStyle even when it throws, so a caller mid-frame is not left with our colour', () => {
@@ -96,10 +102,12 @@ describe('PixelText missing-glyph policy', () => {
 describe('PixelText geometry', () => {
   it('measures without a trailing inter-character gap', () => {
     expect(measurePixelText('', 1)).toBe(0);
-    expect(measurePixelText('A', 1)).toBe(GLYPH_W);
-    expect(measurePixelText('ABC', 1)).toBe(11);          // 3 cells + 2 gaps, no trailing gap
-    expect(measurePixelText('ABC', 2)).toBe(22);
-    expect(pixelTextHeight(1)).toBe(GLYPH_H);
+    expect(measurePixelText('A', 1)).toBe(GW());
+    // 3 cells + 2 gaps, no trailing gap — derived from the live face, because the numbers were
+    // 11 and 22 on the 3x5 face and are 17 and 34 on the 5x7 one.
+    expect(measurePixelText('ABC', 1)).toBe(3 * ADV() - 1);
+    expect(measurePixelText('ABC', 2)).toBe(3 * ADV() * 2 - 2);
+    expect(pixelTextHeight(1)).toBe(GH());
   });
 
   it('draws only integer-aligned texels — a half-covered row is a grey smear once magnified', () => {
@@ -141,6 +149,74 @@ describe('PixelText geometry', () => {
     const ctx = recordingCtx();
     drawPixelText(ctx, ' ', 0, 0);
     expect(ctx.rects).toEqual([]);
-    expect(measurePixelText(' ', 1)).toBe(GLYPH_W);
+    expect(measurePixelText(' ', 1)).toBe(GW());
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// ⭐ THE CONFUSABILITY GATE — the measurement that condemned the 3x5 face.
+//
+// Max, 2026-09-07: *"this font is no longer a good fit for this resolution"*. The cause was not the
+// resolution, it was CELL WIDTH: three columns cannot hold the letters distinguished by their
+// MIDDLE. Counting pairs of glyphs that differ by two lit pixels or fewer put a number on it —
+// 3x5 had TWELVE such pairs, M/N among them differing by a single pixel of fifteen.
+//
+// This is a legibility floor, not a look test. Whether the face reads WELL is Max's eye.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+describe('PixelText legibility floor', () => {
+  /** Every pair of glyphs within `limit` lit pixels of each other, drawn through the real API. */
+  function confusablePairs(limit = 2) {
+    // ⭐ RENDERED, NOT READ OFF THE TABLE. Asking `drawPixelText` what it draws means the gate
+    // measures what reaches the glass; a scan of the glyph object would pass a face whose draw
+    // path dropped rows.
+    const bitmapOf = (ch) => {
+      const rects = [];
+      drawPixelText({ fillStyle: '', fillRect: (x, y) => rects.push(`${x},${y}`) }, ch, 0, 0, {});
+      return new Set(rects);
+    };
+    const chars = [];
+    for (let c = 65; c <= 90; c++) chars.push(String.fromCharCode(c));
+    for (let d = 0; d <= 9; d++) chars.push(String(d));
+    const bmp = new Map(chars.map((c) => [c, bitmapOf(c)]));
+    const out = [];
+    for (let i = 0; i < chars.length; i++) {
+      for (let j = i + 1; j < chars.length; j++) {
+        const a = bmp.get(chars[i]), b = bmp.get(chars[j]);
+        let d = 0;
+        for (const k of a) if (!b.has(k)) d++;
+        for (const k of b) if (!a.has(k)) d++;
+        if (d <= limit) out.push(`${chars[i]}/${chars[j]}=${d}px`);
+      }
+    }
+    return out;
+  }
+
+  it('the SHIPPED face keeps every letter and digit apart', () => {
+    setPixelFace('5x7');
+    const pairs = confusablePairs(2);
+    // D/O are near-identical in every typeface ever cut; that one is honest and is the only
+    // letter-pair allowed through. Any NEW entry here is a glyph that needs redrawing.
+    expect(pairs, `confusable at <=2px on the 5x7 face: ${pairs.join(' ')}`).toEqual(['D/O=2px']);
+  });
+
+  it('…and the 3x5 reference face still FAILS it, which is why it is not the shipped face', () => {
+    // ⛔ A NON-VACUITY CHECK ON THE GATE ABOVE, and a fence against quietly re-shipping 3x5. If
+    // this ever passes, the metric has stopped measuring anything.
+    setPixelFace('3x5');
+    const pairs = confusablePairs(2);
+    expect(pairs.length).toBeGreaterThan(8);
+    expect(pairs).toContain('M/N=1px');
+    setPixelFace('5x7');
+  });
+
+  it('every face renders the same character set, so the A/B cannot throw on one of them', () => {
+    // The in-game `;` A/B swaps the face under live draw calls that pass onMissing:'throw'.
+    const LITERALS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,:-\u2014/%+_<>';
+    for (const face of pixelFaceNames()) {
+      setPixelFace(face);
+      const missing = [...LITERALS].filter((ch) => !hasGlyph(ch));
+      expect(missing, `${face} cannot render ${missing.join('')}`).toEqual([]);
+    }
+    setPixelFace('5x7');
   });
 });

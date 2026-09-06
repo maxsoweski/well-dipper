@@ -50,11 +50,16 @@ export function etaVisible({ speed, targetDistance, aimOnTarget } = {}) {
 
 // ── THE LAYOUT, IN BUFFER PIXELS ──
 // Every number below is world pixels, not CSS pixels. The old values were CSS px against a ~1080-tall
-// window; these are their ~0.222x counterparts, re-rounded to integers and then re-spaced so the
-// 5-row cap height has room. The bottom-left cluster is 30 rows tall (37 with the SUBLIGHT tag) out
-// of 240 — about 12.5% of the screen, up from 7.8% today. That growth is the direct cost of the
-// five-row floor: a letter cannot be a letter in fewer rows, and no magnification adds rows.
-const TEXT_H = pixelTextHeight(1);   // 5
+// window; these are their ~0.222x counterparts, re-rounded to integers and then re-spaced so the cap
+// height has room. On the shipped 5x7 face the bottom-left cluster is 32 rows tall (41 with the
+// SUBLIGHT tag) out of 240 — about 13% of the screen, up from 7.8% before this workstream. That
+// growth is the direct cost of legibility: a letter cannot be a letter in fewer rows, and no
+// magnification adds rows. The vertical spacings below are expressed in terms of TEXT_H rather than
+// as constants, so the cluster re-flows when the face changes instead of overlapping itself.
+// ⛔ NO MODULE-LEVEL `TEXT_H`. It was `pixelTextHeight(1)` here, read ONCE at import — which strands
+// the whole vertical layout on whichever face happened to be active at boot, and the face is now
+// switchable for the A/B. Same failure the shared-object comments in `renderBuffer.js` and
+// `pixelScaleUniform.js` describe. It is read per-frame inside `update()` instead.
 const LX = 6;                        // left margin of the cluster (was 24 CSS px)
 const BAR_W = 60;                    // log speed bar width (was 180)
 const BAR_H = 4;                     // bar height — 4 so a two-tone fill HAS an interior (was 8)
@@ -182,6 +187,7 @@ export class SupercruiseHud {
     if (!state.visible) return;
     const w = this._w, h = this._h;
     const cx = Math.round(w / 2), cy = Math.round(h / 2);
+    const TEXT_H = pixelTextHeight(1);   // 7 on the shipped 5x7 face — read live, see the note above
 
     const speed = state.speed || 0;
     const commandedSpeed = state.commandedSpeed || 0;
