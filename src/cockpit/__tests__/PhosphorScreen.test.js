@@ -46,7 +46,7 @@
  * and its describe.skipIf pattern is deliberately NOT copied.
  */
 import { describe, it, expect } from 'vitest';
-import { decodePixelText, FACE } from '../../rendering/PixelText.js';
+import { decodePixelText, measurePixelText, FACE } from '../../rendering/PixelText.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -124,7 +124,11 @@ const STUB_NO_FONT_SIZE = 10;
 const FONT_SIZE_RE = /(\d+(?:\.\d+)?)px/;
 
 /** What the stub would report for this string at this size. */
-const stubWidth = (str, size) => String(str).length * STUB_CHAR_W * size;
+// ⛔ THE STUB WIDTH MODEL IS GONE. It approximated a vector monospace face at 0.6em per character
+// because `measureText` in a headless context can only ever be a guess. The bitmap face is
+// fixed-width and measures by arithmetic, so the test can ask the REAL function — which means
+// these assertions now check the actual layout instead of agreeing with a stub.
+const stubWidth = (str, size) => measurePixelText(str, Math.max(1, Math.round(size / FACE.h)));
 
 /**
  * A Canvas2D-shaped recorder.
@@ -163,7 +167,11 @@ function decodedText(log) {
     const src = rects.find((r) => r.x >= d.x && r.x < d.x + d.text.length * FACE.advance * d.scale
       && r.y >= d.y && r.y < d.y + FACE.h * d.scale && r.w === d.scale);
     return {
-      op: 'fillText', text: d.text, x: d.x, y: d.y, size: px,
+      // ⭐ THE BASELINE, NOT THE TOP. `drawPixelText` takes a top and `decodePixelText` returns
+      // one, but `text()`/`row()`/`banner()` have always taken a BASELINE and every assertion in
+      // this file is written against that. Converting here keeps the contract these tests were
+      // written for — the ink box is exact on a bitmap face, so baseline = top + cap height.
+      op: 'fillText', text: d.text, x: d.x, y: d.y + px, size: px,
       // `font` is synthesised so the existing FONT_SIZE_RE size readers keep working unchanged.
       font: `${px}px bitmap`, fillStyle: src ? src.fillStyle : null,
     };

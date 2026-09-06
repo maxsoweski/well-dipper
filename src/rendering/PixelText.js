@@ -464,54 +464,78 @@ export function decodePixelText(rects) {
   for (const s of [...new Set(square.map((r) => r.w))].sort((a, b) => a - b)) {
     const pool = square.filter((r) => r.w === s);
     const at = new Set(pool.map((r) => `${r.x},${r.y}`));
-    const claimed = new Set();
+    const used = new Set();
 
-    for (const y0 of [...new Set(pool.map((r) => r.y))].sort((a, b) => a - b)) {
-      if (claimed.has(y0)) continue;
-      // A band is the GH rows starting at y0, on the scale's own row pitch.
-      const band = pool.filter((r) => r.y >= y0 && r.y < y0 + GH * s && (r.y - y0) % s === 0);
-      if (!band.length) continue;
-
-      // ⭐ SPLIT THE BAND INTO RUNS BEFORE DECODING, AND RE-ANCHOR THE CELL GRID ON EACH.
-      // A label hard-left and its value hard-right share one baseline, and the value's glyphs are
-      // NOT on the label's 6-texel cell lattice — decoding the whole band on one origin turned
-      // "ERIS" into five replacement characters. The gap threshold is two full cells: one space
-      // inside a word is at most `2*ADV - (GW-1)` texels of clear air, two spaces are strictly
-      // more, so words survive and columns separate.
-      const columns = [...new Set(band.map((r) => r.x))].sort((a2, b2) => a2 - b2);
-      const runs = [];
-      for (const x of columns) {
-        const last = runs[runs.length - 1];
-        if (last && x - last[last.length - 1] <= 2 * ADV * s) last.push(x);
-        else runs.push([x]);
-      }
-
-      let bandHadText = false;
-      for (const run of runs) {
-        const x0 = run[0];
-        const cells = Math.floor((run[run.length - 1] - x0) / (ADV * s)) + 1;
-        let text = '';
-        for (let c = 0; c < cells; c++) {
-          const cx = x0 + c * ADV * s;
-          const rows = [];
-          for (let r = 0; r < GH; r++) {
-            let mask = 0;
-            for (let col = 0; col < GW; col++) {
-              if (at.has(`${cx + col * s},${y0 + r * s}`)) mask |= 1 << (GW - 1 - col);
-            }
-            rows.push(mask);
-          }
-          const key = rows.join(',');
-          text += byKey.has(key) ? byKey.get(key) : (rows.some(Boolean) ? '\uFFFD' : ' ');
+    /** Decode one cell at (cx, y0); returns the character or null if it matches no glyph. */
+    const cellAt = (cx, y0) => {
+      const rows = [];
+      for (let r = 0; r < GH; r++) {
+        let mask = 0;
+        for (let col = 0; col < GW; col++) {
+          if (at.has(`${cx + col * s},${y0 + r * s}`)) mask |= 1 << (GW - 1 - col);
         }
-        // ⛔ A RUN OF PURE FURNITURE IS NOT A STRING. If nothing matched a glyph, these were
-        // square fills that happened to line up — report nothing rather than a row of U+FFFD.
-        if (!/[^\s\uFFFD]/.test(text)) continue;
-        bandHadText = true;
-        out.push({ text: text.trimEnd(), x: x0, y: y0, scale: s });
+        rows.push(mask);
       }
-      if (bandHadText) for (let r = 0; r < GH; r++) claimed.add(y0 + r * s);
+      const key = rows.join(',');
+      if (byKey.has(key)) return byKey.get(key);
+      return rows.some(Boolean) ? null : ' ';
+    };
+
+    for (const top of [...new Set(pool.map((r) => r.y))].sort((a, b) => a - b)) {
+      // ⭐ TRY EVERY ANCHOR, NOT JUST THE TOPMOST TEXEL. Since the face gained lowercase, an
+      // all-lowercase run's first lit row is its x-height, not the top of the cell — anchoring at
+      // `min(y)` shifted every such string up by two rows and matched nothing. Score each candidate
+      // origin by how many cells actually resolve to a glyph and keep the best.
+      let best = null;
+      for (let k = 0; k < GH; k++) {
+        const y0 = top - k * s;
+        const band = pool.filter((r) => r.y >= y0 && r.y < y0 + GH * s
+          && (r.y - y0) % s === 0 && !used.has(`${r.x},${r.y}`));
+        if (!band.length) continue;
+        const columns = [...new Set(band.map((r) => r.x))].sort((a2, b2) => a2 - b2);
+        const runs = [];
+        for (const x of columns) {
+          const last = runs[runs.length - 1];
+          if (last && x - last[last.length - 1] <= 2 * ADV * s) last.push(x);
+          else runs.push([x]);
+        }
+        let score = 0;
+        const decoded = [];
+        for (const run of runs) {
+          const x0 = run[0];
+          const cells = Math.floor((run[run.length - 1] - x0) / (ADV * s)) + 1;
+          let text = '';
+          for (let c = 0; c < cells; c++) {
+            const ch = cellAt(x0 + c * ADV * s, y0);
+            if (ch === null) { text += '\uFFFD'; } else { text += ch; if (ch !== ' ') score++; }
+          }
+          decoded.push({ x0, text });
+        }
+        if (!best || score > best.score) best = { y0, score, decoded };
+      }
+      if (!best || best.score === 0) continue;
+
+      for (const { x0, text } of best.decoded) {
+        if (!/[^\s\uFFFD]/.test(text)) continue;
+        // Consume this run's texels so a later anchor cannot decode them a second time.
+        for (let c = 0; c < text.length; c++) {
+          for (let r = 0; r < GH; r++) {
+            for (let col = 0; col < GW; col++) {
+              used.add(`${x0 + c * ADV * s + col * s},${best.y0 + r * s}`);
+            }
+          }
+        }
+        // Split on two or more blank cells: a `row()` whose label and value nearly meet arrives as
+        // one run, and every caller would otherwise re-split it by a rule of its own.
+        let seek = 0;
+        for (const part of text.split(/ {2,}/)) {
+          const idx = text.indexOf(part, seek);
+          seek = idx + part.length;
+          if (part.trim()) out.push({ text: part, x: x0 + idx * ADV * s, y: best.y0, scale: s });
+        }
+      }
     }
   }
+
   return out.sort((a, b) => (a.y - b.y) || (a.x - b.x));
 }

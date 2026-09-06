@@ -53,7 +53,7 @@
  * model — are exactly the shapes the missing-means-blank rule has to survive.
  */
 import { describe, it, expect } from 'vitest';
-import { decodePixelText, FACE } from '../../rendering/PixelText.js';
+import { decodePixelText, measurePixelText, FACE } from '../../rendering/PixelText.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -220,7 +220,9 @@ function decodedText(log) {
     const src = rects.find((r) => r.x >= d.x && r.x < d.x + d.text.length * FACE.advance * d.scale
       && r.y >= d.y && r.y < d.y + FACE.h * d.scale && r.w === d.scale);
     return {
-      op: 'fillText', text: d.text, x: d.x, y: d.y, size: px,
+      // The BASELINE, not the top — `text()`/`row()`/`banner()` take a baseline and every
+      // assertion here is written against that. Exact on a bitmap face: baseline = top + cap.
+      op: 'fillText', text: d.text, x: d.x, y: d.y + px, size: px,
       // `font` is synthesised so the existing FONT_SIZE_RE size readers keep working unchanged.
       font: `${px}px bitmap`, fillStyle: src ? src.fillStyle : null,
     };
@@ -229,20 +231,6 @@ function decodedText(log) {
 
 const ops = (log, op) => (op === 'fillText' ? decodedText(log) : log.filter((e) => e.op === op));
 
-/**
- * A model string as it appears ON THE GLASS.
- *
- * ⭐ THE FACE IS UPPERCASE-ONLY, and that is a real product consequence of chrome-and-ui-at-240p,
- * not a test detail: `FlightReadout` still produces "0.50 c" and a body is still named "Veskol b",
- * but the cockpit now draws "0.50 C" and "VESKOL B". Every 5th-gen HUD this is imitating was
- * uppercase, and a 5x5 cell has no room for a descender — so the model keeps its case and the
- * glass loses it. Comparisons that cross that boundary go through here so the boundary is VISIBLE
- * rather than being smuggled in as a hand-uppercased literal.
- * ⚠ The `c` in "0.50 c" is the symbol for lightspeed and the `b` in "Veskol b" is a planet
- * designation; both are conventionally lowercase. Max should see them on the glass before this is
- * called settled.
- */
-const onGlass = (s) => String(s).toUpperCase();
 
 /** Every string that reached the glass, in order. */
 const drawn = (log) => ops(log, 'fillText').map((e) => e.text);
@@ -370,7 +358,7 @@ describe('DRIVE — every string is the flight model\'s, unchanged', () => {
     // Against the MODEL: a painter that recomputes the speed — drops the REV
     // prefix, picks its own tier, rounds differently — diverges here even if it
     // looks plausible on its own.
-    expect(texts).toContain(onGlass(FLYING_READOUT.speedText));
+    expect(texts).toContain(FLYING_READOUT.speedText);
     // And against a LITERAL, so a builder that silently changed its answer cannot
     // drag this test along with it.
     expect(FLYING_READOUT.speedText).toBe('0.50 c');
@@ -406,7 +394,7 @@ describe('DRIVE — every string is the flight model\'s, unchanged', () => {
       sublightCap: 0.002,
     });
     const model = buildFlightReadout(flightReadoutStateFromSnapshot(reversing));
-    expect(drawn(paint(paintDrive, reversing, 0).log)).toContain(onGlass(model.speedText));
+    expect(drawn(paint(paintDrive, reversing, 0).log)).toContain(model.speedText);
     expect(model.speedText).toBe('REV 150 km/s');
   });
 
@@ -429,7 +417,7 @@ describe('DRIVE — every string is the flight model\'s, unchanged', () => {
     // it is the first casualty of adding rows: the natural fix for a crowded panel
     // is to shrink the number nobody is supposed to have to look for.
     const { log } = paint(paintDrive, FLYING, 0);
-    expectStrictlyBiggest(log, onGlass(FLYING_READOUT.speedText));
+    expectStrictlyBiggest(log, FLYING_READOUT.speedText);
   });
 });
 
@@ -438,7 +426,7 @@ describe('TARGET — name, distance, ETA and the approach cue', () => {
     const { log } = paint(paintTarget, FLYING, 0);
     const texts = drawn(log);
 
-    expect(texts).toContain(onGlass('Veskol b'));
+    expect(texts).toContain('Veskol b');
 
     // 250 scene units is a quarter of an AU (ScaleConstants: 1 AU = 1000 u).
     expect(rowValue(log, 'DIST')).toBe('0.25 AU');
@@ -454,7 +442,7 @@ describe('TARGET — name, distance, ETA and the approach cue', () => {
   });
 
   it('draws the target name as the largest thing on the panel when it fits', () => {
-    expectStrictlyBiggest(paint(paintTarget, FLYING, 0).log, onGlass('Veskol b'));
+    expectStrictlyBiggest(paint(paintTarget, FLYING, 0).log, 'Veskol b');
   });
 
   it('drops the name one size — never below body size — rather than clip a long one', () => {
@@ -467,7 +455,7 @@ describe('TARGET — name, distance, ETA and the approach cue', () => {
     });
     const { log, screen } = paint(paintTarget, long, 0);
 
-    const nameDraws = ops(log, 'fillText').filter((e) => e.text === onGlass('PVX J4K7Q2M+9XP3RWZ b'));
+    const nameDraws = ops(log, 'fillText').filter((e) => e.text === 'PVX J4K7Q2M+9XP3RWZ b');
     // Drawn twice: once as the probe at display size, once for real one size down.
     expect(nameDraws.length).toBe(2);
     expect(sizeOf(nameDraws[0])).toBeCloseTo(screen.type.display, 6);
@@ -579,7 +567,7 @@ describe('TARGET — the warp destination, once the body selection is gone', () 
       warpTarget: { name: 'PVX J4K7Q2M+9XP3RWZ' },
     });
     const texts = drawn(paint(paintTarget, both, 0).log);
-    expect(texts).toContain(onGlass('Veskol b'));
+    expect(texts).toContain('Veskol b');
     expect(texts).not.toContain('PVX J4K7Q2M+9XP3RWZ');
     expect(texts).not.toContain('WARP TARGET');
   });
@@ -607,7 +595,7 @@ describe('INFO — the dossier, straight off the table', () => {
 
     // And the literals, so a table that silently changed shape is visible here
     // rather than being agreed with.
-    expect(rowValue(log, 'BODY')).toBe(onGlass('Veskol b'));
+    expect(rowValue(log, 'BODY')).toBe('Veskol b');
     expect(rowValue(log, 'T_EQ')).toBe('374 K');
     expect(rowValue(log, 'COMP')).toBe('silicate Fe0.31');
     expect(rowValue(log, 'ATMO')).toBe('co2-n2 0.85 bar');
@@ -1119,7 +1107,7 @@ describe('all three panels — a frame with nothing in it draws no numbers', () 
     // in this assertion: an instrument that is present and blank is the honest
     // picture, and a label that vanished with its reading would be a seventh
     // element appearing and disappearing on the glass.
-    expect(drawn(paint(paintDrive, EMPTY, 0).log)).toEqual(['0.0 KM/S', 'SUBLIGHT', 'THR', 'CAP', 'TURN']);
+    expect(drawn(paint(paintDrive, EMPTY, 0).log)).toEqual(['0.0 km/s', 'SUBLIGHT', 'THR', 'CAP', 'TURN']);
     expect(drawn(paint(paintTarget, EMPTY, 0).log)).toEqual(['DIST', 'ETA']);
     expect(drawn(paint(paintInfo, EMPTY, 0).log)).toEqual(INFO_ROWS.map((r) => r.label));
   });
