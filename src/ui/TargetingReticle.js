@@ -51,13 +51,21 @@ const NAME_COLOR_SHIP_SELECTED  = 'rgba(180, 235, 255, 0.95)';
 // They were CSS pixels against the window; this canvas's backing store is now the world render
 // buffer, so one unit here is one WORLD pixel, magnified ~4.7x at the 240p setting.
 //
-// ⭐ THIS IS A REDESIGN, NOT A DIVISION. Two of these could not simply be scaled:
-//   - THICKNESS. At 240p there are exactly TWO representable stroke weights. Selected-vs-tentative
-//     therefore has to be carried by 2-vs-1. It could not be before: 3 and 4 CSS px both quantised
-//     to one block (`round(3/3) === round(4/3) === 1`), so for the whole life of this file the only
-//     thing separating a locked target from a hovered one was ALPHA.
-//   - THE MINIMUM. 16 CSS px of half-width is 3.4 buffer px, which cannot hold a bracket with an
-//     arm and a step in it. 6 is the floor at which the staircase shape survives.
+// ⭐ THIS IS A REDESIGN, NOT A DIVISION. THE MINIMUM had to move: 16 CSS px of half-width is 3.4
+// buffer px, which cannot hold a bracket with an arm and a chamfer in it. 6 is the floor at which
+// the corner shape survives.
+//
+// ⛔ THICKNESS IS 1 FOR BOTH STATES, AND A 2-TEXEL SELECTED STROKE IS A TRIED-AND-REJECTED IDEA.
+// The batch plan reasoned that at 240p there are exactly two representable stroke weights, so
+// selected-vs-tentative "must" be carried by 2-vs-1 — since 3 and 4 CSS px both quantised to one
+// block (`round(3/3) === round(4/3) === 1`), meaning only ALPHA had ever separated them. That
+// reasoning is sound and the result still failed: Max, 2026-09-07, *"when it's selected it gets too
+// bold to read properly; the un-selected reticles look good by comparison."* At half-width 6 a
+// 2-texel stroke is a third of the arm's length and the corner stops reading as a line.
+// So the separator is what it has always been, and what he has always been happy with: COLOUR AND
+// ALPHA — 0.45 dim green hovered against 1.0 bright green locked, better than a 2x contrast.
+// ⚠ If a stronger separator is ever wanted, the lever is ARM LENGTH or the square's SIZE, not
+// weight. Both add a cue without adding ink.
 // Bracket sizing (scales with projected body radius so big bodies get big brackets)
 const BRACKET_MIN_HALF = 6;   // buffer px — smallest half-width of bracket square
 const BRACKET_MAX_HALF = 9999; // buffer px — body fills screen (camera on body, dist<=0); callers clamp to viewport
@@ -66,7 +74,7 @@ const BRACKET_EDGE_MARGIN = 8; // buffer px — keep brackets this far from view
 const BRACKET_ARM_LEN = 3;    // buffer px — 3 texels x 4.26 magnification = 12.8 screen px, which is
                               // what the old 12-CSS-px arm measured. 4 made the arms LONGER than before.
 const BRACKET_THICK_TENT = 1;
-const BRACKET_THICK_SEL  = 2;
+const BRACKET_THICK_SEL  = 1;   // ⛔ NOT 2 — see the thickness note above; Max rejected the bolder form
 
 // Ghost reticle (sub-pixel bodies): fixed size independent of body radius,
 // so every distant body reads as the same quiet marker. Sized for a chunky
