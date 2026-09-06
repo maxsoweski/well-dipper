@@ -168,6 +168,41 @@ Verified by unit test, not the live game, and I will not dress that up as a live
 
 **Verify:** V4.
 
+### ⛔ STEP 6 IS ON HOLD — ITS HEADLINE JUSTIFICATION IS NOT DELIVERED BY ITS OWN SPEC (found 2026-09-07)
+
+Read this before starting step 6. Steps 4 and 5 are landed and green, so its gate is MET; the hold is
+about the spec below, not about the gate.
+
+**§0 point 3 argues the one surviving reason to composite is GRAIN** — "`uGrainStrength` defaults to
+0.045 and the grain runs at *screen* resolution, so every fat world pixel has fine noise inside it and
+a stage-1 overlay's fat pixels would be flat and clean. That is exactly the 'chrome sitting on top'
+reading AC-9 judges." It also establishes that the quantise justification is near-dead
+(`uQuantizeAll` defaults to 0) and the palette one is "a real setting but a niche one".
+
+**Edit 4 then places the branch where the grain cannot reach it.** Verified in the source, not the
+prose — `RetroRenderer.js`: grain `:883`, cockpit `:898`, `// ── THE FRAMEBUFFER ──` `:907`,
+`applyPalette` `:916`. The instruction is to insert "immediately after the `result = mix(result, c,
+cockpit.a);` block's closing brace and before the `// ── THE FRAMEBUFFER ──` comment", i.e. at ~`:906`
+— **after** the grain block. Edit 4's own ⛔ note says as much and accepts it, because the branch is
+meant to travel with the cockpit when batch 2 moves it above the grain.
+
+**So step 6, landed today, delivers the PALETTE and the framebuffer quantise, and NOT the grain.**
+That is the small half of its own argument, bought at the full structural price: two DOM canvases
+removed, a shared-canvas mode added to two classes, the flipY and clear-ordering coin-flips taken,
+`body.hud-hidden #targeting-overlay` (`style.css`) turned into dead CSS, and `LabMode.js:72`'s
+`'targeting-overlay': '#targeting-overlay'` registration left resolving to nothing.
+
+**Recommendation: fold step 6 into batch 2 and land it in the same commit that moves the cockpit
+above the grain.** Then the branch is written once, in its final position, and the grain arrives with
+it — which is the outcome §0 point 3 actually wanted. Nothing about AC-6 waits on this: AC-6 is closed
+by steps 4 and 5, live-verified.
+
+⚠ If it is landed early anyway, the ⛔ in edit 4 becomes load-bearing rather than advisory: left
+behind when the cockpit moves, the cabin gets grain and the chrome does not — a NEW seam of exactly
+the kind AC-9 judges, which is worse than today's.
+
+---
+
 ### STEP 6 — GATED. Composite the overlay. Closes the grain/palette seam. Depends on 4 **and** 5 both green.
 Six edits, all revertible on their own:
 1. In `resize()`, after the hudTarget block: create **one** offscreen canvas at `renderWidth × renderHeight` (never appended to the DOM), re-fetch its 2D context and re-set `imageSmoothingEnabled = false` after every resize (a canvas resize resets context state), and on first creation only make a `CanvasTexture` with Nearest/Nearest, `generateMipmaps = false`. Leave `flipY` and `colorSpace` at their defaults. Expose `getOverlay() → { canvas, ctx }` returning **live references only, no dimensions** (they go stale).
@@ -208,6 +243,43 @@ Also: `body.hud-hidden #targeting-overlay { display: none }` (`style.css:831-834
 **No test asserts `_hudSize === 320`.** It appears only at `RetroRenderer.js:90` and `:969`; no test file references `hudTarget`. The `320` in `mainHudSlot.test.js:2/278` is prose.
 
 **Stale prose worth sweeping (comment-only, no AC depends on it):** `OrbitLine.js` header still claims the class *is* an analytic coverage ring "in RetroRenderer's 1/3-res sceneTarget"; `OrbitConicField.js:117`'s `@param` says the same; both cite a resolution scheme that has not existed since the line-count change. Their two hover-highlight line citations (`main.js ~:11127-11138`, `main.js :11210`) are stale — the real block is `main.js:14598-14621`. `SystemMap.js:14` says "LineLoop circles" while `:136` builds a `THREE.Line`. `cabinMask.js:66` claims "nothing else in `src/` touches `layers`" — `OrbitRingSDF.js:142` now does (layer 10; no collision with the mask's 7).
+
+---
+
+## 3.5 ⛔ CORRECTIONS TO THIS PLAN, FOUND WHILE APPLYING STEPS 4 AND 5 (2026-09-07)
+
+The plan held up well; these are the places it did not, recorded so the next reader trusts the rest.
+
+1. ⭐⭐ **THE `t - PX` ARITHMETIC IN STEP 5 IS OFF BY ONE.** The plan prescribes
+   `bx - (sx > 0 ? t : 0)`, claiming the boundary becomes `[cx-h, cx+h)`. It does — but that is
+   `2h` lit columns, `[cx-h, cx+h-1]`, whose centre is `cx-0.5`: asymmetric about the body's centre
+   pixel. The correct form is **`bx - (sx > 0 ? t - PX : 0)`** — the same offset the original had,
+   moved to the other branch — giving `[cx-h, cx+h]`, `2h+1` columns, centred. Measured live at
+   240p: lit columns `[-6..-3]` and `[3..6]` about the centre. The plan's DIAGNOSIS was right
+   (thickness anchored outward, so selecting a body widened its square) and its BRANCH was right;
+   only the amount was wrong.
+2. **The original was not "half a pixel off centre" at PX=1.** It was symmetric and `2h+3` wide —
+   it grew outward. The off-centre-by-`PX-1` asymmetry the plan is remembering is real but belongs
+   to the historical PX=3 case, where the blocks are anchored top-left.
+3. ⭐ **STEP 4 NEEDS FOUR TEST FILES, NOT THREE.** `src/cockpit/__tests__/FlightReadout.test.js`
+   source-scans `SupercruiseHud.js` in three places and is not in the plan's list or in V6's fence:
+   two bar-mark guards pinning `lx + barW * speedToBarFrac(...)` verbatim, and
+   `/fillText\(\s*'SUBLIGHT'/`. All three go red on step 4 as specified.
+4. **The off-screen ship chevron needed redesigning, not just re-denominating.** The plan converts
+   its `halfW`/`halfH` and cull margin but leaves it a `translate`/`rotate` + `fill()` of a path —
+   which antialiases unconditionally, leaving one blurred element on a canvas whose whole premise is
+   hard texels. It is now rasterised by hand (`_fillTriangleTexels`), which also keeps the rotation
+   continuous rather than snapping to eight directions.
+5. **Step 5 does NOT remove the Google-Fonts dependency.** It removes it from the reticle LABEL, which
+   is what matters for the draw path. 'Pixelify Sans' still has five users in `src/style.css`, so
+   `index.html:10` stays.
+6. **AC-MASK-AGREES-WITH-THE-ORACLE cannot be closed on an arbitrary window.** 0.587202 is stated in
+   its own contract as measured at "1600x900 CSS (exactly 16:9) … head centred". Coverage moves with
+   aspect ratio and head pose, so on a 1.977:1 window it reads ~0.550 with the mask at ANY resolution
+   from 41k to 2.3M sampled px. The portable half of the AC is its second clause — agreement with
+   same-session `_cockpitOcclusion()` — which held at 0.0063.
+7. **V0/V1's predicted numbers assume a 2205x1130 window.** Nothing depends on them; just do not read
+   a different window's figures as a failure.
 
 ---
 
