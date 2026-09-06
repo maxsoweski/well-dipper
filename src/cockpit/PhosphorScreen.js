@@ -158,6 +158,8 @@
  * the one cockpit-lab.html's palette cycler already defaults to, so the lab and
  * the shipped panels cannot drift apart.
  */
+import { FACE, drawPixelText, measurePixelText } from '../rendering/PixelText.js';
+
 export const PHOSPHOR = Object.freeze({ INK: '#EDE8DE', BACK: '#000000' });
 
 /**
@@ -191,13 +193,45 @@ export const BLINK_MS = Object.freeze({
  * writes the numbers out itself, because a test that reads its expectations from
  * the file under test agrees with every future edit by construction.
  */
-export const TYPE_RATIOS = Object.freeze({
-  display: 1 / 6,
-  body: 1 / 17,
-  label: 1 / 20,
-  pad: 1 / 17,
-  lead: 1 / 11,
-});
+/**
+ * The grid, in rows, BEFORE the resolution multiplier — and every tier is read off the LIVE face
+ * rather than typed.
+ *
+ * ⛔ A FUNCTION, NOT A FROZEN OBJECT, AND THAT IS THE WHOLE POINT. It was `{ body: 5, lead: 6 }`
+ * as literals, which is correct for exactly one face. `PixelText`'s header promises the faces are
+ * switchable so they can be compared in the running game — and under literals, switching to the
+ * 5x7 face would draw seven-row glyphs on six-row leading, colliding every line, with the layout
+ * still believing it was five. The face is a shared MUTABLE object for the same reason
+ * `RENDER_BUFFER` is: a build-time read strands every consumer on whichever face was live at boot.
+ *
+ *   display  two cells — the SAME face at integer scale 2, never a second face
+ *   body     one cell
+ *   label    ⭐ MERGED WITH BODY. A five-row face has no size between them; pretending otherwise
+ *            put a second name on one number and invited a fractional one.
+ *   pad      one grid unit
+ *   lead     one cell plus one row of air
+ */
+export function typeUnits() {
+  return Object.freeze({
+    display: 2 * FACE.h,
+    body: FACE.h,
+    label: FACE.h,
+    pad: 1,
+    lead: FACE.h + 1,
+  });
+}
+
+/**
+ * Rows the design grid needs: `2*pad + body + 6*lead` — a heading line and six stacked rows.
+ * On the shipped 5x5 face that is 2 + 5 + 36 = **43**, which is why the upper panel's measured
+ * 42.84 rows is the number every cockpit figure comes off. On the 5x7 alternative it is 57, and
+ * a 43-row panel then honestly reports five lines instead of seven — which is exactly the trade
+ * `PixelText`'s header states, now computed rather than asserted.
+ */
+export function gridRows() {
+  const u = typeUnits();
+  return 2 * u.pad + u.body + 6 * u.lead;
+}
 
 /**
  * The smallest fraction of the buffer height any TEXT in this kit is allowed to
@@ -214,7 +248,7 @@ export const TYPE_RATIOS = Object.freeze({
  * `_checkSize` below is where the floor actually bites. Every text-drawing entry
  * point runs through it.
  */
-export const MIN_TEXT_RATIO = 1 / 20;
+export const MIN_TEXT_TEXELS = 1;
 
 /**
  * Bold, because at 13 screen pixels a regular weight loses most of its stroke to
@@ -227,8 +261,13 @@ export const MIN_TEXT_RATIO = 1 / 20;
  * WIDTH, and every centred and right-aligned string on the panel moves — with no
  * error anywhere. Asking for the generic gets whatever the platform actually has.
  */
-const FONT_WEIGHT = 700;
-const FONT_FAMILY = 'monospace';
+// ⛔ NO FONT. chrome-and-ui-at-240p: every string on a cockpit panel goes through `PixelText`,
+// the one bitmap face in this repo. A vector face antialiases unconditionally and spends its
+// detail on fractional edge coverage — which is exactly the wrong currency once the cockpit
+// renders into the world buffer, where a panel is ~43 rows tall. Measured: dropping
+// `cockpitTarget` to the world buffer with this kit still on `fillText` turned the INFO panel
+// into a column of grey mush while the cabin geometry came out correct. The two halves are one
+// change.
 
 /**
  * Where the ink of a line sits relative to its baseline, as multiples of the
@@ -242,11 +281,10 @@ const FONT_FAMILY = 'monospace';
  * glyphs rather than clipping them. A block a little too tall reads as intended;
  * a block that crops the descenders reads as broken.
  */
-const ASCENT = 0.8;
-const DESCENT = 0.25;
-
-/** Side breathing room inside an inverted block, as a multiple of font size. */
-const INK_BLOCK_PAD_X = 0.25;
+// ⛔ NO ASCENT/DESCENT. They were honest approximations of a vector monospace face's ink box,
+// needed because `measureText` cannot report one portably. A bitmap face has no such uncertainty:
+// its cap height IS `size`, it has no descenders, and the baseline is the bottom of the cell. So
+// the ink box is exact and `top = y - size`.
 
 /** The accepted `align` spellings, mapped to the one the code works in. */
 const ALIGNMENTS = Object.freeze({
@@ -340,12 +378,26 @@ export function typeScale(bufferHeightPx) {
       `derived from it would be 0 — a panel that draws nothing and says nothing.`,
     );
   }
+  // ⭐ AN INTEGER UNIT, NOT A FRACTION OF THE HEIGHT. Ratios cannot land a bitmap face on whole
+  // rows, and snapping five of them independently makes the character budget wander with the
+  // resolution — the panel would be a different layout at every setting instead of the same
+  // picture, only sharper. One integer `unit` scales the whole grid; nothing else moves.
+  // ⚠ `Math.max(1, …)` so a buffer below one grid-height still draws (chunkier, honestly
+  // degraded) rather than collapsing every size to 0, which is the blank-panel-clean-console
+  // failure the throw above exists to prevent.
+  const unit = Math.max(1, Math.floor(h / gridRows()));
+  const u = typeUnits();
   return Object.freeze({
-    display: h * TYPE_RATIOS.display,
-    body: h * TYPE_RATIOS.body,
-    label: h * TYPE_RATIOS.label,
-    pad: h * TYPE_RATIOS.pad,
-    lead: h * TYPE_RATIOS.lead,
+    display: u.display * unit,
+    body: u.body * unit,
+    label: u.label * unit,
+    pad: u.pad * unit,
+    lead: u.lead * unit,
+    /** The grid unit itself — what `hair`, insets and tick lengths are measured in. */
+    unit,
+    /** How many `lead`-spaced rows fit under a heading. Painters must not run off the glass. */
+    lines: Math.max(1, Math.floor((h - 2 * u.pad * unit - u.body * unit)
+      / (u.lead * unit)) + 1),
   });
 }
 
@@ -408,7 +460,11 @@ export class PhosphorScreen {
      * which is why the test that defends it builds a deliberately small screen.
      * Every test at the usual 400 px buffer passes with the floor deleted.
      */
-    this.hair = Math.max(1, this.type.body / 8);
+    // ⭐ ONE GRID UNIT, AND AN INTEGER. It was `body / 8`, a fraction that lands between texels —
+    // and a sub-pixel fillRect does not render as a thin line, it renders as a grey smear. Grey is
+    // not one of our two colours in any sense a pilot would recognise. At the grid unit a hairline
+    // is exactly one texel at 240p and scales up whole at every higher setting.
+    this.hair = this.type.unit;
   }
 
   /**
@@ -426,19 +482,55 @@ export class PhosphorScreen {
    * @private
    */
   _checkSize(size, where) {
-    const floor = this.height * MIN_TEXT_RATIO;
-    // The epsilon is because `label` sits EXACTLY on the floor, and a caller who
-    // recomputes H/20 by a slightly different route can land a bit under it.
+    // ⭐ AN ABSOLUTE TEXEL COUNT, NOT A FRACTION OF THE HEIGHT. `H/20` was the old floor, and once
+    // the buffer IS the display grid a fractional floor can only be wrong at some resolution: at
+    // H=43 it demands 2.15 px, which no whole number of cells satisfies below 5, and at H=1024 it
+    // demands 51.2, which rejects the legal 50. The floor that actually means anything is "at
+    // least one whole cell of the face".
+    const floor = FACE.h * MIN_TEXT_TEXELS;
     if (!Number.isFinite(size) || size < floor - 1e-9) {
       throw new Error(
         `PhosphorScreen.${where}: text size ${size} is below the legibility floor of ` +
-        `${floor} px (H/20) in a ${this.height} px buffer. At 14.25 degrees of a 70 degree ` +
-        `FOV a panel is only about 220 screen pixels tall, so that size reaches the ` +
-        `pilot's eye at roughly ${(size / this.height * 220).toFixed(1)} screen pixels ` +
-        `against a floor of about 11. If this fired because one more row was needed, ` +
-        `drop a row — do not shrink the type.`,
+        `${floor} px — one whole ${FACE.w}x${FACE.h} cell — in a ${this.height} px buffer. ` +
+        `A bitmap face cannot be drawn at a fraction of a cell; it would be a smear, not a ` +
+        `letter. If this fired because one more row was needed, drop a row — do not shrink ` +
+        `the type.`,
       );
     }
+  }
+
+  /**
+   * A px size to the face's integer scale.
+   *
+   * ⛔ INTEGER, AND FLOORED AT 1. A bitmap face drawn at 1.4x is resampled by the canvas into
+   * exactly the grey fringe this whole workstream removes. `typeScale` only ever produces exact
+   * multiples of the cell, so this rounds nothing in practice — it exists for the caller that
+   * passes its own `size`, which `_checkSize` has already held to a whole cell.
+   * @private
+   */
+  _scaleFor(size) { return Math.max(1, Math.round(size / FACE.h)); }
+
+  /**
+   * How many characters fit between the margins at a size.
+   *
+   * ⭐ THE NUMBER EVERY PANEL NEEDS AND NONE OF THEM SHOULD DERIVE ITSELF. A run of n characters is
+   * `n * advance * scale - scale` texels wide — the last one carries no trailing gap — so the fit
+   * is `(usable + scale) / (advance * scale)`. A painter that computes this itself is a painter
+   * that will be wrong the first time the face or the padding changes, silently, by overflowing
+   * the glass rather than by throwing.
+   *
+   * ⚠ ON THE REAL PANELS THIS IS 8 AND 9. The upper pair (NAV, DRIVE) measures 51.41 texels across
+   * at 240 lines and the lower pair (INFO, TARGET) 55.28 — see `chrome-240p-BATCH-PLANS.md` §0.5,
+   * which also records that the plan's own 12/13 were the OLD 3x5 face's numbers, and that the
+   * same arithmetic reproduces them at `advance` 4, which is what validates it.
+   *
+   * @param {number} [size] a size from `this.type`; defaults to body
+   * @returns {number} whole characters, never below 0
+   */
+  colsAt(size = this.type.body) {
+    const scale = this._scaleFor(size);
+    const usable = this.width - 2 * this.type.pad;
+    return Math.max(0, Math.floor((usable + scale) / (FACE.advance * scale)));
   }
 
   // ── The only two places a colour is ever set ──────────────────────────────
@@ -466,11 +558,10 @@ export class PhosphorScreen {
    * reimplement canvas alignment.
    * @private
    */
-  _setFont(size) {
-    this.ctx.font = `${FONT_WEIGHT} ${size}px ${FONT_FAMILY}`;
-    this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'alphabetic';
-  }
+  // ⛔ `_setFont` IS GONE. There is no font: `drawPixelText` writes texels with `fillRect` and
+  // touches neither `ctx.font` nor `textAlign`/`textBaseline`. The whole class of "a shared
+  // stateful context left textAlign somewhere else" cannot arise, because the kit no longer
+  // depends on any of that state.
 
   /**
    * Width of a string at a size, in buffer pixels.
@@ -488,9 +579,12 @@ export class PhosphorScreen {
    * @private
    */
   _measure(str, size) {
-    this._setFont(size);
-    const m = this.ctx.measureText(str);
-    const w = m && m.width;
+    // ⭐ ARITHMETIC, NOT `measureText`. The face is fixed-width, so a string's width is exactly
+    // `n * advance * scale - scale`. That removes the ordering hazard this comment used to warn
+    // about (measure-before-set-font returning the PREVIOUS drawer's size) by removing the shared
+    // state it depended on, and it makes the headless tests measure the real thing instead of a
+    // stub's guess.
+    const w = measurePixelText(str, this._scaleFor(size));
     if (!Number.isFinite(w)) {
       throw new Error(
         `PhosphorScreen: measureText returned a non-numeric width (${w}) for ` +
@@ -552,21 +646,28 @@ export class PhosphorScreen {
     this._checkSize(size, 'text');
 
     const w = this._measure(s, size);
-    const left = this._leftEdge(x, w, align);
-    const top = y - size * ASCENT;
-    const h = size * (ASCENT + DESCENT);
+    const left = Math.round(this._leftEdge(x, w, align));
+    // The baseline is the BOTTOM of the cell: a bitmap face has no descenders, so the ink box is
+    // exact rather than the old ASCENT/DESCENT approximation.
+    const top = Math.round(y) - size;
+    const h = size;
 
     if (invert) {
       // Ink block first, then the glyphs knocked out of it in the background
       // colour. This is the entire alert vocabulary — no second hue exists.
-      const padX = size * INK_BLOCK_PAD_X;
+      const padX = this.hair;
       this._ink();
       this.ctx.fillRect(left - padX, top, w + padX * 2, h);
-      this._back();
-    } else {
-      this._ink();
     }
-    this.ctx.fillText(s, left, y);
+    // ⛔ COLOUR PASSED EXPLICITLY, ALWAYS. `drawPixelText` saves and restores `ctx.fillStyle` and
+    // its own default is the literal '#ffffff' — which would put a THIRD value on the context
+    // without appearing anywhere in this file, and this file's source is what the one-ink scan
+    // inspects. Inverted text is knocked out in the background colour; everything else is ink.
+    drawPixelText(this.ctx, s, left, top, {
+      color: invert ? PHOSPHOR.BACK : PHOSPHOR.INK,
+      scale: this._scaleFor(size),
+      onMissing: 'tofu',
+    });
 
     return { x: left, y: top, w, h };
   }
@@ -687,14 +788,22 @@ export class PhosphorScreen {
         // The zero mark. Without it a bipolar bar at rest is visually identical
         // to a bipolar bar with no reading at all, and "stopped" and "no data"
         // are very different things to tell a pilot.
-        c.fillRect(centreX - hair / 2, fillY, hair, fillH);
+        // ⛔ FULL INNER HEIGHT, NOT `fillH`, AND THE REASON IS AN INVARIANT RATHER THAN TASTE.
+        // `decodePixelText` tells glyph texels from bar furniture by one rule, stated in its own
+        // header: "a glyph texel is always a SQUARE of the scale. Bars, frames, ticks and pins are
+        // not." At `fillH` this mark broke that rule the moment a bar became a body-tall grid slot
+        // — `fillH = h - 4*hair`, so a `5*hair` bar gives a mark exactly `hair` by `hair`, and the
+        // decoder read the throttle's zero mark as a character and returned tofu in the middle of
+        // the panel's text. Spanning the inner height is both non-square and the better mark: at
+        // 240p it is three texels of centre tick instead of one.
+        c.fillRect(centreX - hair / 2, y + hair, hair, Math.max(hair, h - hair * 2));
       } else {
         const span = clamp(frac, 0, 1) * (w - inset * 2);
         if (span > 0) c.fillRect(x + inset, fillY, span, fillH);
       }
     }
 
-    const markLen = hair * 3;
+    const markLen = hair * 2;
     const ticks = Array.isArray(opts.ticks) ? opts.ticks : [];
     for (const t of ticks) {
       // A tick with no usable fraction is skipped, not drawn at zero. A tick at
@@ -745,8 +854,8 @@ export class PhosphorScreen {
 
     const size = opts.size ?? this.type.body;
     this._checkSize(size, 'banner');
-    const top = y - size * ASCENT;
-    const h = size * (ASCENT + DESCENT);
+    const top = Math.round(y) - size;
+    const h = size;
 
     // MEASURE BEFORE PAINTING, and the order is the point. Measuring afterwards
     // reads better but leaves a failure mode: `_measure` throws on a non-finite
@@ -758,8 +867,9 @@ export class PhosphorScreen {
 
     this._ink();
     this.ctx.fillRect(0, top, this.width, h);
-    this._back();
-    this.ctx.fillText(s, (this.width - w) / 2, y);
+    drawPixelText(this.ctx, s, Math.round((this.width - w) / 2), top, {
+      color: PHOSPHOR.BACK, scale: this._scaleFor(size), onMissing: 'tofu',
+    });
 
     return { x: 0, y: top, w: this.width, h };
   }

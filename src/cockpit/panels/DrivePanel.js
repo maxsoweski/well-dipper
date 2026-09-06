@@ -98,7 +98,8 @@
  */
 
 import { blinkOn } from '../PhosphorScreen.js';
-import { buildFlightReadout, flightReadoutStateFromSnapshot } from '../FlightReadout.js';
+import { buildFlightReadout, flightReadoutStateFromSnapshot, READOUT_TEXT } from '../FlightReadout.js';
+import { briefAlert } from '../../ui/AlertCue.js';
 import { formatSpeed } from '../../ui/SpeedFormat.js';
 
 /**
@@ -113,31 +114,29 @@ import { formatSpeed } from '../../ui/SpeedFormat.js';
  * touches anything else, and the two rows are exactly one `lead` apart, which is
  * the scale's own baseline-to-baseline distance.
  */
-const LAYOUT = Object.freeze({
-  HERO_BASELINE: 0.20,
-  TAG_BASELINE: 0.28,
-  BAR_TOP: 0.33,
-  BAR_HEIGHT: 0.07,
-  // ⭐ THE THROTTLE, added 2026-07-31 (Max's UAT). The clearances above and below
-  // it are the whole reason these three numbers are what they are, and a hairline
-  // is `body/8` = H/136 ≈ 0.0074H, with the bar's ticks and pin reaching three of
-  // them (0.022H) outside the frame:
-  //
-  //   ABOVE — the speed bar's frame bottoms at 0.400 and its DROP TICK hangs to
-  //     0.422. The throttle bar's top at 0.435 clears that by 0.013H, which is
-  //     the same clearance the original layout's tightest seam already ran at.
-  //   BELOW — no tick, no pin, so 0.485 is the last ink. `ROW_FIRST_BASELINE`
-  //     moved 0.52 → 0.545 to keep its 0.013H (a body-size row's ink top is
-  //     `baseline - 0.8 × H/17` = 0.498).
-  //
-  // The rows moving pushed nothing else: the second row's descender now bottoms
-  // at 0.651 and MODE's ink starts at 0.713, so that gap grew rather than shrank.
-  THR_BAR_TOP: 0.435,
-  THR_BAR_HEIGHT: 0.05,
-  ROW_FIRST_BASELINE: 0.545,
-  MODE_BASELINE: 0.76,
-  BANNER_BASELINE: 0.92,
-});
+// ⛔ `LAYOUT` IS GONE, AND ITS FRACTIONS ARE THE REASON. It placed every element at a fraction of
+// the buffer height — HERO_BASELINE 0.20, MODE_BASELINE 0.76 — which was right for a 512-tall panel
+// canvas and is wrong the moment the panel IS the game's 43 rows: 0.76 of 43 is 32.68, and a glyph
+// on a fractional baseline is resampled into exactly the grey fringe this workstream removes. The
+// replacement is `lineTop(i)`/`baseline(i)` inside the painter, in whole grid units.
+//
+// The clearance arithmetic those fractions encoded is not lost, it is satisfied by construction: a
+// grid slot is a cell plus a row of air, so nothing can overlap anything without the row count
+// exceeding the panel, which `typeScale().lines` reports and this painter honours.
+
+/**
+ * The mode, without the prefix.
+ *
+ * "MODE: MANUAL" is twelve characters and the panel is eight. The prefix is stripped with the
+ * model's OWN constant rather than a magic string: if `MODE_PREFIX` is ever renamed, this stops
+ * stripping and prints the long form — visibly wrong on the glass — instead of silently slicing six
+ * characters off a string that no longer starts with it.
+ */
+export function shortMode(modeLine) {
+  if (typeof modeLine !== 'string' || !modeLine) return modeLine ?? null;
+  const p = READOUT_TEXT.MODE_PREFIX;
+  return modeLine.startsWith(p) ? modeLine.slice(p.length) : modeLine;
+}
 
 /**
  * The gap between the THR label and the bar that follows it, in hairlines.
@@ -163,7 +162,7 @@ const RAD_TO_DEG = 180 / Math.PI;
  * this case is distinguishable), which is every frame before the ship is flying.
  * Missing means BLANK — never stale, never zero.
  */
-function formatSpeedCap(sceneUPerSec) {
+export function formatSpeedCap(sceneUPerSec) {
   if (!Number.isFinite(sceneUPerSec)) return '';
   const s = formatSpeed(sceneUPerSec);
   return `${s.value} ${s.unit}`;
@@ -182,7 +181,7 @@ function formatSpeedCap(sceneUPerSec) {
  * is a real and alarming reading ("you cannot turn"), so it must never be what a
  * frame with no drive model looks like.
  */
-function formatTurnCap(radPerSec) {
+export function formatTurnCap(radPerSec) {
   if (!Number.isFinite(radPerSec)) return '';
   return `${Math.round(radPerSec * RAD_TO_DEG)} deg/s`;
 }
@@ -201,9 +200,7 @@ export function paintDrive(screen, snapshot, nowMs) {
   // ONE call to the model, at the top. Everything below reads this object and
   // nothing else; there is no second place a speed or a warning could come from.
   const readout = buildFlightReadout(flightReadoutStateFromSnapshot(snapshot ?? {}));
-  const drive = snapshot?.drive ?? {};
 
-  const H = screen.height;
   const W = screen.width;
   const t = screen.type;
 
@@ -212,89 +209,115 @@ export function paintDrive(screen, snapshot, nowMs) {
   // into mush within a second.
   screen.clear();
 
+  // ── THE GRID ──
+  //
+  // ⛔ NOT SEVEN EVEN SLOTS. DRIVE IS THE ONE PANEL THAT CANNOT USE THEM, and finding out why cost
+  // a collision: `bar()` draws its commanded PIN two hairlines ABOVE the frame and its drop TICK
+  // two BELOW, so a bar needs nine rows of clearance where a line of type needs five. Dropped into
+  // a six-row slot, the pin overlapped the tier line above it and the tick overlapped the throttle
+  // frame below — both invisible in a spec and both real on the glass.
+  //
+  // So this panel's rows are stated, in grid units, and the arithmetic is next to them. The budget
+  // is the upper panel's 43 rows (`chrome-240p-BATCH-PLANS.md` §1):
+  //
+  //     pad 1 + hero 10 + gap 1 + tier 5 + gap 1 + [pin 2 + bar 5 + tick 2] + gap 1
+  //             + throttle 5 + gap 1 + mode 5 + pad 1  =  40, inside 43.
+  //
+  // ⚠ THE BANNER TAKES THE MODE LINE RATHER THAN A ROW OF ITS OWN. There is no room for a seventh
+  // element, and an alert outranks a mode readout: while you are mass-locked, "you are too close"
+  // is the thing to know and "MANUAL" is not. It is also how the panel behaved before this
+  // workstream, where the banner sat at 0.92H over whatever was there.
+  const u = t.unit;
+  const ROW = {
+    hero:     { top: 1 * u,  h: t.display },
+    tier:     { top: 12 * u, h: t.body },
+    bar:      { top: 20 * u, h: t.body },   // pin reaches to 18u, tick to 27u
+    throttle: { top: 28 * u, h: t.body },
+    mode:     { top: 35 * u, h: t.body },
+  };
+  const baseline = (r) => ROW[r].top + ROW[r].h;
+
   // ── The hero ──
-  // `readout.speedText` already carries the REV prefix, the tier and the unit.
-  // Drawn exactly as handed over: the moment this file interpolates its own
-  // number, the glass and the HUD can disagree.
-  screen.text(readout.speedText, W / 2, H * LAYOUT.HERO_BASELINE, {
-    size: t.display,
-    align: 'centre',
-  });
+  // ⭐ THE LARGEST SIZE THAT FITS, CHOSEN FROM THE MEASUREMENT RATHER THAN ASSUMED.
+  // The display tier is two cells tall, so it holds only FOUR characters on a
+  // 51-texel panel — and `formatSpeed` emits five and six ("1,996", "999.99").
+  // Drawing a six-character number at the display size would run it off both
+  // edges; picking the body size unconditionally would mean the panel has no hero
+  // at all. So the panel asks the kit how many characters each tier holds and
+  // takes the bigger one that works.
+  // ⛔ AND THE STRING IS STILL THE MODEL'S, UNTOUCHED. No reformatting, no dropped
+  // decimal, no thousands separator stripped: the moment this file interpolates
+  // its own number, the glass and the HUD can disagree about the same speed.
+  // `speedValue` is the model's own splitting of the same reading `speedText`
+  // composes — the unit is on the tier line below, not thrown away here.
+  const speed = readout.speedValue ?? '';
+  const heroSize = speed.length <= screen.colsAt(t.display) ? t.display : t.body;
+  screen.text(speed, W / 2, ROW.hero.top + heroSize, { size: heroSize, align: 'centre' });
 
-  // `sublightTag` is null while the drive is up, and `text` draws nothing for an
-  // empty string — so "supercruise" is said by the absence of the word, and no
-  // branch is needed here to say it.
-  screen.text(readout.sublightTag, W / 2, H * LAYOUT.TAG_BASELINE, { align: 'centre' });
+  // ── The tier and the drive state ──
+  // `sublightTag` is null while the drive is up, so supercruise is still said by
+  // the ABSENCE of the word and no branch is needed to say it. The unit joins it
+  // because eight characters is exactly "SUB km/s" and a hero number with no unit
+  // under it is a number that means nothing.
+  screen.text(readout.tierLine, W / 2, baseline('tier'), { align: 'centre' });
 
-  // ── The bar ──
+  // ── The speed bar ──
   // Every fraction comes from the model, in the model's own domain: `bipolar`
   // decides whether `frac` runs 0..1 from the left or -1..+1 from the centre, and
   // the kit reads the pin and the ticks in whichever domain the bar is in. A
   // non-finite tick fraction is skipped by the kit rather than drawn at zero, so
   // "no drop ceiling computed" needs no branch here either.
-  screen.bar(
-    t.pad,
-    H * LAYOUT.BAR_TOP,
-    W - t.pad * 2,
-    H * LAYOUT.BAR_HEIGHT,
-    readout.bar.frac,
-    {
-      bipolar: readout.bar.bipolar,
-      ticks: [{ frac: readout.bar.dropTickFrac }],
-      pin: readout.bar.commandedFrac,
-    },
-  );
+  screen.bar(t.pad, ROW.bar.top, W - t.pad * 2, ROW.bar.h, readout.bar.frac, {
+    bipolar: readout.bar.bipolar,
+    ticks: [{ frac: readout.bar.dropTickFrac }],
+    pin: readout.bar.commandedFrac,
+  });
 
   // ── The throttle ──
   // The lever's own position, always bipolar: fill right of the centre zero for
   // forward, left for reverse. The overlay says that difference with cyan vs
-  // amber and one ink cannot, so the DIRECTION of the fill carries it — which is
-  // the same substitution the sublight speed bar already makes.
+  // amber and one ink cannot, so the DIRECTION of the fill carries it.
   //
-  // NO PIN. The overlay draws one at `tbCenterX + (tbW/2)*throttle`, which is
-  // precisely where its own fill ends — a marker on the tip of the thing it
-  // marks. On black glass the fill's edge already is that mark, so the pin would
-  // be redundant ink, and the 0.022H it reaches ABOVE the frame is exactly the
-  // clearance this row does not have.
+  // NO PIN AND NO TICK HERE, which is also why it needs only five rows: the overlay draws a pin at
+  // exactly where its own fill ends — a marker on the tip of the thing it marks — and on black
+  // glass the fill's edge already is that mark.
   //
   // A null frac draws the FRAME AND NOTHING INSIDE — no fill, and no zero mark
-  // either, since the kit puts the zero mark inside its finite branch. That is
-  // the reading this panel needs and could not previously have: an empty
-  // instrument says "no throttle data", a centre zero mark says "the lever is at
-  // rest", and before the snapshot started writing null those were the same
-  // picture. See CockpitSnapshot's `drive.throttle`.
-  const thrY = H * LAYOUT.THR_BAR_TOP;
-  const thrH = H * LAYOUT.THR_BAR_HEIGHT;
-  // Vertically centre the label's ink on the bar rather than sharing a baseline
-  // with it: a bar has no baseline, and a label sitting on its bottom edge reads
-  // as belonging to whatever is below.
-  const thrLabelBaseline = thrY + (thrH + t.label * (0.8 - 0.25)) / 2;
-  const thrLabel = screen.text('THR', t.pad, thrLabelBaseline, { size: t.label });
+  // either. An empty instrument says "no throttle data"; a centre zero mark says
+  // "the lever is at rest", and before the snapshot started writing null those
+  // were the same picture. See CockpitSnapshot's `drive.throttle`.
+  const thrLabel = screen.text('THR', t.pad, baseline('throttle'));
   // `text` returns null for an empty string only; 'THR' always draws. The
   // fallback keeps the bar on the glass rather than at NaN if that ever changes.
   const thrBarX = thrLabel
     ? thrLabel.x + thrLabel.w + screen.hair * THR_LABEL_GAP_HAIRS
     : t.pad;
-  screen.bar(
-    thrBarX,
-    thrY,
-    W - t.pad - thrBarX,
-    thrH,
-    readout.throttleFrac,
-    { bipolar: true },
-  );
+  screen.bar(thrBarX, ROW.throttle.top, W - t.pad - thrBarX, ROW.throttle.h,
+    readout.throttleFrac, { bipolar: true });
 
-  // ── The two ceilings ──
-  // Label left, value right, one baseline each, one `lead` apart. The shared
-  // right edge is what makes two rows scannable without reading the labels.
-  const row0 = H * LAYOUT.ROW_FIRST_BASELINE;
-  screen.row('CAP', formatSpeedCap(drive.speedCap), row0);
-  screen.row('TURN', formatTurnCap(drive.turnRateCap), row0 + t.lead);
-
-  // ── The mode line ──
-  // `modeLine` is already "MODE: MANUAL" — prefix, uppercasing and all — and is
-  // null when there is no manual flight mode this frame, which draws nothing.
-  screen.text(readout.modeLine, t.pad, H * LAYOUT.MODE_BASELINE);
+  // ── The mode ──
+  // ⛔ CAP AND TURN USED TO LIVE HERE AND MAX CUT THEM, 2026-09-08 ("1, okay").
+  // The panel is 43 rows; the hero takes ten of them and the speed bar nine with
+  // its marks, and the two ceilings were the rows with nowhere to go. CAP's real
+  // job — how much of the bar is available right now — is already drawn as the
+  // drop tick on the speed bar above, and TURN is a slowly-changing derived
+  // number that nothing in the flight loop asks the pilot to act on.
+  // `formatSpeedCap`/`formatTurnCap` are exported and still tested rather than
+  // deleted: Max's ruling came with *"don't get rid of any code that allows you to
+  // display what we want to display"*, and he expects to revisit these panels.
+  //
+  // The prefix goes because "MODE: MANUAL" is twelve characters on an eight
+  // character panel. It is stripped with the model's own constant rather than a
+  // magic string, so a rename there cannot leave this reaching for a prefix that
+  // no longer exists — it would simply stop stripping, and print the long form,
+  // which is visible rather than silent.
+  // ⛔ AND IT IS SKIPPED WHILE THE BANNER IS LIT, rather than painted under it. The banner occupies
+  // this exact line — there is no room for a seventh element on a 43-row panel — so drawing both
+  // put an ink block over live type, which happens to look right only because the block is opaque.
+  // Deciding it here makes the layout honest: at most one of the two is ever on the glass, and the
+  // panel-overlap guard in the tests can be total instead of carrying an exemption.
+  const alerting = !!readout.massLock && blinkOn(readout.massLock.blink, nowMs);
+  if (!alerting) screen.text(shortMode(readout.modeLine), t.pad, baseline('mode'));
 
   // ── The one warning that belongs to the drive ──
   // The cue carries words and a blink TIER and no colour at all. Urgency is
@@ -305,8 +328,8 @@ export function paintDrive(screen, snapshot, nowMs) {
   // THROWS on an unknown tier by design, and `undefined` is an unknown tier, so
   // asking it about a cue that is not there would take the whole panel down
   // through PanelHost's painter catch and leave the screen frozen.
-  if (readout.massLock && blinkOn(readout.massLock.blink, nowMs)) {
-    screen.banner(readout.massLock.text, H * LAYOUT.BANNER_BASELINE);
+  if (alerting) {
+    screen.banner(briefAlert(readout.massLock.text), baseline('mode'));
   }
 }
 

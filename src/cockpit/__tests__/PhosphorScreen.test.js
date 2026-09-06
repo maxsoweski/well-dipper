@@ -46,11 +46,12 @@
  * and its describe.skipIf pattern is deliberately NOT copied.
  */
 import { describe, it, expect } from 'vitest';
+import { decodePixelText, measurePixelText, FACE, setPixelFace } from '../../rendering/PixelText.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  PHOSPHOR, BLINK_MS, TYPE_RATIOS, MIN_TEXT_RATIO,
+  PHOSPHOR, BLINK_MS, typeUnits, MIN_TEXT_TEXELS, gridRows,
   blinkOn, typeScale, PhosphorScreen,
 } from '../PhosphorScreen.js';
 import { BLINK } from '../../ui/AlertCue.js';
@@ -123,7 +124,11 @@ const STUB_NO_FONT_SIZE = 10;
 const FONT_SIZE_RE = /(\d+(?:\.\d+)?)px/;
 
 /** What the stub would report for this string at this size. */
-const stubWidth = (str, size) => String(str).length * STUB_CHAR_W * size;
+// ⛔ THE STUB WIDTH MODEL IS GONE. It approximated a vector monospace face at 0.6em per character
+// because `measureText` in a headless context can only ever be a guess. The bitmap face is
+// fixed-width and measures by arithmetic, so the test can ask the REAL function — which means
+// these assertions now check the actual layout instead of agreeing with a stub.
+const stubWidth = (str, size) => measurePixelText(str, Math.max(1, Math.round(size / FACE.h)));
 
 /**
  * A Canvas2D-shaped recorder.
@@ -144,6 +149,35 @@ const stubWidth = (str, size) => String(str).length * STUB_CHAR_W * size;
  * is RECORDED and caught by the one-ink assertions, rather than crashing with
  * "beginPath is not a function" and being fixed by adding it to the stub.
  */
+
+// ── ⭐ TEXT IS READ BACK OUT OF THE TEXELS NOW ─────────────────────────────────────────────────
+// chrome-and-ui-at-240p moved the cockpit kit onto the repo's bitmap face, so nothing calls
+// `ctx.fillText` any more and the first argument these tests used to read no longer exists.
+// ⛔ THE REPLACEMENT IS NOT A SELF-REPORT. `decodePixelText` reconstructs each string from the
+// `fillRect` texels actually recorded, so every assertion below still asks the GLASS what it says
+// — and asks it harder than before: a dropped glyph row or a fractional scale now fails, where a
+// `fillText` string argument would have read perfectly either way.
+function decodedText(log) {
+  const rects = log.filter((e) => e.op === 'fillRect');
+  return decodePixelText(rects).map((d) => {
+    const px = d.scale * FACE.h;
+    // ⚠ ANY texel of the run, not the one at (x, y): a glyph's first lit pixel is rarely its
+    // top-left corner, so an exact-corner lookup returned undefined and reported `fillStyle: null`
+    // — which read as "text drawn with no colour set" in the one-ink checks.
+    const src = rects.find((r) => r.x >= d.x && r.x < d.x + d.text.length * FACE.advance * d.scale
+      && r.y >= d.y && r.y < d.y + FACE.h * d.scale && r.w === d.scale);
+    return {
+      // ⭐ THE BASELINE, NOT THE TOP. `drawPixelText` takes a top and `decodePixelText` returns
+      // one, but `text()`/`row()`/`banner()` have always taken a BASELINE and every assertion in
+      // this file is written against that. Converting here keeps the contract these tests were
+      // written for — the ink box is exact on a bitmap face, so baseline = top + cap height.
+      op: 'fillText', text: d.text, x: d.x, y: d.y + px, size: px,
+      // `font` is synthesised so the existing FONT_SIZE_RE size readers keep working unchanged.
+      font: `${px}px bitmap`, fillStyle: src ? src.fillStyle : null,
+    };
+  });
+}
+
 function makeRecordingCtx() {
   const log = [];
   const state = {
@@ -188,7 +222,7 @@ function makeRecordingCtx() {
   return ctx;
 }
 
-const ops = (log, op) => log.filter((e) => e.op === op);
+const ops = (log, op) => (op === 'fillText' ? decodedText(log) : log.filter((e) => e.op === op));
 const styleSets = (log) =>
   log.filter((e) => e.op === 'set' && (e.prop === 'fillStyle' || e.prop === 'strokeStyle'));
 
@@ -352,23 +386,82 @@ describe('PhosphorScreen — takes its context, never makes one', () => {
 
 // ── Rule 2: the type scale is anchored to the buffer height ────────────────
 
-describe('PhosphorScreen — the type scale is proportional to the buffer (rule 2)', () => {
-  it('scales every size by the same ratio at two very different heights', () => {
-    const small = typeScale(256);
-    const large = typeScale(1024);
-    const ratio = 256 / 1024;
-
+describe('PhosphorScreen — the type scale is a whole number of grid units (rule 2)', () => {
+  /**
+   * ⛔ THE OLD FORM OF THIS TEST WAS `small[k] / large[k] === 256/1024`, AND IT CANNOT SURVIVE THE
+   * BITMAP FACE. A continuous ratio is precisely what a bitmap face may not have: a glyph drawn at
+   * 1.4x is resampled into the grey fringe this whole workstream exists to remove. The property
+   * that replaces it is stronger, not weaker — every size is an exact multiple of ONE integer
+   * unit, so the layout is the invariant and only the texel size moves.
+   */
+  it('makes every size an integer multiple of one grid unit, at every height', () => {
     const keys = ['display', 'body', 'label', 'pad', 'lead'];
-    expect(Object.keys(small).sort()).toEqual([...keys].sort());
+    for (const h of [43, 46, 86, 129, 240, 480, 1024]) {
+      const t = typeScale(h);
+      expect(Object.keys(t).sort()).toEqual([...keys, 'unit', 'lines'].sort());
+      expect(Number.isInteger(t.unit), `unit is fractional at H=${h}`).toBe(true);
+      for (const k of keys) {
+        expect(t[k], `${k} is 0 or missing at H=${h}`).toBeGreaterThan(0);
+        expect(
+          Number.isInteger(t[k]),
+          `${k} is ${t[k]} at H=${h} — a fractional size. A bitmap glyph drawn at a fraction of ` +
+          `its cell is resampled by the canvas into a grey fringe, which is a third colour.`,
+        ).toBe(true);
+        expect(t[k] / t.unit, `${k} is not its own number of grid units at H=${h}`)
+          .toBe(typeUnits()[k]);
+      }
+    }
+  });
 
-    for (const k of keys) {
-      expect(small[k], `${k} is 0 or missing at H=256`).toBeGreaterThan(0);
+  /**
+   * ⭐ THE PROPERTY THE WHOLE GRID EXISTS FOR, and the one AC-2 and AC-3 need in order to be
+   * checkable at all: from 240p up the panel is the SAME PICTURE, only sharper. Under the old
+   * ratios the character budget wandered with the resolution, so a layout that fit at one setting
+   * silently overflowed at another and there was no single thing to accept.
+   *
+   * The heights are the real ones: `RENDER_LINE_OPTIONS` at 240/480/720 lines projects the upper
+   * panel to 43/86/129 rows and the lower to 46/92/138.
+   */
+  it('is the same seven-line layout at every shipped resolution — only the texels grow', () => {
+    const upper = [43, 86, 129].map(typeScale);
+    const lower = [46, 92, 138].map(typeScale);
+    for (const [name, panels] of [['upper', upper], ['lower', lower]]) {
+      for (const t of panels) {
+        expect(t.lines, `the ${name} panel stopped holding seven lines at unit ${t.unit}`).toBe(7);
+      }
+      const shapes = panels.map((t) => `${t.display / t.unit}/${t.body / t.unit}/${t.lead / t.unit}`);
+      expect(new Set(shapes).size, `the ${name} panel is a different layout at different ` +
+        `resolutions: ${shapes.join(' vs ')}`).toBe(1);
+    }
+  });
+
+  /**
+   * ADDED 2026-09-08. `typeUnits` reads the LIVE face; it used to be a frozen object of literals,
+   * correct for exactly one face. `PixelText`'s header promises the faces are switchable so they
+   * can be compared in the running game, and under literals that switch would have drawn seven-row
+   * glyphs on six-row leading — every line colliding, with the layout still believing it was five.
+   *
+   * ⛔ The numbers here are written out rather than imported, for the reason the file's other
+   * pinned literals are: a test that derives its expectation from the module agrees with every
+   * future edit by construction. 5 rows + 1 of air over six rows plus a heading and two margins is
+   * 43; a 7-row cell is 57, and a 43-row panel then honestly reports FIVE lines.
+   */
+  it('reads the grid off the live face, so switching faces re-derives the layout', () => {
+    try {
+      setPixelFace('5x5');
+      expect(gridRows(), 'the 5x5 grid is 2 + 5 + 6*6').toBe(43);
+      expect(typeScale(43).lines).toBe(7);
+
+      setPixelFace('5x7');
+      expect(gridRows(), 'the 5x7 grid is 2 + 7 + 6*8').toBe(57);
+      expect(typeUnits().lead, 'leading did not follow the taller cell').toBe(8);
       expect(
-        small[k] / large[k],
-        `${k} did not scale with the buffer height: ${small[k]} at H=256 vs ${large[k]} at ` +
-        `H=1024. Any size written in absolute pixels SHRINKS ON THE GLASS every time the ` +
-        `panel resolution is raised, because the panel still occupies the same ~260 screen px.`,
-      ).toBeCloseTo(ratio, 12);
+        typeScale(43).lines,
+        `a 43-row panel still claimed seven lines on a seven-row face. That is the collision this ` +
+        `test exists for: the glyphs would overlap and the layout would not know.`,
+      ).toBe(5);
+    } finally {
+      setPixelFace('5x5');   // the shipped face, restored even if an expectation throws
     }
   });
 
@@ -392,134 +485,129 @@ describe('PhosphorScreen — the type scale is proportional to the buffer (rule 
 
 describe('PhosphorScreen — the legibility floor (rule 3)', () => {
   /**
-   * THE NUMBERS BELOW ARE WRITTEN OUT HERE ON PURPOSE.
+   * ⛔ THE FLOOR STOPPED BEING A FRACTION, AND IT HAD TO.
    *
-   * Importing them from TYPE_RATIOS would make this test agree with any future
-   * edit automatically, which is the same as not having it. Written out, an edit
-   * to the module has to come here and change the literal too — which is the
-   * moment somebody reads the arithmetic and decides on purpose.
+   * It was `H/20`, with `label` sitting exactly on it. Once the buffer IS the display grid a
+   * fractional floor can only be wrong at some resolution: at H=43 it demands 2.15 px, which no
+   * whole number of cells satisfies below 5, and at H=1024 it demands 51.2, which rejects the
+   * legal 50. Every draw would throw and `PanelHost` would freeze all four screens.
    *
-   * The arithmetic, restated so it is next to the numbers it justifies: the
-   * panels subtend ~17 deg of a 70 deg vertical FOV; on a 1080-tall display that
-   * is ~15 screen px per degree; so one panel is about 260 SCREEN pixels tall
-   * regardless of its buffer resolution. Multiply each ratio by 220 to get what
-   * the pilot's eye actually receives.
+   * The floor that means something on a bitmap face is ONE WHOLE CELL. A glyph cannot be drawn at
+   * a fraction of its cell — there is no such raster — so anything below a cell is not small type,
+   * it is a smear.
+   *
+   * ⭐ THE NUMBERS BELOW ARE STILL WRITTEN OUT ON PURPOSE, for the reason they always were:
+   * importing them from the module would make this test agree with any future edit automatically,
+   * which is the same as not having it. The arithmetic they encode: a panel subtends 42.84 rows of
+   * a 240-line buffer (`panelPose.js:34-49`, the PIXEL fraction, not the angular one), so a
+   * five-row cell is 11.7% of the panel's height and reaches the eye at about 26 screen pixels on
+   * a 1080-tall display. That is the size being defended.
    */
   const H = 480;
-  const SCREEN_PX_PER_PANEL = 220;   // MEASURED off cockpit.glb from Eye_Point, not assumed
+  const CELL = 5;                    // FACE.h on the shipped face, written out, not imported
+  const PANEL_ROWS_AT_240 = 42.84;   // MEASURED off cockpit.glb from Eye_Point, not assumed
 
-  it('holds body text at H/20 and every text size at or above the H/24 floor', () => {
+  it('merges body and label, because a five-row face has no size between them', () => {
     const t = typeScale(H);
-
-    // The floor CONSTANT is pinned first, and to a literal. Measured while
-    // building this test: lowering MIN_TEXT_RATIO on its own broke nothing at
-    // all, because it changes no size — it is documentation the module hands to
-    // panel authors as "the floor". Without this line, moving the floor and then
-    // moving the type down to meet it is a two-step edit whose first step is
-    // silent, which is exactly how a floor stops being one.
-    expect(MIN_TEXT_RATIO, 'the legibility floor itself was moved').toBeCloseTo(1 / 20, 12);
-
-    expect(t.body, 'body text must be H/17 — about 13 screen px')
-      .toBeCloseTo(H / 17, 10);
-    expect(t.label, 'row labels must be H/20 — about 11 screen px, the floor')
-      .toBeCloseTo(H / 20, 10);
-    expect(t.display, 'the display size must be H/6 — about 37 screen px')
-      .toBeCloseTo(H / 6, 10);
-
-    // The floor, stated as an inequality so the WHY travels with the failure.
-    for (const k of ['display', 'body', 'label']) {
-      expect(
-        t[k],
-        `${k} is ${t[k]} px in a ${H} px buffer, which is ${(t[k] / H * SCREEN_PX_PER_PANEL).toFixed(1)} ` +
-        `screen pixels at 14.25 degrees of a 70 degree FOV. The floor is H/20 (~11 screen px), below ` +
-        `which a bold monospace glyph stops being read and starts being guessed. If this failed ` +
-        `because one more row was needed, drop a row — do not shrink the type.`,
-      ).toBeGreaterThanOrEqual(H * MIN_TEXT_RATIO - 1e-9);
-      expect(t[k]).toBeGreaterThanOrEqual(H / 20 - 1e-9);
-    }
-  });
-
-  it('leaves leading loose enough for INFO’s seven rows plus a heading and a rule', () => {
-    const t = typeScale(H);
-
-    // lead must clear the body size or consecutive lines collide.
-    expect(t.lead, 'leading is tighter than the body text it separates').toBeGreaterThan(t.body);
-    expect(t.lead / t.body, 'leading is under 1.4x body — cramped at this angular size')
-      .toBeGreaterThanOrEqual(1.4);
-
-    // INFO has seven rows. Heading + rule + 7 rows = 9 lines, and they must fit
-    // between the top and bottom margins. This is the budget that was checked
-    // before the ratios were picked, pinned so a later lead change re-checks it.
-    //
-    // The bound was 10 until 2026-07-29 and is now 9. The panels were MEASURED in
-    // the lab as subtending 14.25 degrees rather than the 17 this file's arithmetic
-    // had assumed, so every glyph was reaching the eye about 15% under its own
-    // stated target and the label tier sat below its own floor. Raising the sizes
-    // to meet those targets spent the spare baseline. Nine still covers everything
-    // INFO is specified to show, and today's INFO uses seven. The trade is
-    // deliberate: glyph size is the thing that decides whether a readout is read.
-    const linesThatFit = Math.floor((H - t.pad * 2) / t.lead);
     expect(
-      linesThatFit,
-      `only ${linesThatFit} baselines fit in a ${H} px panel at lead ${t.lead}. INFO needs 9 ` +
-      `(a heading, a rule, and seven rows). If the type grew again, drop a row rather than ` +
-      `tightening the lead — cramped rows and small glyphs fail the same glance.`,
-    ).toBeGreaterThanOrEqual(9);
+      t.label,
+      `label is ${t.label} and body is ${t.body}. A five-row cell has no size between them, so two ` +
+      `names for one number is an invitation to derive a fractional third. Row contrast is ` +
+      `POSITIONAL now — hard left and hard right — which is what row()'s own comment says makes a ` +
+      `column scannable.`,
+    ).toBe(t.body);
+    expect(t.display, 'the display tier must be the same face at integer scale 2').toBe(t.body * 2);
+    expect(t.body / t.unit, 'body is not one whole cell').toBe(CELL);
   });
 
-  it('refuses to DRAW below the floor, not just to derive a size below it', () => {
-    // ADDED IN REVIEW, and this is the hole it closes. Everything else in this
-    // describe block constrains `typeScale`. But no panel is obliged to use
-    // typeScale's sizes — `text(str, x, y, { size: 3 })` is an ordinary-looking
-    // call, and before this guard it drew type at about 1.6 screen pixels with
-    // nothing anywhere objecting. Measured: the floor was documentation sitting
-    // one convenient argument away from being ignored, so the exact request rule
-    // 3 exists to stop — "just make it a bit smaller so one more row fits" —
-    // went straight past it.
+  it('refuses to DRAW below one whole cell of the face, not just to derive such a size', () => {
+    // The hole this closes has not changed, only the floor's shape. No panel is obliged to use
+    // typeScale's sizes — `text(str, x, y, { size: 3 })` is an ordinary-looking call, and before
+    // this guard it drew type at about 1.6 screen pixels with nothing anywhere objecting.
     const { ctx, screen } = makeScreen(480, H);
 
+    expect(MIN_TEXT_TEXELS, 'the floor itself was moved').toBe(1);
     expect(() => screen.text('ONE MORE ROW', 20, 100, { size: 3 }))
       .toThrow(/below the legibility floor/);
     expect(() => screen.banner('TOO CLOSE', 100, { size: 3 }))
       .toThrow(/below the legibility floor/);
-    // Just under the floor is refused too — this is a floor, not a rough hint.
-    expect(() => screen.text('X', 20, 100, { size: H / 24 - 0.5 })).toThrow(/legibility floor/);
+    // Just under a whole cell is refused too — this is a floor, not a rough hint.
+    expect(() => screen.text('X', 20, 100, { size: CELL - 0.5 })).toThrow(/legibility floor/);
 
-    // Nothing was drawn on the way to any of those throws. A guard that refuses
-    // the text but has already painted its inverted block is not a guard.
+    // Nothing was drawn on the way to any of those throws. A guard that refuses the text but has
+    // already painted its inverted block is not a guard.
     expect(ops(ctx.log, 'fillRect'), 'a refused draw still painted').toHaveLength(0);
     expect(ops(ctx.log, 'fillText'), 'a refused draw still drew text').toHaveLength(0);
 
-    // And the floor does NOT reject the scale's own smallest size. `label` sits
-    // exactly on H/24, so an off-by-a-float here would break every INFO row.
+    // And the floor does NOT reject the scale's own smallest size, nor a bare cell at the
+    // coarsest resolution the panel ever runs at — H=43, where unit is 1 and body IS the floor.
     expect(() => screen.text('BODY', 20, 100, { size: screen.type.label })).not.toThrow();
     expect(() => screen.row('BODY', 'Kepler-16b', 100)).not.toThrow();
+    const coarse = new PhosphorScreen(makeRecordingCtx(), { width: 51, height: 43 });
+    expect(coarse.type.body, 'the 240p panel must sit exactly on the floor').toBe(CELL);
+    expect(() => coarse.text('CLS', 1, 20)).not.toThrow();
   });
 
-  it('keeps the hairline a whole pixel on a small buffer, where the floor bites', () => {
-    // ADDED IN REVIEW. `hair` is body/8 floored at one pixel, and the module's
-    // own comment argues the floor matters — a sub-pixel fillRect rasterises as
-    // a grey smear, and grey is not one of our two colours. But the floor only
-    // BINDS below H = 160, and every other test here builds a 400 px buffer
-    // where body/8 is 2.5. Measured: deleting `Math.max(1, ...)` left all 43
-    // tests green. This builds the small screen that makes the guard bite.
-    const small = new PhosphorScreen(makeRecordingCtx(), { width: 144, height: 120 });
-    expect(typeScale(120).body / 8, 'H=120 must be small enough to need the floor')
-      .toBeLessThan(1);
-    expect(small.hair, 'a sub-pixel hairline rasterises grey, which is a third colour')
-      .toBeGreaterThanOrEqual(1);
-
-    // Proportional above the floor, so it has not simply been pinned to 1.
-    const large = new PhosphorScreen(makeRecordingCtx(), { width: 1229, height: 1024 });
-    expect(large.hair).toBeCloseTo(typeScale(1024).body / 8, 9);
+  it('holds a five-row cell at a readable angular size on the real panel', () => {
+    // The floor is stated in texels, but the reason it is five and not two lives in the geometry.
+    // Restated next to the number so a future edit that lowers the cell has to argue with it.
+    const t = typeScale(Math.round(PANEL_ROWS_AT_240));
+    const fractionOfPanel = t.body / PANEL_ROWS_AT_240;
+    const screenPxOn1080 = fractionOfPanel * (PANEL_ROWS_AT_240 / 240) * 1080;
+    expect(
+      screenPxOn1080,
+      `a body glyph reaches the eye at ${screenPxOn1080.toFixed(1)} screen pixels on a 1080-tall ` +
+      `display. Below about ten it stops being read and starts being guessed. If this failed ` +
+      `because one more row was needed, drop a row — do not shrink the type.`,
+    ).toBeGreaterThanOrEqual(10);
   });
 
-  it('exposes the ratios it actually uses, so a panel author can plan a layout', () => {
-    expect(Object.isFrozen(TYPE_RATIOS)).toBe(true);
-    const t = typeScale(H);
-    for (const k of Object.keys(TYPE_RATIOS)) {
-      expect(t[k], `typeScale ignored TYPE_RATIOS.${k}`).toBeCloseTo(H * TYPE_RATIOS[k], 10);
+  it('leaves room for INFO’s seven rows without a single fractional baseline', () => {
+    // INFO carries seven fields. Under the grid the heading line IS the first of the seven (the
+    // body's designation, unlabelled at full width) and the remaining six are labelled rows, so
+    // the budget is seven lines rather than the old nine — the rule is drawn in the air the
+    // leading already provides rather than costing a baseline of its own.
+    for (const h of [43, 46, 86, 129]) {
+      const t = typeScale(h);
+      expect(t.lines, `only ${t.lines} lines fit in a ${h}-row panel`).toBeGreaterThanOrEqual(7);
+      expect(t.lead, 'leading is tighter than the cell it separates').toBeGreaterThan(t.body);
+      expect(
+        (t.pad * 2 + t.body + 6 * t.lead) <= h,
+        `the seven-line grid is ${t.pad * 2 + t.body + 6 * t.lead} rows in an ${h}-row panel`,
+      ).toBe(true);
     }
+  });
+
+  it('keeps the hairline a whole texel, because a fractional fillRect rasterises grey', () => {
+    // The guard still matters and now binds everywhere rather than only below H=160: `hair` is the
+    // grid unit, and the grid unit is an integer by construction. Measured on the old kit: deleting
+    // `Math.max(1, ...)` from `body / 8` left every test green, because they all built a 400 px
+    // buffer where the fraction happened to exceed 1.
+    for (const h of [40, 43, 120, 400, 1024]) {
+      const screen = new PhosphorScreen(makeRecordingCtx(), { width: Math.round(h * 1.2), height: h });
+      expect(Number.isInteger(screen.hair), `a fractional hairline at H=${h} rasterises grey, ` +
+        `which is a third colour`).toBe(true);
+      expect(screen.hair, `a zero-width hairline at H=${h} draws nothing at all`)
+        .toBeGreaterThanOrEqual(1);
+      expect(screen.hair, 'the hairline is not the grid unit').toBe(screen.type.unit);
+    }
+    // Proportional above the floor, so it has not simply been pinned to 1.
+    expect(new PhosphorScreen(makeRecordingCtx(), { width: 1229, height: 1024 }).hair)
+      .toBeGreaterThan(1);
+  });
+
+  it('exposes the grid it actually uses, so a panel author can plan a layout', () => {
+    const t = typeScale(H);
+    const u = typeUnits();
+    expect(Object.isFrozen(u)).toBe(true);
+    expect(Object.isFrozen(t)).toBe(true);
+    for (const k of Object.keys(u)) {
+      expect(t[k], `typeScale ignored typeUnits().${k}`).toBe(u[k] * t.unit);
+    }
+    // `lines` is the one a painter must consume rather than assume; without it a painter run at
+    // 144p walks straight off the bottom of the glass drawing rows that are not there.
+    expect(typeScale(26).lines, 'a 144p upper panel must report fewer lines, not seven')
+      .toBeLessThan(7);
   });
 });
 
@@ -638,49 +726,82 @@ describe('PhosphorScreen — text placement', () => {
     screen.text(s, 440, 220, { size, align: 'right' });
 
     const [left, centreBritish, centreAmerican, right] = ops(ctx.log, 'fillText');
-    expect(left.x).toBeCloseTo(40, 9);
-    expect(centreBritish.x).toBeCloseTo(240 - w / 2, 9);
-    expect(centreAmerican.x).toBeCloseTo(240 - w / 2, 9);
-    expect(right.x).toBeCloseTo(440 - w, 9);
+    // ⭐ EXACT INTEGERS, NOT `toBeCloseTo`. The kit rounds every edge now, and that is the point
+    // rather than an implementation detail: a texel drawn at a fractional x is resampled into a
+    // grey fringe, so "close enough" is precisely the failure mode being excluded. A centred odd
+    // width therefore lands one side of centre, deliberately and reproducibly.
+    expect(left.x).toBe(40);
+    expect(centreBritish.x).toBe(Math.round(240 - w / 2));
+    expect(centreAmerican.x).toBe(Math.round(240 - w / 2));
+    expect(right.x).toBe(440 - w);
 
     // The baseline is passed straight through — y is a baseline, not a top.
     expect(left.y).toBe(100);
     expect(right.y).toBe(220);
   });
 
-  it('sets font, textAlign and textBaseline explicitly on every draw', () => {
+  /**
+   * ⭐ THIS TEST'S CLAIM IS NOW THE OPPOSITE OF WHAT IT USED TO BE, AND IT IS A STRONGER ONE.
+   *
+   * It used to assert that the kit SET `font`, `textAlign` and `textBaseline` on every single
+   * draw — a defence against a shared canvas on which another drawer had left them somewhere
+   * else. That defence was necessary because the kit's output depended on that state.
+   *
+   * It no longer depends on it. `drawPixelText` writes texels with `fillRect` and touches none of
+   * the three. So the right assertion is not "it sets them correctly" but **"it never reads or
+   * writes them at all"** — the whole class of stale-context bug is gone rather than defended
+   * against, and this test is what stops it being quietly reintroduced by a future `fillText`.
+   */
+  it('never touches font, textAlign or textBaseline — the stale-context bug cannot arise', () => {
     const { ctx, screen } = makeScreen();
-    // A hostile context: another drawer has left both placement modes set to
-    // something else. On a real shared canvas this persists, and a kit that
-    // relies on the defaults shifts every string by half its width — on the
-    // frames after that other code ran, and not before.
+    // A hostile context: another drawer has left both placement modes set to something else, and
+    // on a real shared canvas that persists. Under the old kit this shifted every string by half
+    // its width on the frames after that other code ran, and not before.
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
+    ctx.font = '9px sans-serif';
 
+    // ⚠ Only what the KIT writes, not the hostile setup above — which is itself recorded, and
+    // reading the whole log made this assertion fail on its own fixture.
+    const before = ctx.log.length;
     drawEverything(screen);
 
-    for (const t of ops(ctx.log, 'fillText')) {
-      expect(t.textAlign, `"${t.text}" drew under textAlign ${t.textAlign}`).toBe('left');
-      expect(t.textBaseline, `"${t.text}" drew under textBaseline ${t.textBaseline}`).toBe('alphabetic');
-      expect(t.font, `"${t.text}" drew with no font set`).toMatch(/^700 [\d.]+px monospace$/);
-    }
+    const touched = ctx.log.slice(before).filter((e) => e.op === 'set'
+      && ['font', 'textAlign', 'textBaseline'].includes(e.prop));
+    expect(
+      touched.map((e) => `${e.prop}=${e.value}`),
+      `the kit wrote canvas text state. There is no font here: every string goes through the ` +
+      `bitmap face, so anything setting these is a fillText creeping back in.`,
+    ).toEqual([]);
+
+    // And it still drew — otherwise the assertion above is vacuously true on an empty log.
+    expect(ops(ctx.log, 'fillText').length, 'nothing was drawn, so nothing was proved')
+      .toBeGreaterThan(0);
+    // The hostile state is untouched, which is what "does not depend on it" means concretely.
+    expect(ctx.textAlign).toBe('center');
+    expect(ctx.textBaseline).toBe('top');
   });
 
-  it('measures under the font it is about to draw with, not the previous one', () => {
+  it('measures by arithmetic, so the measure-before-font ordering hazard cannot exist', () => {
     const { ctx, screen } = makeScreen(480, 400);
-    // Draw big first so a stale font would be conspicuously wrong, then ask for
-    // a right-aligned label. If the measurement were taken before the font was
-    // set, the width would be the display size's and the label would hang off
-    // the left edge — a layout that looks deliberate and is simply wrong.
+    // The old hazard: measuring before setting the font returned the PREVIOUS drawer's width, so a
+    // right-aligned label drawn after a display-size string hung off the left edge — a layout that
+    // looks deliberate and is simply wrong. The face is fixed-width, so the width is now
+    // `n * advance * scale - scale` and there is no state to be stale.
     screen.text('0.50 c', 24, 80, { size: screen.type.display });
     screen.text('LABEL', 440, 120, { size: screen.type.label, align: 'right' });
 
     const label = ops(ctx.log, 'fillText')[1];
-    expect(label.x).toBeCloseTo(440 - stubWidth('LABEL', screen.type.label), 9);
+    expect(label.x).toBe(440 - stubWidth('LABEL', screen.type.label));
+    expect(label.size, 'the label drew at the display size — the stale-size bug, alive')
+      .toBe(screen.type.label);
 
-    const measures = ops(ctx.log, 'measureText');
-    const labelMeasure = measures.find((m) => m.text === 'LABEL');
-    expect(labelMeasure.font).toContain(`${screen.type.label}px`);
+    // ⛔ THE LIVENESS HALF. `measureText` is still on the stub, so "no measureText calls" is a real
+    // observation about the kit rather than an artefact of a stub that cannot record them.
+    expect(typeof ctx.measureText, 'the stub cannot record what it does not implement')
+      .toBe('function');
+    expect(ops(ctx.log, 'measureText'), 'the kit called measureText — arithmetic was the point')
+      .toHaveLength(0);
   });
 
   it('draws nothing at all for an empty string, inverted or not', () => {
@@ -712,34 +833,46 @@ describe('PhosphorScreen — inversion is the whole alert vocabulary', () => {
     const size = screen.type.body;
     screen.text('SLOW DOWN', 40, 200, { size, invert: true });
 
+    // ⚠ THE GLYPHS ARE `fillRect`s NOW. Every lit texel is one, so "the log has exactly one rect"
+    // is no longer the shape of this assertion. The two are told apart by COLOUR, which is the
+    // property being tested anyway: the block is ink, the knocked-out glyphs are the background.
     const rects = ops(ctx.log, 'fillRect');
+    const block = rects.filter((r) => r.fillStyle === PHOSPHOR.INK);
+    const glyphTexels = rects.filter((r) => r.fillStyle === PHOSPHOR.BACK);
     const texts = ops(ctx.log, 'fillText');
-    expect(rects).toHaveLength(1);
-    expect(texts).toHaveLength(1);
 
-    // Block in ink, text in the background colour. Not a second hue — there is
-    // no third value anywhere in this module for it to be.
-    expect(rects[0].fillStyle).toBe(PHOSPHOR.INK);
+    expect(block, 'an inverted draw painted more than one ink block').toHaveLength(1);
+    expect(texts).toHaveLength(1);
+    expect(glyphTexels.length, 'the glyphs were not knocked out of the block at all')
+      .toBeGreaterThan(0);
+    // Not a second hue — there is no third value anywhere in this module for it to be.
+    expect(new Set(rects.map((r) => r.fillStyle))).toEqual(new Set([PHOSPHOR.INK, PHOSPHOR.BACK]));
     expect(texts[0].fillStyle).toBe(PHOSPHOR.BACK);
 
     // Order matters: the block has to land before the glyphs or it covers them.
-    const blockIdx = ctx.log.indexOf(rects[0]);
-    const textIdx = ctx.log.indexOf(texts[0]);
-    expect(blockIdx, 'the ink block was painted over its own text').toBeLessThan(textIdx);
+    expect(
+      ctx.log.indexOf(block[0]),
+      'the ink block was painted over its own text',
+    ).toBeLessThan(ctx.log.indexOf(glyphTexels[0]));
 
     // And the block actually covers the glyphs, with room on both sides.
     const w = stubWidth('SLOW DOWN', size);
-    expect(rects[0].x).toBeLessThan(40);
-    expect(rects[0].x + rects[0].w).toBeGreaterThan(40 + w);
-    expect(rects[0].y).toBeLessThan(200);                 // above the baseline
-    expect(rects[0].y + rects[0].h).toBeGreaterThan(200); // and below it, for descenders
+    expect(block[0].x).toBeLessThan(40);
+    expect(block[0].x + block[0].w).toBeGreaterThan(40 + w);
+    expect(block[0].y, 'the block starts below the cap line').toBeLessThan(200);
+    // ⭐ EXACTLY THE BASELINE, not past it. The old kit padded by a DESCENT fraction because a
+    // vector face's ink box could not be known portably. This face has no descenders and its cell
+    // bottom IS the baseline, so a block that ran past it would be padding against nothing.
+    expect(block[0].y + block[0].h, 'the block overhangs a baseline with nothing under it')
+      .toBe(200);
   });
 
   it('spans a banner edge to edge, ignoring the margins', () => {
     const { ctx, screen } = makeScreen(480, 400);
     screen.banner('TOO CLOSE — SUBLIGHT ONLY', 300);
 
-    const block = ops(ctx.log, 'fillRect')[0];
+    // The banner's block is the first rect drawn; the rest of the rects are its knocked-out glyphs.
+    const block = ops(ctx.log, 'fillRect').find((r) => r.fillStyle === PHOSPHOR.INK);
     const text = ops(ctx.log, 'fillText')[0];
 
     // Full width is the point: at this angular size an inverted band across the
@@ -751,19 +884,24 @@ describe('PhosphorScreen — inversion is the whole alert vocabulary', () => {
 
     // Centred across the full width, not across the text area.
     const w = stubWidth('TOO CLOSE — SUBLIGHT ONLY', screen.type.body);
-    expect(text.x).toBeCloseTo((480 - w) / 2, 9);
+    expect(text.x, 'a fractional centre would resample the texels into a grey fringe')
+      .toBe(Math.round((480 - w) / 2));
   });
 
   it('paints no bare block when the measurement fails mid-banner', () => {
-    // ADDED IN REVIEW. `banner` used to paint its ink block and THEN measure the
-    // string. `_measure` throws on a non-finite width, so a broken context left
-    // an inverted band on the glass with no words in it — which is precisely
-    // what `text` refuses to draw for an empty string, arriving by another door.
-    // On a one-ink panel a wordless block is indistinguishable from a deliberate
-    // marker, so it is a wrong reading rather than a missing one.
+    // ADDED IN REVIEW. `banner` used to paint its ink block and THEN measure the string, so a
+    // measurement that threw left an inverted band on the glass with no words in it — which is
+    // precisely what `text` refuses to draw for an empty string, arriving by another door. On a
+    // one-ink panel a wordless block is indistinguishable from a deliberate marker, so it is a
+    // WRONG reading rather than a missing one, and the ordering is what prevents it.
+    //
+    // ⚠ THE OLD TRIGGER IS GONE AND THE PROPERTY IS NOT. It used to force the failure with
+    // `ctx.measureText = () => ({ width: NaN })`; the kit measures by arithmetic now and never
+    // calls it, so that fixture would test nothing and PASS — a vacuous green. The failure is
+    // injected at `_measure` itself instead, which is the seam the ordering actually protects.
     const ctx = makeRecordingCtx();
-    ctx.measureText = () => ({ width: NaN });
     const screen = new PhosphorScreen(ctx, { width: 480, height: 400 });
+    screen._measure = () => { throw new Error('PhosphorScreen: non-numeric width'); };
 
     expect(() => screen.banner('TOO CLOSE — SUBLIGHT ONLY', 300)).toThrow(/non-numeric width/);
     expect(ops(ctx.log, 'fillRect'), 'the ink block was painted before the banner could finish')
@@ -781,8 +919,19 @@ describe('PhosphorScreen — inversion is the whole alert vocabulary', () => {
     // literal numbers and lets all four panels blink in step off one clock.
     const { ctx, screen } = makeScreen();
     screen.banner('SLOW DOWN', 100);
+    const first = ctx.log.length;
     screen.banner('SLOW DOWN', 100);
-    expect(ops(ctx.log, 'fillText')).toHaveLength(2);   // identical calls, identical output
+
+    // ⚠ ASSERTED ON THE RAW TEXELS, NOT THE DECODED TEXT. Two identical banners at one baseline
+    // land on the same texels, and `decodePixelText` consumes a texel once — so the decoder
+    // reports ONE string for two draws and a count of 2 would be unreachable no matter what the
+    // kit did. Comparing the two halves of the log is the assertion that still means "the second
+    // call drew exactly what the first did", which is what "no clock in here" looks like.
+    const a = ctx.log.slice(0, first);
+    const b = ctx.log.slice(first);
+    expect(b.length, 'the second identical call drew a different amount').toBe(a.length);
+    expect(JSON.stringify(b), 'identical calls produced different output — something in the kit ' +
+      'is reading a clock').toBe(JSON.stringify(a));
   });
 });
 
@@ -790,11 +939,21 @@ describe('PhosphorScreen — rows and rules', () => {
   it('pushes the label hard left and the value hard right on one baseline', () => {
     const { ctx, screen } = makeScreen(480, 400);
     const y = 220;
-    screen.row('ATMO', 'co2-n2 0.85 bar', y);
+    // ⛔ THE OLD FIXTURE WAS `row('ATMO', 'co2-n2 0.85 bar')` AND IT NO LONGER FITS THE GLASS.
+    // Fifteen characters of the bitmap face is 801 texels on a 480-texel panel, so the
+    // right-aligned value started at x = -330 and this test's own `[label, value]` destructuring
+    // was reading a string that was mostly off the screen. That overflow is the real finding this
+    // workstream is built on — see `chrome-240p-BATCH-PLANS.md` §0.5 — and it belongs in the panel
+    // tests, not here. This test is about hard-left and hard-right placement, so it uses a row
+    // that fits: the shape INFO actually ships, a 3-character label and a value inside its budget.
+    screen.row('ATM', '0.85', y);
 
-    const [label, value] = ops(ctx.log, 'fillText');
-    expect(label.text).toBe('ATMO');
-    expect(value.text).toBe('co2-n2 0.85 bar');
+    // ⚠ SORTED BY POSITION, NOT TAKEN IN DRAW ORDER. `decodePixelText` walks the texels, so the
+    // order it hands runs back is a fact about the glass rather than about which call came first.
+    // Reading `[label, value]` off the raw order silently passed on the old kit and is luck here.
+    const [label, value] = ops(ctx.log, 'fillText').sort((p, q) => p.x - q.x);
+    expect(label.text).toBe('ATM');
+    expect(value.text).toBe('0.85');
 
     // One baseline. This is why y is a baseline and not a top: two different
     // sizes on one line need no arithmetic at all.
@@ -804,13 +963,16 @@ describe('PhosphorScreen — rows and rules', () => {
     // Opposite margins. The shared right edge is what makes a column of rows
     // scannable without reading the labels — the only way seven rows work at
     // eleven screen pixels.
-    expect(label.x).toBeCloseTo(screen.type.pad, 9);
-    expect(value.x + stubWidth(value.text, screen.type.body))
-      .toBeCloseTo(480 - screen.type.pad, 9);
+    expect(label.x).toBe(screen.type.pad);
+    expect(value.x + stubWidth(value.text, screen.type.body)).toBe(480 - screen.type.pad);
 
-    // Labels smaller than values: the value is the thing being read.
-    expect(label.font).toContain(`${screen.type.label}px`);
-    expect(value.font).toContain(`${screen.type.body}px`);
+    // ⭐ THE TWO TIERS ARE ONE SIZE NOW, and this assertion inverted rather than disappeared. It
+    // used to read "labels smaller than values: the value is the thing being read". A five-row
+    // face has no size between them, so the contrast that makes a column scannable is POSITIONAL —
+    // the shared hard-right edge above — which is what `row()`'s own comment always said was
+    // doing the work. Two names for one number is what invited a fractional third.
+    expect(label.size, 'the label and the value drew at different sizes').toBe(value.size);
+    expect(label.size).toBe(screen.type.body);
   });
 
   it('keeps a blank row’s label and its line, drawing no value', () => {

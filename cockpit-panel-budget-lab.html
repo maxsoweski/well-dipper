@@ -58,7 +58,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Cockpit panel budget — what a readout can say at 240p</title>
+<title>Cockpit panel budget — what a readout says at 240p</title>
 <style>
   :root { --ink:#EDE8DE; --dim:#8b8378; --rule:#2a2a28; --bg:#131312; }
   * { box-sizing: border-box; }
@@ -100,7 +100,7 @@
   <span id="zinfo" style="color:var(--dim);margin-left:10px"></span>
 </div>
 
-<h1>What a cockpit readout can say at the game's resolution</h1>
+<h1>What a cockpit readout says at the game's resolution</h1>
 <p class="sub" id="derive">measuring…</p>
 
 <div class="quote">
@@ -111,14 +111,17 @@
 
 <h2>1 · INFO — the panel the question was asked about</h2>
 <p>INFO sits on <code>Screen_LL</code>, the lower and wider pair, so its values get
-<b>five</b> characters. Left is what today's mechanism puts on the glass at that size; middle is the
-recommendation; right is what keeping the full strings would actually cost.</p>
+<b>five</b> characters. Left is what the old mechanism put on the glass at that size; middle is
+<b>the shipped panel</b> — this is `paintInfo` itself, not a drawing of it; right is what keeping the
+full strings would have cost. Only one field actually lost anything: <code>ATM</code> keeps the
+pressure and drops the gas mix, which was the call you made.</p>
 <div class="row" id="info-row"></div>
 
 <h2>2 · DRIVE — with CAP and TURN cut</h2>
 <p>DRIVE is on <code>Screen_UR</code>, the upper pair: <b>four</b> characters to a value, and eight
-across the whole panel. That is why the mass-lock banner has to change too — its shipped text is
-<code>TOO CLOSE — SUBLIGHT ONLY</code>, twenty-five characters.</p>
+across the whole panel. CAP and TURN are gone. The mass-lock banner had to change too — its full text
+is <code>TOO CLOSE — SUBLIGHT ONLY</code>, twenty-five characters — and it takes the mode line while
+it is lit, because a 43-row panel has no room for a seventh element.</p>
 <div class="row" id="drive-row"></div>
 
 <h2>3 · TARGET — the short name and the distance</h2>
@@ -137,8 +140,24 @@ ink the panels use.</p>
 
 <script type="module">
 import { drawPixelText, measurePixelText, FACE } from './src/rendering/PixelText.js';
-import { PHOSPHOR, TYPE_RATIOS } from './src/cockpit/PhosphorScreen.js';
+import { PHOSPHOR, PhosphorScreen } from './src/cockpit/PhosphorScreen.js';
 import { buildInfoRows } from './src/cockpit/InfoReadout.js';
+import { buildCockpitSnapshot } from './src/cockpit/CockpitSnapshot.js';
+import { C_IN_SCENE_PER_S } from './src/ui/SpeedFormat.js';
+import { paintInfo } from './src/cockpit/panels/InfoPanel.js';
+import { paintDrive } from './src/cockpit/panels/DrivePanel.js';
+import { paintTarget } from './src/cockpit/panels/TargetPanel.js';
+
+/* ── ⭐ THE "AFTER" COLUMNS ARE THE SHIPPED PAINTERS, NOT A DRAWING OF THEM ──────────────────────
+   This page opened as a PROPOSAL: I hand-drew what a five-character row would look like so Max
+   could rule on it before it was built. He ruled ("1. this is fine"), it was built, and a hand-drawn
+   proposal sitting next to shipped code is the exact shape of a lab that quietly stops telling the
+   truth. So the recommendation columns now call `paintInfo`, `paintDrive` and `paintTarget` — the
+   same functions the cockpit runs — over a real `buildCockpitSnapshot`. What is on this page is
+   what is on the glass, or the page is wrong. */
+
+/** Today's mechanism, preserved for the before/after: fractions of panel height, vector font. */
+const TYPE_RATIOS = Object.freeze({ display: 1 / 6, body: 1 / 17, label: 1 / 20, pad: 1 / 17, lead: 1 / 11 });
 
 /* ── PANEL GEOMETRY, PROJECTED FROM THE MESH ─────────────────────────────────────────────────────
    Straight out of cockpit-metrics.json /screens: every screen is 0.24 x 0.20 m; the upper pair sits
@@ -254,21 +273,40 @@ function drawToday(cols, rows) {
   return c;
 }
 
-/* THE RECOMMENDATION: the same seven fields on the grid, at the face's real size. */
-function drawInfoRec(cols, rows) {
-  const c = texelCanvas(cols, rows), x = c.getContext('2d');
-  px(x, 'CAPH B II', PAD, PAD);                                   // 9 chars, exactly the panel
-  x.fillStyle = PHOSPHOR.INK;
-  x.fillRect(PAD, PAD + FACE.h + 2, c.width - 2 * PAD, 1);        // the rule the spare rows buy
-  const top = PAD + FACE.h + 5;                                   // clear of the rule, not on it
-  REC_ROWS.forEach(([label, value], i) => {
-    const y = top + i * LEAD;
-    px(x, label, PAD, y);
-    px(x, value, c.width - PAD, y, { align: 'right' });
-  });
-  assertFits('INFO recommended', top + (REC_ROWS.length - 1) * LEAD + FACE.h, c.height);
+/* ── THE SHIPPED PANELS ─────────────────────────────────────────────────────────────────────────
+   One helper: build the panel's texel canvas, wrap it in the real kit, hand it to the real painter.
+   Nothing about the layout is decided here, which is the point. */
+function paintReal(painter, cols, rows, snapshot, nowMs = 0) {
+  const c = texelCanvas(cols, rows);
+  painter(new PhosphorScreen(c.getContext('2d'), { width: c.width, height: c.height }), snapshot, nowMs);
   return c;
 }
+
+/* A real frame: mass-locked, closing on a body, manual flight. The same shape the cockpit's own
+   provider hands its painters, built by the game's own builder rather than typed out here. */
+const FRAME = buildCockpitSnapshot({
+  // ⚠ THROUGH THE GAME'S OWN CONSTANT, not a hand-computed one. A lab that converts units itself
+  // is a lab that can be wrong about the number it is showing off, which is the one thing it may
+  // not be.
+  scModel: { speed: 0.5 * C_IN_SCENE_PER_S, throttle: 0.62, driveOn: true,
+             speedCap: () => 4000, turnRateCap: () => 0.7 },
+  commandedSpeed: 0.6 * C_IN_SCENE_PER_S,
+  sublightCap: 0.002,
+  selectedTarget: { kind: 'moon', name: 'Caph b II' },
+  targetDistance: 250,
+  aimOnTarget: true,
+  drop: { state: 'too-fast', dropMaxSpeed: 0.004, captureSphere: 0.01 },
+  massLockHint: true,
+  flightMode: 'manual',
+  focusedBody: {
+    kind: 'moon', name: 'Caph b II', data: { type: 'terrestrial', T_eq: 410 },
+    physics: {
+      composition: { surfaceType: 'rock', ironFraction: 0.31 },
+      atmosphere: { retained: true, composition: 'co2-n2', pressure: 0.85 },
+      tidalState: { locked: true, lockType: 'synchronous' },
+    },
+  },
+});
 
 /* THE COST OF KEEPING THE FULL STRINGS: the same rows at the same texel size, on the panel width
    they would require. Drawn at the same scale as the real panel, with the real panel's edge marked,
@@ -287,15 +325,15 @@ function drawWide(rows) {
   return { canvas: c, need };
 }
 
-/* DRIVE, today and cut. The hero speed is the face at integer scale 2 — the same face, not a second
-   one; the plan's `display` tier is 10 rows and that is what 5 x 2 is. */
+/* DRIVE and TARGET, today. Today's mechanism at the panel's real size — not an impression of the
+   defect, the defect. Both are kept so the before/after stays honest after the rewrite. */
 function drawDriveToday(cols, rows) {
   const c = texelCanvas(cols, rows), x = c.getContext('2d');
   const H = c.height, body = H * TYPE_RATIOS.body, label = H * TYPE_RATIOS.label;
   const disp = H * TYPE_RATIOS.display, pad = H * TYPE_RATIOS.pad, lead = H * TYPE_RATIOS.lead;
   x.fillStyle = PHOSPHOR.INK; x.textBaseline = 'alphabetic';
   x.font = `700 ${disp}px monospace`; x.textAlign = 'center';
-  x.fillText('1.42 c', c.width / 2, H * 0.20);
+  x.fillText('0.50 c', c.width / 2, H * 0.20);
   x.font = `700 ${label}px monospace`;
   x.fillText('SUPERCRUISE', c.width / 2, H * 0.28);
   x.fillRect(pad, H * 0.33, c.width - 2 * pad, H * 0.07);
@@ -303,42 +341,12 @@ function drawDriveToday(cols, rows) {
   ['CAP', 'TURN'].forEach((l, i) => {
     const y = H * 0.545 + i * lead;
     x.font = `700 ${label}px monospace`; x.textAlign = 'left';  x.fillText(l, pad, y);
-    x.font = `700 ${body}px monospace`;  x.textAlign = 'right'; x.fillText(i ? '18 deg/s' : '2.10 c', c.width - pad, y);
+    x.font = `700 ${body}px monospace`;  x.textAlign = 'right'; x.fillText(i ? '40 deg/s' : '1,996 c', c.width - pad, y);
   });
   x.font = `700 ${body}px monospace`; x.textAlign = 'left';
   x.fillText('MODE: MANUAL', pad, H * 0.76);
   x.textAlign = 'center';
   x.fillText('TOO CLOSE — SUBLIGHT ONLY', c.width / 2, H * 0.92);
-  return c;
-}
-function drawDriveRec(cols, rows) {
-  const c = texelCanvas(cols, rows), x = c.getContext('2d');
-  const W = c.width, inner = W - 2 * PAD;
-
-  //  row  1-10  the speed, at integer scale 2 — the SAME face, not a second one. The plan's
-  //             `display` tier is ten rows and 5 x 2 is exactly that.
-  px(x, '1.42', W / 2, 1, { scale: 2, align: 'center' });
-  //  row 12-16  the unit and the mode band
-  px(x, 'CRUISE', W / 2, 12, { align: 'center' });
-  //  row 18-21  the speed bar: frame in ink, the drop window knocked out in the background colour
-  x.fillStyle = PHOSPHOR.INK;  x.fillRect(PAD, 18, inner, 4);
-  x.fillStyle = PHOSPHOR.BACK; x.fillRect(PAD + 1 + Math.round((inner - 2) * 0.55), 19, inner, 2);
-  //  row 23-27  the throttle, its bar starting from the label's measured ink rather than a guess
-  px(x, 'THR', PAD, 23);
-  const thrX = PAD + measurePixelText('THR') + FACE.advance;
-  x.fillStyle = PHOSPHOR.INK;
-  x.fillRect(thrX, 24, Math.round((W - PAD - thrX) * 0.62), 3);
-  //  row 29-33  the mode. "MODE: MANUAL" is twelve characters and the panel is eight, so the
-  //             prefix goes; the row's position is what says it is the mode.
-  px(x, 'MANUAL', PAD, 29);
-  //  row 35-41  the mass-lock banner, inverted. Its shipped text is "TOO CLOSE — SUBLIGHT ONLY",
-  //             twenty-five characters. Eight is the panel.
-  const bannerTop = 35;
-  x.fillStyle = PHOSPHOR.INK; x.fillRect(PAD, bannerTop, inner, FACE.h + 2);
-  drawPixelText(x, 'TOOCLOSE', PAD + Math.round((inner - measurePixelText('TOOCLOSE')) / 2), bannerTop + 1,
-                { color: PHOSPHOR.BACK, onMissing: 'tofu' });
-
-  assertFits('DRIVE recommended', bannerTop + FACE.h + 2, c.height);
   return c;
 }
 
@@ -356,7 +364,7 @@ function drawTargetToday(cols, rows) {
   x.fillText(full, c.width / 2, H * 0.22);
   x.font = `700 ${label}px monospace`;
   x.fillText('WARP TARGET', c.width / 2, H * 0.36);
-  [['DIST', '1.42 Gm'], ['ETA', '2:14']].forEach(([l, v], i) => {
+  [['DIST', '0.25 AU'], ['ETA', '2:14']].forEach(([l, v], i) => {
     const y = H * 0.55 + i * lead;
     x.font = `700 ${label}px monospace`; x.textAlign = 'left';  x.fillText(l, pad, y);
     x.font = `700 ${body}px monospace`;  x.textAlign = 'right'; x.fillText(v, c.width - pad, y);
@@ -364,26 +372,6 @@ function drawTargetToday(cols, rows) {
   });
   x.font = `700 ${body}px monospace`;
   x.fillText('SAFE TO DROP', c.width / 2, H * 0.92);
-  return c;
-}
-
-function drawTargetRec(cols, rows) {
-  const c = texelCanvas(cols, rows), x = c.getContext('2d');
-  const W = c.width, inner = W - 2 * PAD;
-  px(x, 'TARGET', PAD, 1);                                  // what the panel is
-  px(x, 'CAPH B II', W / 2, 7, { align: 'center' });         // the short name, 9 chars, full width
-  x.fillStyle = PHOSPHOR.INK; x.fillRect(PAD, 14, inner, 1);
-  [['DST', '1.4Gm'], ['ETA', '2:14']].forEach(([l, v], i) => {
-    const y = 17 + i * LEAD;
-    px(x, l, PAD, y);
-    px(x, v, W - PAD, y, { align: 'right' });
-  });
-  px(x, 'WARP', PAD, 29);
-  const bannerTop = 35;                                      // "SAFE TO DROP" is 12; nine is the panel
-  x.fillStyle = PHOSPHOR.INK; x.fillRect(PAD, bannerTop, inner, FACE.h + 2);
-  drawPixelText(x, 'SAFE DROP', PAD + Math.round((inner - measurePixelText('SAFE DROP')) / 2), bannerTop + 1,
-                { color: PHOSPHOR.BACK, onMissing: 'tofu' });
-  assertFits('TARGET recommended', bannerTop + FACE.h + 2, c.height);
   return c;
 }
 
@@ -425,10 +413,10 @@ function render() {
       `The seven fields are all there and none of them is a letter. Body text is ` +
       `<b>${(LOWER.rows * TYPE_RATIOS.body).toFixed(1)}</b> pixel rows tall; five is the floor.`,
       `<b>TODAY</b> — today's mechanism, at the real panel size`),
-    blit(drawInfoRec(LOWER.cols, LOWER.rows),
+    blit(paintReal(paintInfo, LOWER.cols, LOWER.rows, FRAME),
       `Nine characters of designation, then six rows of ${LOWER_V}. Only <span class="bad">ATM</span> ` +
       `actually loses something: the gas mix comes off and the pressure stays.`,
-      `<b class="good">RECOMMENDED</b> — ${LOWER_N} across, ${LOWER_V} to a value`),
+      `<b class="good">SHIPPED</b> — ${LOWER_N} across, ${LOWER_V} to a value`),
     blit(wide.canvas,
       `Keeping "co2-n2 0.85 bar" intact needs <b>${wide.need}</b> texels where the glass has ` +
       `<b>${Math.floor(LOWER.cols)}</b>. The red line is where the real panel ends — everything ` +
@@ -437,21 +425,21 @@ function render() {
   );
   document.getElementById('drive-row').replaceChildren(
     blit(drawDriveToday(UPPER.cols, UPPER.rows), '', `<b>TODAY</b> — with CAP and TURN`),
-    blit(drawDriveRec(UPPER.cols, UPPER.rows),
+    blit(paintReal(paintDrive, UPPER.cols, UPPER.rows, FRAME),
       `CAP and TURN are gone, so the speed, the two bars, the mode and the banner each get a full ` +
       `line. <code>MODE:</code> drops as a prefix and the mass-lock banner goes to ` +
       `${UPPER_N} characters.`,
-      `<b class="good">RECOMMENDED</b> — ${UPPER_N} across, ${UPPER_V} to a value`),
+      `<b class="good">SHIPPED</b> — ${UPPER_N} across, ${UPPER_V} to a value`),
   );
   document.getElementById('target-row').replaceChildren(
     blit(drawTargetToday(LOWER.cols, LOWER.rows),
       `Not a mock-up of a defect — this is the shrink-to-fit the panel does today, at the panel's ` +
       `real size.`,
       `<b class="bad">TODAY</b> — the full designation, shrunk to fit`),
-    blit(drawTargetRec(LOWER.cols, LOWER.rows),
+    blit(paintReal(paintTarget, LOWER.cols, LOWER.rows, FRAME),
       `The short name at full width, the distance and ETA as rows, and the drop cue as a banner the ` +
       `panel can actually hold.`,
-      `<b class="good">RECOMMENDED</b> — short name and distance`),
+      `<b class="good">SHIPPED</b> — short name and distance`),
   );
   document.getElementById('ladder-row').replaceChildren(
     blit(drawLadder(), '', `<b>THE FACE</b> — ${FACE.name}, as the panels draw it`));

@@ -64,6 +64,44 @@ export const ALERT_TEXT = Object.freeze({
 });
 
 /**
+ * The same three cues at the width a cockpit panel actually has.
+ *
+ * ⭐ ADDED 2026-09-08 for `chrome-and-ui-at-240p`. A banner spans the panel edge to edge, and at
+ * the game's resolution that is EIGHT characters on the upper pair (DRIVE, NAV) and NINE on the
+ * lower (TARGET, INFO). The shipped MASS_LOCK line is twenty-five. A banner whose words run off
+ * both edges is worse than a shorter one: an inverted band is recognisable before any of its
+ * letters are, so it would still read as an alarm while saying nothing.
+ *
+ * ⛔ BESIDE `ALERT_TEXT`, NEVER INSTEAD OF IT. Max, 2026-09-08: *"don't get rid of any code that
+ * allows you to display what we want to display."* The DOM overlay is not being coarsened and
+ * still draws the long form; these are what the glass can hold, and the two are checked against
+ * each other by the test that pairs their keys.
+ *
+ * MASS_LOCK loses its word space rather than a word: "TOO CLOSE" is nine characters and the upper
+ * panel has eight, and of the two facts in that line — you are too close, and you are therefore
+ * sublight only — the first is the one the pilot can act on.
+ */
+export const ALERT_BRIEF = Object.freeze({
+  DROP_SAFE: 'SAFE DROP',
+  DROP_SLOW: 'SLOW DOWN',
+  MASS_LOCK: 'TOOCLOSE',
+});
+
+/**
+ * The panel form of a cue's words, by lookup rather than by truncation.
+ *
+ * ⚠ FALLS BACK TO THE FULL STRING, DELIBERATELY. A cue added to `ALERT_TEXT` without a brief form
+ * then draws too long and is VISIBLY wrong on the glass, which is a bug that gets found. Returning
+ * a silently truncated string instead would be a bug that ships.
+ */
+export function briefAlert(text) {
+  for (const key of Object.keys(ALERT_TEXT)) {
+    if (ALERT_TEXT[key] === text) return ALERT_BRIEF[key] ?? text;
+  }
+  return text;
+}
+
+/**
  * How hard the line insists. This is the ONLY urgency channel a one-ink panel
  * has left once colour is off the table, so it carries the whole gradient:
  * `steady` is a lit line that does not blink at all (reassurance — "you are

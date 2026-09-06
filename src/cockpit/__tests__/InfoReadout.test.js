@@ -42,6 +42,7 @@ import {
   INFO_ROWS, INFO_VALUE_MAX_CHARS, BLANK,
   buildInfoRows, renderInfoValue,
   formatText, formatKelvin, formatComposition, formatAtmosphere, formatTidalState,
+  PANEL_VALUE_CHARS,
 } from '../InfoReadout.js';
 import { StarSystemGenerator } from '../../generation/StarSystemGenerator.js';
 
@@ -501,15 +502,72 @@ describe('InfoReadout — the table stays honest', () => {
     }
   });
 
-  it('gives every row a label, a reader and a formatter and nothing else', () => {
+  it('gives every row both projections of the same reading, and nothing else', () => {
+    // ⭐ THE ROW GREW A SECOND FORMATTER, NOT A SECOND READER, and the exact-keys assertion is
+    // what makes that checkable. `chrome-and-ui-at-240p` needs the same field at two lengths — the
+    // full "co2-n2 0.85 bar" for a surface with room, and a five-character form for a cockpit panel
+    // that is nine characters wide — and Max's ruling was that the short form is what a panel
+    // DRAWS, never what this module can produce: *"don't get rid of any code that allows you to
+    // display what we want to display."* So `format` and `brief` both stay, over one `read`.
+    //
+    // ⛔ A ROW WITH A SECOND `read` WOULD FAIL HERE, and that is the point of listing the keys
+    // rather than checking they exist: two readers is two places a value can come from, which is
+    // how the long and short forms would eventually disagree about the same body.
+    const ALLOWED = ['abbr', 'brief', 'format', 'headline', 'label', 'read'];
     for (const row of INFO_ROWS) {
-      expect(Object.keys(row).sort()).toEqual(['format', 'label', 'read']);
+      expect(Object.keys(row).every((k) => ALLOWED.includes(k)),
+        `row ${row.label} carries a key this table does not define: ` +
+        `${Object.keys(row).filter((k) => !ALLOWED.includes(k)).join(', ')}`).toBe(true);
       expect(typeof row.label).toBe('string');
       expect(row.label.length).toBeGreaterThan(0);
       expect(typeof row.read).toBe('function');
       expect(typeof row.format).toBe('function');
+      expect(typeof row.brief, `row ${row.label} has no brief form`).toBe('function');
+      expect(typeof row.abbr, `row ${row.label} has no panel label`).toBe('string');
     }
     expect(new Set(INFO_ROWS.map((r) => r.label)).size).toBe(INFO_ROWS.length);
+
+    // The panel labels are three characters and distinct, except the headline row — which is drawn
+    // unlabelled across the full width and therefore carries the empty string on purpose.
+    const labelled = INFO_ROWS.filter((r) => !r.headline);
+    for (const row of labelled) {
+      expect(row.abbr.length, `${row.label}'s panel label is not three characters`).toBe(3);
+    }
+    expect(new Set(labelled.map((r) => r.abbr)).size,
+      'two rows would draw the same three-character label').toBe(labelled.length);
+    expect(INFO_ROWS.filter((r) => r.headline).length,
+      'exactly one row is the panel heading').toBe(1);
+  });
+
+  it('keeps every brief value inside the panel budget, without the backstop firing', () => {
+    // ⛔ THE CLAMP IN `renderInfoValue` IS A BACKSTOP AND MUST STAY UNREACHED. If a formatter
+    // relies on it, the value it produces is silently cut — and a cut number reads as a real one.
+    // This runs the formatters over the shapes the generators actually emit and asserts they come
+    // in under budget on their own.
+    const cases = [
+      { kind: 'planet', type: 'terrestrial', tEq: 410,
+        composition: { surfaceType: 'rock', ironFraction: 0.31 },
+        atmosphere: { retained: true, composition: 'co2-n2', pressure: 0.85 },
+        tidalState: { locked: true, lockType: 'synchronous' } },
+      { kind: 'star', type: 'hot-jupiter', tEq: 5778,
+        composition: { surfaceType: 'silicate', ironFraction: 0.999 },
+        atmosphere: { retained: true, composition: 'h2-he', pressure: 1000 },
+        tidalState: { locked: true, lockType: '3:2-resonance' } },
+      { kind: 'moon', type: 'ecumenopolis', tEq: 3,
+        composition: { surfaceType: 'ice', ironFraction: 0 },
+        atmosphere: { retained: false },
+        tidalState: { locked: false } },
+    ];
+    for (const survey of cases) {
+      for (const row of buildInfoRows({ survey }, undefined, { brief: true })) {
+        if (!row.label) continue;   // the headline is fitted by the painter, not by the budget
+        expect(row.value.length,
+          `${row.label} rendered "${row.value}" — ${row.value.length} characters where the panel ` +
+          `holds ${PANEL_VALUE_CHARS}. The clamp would hide this by cutting the value, which is ` +
+          `how a truncated number reaches the glass looking like a real one.`)
+          .toBeLessThanOrEqual(PANEL_VALUE_CHARS);
+      }
+    }
   });
 
   it('reads an ATMO field the generator actually produces', () => {

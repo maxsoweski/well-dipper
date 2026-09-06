@@ -158,6 +158,9 @@ export { ALERT_TEXT, BLINK };
 export const READOUT_TEXT = Object.freeze({
   REV_PREFIX: 'REV ',
   SUBLIGHT: 'SUBLIGHT',
+  /** The eight-character panel's form of it. The long one is untouched and still drawn wherever
+   *  there is room for it — see `tierLine`. */
+  SUBLIGHT_SHORT: 'SUB',
   ETA_UNKNOWN: '--:--',
   MODE_PREFIX: 'MODE: ',
 });
@@ -213,7 +216,9 @@ function formatEta(seconds) {
  *     captureSphere, dropMaxSpeed, dropState, flightMode, showReticle }
  * @returns {{
  *   speedText: string,
+ *   speedValue: string,
  *   sublightTag: string|null,
+ *   tierLine: string,
  *   band: 'normal'|'in-window'|'too-fast',
  *   bar: {frac:number, bipolar:boolean, commandedFrac:number, dropTickFrac:number|null},
  *   throttleFrac: number|null,
@@ -241,10 +246,44 @@ export function buildFlightReadout(state = {}) {
   const spd = formatSpeed(speed);
   const speedText = `${speed < 0 ? READOUT_TEXT.REV_PREFIX : ''}${spd.value} ${spd.unit}`;
 
+  /**
+   * The speed WITHOUT its unit — the hero number, and nothing else.
+   *
+   * ⭐ ADDED 2026-09-08. The DRIVE panel's display tier is two cells tall and therefore holds FOUR
+   * characters on a 51-texel panel. "0.50 c" is six, so a hero drawn from `speedText` fell back to
+   * body size on every single frame and the panel had no hero at all — the number a pilot flies by
+   * was the same size as the throttle label. The unit is not lost: it is on the tier line
+   * immediately below, which is where it has to be anyway once the drive state has to share a row.
+   *
+   * ⛔ THE REV PREFIX STAYS ATTACHED TO THE NUMBER, and that costs the hero its size when
+   * reversing — "REV 0.50" is eight characters, so it drops to body. That is the right trade and
+   * not an oversight: `formatSpeed` takes `Math.abs`, so a reversing ship reads IDENTICALLY to a
+   * forward one unless the panel says otherwise. Losing the prefix is a silent wrong readout; the
+   * number is right and the direction is gone. A smaller correct number beats a large wrong one.
+   */
+  const speedValue = `${speed < 0 ? READOUT_TEXT.REV_PREFIX : ''}${spd.value}`;
+
   // The SUBLIGHT tag keys on `driveOn === false`, STRICTLY. Not `!driveOn`: a
   // frame that never set the field would then claim the drive is down, which is
   // the readout saying the ship left supercruise when it did not.
   const sublightTag = state.driveOn === false ? READOUT_TEXT.SUBLIGHT : null;
+
+  /**
+   * The tier line: the speed's UNIT, with the drive state in front of it when the drive is down.
+   *
+   * ⭐ ADDED 2026-09-08 for `chrome-and-ui-at-240p`, and composed HERE rather than in the panel for
+   * the reason `speedText` is: a panel that assembles its own version of a model string is a second
+   * place the glass and the HUD can disagree. `sublightTag` and `spd.unit` both stay exactly as
+   * they were — this is a third string over the same two readings, not a replacement for either.
+   *
+   * ⛔ "SUB", NOT "SUBLIGHT", AND ONLY WHEN THE UNIT HAS TO SHARE THE LINE. The DRIVE panel is
+   * eight characters wide at the game's resolution: "SUBLIGHT" alone is exactly eight and would
+   * leave a hero number with no unit under it, which is a number that means nothing. "SUB km/s" is
+   * also exactly eight and carries both facts.
+   */
+  const tierLine = sublightTag
+    ? `${READOUT_TEXT.SUBLIGHT_SHORT} ${spd.unit}`
+    : spd.unit;
 
   // ── The bar ──
   // Two different scales, because one cannot cover both regimes. Supercruise is
@@ -366,7 +405,9 @@ export function buildFlightReadout(state = {}) {
 
   return {
     speedText,
+    speedValue,
     sublightTag,
+    tierLine,
     band,
     bar: { frac, bipolar, commandedFrac, dropTickFrac },
     // A SIBLING OF `bar`, not a field inside it, and deliberately so: everything

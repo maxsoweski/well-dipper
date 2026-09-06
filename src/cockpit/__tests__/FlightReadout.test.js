@@ -420,8 +420,26 @@ const stateOf = (row) => ({ ...row.state, ...(row.stateExtra || {}) });
 describe('FlightReadout — the overlay\'s drive/target readout, ported without colour', () => {
   it('says exactly the right thing for every row of the truth table', () => {
     for (const row of ROWS) {
-      const { bar, throttleFrac, ...text } = buildFlightReadout(stateOf(row));
+      const { bar, throttleFrac, speedValue, tierLine, ...text } = buildFlightReadout(stateOf(row));
       expect(text, row.name).toEqual(row.expect);
+
+      // ⭐ `speedValue` AND `tierLine` ARE ASSERTED AS A RELATIONSHIP, NOT AS EIGHTEEN LITERALS.
+      // They were added for `chrome-and-ui-at-240p`, where the DRIVE panel's display tier holds
+      // four characters and "0.50 c" is six — so the hero is the number and the unit moves to the
+      // line below. Writing them into all eighteen rows would restate `speedText` eighteen times
+      // and assert nothing new; what actually matters is that the THREE strings are one reading
+      // split three ways, because the moment they are not, the glass and the HUD disagree about
+      // the same speed. That is the property, and it holds on every row rather than on a chosen few.
+      expect(text.speedText.startsWith(speedValue), `${row.name}: speedText does not open with ` +
+        `speedValue ("${text.speedText}" vs "${speedValue}")`).toBe(true);
+      const unit = text.speedText.slice(speedValue.length).trim();
+      expect(unit.length, `${row.name}: speedText carries no unit`).toBeGreaterThan(0);
+      expect(tierLine.endsWith(unit), `${row.name}: the tier line "${tierLine}" does not carry ` +
+        `the unit "${unit}" the speed was measured in`).toBe(true);
+      // Sublight is said once, on the tier line, in the short form the panel has room for. The
+      // long `sublightTag` is untouched and still what a surface with room would draw.
+      expect(tierLine.startsWith('SUB '), `${row.name}: tier line and sublightTag disagree`)
+        .toBe(!!text.sublightTag);
       // The bar is always present, even on rows that assert nothing about it —
       // otherwise a destructure of a missing field would quietly pass above.
       expect(typeof bar, row.name).toBe('object');
@@ -1034,7 +1052,10 @@ describe('FlightReadout — the overlay\'s drive/target readout, ported without 
     // Never pass vacuously. Counted from the table's own expectations: one
     // speedText and one band per row always, plus each optional line that row
     // says it shows, plus two strings for each cue it raises.
-    const expected = ROWS.reduce((n, r) => n + 2
+    // ⚠ FOUR PER ROW, NOT TWO, SINCE 2026-09-08: `speedValue` and `tierLine` joined `speedText`
+    // and the band. They are strings on the same walk and the count is what keeps this from
+    // passing vacuously, so it moves with the readout rather than being loosened to an inequality.
+    const expected = ROWS.reduce((n, r) => n + 4
       + (r.expect.sublightTag ? 1 : 0)
       + (r.expect.eta ? 1 : 0)
       + (r.expect.modeLine ? 1 : 0)

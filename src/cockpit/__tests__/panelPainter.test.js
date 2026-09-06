@@ -42,6 +42,7 @@
  * Lane E's files are read, never written, and its `describe.skipIf` pattern is
  * deliberately not copied — see the module-scope self-scan below.
  */
+import { decodePixelText, FACE } from '../../rendering/PixelText.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -126,8 +127,33 @@ function recordingCtx(canvas) {
     canvas,
     _rects: rects,
     _texts: texts,
+    /**
+     * The strings actually ON the glass, read back out of the texels.
+     *
+     * ⭐ NOT A SELF-REPORT. `decodePixelText` reconstructs each run from the `fillRect` calls that
+     * were really made, so an assertion on this is an assertion about the pixels — and a harder
+     * one than the old `fillText` argument, which read perfectly whether or not the glyph rows
+     * landed. `_texts` stays for the fillText guard above; `_decoded()` is what the panels are
+     * asserted against.
+     */
+    _decoded() {
+      return decodePixelText(rects).map((d) => {
+        const px = d.scale * FACE.h;
+        // ⚠ ANY texel of the run, not the one at (x, y): a glyph's first lit pixel is rarely its
+        // top-left corner, so an exact-corner lookup reports a null style — which reads as "drawn
+        // with no colour set" in the one-ink checks and is simply wrong.
+        const src = rects.find((r) => r.x >= d.x
+          && r.x < d.x + d.text.length * FACE.advance * d.scale
+          && r.y >= d.y && r.y < d.y + FACE.h * d.scale && r.w === d.scale);
+        return { text: d.text, x: d.x, y: d.y + px, size: px, style: src ? src.style : null };
+      });
+    },
     clearRect() {},
     fillRect(x, y, w, h) { rects.push({ x, y, w, h, style: state.fillStyle }); },
+    // ⛔ RETAINED THOUGH THE KIT NO LONGER CALLS IT. `chrome-and-ui-at-240p` moved the cockpit onto
+    // the repo's bitmap face, so every glyph arrives as `fillRect` texels and `_texts` fills from
+    // `_decoded()` below instead. This stays so that a `fillText` creeping back in is RECORDED and
+    // caught by the one-ink assertions, rather than crashing the stub and being fixed by adding it.
     fillText(text, x, y) { texts.push({ text: String(text), x, y, style: state.fillStyle }); },
     // Scales with the font size, so a measurement taken under the wrong font
     // produces a width that matches nothing rather than one that quietly passes.
@@ -500,15 +526,26 @@ describe('panelPainter — one kit per panel, rebuilt when the buffer is', () =>
 describe('panelPainter — against the real host and a real painter', () => {
   it('puts a shipped painter on real glass with nothing else in between', () => {
     // The end-to-end shape the game will use the day the cockpit is wired into
-    // main.js: `host.setPainter(role, panelPainter(paintInfo))`. `paintInfo` draws
-    // one row per INFO_ROWS entry, so text reaching this context at all is the
-    // whole chain — host, bridge, kit, painter — proving it fits together.
+    // main.js: `host.setPainter(role, panelPainter(paintInfo))`. Text reaching this
+    // context at all is the whole chain — host, bridge, kit, painter — proving it
+    // fits together.
+    //
+    // ⚠ SIX, NOT SEVEN, AND THE DIFFERENCE IS THE REDESIGN RATHER THAN A LOSS.
+    // `paintInfo` now draws the first table row as the panel's HEADING — the body's
+    // designation, unlabelled, across the full width — and the remaining six as
+    // label-and-value rows. This fixture's snapshot has no focused body, so the
+    // heading has nothing to say and correctly draws nothing, while all six labels
+    // still hold their lines. Asserting on the LABELS rather than on a count is what
+    // makes that difference legible instead of a number that drifted.
     const host = hostAt();
     host.setPainter('INFO', panelPainter(paintInfo));
     expect(host.update(snap(), 0)).toBeGreaterThan(0);
 
     const ctx = host.panel('INFO').ctx;
-    expect(ctx._texts.length, 'the INFO painter reached no glass').toBeGreaterThanOrEqual(7);
+    const drawn = ctx._decoded().map((d) => d.text);
+    expect(drawn, 'the INFO painter reached no glass').toEqual(
+      expect.arrayContaining(['CLS', 'TYP', 'TEQ', 'CMP', 'ATM', 'TID']));
+    expect(ctx._texts, 'a fillText came back — there is no font in this kit').toHaveLength(0);
     // One ink and one background, and nothing else, all the way through.
     const styles = new Set([...ctx._rects, ...ctx._texts].map((d) => d.style));
     expect([...styles].sort()).toEqual([PHOSPHOR.BACK, PHOSPHOR.INK].sort());

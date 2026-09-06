@@ -429,3 +429,143 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
     console.log(`[PIXEL-FACE] ${next} (${FACE.w}x${FACE.h})`);
   });
 }
+
+/**
+ * Read strings back OUT of recorded `fillRect` calls.
+ *
+ * ⭐ WHY THIS EXISTS. Every test in this repo that asks "what did the panel say?" did it by
+ * recording `ctx.fillText` and reading its first argument. Bitmap text reaches the context as
+ * anonymous texels, so that question became unanswerable the moment the cockpit moved onto the
+ * world's pixel grid — and the tempting replacement is a class SELF-REPORT ("the painter says it
+ * drew X"), which is exactly what this lane refuses elsewhere, because a self-report agrees with
+ * the code rather than checking it.
+ *
+ * Decoding restores the original standard and raises it: the assertion now depends on the actual
+ * texels landing in the actual positions, so a face whose draw path dropped a row, or a caller
+ * that scaled text off the grid, fails where a `fillText` string argument would still have read
+ * perfectly. It answers "what is ON THE GLASS", never "what did the code intend".
+ *
+ * ⚠ IT DECODES AGAINST THE ACTIVE FACE. Switch faces and re-run; do not cache the result.
+ *
+ * @param {Array<{x:number,y:number,w:number,h:number}>} rects every fillRect the context saw
+ * @returns {Array<{text:string, x:number, y:number, scale:number}>} runs, in reading order
+ */
+export function decodePixelText(rects) {
+  const { w: GW, h: GH, advance: ADV, glyphs } = _active;
+  const byKey = new Map();
+  for (const ch of Object.keys(glyphs)) byKey.set(glyphs[ch].join(','), ch);
+
+  // A glyph texel is always a SQUARE of the scale. Bars, frames, ticks and pins are not, which is
+  // what keeps panel furniture out of the decode.
+  const square = (rects || []).filter((r) => r && r.w === r.h && r.w > 0
+    && Number.isInteger(r.x) && Number.isInteger(r.y));
+  const out = [];
+
+  for (const s of [...new Set(square.map((r) => r.w))].sort((a, b) => a - b)) {
+    const pool = square.filter((r) => r.w === s);
+    const at = new Set(pool.map((r) => `${r.x},${r.y}`));
+    const used = new Set();
+
+    /** Decode one cell at (cx, y0); returns the character or null if it matches no glyph. */
+    const cellAt = (cx, y0) => {
+      const rows = [];
+      for (let r = 0; r < GH; r++) {
+        let mask = 0;
+        for (let col = 0; col < GW; col++) {
+          if (at.has(`${cx + col * s},${y0 + r * s}`)) mask |= 1 << (GW - 1 - col);
+        }
+        rows.push(mask);
+      }
+      const key = rows.join(',');
+      if (byKey.has(key)) return byKey.get(key);
+      return rows.some(Boolean) ? null : ' ';
+    };
+
+    for (const top of [...new Set(pool.map((r) => r.y))].sort((a, b) => a - b)) {
+      // ⭐ TRY EVERY ANCHOR, NOT JUST THE TOPMOST TEXEL. Since the face gained lowercase, an
+      // all-lowercase run's first lit row is its x-height, not the top of the cell — anchoring at
+      // `min(y)` shifted every such string up by two rows and matched nothing. Score each candidate
+      // origin by how many cells actually resolve to a glyph and keep the best.
+      let best = null;
+      for (let k = 0; k < GH; k++) {
+        const y0 = top - k * s;
+        const band = pool.filter((r) => r.y >= y0 && r.y < y0 + GH * s
+          && (r.y - y0) % s === 0 && !used.has(`${r.x},${r.y}`));
+        if (!band.length) continue;
+        const columns = [...new Set(band.map((r) => r.x))].sort((a2, b2) => a2 - b2);
+        const runs = [];
+        for (const x of columns) {
+          const last = runs[runs.length - 1];
+          if (last && x - last[last.length - 1] <= 2 * ADV * s) last.push(x);
+          else runs.push([x]);
+        }
+        let score = 0;
+        let bad = 0;
+        const decoded = [];
+        for (const run of runs) {
+          // ⭐ TRY EVERY COLUMN ORIGIN, NOT JUST THE LEFTMOST TEXEL — the exact mirror of the row
+          // anchor search above, and it was missing. A run's first lit column is not its cell's
+          // left edge whenever the leading glyph is blank down its first column: '1' is lit only
+          // in columns 1-3 of five, and so are '-', '.' and ':'. Anchoring at `min(x)` shifted
+          // every such string one texel right and matched nothing, so "175" and "--:--" decoded as
+          // pure tofu and vanished — silently, because an all-tofu run is dropped.
+          let bestRun = null;
+          for (let k = 0; k < GW; k++) {
+            const x0 = run[0] - k * s;
+            const cells = Math.floor((run[run.length - 1] - x0) / (ADV * s)) + 1;
+            let text = '';
+            let good = 0;
+            let miss = 0;
+            for (let c = 0; c < cells; c++) {
+              const ch = cellAt(x0 + c * ADV * s, y0);
+              if (ch === null) { text += '\uFFFD'; miss++; } else { text += ch; if (ch !== ' ') good++; }
+            }
+            if (!bestRun || (good - miss) > (bestRun.good - bestRun.miss)) {
+              bestRun = { x0, text, good, miss };
+            }
+          }
+          score += bestRun.good;
+          bad += bestRun.miss;
+          decoded.push({ x0: bestRun.x0, text: bestRun.text });
+        }
+        // ⭐ UNMATCHED CELLS COUNT AGAINST AN ANCHOR, THEY DO NOT COME FREE. Scoring on resolved
+        // cells alone made a WRONG origin competitive: a band is `GH * s` tall, so an anchor placed
+        // on the middle of one line reaches down into the NEXT line and decodes its top rows as the
+        // bottom of a phantom cell. Measured on a real TARGET panel — "0.25 AU" on one baseline and
+        // "ETA"/"4:09" on the next produced two runs that were never drawn, "__\uFFFD" and
+        // "\uFFFD.\uFFFD\uFFFD", at baselines a third of a line apart from anything.
+        if (!best || (score - bad) > (best.score - best.bad)) best = { y0, score, bad, decoded };
+      }
+      if (!best || best.score === 0) continue;
+
+      for (const { x0, text } of best.decoded) {
+        if (!/[^\s\uFFFD]/.test(text)) continue;
+        // ⛔ A RUN WITH AN UNMATCHED CELL IS NOT EMITTED, AND ITS TEXELS ARE NOT CONSUMED.
+        // This decoder exists so panel tests can ask the GLASS what it says; a run it could not
+        // fully read is a run it has mis-anchored, and reporting it invents text that no painter
+        // drew — which is worse than reporting nothing, because an assertion written against the
+        // invented string then passes. Leaving the texels unconsumed is the other half: they are
+        // still available to the correct anchor, which is how the real line is recovered.
+        if (text.includes('\uFFFD')) continue;
+        // Consume this run's texels so a later anchor cannot decode them a second time.
+        for (let c = 0; c < text.length; c++) {
+          for (let r = 0; r < GH; r++) {
+            for (let col = 0; col < GW; col++) {
+              used.add(`${x0 + c * ADV * s + col * s},${best.y0 + r * s}`);
+            }
+          }
+        }
+        // Split on two or more blank cells: a `row()` whose label and value nearly meet arrives as
+        // one run, and every caller would otherwise re-split it by a rule of its own.
+        let seek = 0;
+        for (const part of text.split(/ {2,}/)) {
+          const idx = text.indexOf(part, seek);
+          seek = idx + part.length;
+          if (part.trim()) out.push({ text: part, x: x0 + idx * ADV * s, y: best.y0, scale: s });
+        }
+      }
+    }
+  }
+
+  return out.sort((a, b) => (a.y - b.y) || (a.x - b.x));
+}
