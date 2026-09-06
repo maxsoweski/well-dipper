@@ -206,12 +206,22 @@ describe('the camera mirror does not mutate the cockpit camera', () => {
   });
 
   it('the mask buffer tracks the OVERLAY\'s backing store, not the CSS size', () => {
-    // `TargetingReticle._resize` sizes its canvas `innerWidth * dpr`, rounded.
-    // The same formula here is what makes the erase a 1:1 blit with no
-    // resampling — a half-pixel scale would feather every cut edge, which reads
-    // as "the mask is blurry" rather than as a size mismatch.
-    expect(MASK).toMatch(/Math\.round\(\(typeof window !== 'undefined' \? window\.innerWidth : 1\) \* dpr\)/);
-    expect(MASK, 'setSize would re-apply a pixel ratio on top of the dpr already in w/h')
+    // A 1:1 blit with no resampling is what keeps the cut hard — a fractional scale would feather
+    // every cut edge, which reads as "the mask is blurry" rather than as a size mismatch.
+    //
+    // ⭐ ASSERTED AS A SHARED SOURCE, NOT A SHARED FORMULA. Until chrome-and-ui-at-240p this
+    // matched `innerWidth * dpr` here and trusted a comment that the overlay used the same
+    // arithmetic — which is a claim about a file this test never opened. Both files now read the
+    // one object `RetroRenderer.resize()` writes, and BOTH are checked, so the agreement is
+    // structural instead of a coincidence maintained by hand.
+    const reticle = strip('../../ui/TargetingReticle.js');
+    expect(MASK, 'the mask no longer sizes itself from the shared render buffer')
+      .toMatch(/resolveRenderBuffer\(/);
+    expect(reticle, 'the overlay no longer sizes itself from the shared render buffer')
+      .toMatch(/resolveRenderBuffer\(/);
+    expect(MASK, 'the mask is back on the window and the device pixel ratio')
+      .not.toMatch(/devicePixelRatio/);
+    expect(MASK, 'setSize would re-apply a pixel ratio on top of the dimensions already in w/h')
       .toMatch(/setSize\(w, h, false\)/);
   });
 });

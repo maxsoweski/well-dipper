@@ -58,6 +58,7 @@
  */
 
 import * as THREE from 'three';
+import { resolveRenderBuffer } from '../rendering/renderBuffer.js';
 
 /**
  * The `Object3D.layers` bit the cabin's occluders are put on.
@@ -292,16 +293,29 @@ export class CabinMask {
   /**
    * Match `#targeting-overlay`'s BACKING STORE exactly.
    *
-   * Same formula as `TargetingReticle._resize` (`innerWidth * dpr`, rounded) so
-   * the erase is 1:1 and no resampling happens at `drawImage`. Full resolution
-   * on purpose: 782 triangles is nothing for a GPU, and a reduced-resolution
-   * mask would put the whole feature's credibility on whether a ~7 px rib still
-   * cuts cleanly.
+   * ⭐ THE SAME SOURCE, NOT THE SAME FORMULA. This was `innerWidth * dpr` — a second copy of
+   * `TargetingReticle._resize`'s arithmetic, kept in step by hand. Since chrome-and-ui-at-240p the
+   * overlay's backing store IS the world render buffer, so both files now read the one object
+   * `RetroRenderer.resize()` writes. Two derivations of a number that must agree is exactly what
+   * produced the 13.5-pixel checker (see `pixelScaleUniform.js`).
+   *
+   * ⛔ NOT OPTIONAL DRESSING, AND NOT A PERFORMANCE TWEAK. `_applyCabinMask` does
+   * `drawImage(mask, 0, 0, canvas.width, canvas.height)` with smoothing OFF. Left at full window
+   * resolution the mask would be POINT-SAMPLED down ~4.7x onto a buffer whose pixel centres do not
+   * coincide with its own — a cut that flickers holes along every thin rib as the head moves. The
+   * old comment's "full resolution on purpose … a reduced-resolution mask would put the whole
+   * feature's credibility on whether a ~7 px rib still cuts cleanly" was right about the risk and
+   * is now answered the other way round: at buffer resolution the rib and the cut are on the SAME
+   * grid, so the question of a fractional rib does not arise. That is measured by
+   * `_cabinMaskCoverage()` against the standing oracle, not assumed.
    */
   _syncSize() {
-    const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
-    const w = Math.max(1, Math.round((typeof window !== 'undefined' ? window.innerWidth : 1) * dpr));
-    const h = Math.max(1, Math.round((typeof window !== 'undefined' ? window.innerHeight : 1) * dpr));
+    const b = resolveRenderBuffer(
+      (typeof window !== 'undefined' ? window.innerWidth : 1),
+      (typeof window !== 'undefined' ? window.innerHeight : 1),
+    );
+    const w = Math.max(1, Math.round(b.width));
+    const h = Math.max(1, Math.round(b.height));
     if (w === this._w && h === this._h) return;
     this._w = w;
     this._h = h;
