@@ -63,7 +63,8 @@ const BRACKET_MIN_HALF = 6;   // buffer px — smallest half-width of bracket sq
 const BRACKET_MAX_HALF = 9999; // buffer px — body fills screen (camera on body, dist<=0); callers clamp to viewport
 const BRACKET_MARGIN   = 3;   // buffer px — gap between bracket square and body edge
 const BRACKET_EDGE_MARGIN = 8; // buffer px — keep brackets this far from viewport edge
-const BRACKET_ARM_LEN = 4;    // buffer px — length of each L arm
+const BRACKET_ARM_LEN = 3;    // buffer px — 3 texels x 4.26 magnification = 12.8 screen px, which is
+                              // what the old 12-CSS-px arm measured. 4 made the arms LONGER than before.
 const BRACKET_THICK_TENT = 1;
 const BRACKET_THICK_SEL  = 2;
 
@@ -71,7 +72,7 @@ const BRACKET_THICK_SEL  = 2;
 // so every distant body reads as the same quiet marker. Sized for a chunky
 // retro feel so it doesn't get lost against the starfield.
 const GHOST_HALF      = 4;    // buffer px — half-width of ghost bracket square
-const GHOST_ARM_LEN   = 3;    // buffer px — length of each L arm
+const GHOST_ARM_LEN   = 3;    // buffer px — clamped to 2 by the arm rule at GHOST_HALF 4
 const GHOST_THICK     = 1;    // buffer px — line thickness
 
 // Pixel grid size — brackets snap to this for retro chunky look.
@@ -279,29 +280,47 @@ export class TargetingReticle {
     const cxi = Math.round(cx);
     const cyi = Math.round(cy);
     const h = Math.round(half / PX) * PX;
-    const arm = Math.max(3, Math.round(armLen / PX));
     const t = Math.max(1, Math.round(thickness / PX)) * PX;
+    // ⛔ THE ARM MUST BE CLAMPED OR THE CORNERS MERGE INTO A BOX. The clear span left in the middle
+    // of an edge is `(2h+1) - 2*(t + arm)`; at the minimum half-width with a 2-texel selected stroke
+    // an unclamped arm of 3 leaves ONE texel, which reads as a solid rectangle rather than four
+    // corners. `h - t - 1` keeps at least three texels of daylight at every size and weight.
+    const arm = Math.max(1, Math.min(Math.round(armLen / PX), h - t - 1));
+
+    // ── ⭐ FOUR CORNERS OF A SLIGHTLY ROUNDED SQUARE (Max, 2026-09-07) ──
+    //
+    // Each corner is TWO rects and the corner block itself is left EMPTY. That hole is the whole
+    // shape: it chamfers the vertex so the square reads as rounded, and it is what makes these read
+    // as CORNERS rather than as tick marks.
+    //
+    //   . █ █ █        ← horizontal arm: t deep on the outer edge, starting ONE STROKE in
+    //   █ . . .        ← the corner block, empty — this is the rounding
+    //   █
+    //   █              ← vertical arm: t wide on the outer edge, starting ONE STROKE down
+    //
+    // ⛔⛔ DO NOT "FIX" THIS BACK INTO AN L. The version of this file before 2026-09-07 carried an
+    // ASCII diagram showing the vertical arm offset one block INWARD of the horizontal — and the
+    // CODE did the opposite, stepping it outward. The comment was the thing that was wrong. Making
+    // the code match it turned every corner into a T, which Max caught on sight: *"the reticle no
+    // longer reads like the same shape at all. The shape we're going for is the four corners of a
+    // slightly rounded square."* The shape is now stated as rects rather than as offsets into a
+    // loop, so there is nothing left to misread.
+    //
+    // `band` is the t-thick strip lying ON the outer edge; `run` is the arm-long strip starting one
+    // stroke in from the corner. Both are expressed as a MINIMUM coordinate, because fillRect takes
+    // a top-left — which is why the two signs are not symmetric to look at even though the geometry
+    // they produce is.
+    const band = (o, s) => (s > 0 ? o - t + 1 : o);
+    const run = (o, s) => (s > 0 ? o - t - arm + 1 : o + t);
 
     // Four corners: sx/sy point from center toward the corner
     const signs = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
     for (const [sx, sy] of signs) {
-      // Outer corner point
+      // Outer corner point — the extreme lit texel of the square on both axes.
       const ox = cxi + sx * h;
       const oy = cyi + sy * h;
-
-      // Horizontal arm: along the outer edge, running inward (toward center)
-      for (let i = 0; i < arm; i++) {
-        const bx = ox - sx * i * PX;
-        ctx.fillRect(bx - (sx > 0 ? t - PX : 0), oy - (sy > 0 ? t - PX : 0), t, t);
-      }
-
-      // Vertical arm: offset one STROKE inward on the horizontal axis, running inward (toward
-      // center) on the vertical axis. Starts 1 block from the corner (block 0 is the step/gap).
-      for (let i = 1; i < arm; i++) {
-        const by = oy - sy * i * PX;
-        const vx = ox - sx * t;
-        ctx.fillRect(vx - (sx > 0 ? t - PX : 0), by - (sy > 0 ? t - PX : 0), t, t);
-      }
+      ctx.fillRect(run(ox, sx), band(oy, sy), arm, t);   // horizontal arm
+      ctx.fillRect(band(ox, sx), run(oy, sy), t, arm);   // vertical arm
     }
   }
 
