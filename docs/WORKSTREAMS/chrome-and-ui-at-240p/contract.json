@@ -1,0 +1,120 @@
+{
+  "workstream": "chrome-and-ui-at-240p",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "statement": "The cockpit is drawn at the game's resolution, not the window's — its cabin, bezels and dials land on the same pixel grid as the world behind them instead of sitting on top of it sharp.",
+      "layer": "integration",
+      "live": true,
+      "verifyVia": {
+        "input": "Enter HELM with Resolution set to 240p, then change it to 480p and back.",
+        "observable": "retroRenderer.cockpitTarget.height equals the resolution setting (240, then 480), not window.innerHeight. Today it is allocated at raw window size at RetroRenderer.js:976 — the only target in resize() that skips bufferForLines()."
+      }
+    },
+    {
+      "id": "AC-2",
+      "statement": "No text on a cockpit panel is drawn with fewer pixel rows than a letter needs to be a letter. Where the current type scale fails that, the panel is redesigned — fewer, larger rows — rather than the text being exempted from the resolution.",
+      "layer": "integration",
+      "live": true,
+      "verifyVia": {
+        "input": "Open each cockpit panel at 240p.",
+        "observable": "Every active type tier measures at least 5 buffer pixels of cap height. A panel subtends 14.25 degrees of a 70-degree FOV, so at 240 lines it is 48.9 buffer px tall — today body (H/17) is 2.9 and label (H/20) is 2.4, both below the floor. The tier ratios are PhosphorScreen.js:195-197."
+      }
+    },
+    {
+      "id": "AC-3",
+      "statement": "The panels still say what they need to say. Cutting rows to make the type bigger must not lose a readout the pilot actually flies with.",
+      "layer": "integration",
+      "live": true,
+      "verifyVia": {
+        "input": "Fly a supercruise leg and a warp arrival with the cockpit up at 240p.",
+        "observable": "Every value the flight loop writes to a panel is still present and legible on some panel: mode, speed, target, and the nav readouts AutopilotNavSequence drives. No field is silently dropped to make room."
+      }
+    },
+    {
+      "id": "AC-4",
+      "statement": "The nav computer on the glass coarsens with the cabin and is still operable — it is a cockpit panel in HELM, so it cannot be exempted, and it is the surface Max steers with, so it cannot be unreadable either.",
+      "layer": "integration",
+      "live": true,
+      "verifyVia": {
+        "input": "Press N in HELM at 240p, use the nav computer to pick a destination, and confirm the same flow via the mobile dock and an autopilot-initiated open.",
+        "observable": "liveNavComputer() still resolves to the cockpit panel (main.js:5630), the panel renders at the world's resolution, its type clears the same floor as AC-2, and a destination can be selected and jumped to. The DOM fallback still appears in ORRERY."
+      }
+    },
+    {
+      "id": "AC-5",
+      "statement": "The orbit lines match — the green ellipses stop being crisp vector strokes over a chunky world.",
+      "layer": "integration",
+      "live": true,
+      "verifyVia": {
+        "input": "Sit in ORRERY at 240p with the minimap visible, then sweep Resolution 144p -> 720p.",
+        "observable": "The rings share the world's pixel grid and stay continuous at grazing angles. The minimap's rings do not read finer than the world's at any setting — today the minimap draws into a fixed 320-square buffer, so its lines are 2.68x finer at 240p and the relationship INVERTS by 720p."
+      }
+    },
+    {
+      "id": "AC-6",
+      "statement": "The HUD and the targeting reticle match.",
+      "layer": "integration",
+      "live": true,
+      "verifyVia": {
+        "input": "Select a body in HELM and in ORRERY at 240p.",
+        "observable": "The reticle and HUD share the world's pixel grid rather than being drawn crisp on a DOM canvas at device resolution over it."
+      }
+    },
+    {
+      "id": "AC-7",
+      "statement": "The out-of-game harness stays sharp — the settings panel and the title screen are what Max configures the game with, and the split exists so they do not degrade.",
+      "layer": "integration",
+      "live": true,
+      "verifyVia": {
+        "input": "Open the settings panel with P at 240p.",
+        "observable": "Settings and title-screen text render as full-resolution DOM, unchanged from today. Nothing in this workstream routes them through the low-res buffer."
+      }
+    },
+    {
+      "id": "AC-8",
+      "statement": "Nothing already accepted this session regresses.",
+      "layer": "integration",
+      "live": false,
+      "verifyVia": {
+        "input": "Run the suite and the render-lines and magnitude fences.",
+        "observable": "Buffer height still equals the resolution setting across window sizes with the aspect preserved; the star still out-reads the brightest background star; the flare glow still terminates without a black disc; the failing-test baseline is unchanged at 20 across the same 8 files."
+      }
+    },
+    {
+      "id": "AC-9",
+      "statement": "The whole game reads as a 5th generation game.",
+      "layer": "uat",
+      "verifyVia": {
+        "input": "Max flies a leg in HELM and sits in ORRERY, with the cockpit, HUD, nav computer and orbit lines all in shot.",
+        "observable": "Max's holistic judgement that the image coheres as one fifth-generation picture rather than a 240p world with modern chrome over it. No agent renders this verdict."
+      }
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/rendering/renderLines.js — the line-count setting and bufferForLines(); the cockpit target must start consuming it",
+      "src/rendering/pixelScaleUniform.js and skyPixelScale.js — the derived magnification every dither cell and point size divides by",
+      "src/rendering/posterizeLevels.js — the 31-level RGB555 quantum",
+      "src/cockpit/PhosphorScreen.js:195-197 — the display/body/label/lead type ratios, and the 14.25-degree panel subtense measured off cockpit.glb",
+      "cockpit.glb geometry and its Eye_Point, which fix the panels' angular size and are NOT changing"
+    ],
+    "outputs": [
+      "RetroRenderer's composite — cockpitTarget mixes over the world at RetroRenderer.js:896, after film grain at :881, so the cabin currently never receives grain",
+      "The final image Max judges: world, sky, cockpit, HUD and DOM harness together",
+      "src/ui/SystemMap.js — the minimap's fixed 320-square buffer, a second pixel scale that shares the screen with the world's"
+    ],
+    "mustStayWorking": [
+      "The line-count invariant: buffer height equals the setting on every window, aspect preserved",
+      "The apparent-magnitude law and the flare's COVERAGE falloff, both accepted this session",
+      "The cockpit's PhosphorDither one-ink law — lane F's separate current design position, NOT in scope",
+      "Nav computer operability through its single door: the N key, the mobile dock and AutopilotNavSequence all route via _openCockpitNav (main.js:5912)",
+      "The DOM nav-computer fallback for ORRERY and for a failed GLB load",
+      "setCockpit(null, null) still killing the cockpit pass entirely rather than drawing a transparent one (RetroRenderer.js:150)",
+      "Mobile: the portrait HUD branch at 0.35 of screen width, a third pixel scale nobody has reasoned about"
+    ]
+  }
+}

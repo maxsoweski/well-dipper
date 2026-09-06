@@ -2,34 +2,66 @@
 
 ## Why we care
 
-Max, 2026-09-05, immediately after closing the apparent-magnitude arc:
+Max, 2026-09-06, when the cockpit's type scale turned out not to survive 240p:
 
-> *"from here, scope out and implement versions of the nav computer, the cockpit, the orbit lines,
-> the ui, etc. that match our new resolution scheme."*
+> *"I want the whole game to read as a 5th gen game (there are things that are going to be
+> anachronistic and I'm totally fine with that, but some things like the resolution are harder
+> limits to get that aesthetic); so we simply need to redesign anything that does not read properly
+> at this new resolution; if that's true of the in-game hud and nav panels etc. then that's where we
+> go next."*
 
-This is the last of the seven surfaces the 2026-09-06 inventory named, and it has been queued behind
-the starfield by his own ruling since then — *"yes we still need to do this once we figure out the
-starfield"*. The starfield is now figured out: resolution is a line count, the close star reads as a
-star, and in-system bodies out-read the field behind them. What is left is everything the ship and
-the interface put in front of that world, all of which still draws at full native resolution against
-a 240-line picture.
+⭐ **THAT SENTENCE IS THE WHOLE SCOPE DISCIPLINE, AND IT INVERTS THE USUAL ONE.** The resolution is
+not a cost to be worked around; it is the hard constraint everything else bends to. When a surface
+does not read at 240p, the answer is to **redesign the surface**, never to exempt it from the
+resolution. Anachronism elsewhere is explicitly fine — he said so — so nothing here needs to argue
+about period accuracy in general. It only has to hold the one line that is not negotiable.
 
-The through-line, in one sentence: **the world stopped being modern and the chrome did not.**
+⛔ **THIS RETIRES THE "EXEMPT THE TEXT" OPTION BY NAME.** It was offered and not taken. Do not
+reintroduce it as a fix when a panel proves hard to read; that is the failure mode this paragraph
+exists to prevent.
+
+The immediate occasion: this is the last of the seven surfaces the 2026-09-06 inventory named,
+queued behind the starfield by his own earlier ruling — *"yes we still need to do this once we
+figure out the starfield"*. The starfield is now figured out: resolution is a line count, the close
+star reads as a star, and in-system bodies out-read the field behind them. What is left is
+everything the ship and the interface put in front of that world.
 
 ## The ruling that shapes the scope (Max, 2026-09-05)
 
-Asked what "match our new resolution scheme" meant, he chose a **per-surface split** and then
-overruled the one documented objection:
+Asked what "match our new resolution scheme" meant, he first chose a **per-surface split**, then
+overruled the one documented objection, and then — when the arithmetic came back — replaced the
+split's *rationale* with the harder rule above. The surviving reading, which both his messages
+support: **everything IN-GAME goes to 240p and is redesigned if it fails there; the out-of-game
+harness does not.** His qualifier was "the in-game hud and nav panels"; the settings panel and
+title screen are the harness you use to configure the game, not the game.
 
 - **Into the 240p grid:** the cockpit, the orbit lines, the HUD, the reticle, body labels — the
   things the ship *contains*, which belong to the same image as the world.
-- **Staying sharp:** the settings panel, the nav computer, body-info text, the title screen — the
-  layer you pull *over* the game to operate it, which is not part of the fiction.
+- **Staying sharp:** the settings panel and the title screen — the out-of-game harness.
+- ⛔ **THE NAV COMPUTER MOVED SIDES, AND IT HAD TO.** The first split listed it as staying sharp.
+  That was not implementable: `main.js:5630` `liveNavComputer()` returns the COCKPIT panel whenever
+  the cockpit renders, and `main.js:5900` says it outright — *"IN HELM THE NAV COMPUTER IS ON THE
+  GLASS ... There is no overlay to show."* The DOM overlay is only the ORRERY / failed-GLB fallback.
+  So "cockpit at 240p" and "nav computer sharp" named the same pixels. Under the rule above it
+  coarsens with the cabin and gets **redesigned until it reads**.
 - **The cockpit goes in whole, text and all.** `RetroRenderer.js:253` says the cockpit is full-res
   *"because the panels carry text the pilot has to read at 17 degrees"*. He chose "All of it at
-  240p" against that note, knowing it means ~5px glyphs on the readouts he uses while flying. The
-  era genuinely did this. ⭐ **The constraint is not forgotten, it is overruled** — do not quietly
+  240p" against that note. ⭐ **The constraint is not forgotten, it is overruled** — do not quietly
   reinstate it.
+
+⚠ **AND THE NUMBER HE APPROVED WAS MINE AND IT WAS WRONG BY 2x.** I told him "~5px glyphs". The type
+scale is fixed ratios of panel height (`PhosphorScreen.js:195-197`: display H/6, body H/17, label
+H/20) and the panels subtend **14.25 degrees** of a 70-degree FOV — measured off `cockpit.glb` from
+its own Eye_Point on 2026-07-29, not assumed. At 240 lines a panel is `14.25/70 x 240` = **48.9
+buffer px**, so display lands at 8.1, body at **2.9** and label at **2.4**. The tiers he actually
+reads are at half the figure he was given, and `PhosphorScreen.js:81` already calls H/20 "THE
+FLOOR". Re-put to him with the real arithmetic, he did not retreat — he generalised, which is the
+quote at the top of this file.
+
+⚠ Note the trap in that arithmetic: the glyphs' PHYSICAL size on screen barely changes (2.4 buffer
+px x 4.708 magnification is about 11 screen px, which is what they are today). What collapses is the
+number of pixel ROWS available to draw a letterform, and two or three rows cannot make a legible
+letter at any magnification. Size is not the problem; resolution is.
 
 ⚠ He accepted the stated risk of the split: **the seam is visible when both are on screen at once.**
 
