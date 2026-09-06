@@ -761,7 +761,37 @@ is not yet a check.
   name small underneath". The full designation comes OFF the glass; it is not relegated to small
   type. Nine characters at scale 1 is what the panel has, and a nine-character name at the display
   tier would be 106 texels on a 55-texel panel, so the hero tier cannot carry a name at all.
-- **(c) The value budget — OPEN.** *"3. let me see what your rec looks like"* → the lab above.
+- **(c) The value budget — CLOSED at five characters.** *"1. this is fine"*, against the lab. `ATM`
+  keeps the **pressure**; the gas mix comes off.
+
+### ⛔⛔ AND THE CONSTRAINT HE ATTACHED TO IT, WHICH OUTRANKS THE LAYOUT
+
+> *"know we'll probably switch this up in the near future so don't get rid of any code that allows
+> you to display what we want to display."* — Max, 2026-09-08
+
+**The gas mix comes off the GLASS. It does not come out of the PIPELINE.** Those are different
+edits and only the first one was approved.
+
+Concretely, and this is what the next session must not get wrong:
+
+- ⛔ **Do not delete `formatAtmosphere`'s composition clause**, and do not make it stop returning the
+  full `"co2-n2 0.85 bar"`. It keeps producing what it produces.
+- ⛔ **Do not remove a row from `INFO_ROWS`.** All seven stay. `INFO_VALUE_MAX_CHARS` is a backstop
+  and is not the place to encode a panel's width either.
+- ✅ **The panel decides what it can draw.** Choosing the pressure over the mix is a LAYOUT decision
+  and it lives in `InfoPanel.js`, downstream of the readout, where changing our mind later is one
+  edit in one file rather than an archaeology exercise.
+
+⭐ This is the module's own design being honoured rather than a new rule: `InfoReadout.js`'s header
+says *"THE PIPELINE IS THE DELIVERABLE AND THE FIELDS ARE DISPOSABLE"*, and the whole reason it is a
+table is that *"dropping one field meant three coordinated edits in three files — which is exactly
+the shape of change that does not get made, so the panel silently ossifies"*. Deleting a formatter to
+make a five-character row fit would ossify it around a decision Max has already said is temporary.
+
+⚠ The same test applies to every other panel in this batch. `MODE:` losing its prefix, the mass-lock
+banner going to eight characters, TARGET dropping the full designation — **all of those are panels
+choosing what to draw, none of them is a readout losing the ability to produce it.** If an edit
+makes a string unproducible rather than undrawn, it is the wrong edit.
 
 ---
 
