@@ -193,23 +193,44 @@ export const BLINK_MS = Object.freeze({
  * writes the numbers out itself, because a test that reads its expectations from
  * the file under test agrees with every future edit by construction.
  */
-export const TYPE_UNITS = Object.freeze({
-  display: 10,   // two cells tall — the SAME face at integer scale 2, never a second face
-  body: 5,       // one cell
-  label: 5,      // ⭐ MERGED WITH BODY. A 5-row face has no size between them; pretending
-                 //    otherwise put a second name on one number and invited a fractional one.
-  pad: 1,
-  lead: 6,       // one cell plus one row of leading
-});
+/**
+ * The grid, in rows, BEFORE the resolution multiplier — and every tier is read off the LIVE face
+ * rather than typed.
+ *
+ * ⛔ A FUNCTION, NOT A FROZEN OBJECT, AND THAT IS THE WHOLE POINT. It was `{ body: 5, lead: 6 }`
+ * as literals, which is correct for exactly one face. `PixelText`'s header promises the faces are
+ * switchable so they can be compared in the running game — and under literals, switching to the
+ * 5x7 face would draw seven-row glyphs on six-row leading, colliding every line, with the layout
+ * still believing it was five. The face is a shared MUTABLE object for the same reason
+ * `RENDER_BUFFER` is: a build-time read strands every consumer on whichever face was live at boot.
+ *
+ *   display  two cells — the SAME face at integer scale 2, never a second face
+ *   body     one cell
+ *   label    ⭐ MERGED WITH BODY. A five-row face has no size between them; pretending otherwise
+ *            put a second name on one number and invited a fractional one.
+ *   pad      one grid unit
+ *   lead     one cell plus one row of air
+ */
+export function typeUnits() {
+  return Object.freeze({
+    display: 2 * FACE.h,
+    body: FACE.h,
+    label: FACE.h,
+    pad: 1,
+    lead: FACE.h + 1,
+  });
+}
 
 /**
- * Rows the design grid needs, derived from the face rather than typed.
- * `2*pad + body + 6*lead` — a heading line and six stacked rows.
- * On the shipped 5x5 face that is 2 + 5 + 36 = 43, which is why the upper panel's
- * measured 42.84 rows is the number every cockpit figure comes off.
+ * Rows the design grid needs: `2*pad + body + 6*lead` — a heading line and six stacked rows.
+ * On the shipped 5x5 face that is 2 + 5 + 36 = **43**, which is why the upper panel's measured
+ * 42.84 rows is the number every cockpit figure comes off. On the 5x7 alternative it is 57, and
+ * a 43-row panel then honestly reports five lines instead of seven — which is exactly the trade
+ * `PixelText`'s header states, now computed rather than asserted.
  */
 export function gridRows() {
-  return 2 * TYPE_UNITS.pad + TYPE_UNITS.body + 6 * TYPE_UNITS.lead;
+  const u = typeUnits();
+  return 2 * u.pad + u.body + 6 * u.lead;
 }
 
 /**
@@ -365,17 +386,18 @@ export function typeScale(bufferHeightPx) {
   // degraded) rather than collapsing every size to 0, which is the blank-panel-clean-console
   // failure the throw above exists to prevent.
   const unit = Math.max(1, Math.floor(h / gridRows()));
+  const u = typeUnits();
   return Object.freeze({
-    display: TYPE_UNITS.display * unit,
-    body: TYPE_UNITS.body * unit,
-    label: TYPE_UNITS.label * unit,
-    pad: TYPE_UNITS.pad * unit,
-    lead: TYPE_UNITS.lead * unit,
+    display: u.display * unit,
+    body: u.body * unit,
+    label: u.label * unit,
+    pad: u.pad * unit,
+    lead: u.lead * unit,
     /** The grid unit itself — what `hair`, insets and tick lengths are measured in. */
     unit,
     /** How many `lead`-spaced rows fit under a heading. Painters must not run off the glass. */
-    lines: Math.max(1, Math.floor((h - 2 * unit - TYPE_UNITS.body * unit)
-      / (TYPE_UNITS.lead * unit)) + 1),
+    lines: Math.max(1, Math.floor((h - 2 * u.pad * unit - u.body * unit)
+      / (u.lead * unit)) + 1),
   });
 }
 
