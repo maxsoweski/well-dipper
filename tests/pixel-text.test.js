@@ -192,11 +192,11 @@ describe('PixelText legibility floor', () => {
   }
 
   it('the SHIPPED face keeps every letter and digit apart', () => {
-    setPixelFace('5x7');
+    setPixelFace('5x5');
     const pairs = confusablePairs(2);
     // D/O are near-identical in every typeface ever cut; that one is honest and is the only
     // letter-pair allowed through. Any NEW entry here is a glyph that needs redrawing.
-    expect(pairs, `confusable at <=2px on the 5x7 face: ${pairs.join(' ')}`).toEqual(['D/O=2px']);
+    expect(pairs, `confusable at <=2px on the ${FACE.name} face: ${pairs.join(' ')}`).toEqual(['D/O=2px']);
   });
 
   it('…and the 3x5 reference face still FAILS it, which is why it is not the shipped face', () => {
@@ -206,7 +206,13 @@ describe('PixelText legibility floor', () => {
     const pairs = confusablePairs(2);
     expect(pairs.length).toBeGreaterThan(8);
     expect(pairs).toContain('M/N=1px');
+    setPixelFace('5x5');
+  });
+
+  it('the taller A/B alternative clears the same bar, so the choice is size and not legibility', () => {
     setPixelFace('5x7');
+    expect(confusablePairs(2)).toEqual(['D/O=2px']);
+    setPixelFace('5x5');
   });
 
   it('every face renders the same character set, so the A/B cannot throw on one of them', () => {
@@ -217,6 +223,6 @@ describe('PixelText legibility floor', () => {
       const missing = [...LITERALS].filter((ch) => !hasGlyph(ch));
       expect(missing, `${face} cannot render ${missing.join('')}`).toEqual([]);
     }
-    setPixelFace('5x7');
+    setPixelFace('5x5');
   });
 });

@@ -39,7 +39,7 @@
  */
 
 /**
- * ── ⭐ THE FACE IS 5x7, AND THE 3x5 IT REPLACED WAS MEASURABLY UNREADABLE ──────────────────────
+ * ── ⭐ THE FACE IS 5x5, AND THE 3x5 IT REPLACED WAS MEASURABLY UNREADABLE ──────────────────────
  *
  * Max, 2026-09-07: *"this font is no longer a good fit for this resolution"* and *"all in-game,
  * meaning the hud and the font on the nav screen/panels; all should be consistent"*.
@@ -51,19 +51,20 @@
  *
  *     3x5 (the old face)   12 confusable pairs.  M/N differed by ONE pixel of fifteen, and so did
  *                          M/H, N/W, W/H, H/K, U/V and K/X. "MODE: MANUAL" was a row of blobs.
- *     5x5                  10 pairs. Fixes the letters and then loses the DIGITS: S/5, 6/8 and 8/9
- *                          all land within two pixels. Disqualifying for a speed readout — it is a
- *                          false economy, and it is why the row budget below did not win.
- *     5x7 (this face)       2 pairs, and both are honest: D/O are near-identical in every typeface
- *                          ever cut, and `-` vs U+2014 are MEANT to differ only in length.
+ *     5x5 (this face)      ONE pair — D/O, near-identical in every typeface ever cut. ⛔ My FIRST
+ *                          5x5 draft scored ten, losing S/5, 6/8 and 8/9, and I reported the size
+ *                          as disqualified on that basis. Wrong: redrawing six glyphs fixed it. A
+ *                          measurement of my draft was not a measurement of the cell.
+ *     5x7                  Also one pair on the same population, at 40% more height. Kept as the
+ *                          A/B alternative; Max asked for "about 30% smaller" than it.
  *
- * ⚠ THE COST IS ROWS, AND IT LANDS ON BATCH 2, NOT HERE. A 7-row cap makes the HUD cluster ~38 of
- * 240 rows instead of 30 — fine. The cockpit panel is 42.84 rows total (`panelPose.js:34-49`), so a
- * 7-row line fits about FIVE lines where a 5-row line fit eight. That is a decision about what the
- * panels should SAY, and the answer is fewer, larger lines — not a face whose digits blur.
+ * ⚠ ROWS ARE THE SCARCE RESOURCE AND THAT IS WHY 5x5 WINS. The cockpit panel is 42.84 rows total
+ * (`panelPose.js:34-49`): a 5-row line fits about eight lines there, a 7-row line about five. Since
+ * both faces score the same on the legibility gate, the shorter one is strictly better — it buys
+ * batch 2 three more lines per panel for nothing.
  *
- * ⛔ THE FACES ARE SWITCHABLE ONLY SO THEY CAN BE COMPARED IN THE RUNNING GAME. 5x7 is the shipped
- * face; 3x5 is kept purely as the A/B reference. Do not add a third without running the
+ * ⛔ THE FACES ARE SWITCHABLE ONLY SO THEY CAN BE COMPARED IN THE RUNNING GAME. 5x5 is the shipped
+ * face; 5x7 is the taller alternative and 3x5 is kept as the reference the gate proves FAILS. Do not add a third without running the
  * confusability gate on it, and do not let a consumer pick a face per-surface — Max's ruling is that
  * the HUD, the reticle and the cockpit panels are ONE face.
  */
@@ -131,9 +132,73 @@ const FACES = Object.freeze({
     }),
   }),
   /**
-   * THE SHIPPED FACE. Five columns is the width at which a letter can be distinguished by its
-   * middle rather than only by its outline, and seven rows is what lets G, R, S and the digits keep
-   * their counters. Uppercase only, by design — every 5th-gen HUD this is imitating was.
+   * ⭐ THE SHIPPED FACE. Five columns is the width at which a letter can be distinguished by its
+   * MIDDLE rather than only by its outline; five rows is as short as that can be carried.
+   *
+   * ⛔ AND MY FIRST 5x5 DRAFT WAS THE REASON I WRONGLY CALLED THIS SIZE IMPOSSIBLE. I measured a
+   * hastily-cut 5x5 at ten confusable pairs — S/5, 6/8 and 8/9 among them — and reported the CELL
+   * as a false economy. It was the CUTTING that was false. Max asked for "about 30% smaller"
+   * anyway, and a careful redraw of six glyphs (F, M, N, P, 5, 6, 9) brings it to ONE pair, which
+   * is exactly what the 5x7 scores. Same legibility, 29% less height.
+   * ⚠ The lesson is the session's fourth of its shape: a measurement of MY draft is not a
+   * measurement of the design space.
+   */
+  '5x5': Object.freeze({
+    w: 5, h: 5, advance: 6, glyphs: Object.freeze({
+  A: [0b01110, 0b10001, 0b11111, 0b10001, 0b10001],
+  B: [0b11110, 0b10001, 0b11110, 0b10001, 0b11110],
+  C: [0b01111, 0b10000, 0b10000, 0b10000, 0b01111],
+  D: [0b11110, 0b10001, 0b10001, 0b10001, 0b11110],
+  E: [0b11111, 0b10000, 0b11110, 0b10000, 0b11111],
+  F: [0b11111, 0b10000, 0b11110, 0b10000, 0b10000],
+  G: [0b01111, 0b10000, 0b10011, 0b10001, 0b01111],
+  H: [0b10001, 0b10001, 0b11111, 0b10001, 0b10001],
+  I: [0b11111, 0b00100, 0b00100, 0b00100, 0b11111],
+  J: [0b00111, 0b00010, 0b00010, 0b10010, 0b01100],
+  K: [0b10001, 0b10010, 0b11100, 0b10010, 0b10001],
+  L: [0b10000, 0b10000, 0b10000, 0b10000, 0b11111],
+  M: [0b10001, 0b11011, 0b10101, 0b10001, 0b10001],
+  N: [0b11001, 0b10101, 0b10101, 0b10011, 0b10001],
+  O: [0b01110, 0b10001, 0b10001, 0b10001, 0b01110],
+  P: [0b11110, 0b10001, 0b10001, 0b11110, 0b10000],
+  Q: [0b01110, 0b10001, 0b10101, 0b10010, 0b01101],
+  R: [0b11110, 0b10001, 0b11110, 0b10010, 0b10001],
+  S: [0b01111, 0b10000, 0b01110, 0b00001, 0b11110],
+  T: [0b11111, 0b00100, 0b00100, 0b00100, 0b00100],
+  U: [0b10001, 0b10001, 0b10001, 0b10001, 0b01110],
+  V: [0b10001, 0b10001, 0b10001, 0b01010, 0b00100],
+  W: [0b10001, 0b10001, 0b10101, 0b10101, 0b01010],
+  X: [0b10001, 0b01010, 0b00100, 0b01010, 0b10001],
+  Y: [0b10001, 0b01010, 0b00100, 0b00100, 0b00100],
+  Z: [0b11111, 0b00010, 0b00100, 0b01000, 0b11111],
+  0: [0b01110, 0b10011, 0b10101, 0b11001, 0b01110],
+  1: [0b00100, 0b01100, 0b00100, 0b00100, 0b01110],
+  2: [0b11110, 0b00001, 0b01110, 0b10000, 0b11111],
+  3: [0b11110, 0b00001, 0b01110, 0b00001, 0b11110],
+  4: [0b10010, 0b10010, 0b11111, 0b00010, 0b00010],
+  5: [0b11111, 0b10000, 0b11100, 0b00010, 0b11100],
+  6: [0b00110, 0b01000, 0b11110, 0b10001, 0b01110],
+  7: [0b11111, 0b00010, 0b00100, 0b01000, 0b01000],
+  8: [0b01110, 0b10001, 0b01110, 0b10001, 0b01110],
+  9: [0b01110, 0b10001, 0b01111, 0b00010, 0b01100],
+  ' ': [0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
+  '.': [0b00000, 0b00000, 0b00000, 0b00000, 0b00100],
+  ',': [0b00000, 0b00000, 0b00000, 0b00100, 0b01000],
+  ':': [0b00000, 0b00100, 0b00000, 0b00100, 0b00000],
+  '-': [0b00000, 0b00000, 0b01110, 0b00000, 0b00000],
+  '\u2014': [0b00000, 0b00000, 0b11111, 0b00000, 0b00000],
+  '/': [0b00001, 0b00010, 0b00100, 0b01000, 0b10000],
+  '%': [0b11001, 0b11010, 0b00100, 0b01011, 0b10011],
+  '+': [0b00000, 0b00100, 0b01110, 0b00100, 0b00000],
+  '_': [0b00000, 0b00000, 0b00000, 0b00000, 0b11111],
+  '<': [0b00010, 0b00100, 0b01000, 0b00100, 0b00010],
+  '>': [0b01000, 0b00100, 0b00010, 0b00100, 0b01000],
+    }),
+  }),
+  /**
+   * The taller cut, kept as the A/B alternative. Seven rows give G, R, S and the digits roomier
+   * counters, at 40% more height — which is a real cost on a 42.84-row cockpit panel.
+   * Uppercase only, by design — every 5th-gen HUD this is imitating was.
    */
   '5x7': Object.freeze({
     w: 5, h: 7, advance: 6, glyphs: Object.freeze({
@@ -207,7 +272,7 @@ export function setPixelFace(name) {
   return FACE;
 }
 
-setPixelFace('5x7');
+setPixelFace('5x5');
 
 /**
  * The tofu box: a hollow cell, what a real font stack draws for an unmapped codepoint.
