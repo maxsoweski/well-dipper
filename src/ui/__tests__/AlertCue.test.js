@@ -263,7 +263,13 @@ describe('buildAlertCue — words and a blink, never a colour (AC-ALERT-CUE-ONE-
     for (const text of Object.values(ALERT_TEXT)) {
       // Quoted and inside a fillText call: matching the bare substring would let
       // a truncated string ('SLOW') pass against the HUD's longer literal.
-      const drawn = new RegExp(`fillText\\(\\s*'${escapeRe(text)}'`);
+      // ⛔ `drawPixelText` TOO, AND AN OPTIONAL LEADING ARGUMENT. chrome-and-ui-at-240p moved
+      // this overlay onto the repo's one bitmap face, so the words now leave via
+      // `this._drawPixelText('…', …)` — matched as a substring — and a future direct call would
+      // be `drawPixelText(ctx, '…', …)` with the context first. ⛔ The context's variable NAME is
+      // not hard-coded: it is `c` today and pinning that would make this guard about a local.
+      const drawn = new RegExp(
+        `(?:fillText|drawPixelText)\\(\\s*(?:[\\w$.]+\\s*,\\s*)?'${escapeRe(text)}'`);
       expect(drawn.test(hud), `SupercruiseHud.js does not draw '${text}' — the panel ` +
         `and the HUD would show different words for the same danger`).toBe(true);
     }

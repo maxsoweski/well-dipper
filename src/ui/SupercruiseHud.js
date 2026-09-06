@@ -3,8 +3,39 @@
 // Minimal supercruise HUD (AC7): speed readout, throttle bar, virtual-joystick
 // reticle, target marker + drop window. Pure view — main.js passes state each
 // render frame. Pattern: src/ui/TargetingReticle.js (own canvas, _project).
+//
+// ── ⭐ THIS CANVAS LIVES ON THE WORLD'S PIXEL GRID (chrome-and-ui-at-240p, AC-6) ──
+//
+// Max, 2026-09-06: *"I want the whole game to read as a 5th gen game ... so we simply need to
+// redesign anything that does not read properly at this new resolution; if that's true of the
+// in-game hud and nav panels etc. then that's where we go next."*
+//
+// The backing store is the WORLD BUFFER (468x240 at the 240p setting), CSS-stretched to the window
+// with `image-rendering: pixelated` — the same two declarations, in the same order, as `#canvas`
+// (`style.css:22-23`). So one unit in this file is one WORLD pixel, magnified ~4.7x, and the HUD
+// cannot be sharper than the thing it sits on. ⛔ "Keep the text full-res" was offered to Max and
+// NOT taken; do not reintroduce it as a higher-res canvas, a DOM overlay, or a separate sharp pass.
+//
+// THREE CONSEQUENCES THAT ARE NOT OPTIONAL:
+//
+//   1. ⛔ NO `stroke()`, ANYWHERE. A 1-px stroke at an integer coordinate straddles it and lands as
+//      two half-covered grey rows — a NINE-SCREEN-PIXEL smear where one crisp texel was intended.
+//      Every mark here is a `fillRect` at integer coordinates. There is no stroke path on purpose.
+//   2. ⛔ NO `fillText`. A vector face antialiases unconditionally and spends its detail on
+//      fractional edge coverage, which magnifies into flat grey blocks. Every string goes through
+//      `PixelText`, the ONE bitmap face in this repo (`src/rendering/PixelText.js`).
+//   3. ⛔ NO `innerWidth`/`innerHeight` IN THE DRAWING CODE. They are the WINDOW; this canvas is
+//      the BUFFER, and the two differ by the magnification. `this._w`/`this._h` are read off the
+//      canvas itself every frame. Left on `innerWidth`, `_project` alone puts the at-the-body cue
+//      ~4.7x off-screen.
+//
+// ⚠ THE RESOLUTION SETTING CHANGES THE BUFFER WITH NO WINDOW RESIZE AT ALL (`main.js:6266-6271`
+// sets `renderLines` and calls `resize()`), so a `resize` listener alone strands this canvas at the
+// previous resolution. `_syncBuffer()` therefore runs as the FIRST statement of `update()` as well.
 import * as THREE from 'three';
 import { formatSpeed, speedToBarFrac, sublightBarFrac } from './SpeedFormat.js';
+import { resolveRenderBuffer } from '../rendering/renderBuffer.js';
+import { drawPixelText, measurePixelText, pixelTextHeight } from '../rendering/PixelText.js';
 
 // The CONTEXTUAL ETA gate (§targeting-brackets-contextual-eta-design-2026-06-28,
 // Unit 3). The glanceable "M:SS" counter shows ONLY when the player is moving, the
@@ -17,10 +48,42 @@ export function etaVisible({ speed, targetDistance, aimOnTarget } = {}) {
   return speed > 0 && targetDistance != null && !!aimOnTarget;
 }
 
+// ── THE LAYOUT, IN BUFFER PIXELS ──
+// Every number below is world pixels, not CSS pixels. The old values were CSS px against a ~1080-tall
+// window; these are their ~0.222x counterparts, re-rounded to integers and then re-spaced so the
+// 5-row cap height has room. The bottom-left cluster is 30 rows tall (37 with the SUBLIGHT tag) out
+// of 240 — about 12.5% of the screen, up from 7.8% today. That growth is the direct cost of the
+// five-row floor: a letter cannot be a letter in fewer rows, and no magnification adds rows.
+const TEXT_H = pixelTextHeight(1);   // 5
+const LX = 6;                        // left margin of the cluster (was 24 CSS px)
+const BAR_W = 60;                    // log speed bar width (was 180)
+const BAR_H = 4;                     // bar height — 4 so a two-tone fill HAS an interior (was 8)
+const TBAR_W = 40;                   // throttle bar width (was 120), same 2:3 ratio to BAR_W
+const PIN_H = 4;                     // commanded-speed / throttle pin: a 1xPIN_H column (was a triangle)
+const BOTTOM_MARGIN = 3;
+const CROSS_GAP = 3;                 // texels of clear space between screen centre and each arm
+const CROSS_ARM = 4;                 // arm length in texels
+const DOT = 3;                       // deflection dot: a hard 3x3 block
+
+// Inks. The track tone is the dim half of the two-tone bar: a `strokeRect` outline would be a 1-px
+// stroke, which is exactly the smear rule 1 above forbids, so the "empty" part of a bar is a FILL.
+const INK_CYAN = '#9fe8ff';
+const INK_TRACK = '#1e3d47';
+const INK_AMBER = '#ffb84d';
+const INK_GREEN = '#7bff9e';
+const INK_RED = '#ff7b6b';
+const INK_RETICLE = '#64ff82';
+const INK_PIN = '#ffffff';
+
 export class SupercruiseHud {
   constructor(camera) {
     this.camera = camera;
     this.canvas = document.createElement('canvas');
+    // ⭐ The id is what `#supercruise-hud` in style.css hangs the `image-rendering` pair on. It is
+    // NOT set inline here: a browser that supports both declarations must resolve this canvas and
+    // `#canvas` to the same resampling, and the only way to guarantee that is the same two
+    // declarations in the same order in the same stylesheet.
+    this.canvas.id = 'supercruise-hud';
     Object.assign(this.canvas.style, {
       position: 'fixed', inset: '0', display: 'block', pointerEvents: 'none', zIndex: 51,
     });
@@ -28,22 +91,71 @@ export class SupercruiseHud {
     this.ctx = this.canvas.getContext('2d');
     this._v = new THREE.Vector3();
     this._last = null;            // inspection probe
-    this._resize();
-    window.addEventListener('resize', () => this._resize());
+    this._drawn = [];             // what _drawPixelText put on the glass this frame
+    this._w = 1; this._h = 1;
+    this._cssW = -1; this._cssH = -1;
+    this._syncBuffer();
+    window.addEventListener('resize', () => this._syncBuffer());
   }
 
-  _resize() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.canvas.width = innerWidth * dpr; this.canvas.height = innerHeight * dpr;
-    this.canvas.style.width = innerWidth + 'px';
-    this.canvas.style.height = innerHeight + 'px';
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  /**
+   * Match the backing store to the world buffer and the CSS box to the window.
+   *
+   * ⛔ NOT A `_resize()` AND NOT DPR-SCALED. The old one multiplied the window by `devicePixelRatio`
+   * and set a matching context transform, which is the "draw the chrome as sharp as the display
+   * allows" move this whole workstream exists to undo. There is no transform here at all: one unit
+   * is one buffer pixel.
+   */
+  _syncBuffer() {
+    const b = resolveRenderBuffer(innerWidth, innerHeight);
+    if (this.canvas.width !== b.width || this.canvas.height !== b.height) {
+      this.canvas.width = b.width;
+      this.canvas.height = b.height;
+    }
+    // Guarded because `update()` calls this every frame and an unconditional style write is a
+    // layout invalidation per frame for no change.
+    if (this._cssW !== innerWidth || this._cssH !== innerHeight) {
+      this._cssW = innerWidth; this._cssH = innerHeight;
+      this.canvas.style.width = innerWidth + 'px';
+      this.canvas.style.height = innerHeight + 'px';
+    }
+    this._w = this.canvas.width;
+    this._h = this.canvas.height;
   }
+
+  /**
+   * The one text path. A WRAPPER, deliberately — not a `push` beside each call site, because two
+   * adjacent statements drift and the recorded list would then disagree with the glass.
+   *
+   * ⚠ HONEST WEAKENING, FLAGGED NOT HIDDEN. `getDrawnText()` is a class SELF-REPORT, where
+   * `helpers/headlessNav.mjs` deliberately asks the CONTEXT what it drew — because this lane's
+   * source scans were proven evadable seven ways. Bitmap text reaches the context as `fillRect`
+   * calls with no string in them, so a recording context cannot recover it without decoding the
+   * texels back through the glyph table. Mitigations: this single wrapper, the default
+   * `onMissing:'throw'` (an unrenderable literal is loud, not silent), and the reticle geometry
+   * assertions staying at the glass where they always were.
+   */
+  _drawPixelText(str, x, y, opts) {
+    this._drawn.push(String(str));
+    return drawPixelText(this.ctx, str, x, y, opts);
+  }
+
+  /** Every string this HUD put on the glass during the last `update()`, in draw order. */
+  getDrawnText() { return this._drawn.slice(); }
 
   _project(worldPos) {
     this._v.copy(worldPos).project(this.camera);
     if (this._v.z > 1) return null;
-    return { x: (this._v.x * 0.5 + 0.5) * innerWidth, y: (-this._v.y * 0.5 + 0.5) * innerHeight };
+    return { x: (this._v.x * 0.5 + 0.5) * this._w, y: (-this._v.y * 0.5 + 0.5) * this._h };
+  }
+
+  /**
+   * Keep a label fully on the buffer. ⛔ THE FIX IS A CLAMP, NOT A SHORTER STRING. 'SAFE TO DROP'
+   * is 47 buffer px wide where the old 13px-monospace form was ~20, so near the right edge it now
+   * runs off — and it is a readout the pilot flies with, so shortening it is not available.
+   */
+  _clampX(x, str, scale = 1) {
+    return Math.max(2, Math.min(Math.round(x), this._w - measurePixelText(str, scale) - 2));
   }
 
   /** state: {
@@ -63,11 +175,13 @@ export class SupercruiseHud {
    *                           // replacement. See the block below.
    * } */
   update(state) {
-    const c = this.ctx; c.clearRect(0, 0, innerWidth, innerHeight);
+    this._syncBuffer();
+    const c = this.ctx; c.clearRect(0, 0, this._w, this._h);
+    this._drawn.length = 0;
     this._last = state;
     if (!state.visible) return;
-    const cx = innerWidth / 2, cy = innerHeight / 2;
-    c.lineWidth = 1;
+    const w = this._w, h = this._h;
+    const cx = Math.round(w / 2), cy = Math.round(h / 2);
 
     const speed = state.speed || 0;
     const commandedSpeed = state.commandedSpeed || 0;
@@ -109,89 +223,90 @@ export class SupercruiseHud {
     const inWindow = state.dropState === 'in-window'
       || (hasTarget && dropMaxSpeed != null && speed <= dropMaxSpeed);
     const tooFast = state.dropState === 'too-fast';
-    const speedColor = tooFast ? '#ff7b6b' : inWindow ? '#7bff9e' : '#9fe8ff';
+    const speedColor = tooFast ? INK_RED : inWindow ? INK_GREEN : INK_CYAN;
 
     // ── Bottom-left cluster: numeric speed, log speed bar, throttle bar ──
-    const lx = 24;                 // left margin of the cluster
-    const barW = 180;              // log speed bar width
+    // Stacked upward from the bottom margin so the whole cluster tracks the buffer height rather
+    // than a hard-coded 1080-tall window.
+    const tbY = h - BOTTOM_MARGIN - PIN_H - BAR_H;   // throttle bar top
+    const sbY = tbY - 7;                             // speed bar top
+    const spdY = sbY - PIN_H - 1 - TEXT_H - 2;       // numeric speed, top row
+    const subY = spdY - TEXT_H - 2;                  // SUBLIGHT tag, top row
 
     if (showReadouts) {
     // (1) Large numeric speed (the "reads 0" bug fix). formatSpeed returns a
     // magnitude (Math.abs), so prefix "REV " when reversing to read clearly.
+    // ⛔ "Large" is now FIVE ROWS, not 22px. The face has one authored size and the lever if Max
+    // says the speed does not read is `scale: 2` here — which doubles it to a 10-row cap, ~47
+    // screen px at 240p. Not taken on the first landing: 3x today's is a big jump to make unasked.
     const spd = formatSpeed(speed);
     const spdPrefix = speed < 0 ? 'REV ' : '';
-    c.fillStyle = '#9fe8ff';
-    c.font = '22px monospace';
-    c.fillText(`${spdPrefix}${spd.value} ${spd.unit}`, lx, innerHeight - 66);
+    this._drawPixelText(`${spdPrefix}${spd.value} ${spd.unit}`, LX, spdY, { color: INK_CYAN });
 
     // SUBLIGHT mode tag — shown whenever the supercruise drive is dropped out, so
     // the player knows they left supercruise (distinct axis from the flight-assist
     // MODE: readout up top). Amber to match the reverse tone.
     if (state.driveOn === false) {
-      c.fillStyle = '#ffb84d';
-      c.font = '12px monospace';
-      c.fillText('SUBLIGHT', lx, innerHeight - 84);
+      this._drawPixelText('SUBLIGHT', LX, subY, { color: INK_AMBER });
     }
 
     // (2) Horizontal LOG speed bar: fill to actual magnitude (speedToBarFrac is
     // not abs-safe; speed can be negative in reverse); pin at commanded; drop tick.
-    const sbY = innerHeight - 52, sbH = 8;
-    c.strokeStyle = '#9fe8ff';
-    c.strokeRect(lx, sbY, barW, sbH);
+    // ⛔ The track is a FILL, not a strokeRect. At BAR_H = 4 an outline would eat two of the four
+    // rows and leave a two-row interior; the two-tone fill keeps all four rows readable as a level.
+    c.fillStyle = INK_TRACK;
+    c.fillRect(LX, sbY, BAR_W, BAR_H);
     if (state.driveOn === false) {
       // SUBLIGHT: linear bipolar bar — center zero, right = forward, left (amber) = reverse.
-      const cxBar = lx + barW / 2;
+      const cxBar = LX + Math.round(BAR_W / 2);
       const frac = sublightBarFrac(speed, state.sublightCap || 1);
-      c.strokeStyle = '#9fe8ff';
-      c.beginPath(); c.moveTo(cxBar, sbY - 2); c.lineTo(cxBar, sbY + sbH + 2); c.stroke();
-      const w = (barW / 2) * Math.abs(frac);
-      c.fillStyle = frac < 0 ? '#ffb84d' : speedColor;
-      if (frac >= 0) c.fillRect(cxBar, sbY, w, sbH);
-      else c.fillRect(cxBar - w, sbY, w, sbH);
+      const bw = Math.round((BAR_W / 2) * Math.abs(frac));
+      c.fillStyle = frac < 0 ? INK_AMBER : speedColor;
+      if (frac >= 0) c.fillRect(cxBar, sbY, bw, BAR_H);
+      else c.fillRect(cxBar - bw, sbY, bw, BAR_H);
+      // center zero-mark: a 1-px column crossing the bar, one row proud top and bottom so it is
+      // still visible where the fill already covers it.
+      c.fillStyle = INK_CYAN;
+      c.fillRect(cxBar, sbY - 1, 1, BAR_H + 2);
     } else {
       c.fillStyle = speedColor;
-      c.fillRect(lx, sbY, barW * speedToBarFrac(Math.abs(speed)), sbH);
+      c.fillRect(LX, sbY, Math.round(BAR_W * speedToBarFrac(Math.abs(speed))), BAR_H);
     }
 
-    // commanded "pin" (downward triangle above the bar) — actual chases this.
-    const pinX = lx + barW * speedToBarFrac(commandedSpeed);
-    c.fillStyle = '#ffffff';
-    c.beginPath();
-    c.moveTo(pinX - 4, sbY - 7); c.lineTo(pinX + 4, sbY - 7); c.lineTo(pinX, sbY - 1);
-    c.closePath(); c.fill();
+    // commanded "pin" — actual chases this. A 1-px column standing ON the bar, not a triangle: at
+    // this size a triangle is three rows of 3/2/1 texels and reads as a smudge, a column does not.
+    const pinX = LX + Math.round(BAR_W * speedToBarFrac(commandedSpeed));
+    c.fillStyle = INK_PIN;
+    c.fillRect(Math.min(pinX, LX + BAR_W - 1), sbY - PIN_H - 1, 1, PIN_H);
 
     // drop-here tick (vertical mark across the bar) when a target is selected.
     if (hasTarget && dropMaxSpeed != null) {
-      const tickX = lx + barW * speedToBarFrac(dropMaxSpeed);
-      c.strokeStyle = '#7bff9e';
-      c.beginPath(); c.moveTo(tickX, sbY - 2); c.lineTo(tickX, sbY + sbH + 2); c.stroke();
+      const tickX = LX + Math.round(BAR_W * speedToBarFrac(dropMaxSpeed));
+      c.fillStyle = INK_GREEN;
+      c.fillRect(Math.min(tickX, LX + BAR_W - 1), sbY - 1, 1, BAR_H + 2);
     }
 
     // (3) BIDIRECTIONAL throttle bar (-100%..+100%). The model now allows reverse
     // throttle, so the bar fills RIGHT of a center zero-mark for forward and LEFT
     // (amber = reverse) for negative throttle, with a commanded pin at the tip.
-    const tbY = innerHeight - 40, tbW = 120, tbH = 8;
-    const tbCenterX = lx + tbW / 2;                       // zero-throttle mark
+    const tbCenterX = LX + Math.round(TBAR_W / 2);        // zero-throttle mark
     const throttle = Math.min(1, Math.max(-1, state.throttle || 0));
-    c.strokeStyle = '#9fe8ff';
-    c.strokeRect(lx, tbY, tbW, tbH);
-    // center zero-mark (vertical tick through the bar).
-    c.strokeStyle = '#9fe8ff';
-    c.beginPath(); c.moveTo(tbCenterX, tbY - 2); c.lineTo(tbCenterX, tbY + tbH + 2); c.stroke();
+    c.fillStyle = INK_TRACK;
+    c.fillRect(LX, tbY, TBAR_W, BAR_H);
     // fill from center: right = forward (cyan), left = reverse (amber).
-    const fillW = (tbW / 2) * Math.abs(throttle);
+    const fillW = Math.round((TBAR_W / 2) * Math.abs(throttle));
     if (throttle >= 0) {
-      c.fillStyle = '#9fe8ff';
-      c.fillRect(tbCenterX, tbY, fillW, tbH);
+      c.fillStyle = INK_CYAN;
+      c.fillRect(tbCenterX, tbY, fillW, BAR_H);
     } else {
-      c.fillStyle = '#ffb84d';                            // distinct amber reverse tone
-      c.fillRect(tbCenterX - fillW, tbY, fillW, tbH);
+      c.fillStyle = INK_AMBER;                            // distinct amber reverse tone
+      c.fillRect(tbCenterX - fillW, tbY, fillW, BAR_H);
     }
-    const tPinX = tbCenterX + (tbW / 2) * throttle;       // pin at the fill tip
-    c.fillStyle = '#ffffff';
-    c.beginPath();
-    c.moveTo(tPinX - 3, tbY + tbH + 6); c.lineTo(tPinX + 3, tbY + tbH + 6); c.lineTo(tPinX, tbY + tbH);
-    c.closePath(); c.fill();
+    c.fillStyle = INK_CYAN;
+    c.fillRect(tbCenterX, tbY - 1, 1, BAR_H + 2);         // center zero-mark
+    const tPinX = tbCenterX + Math.round((TBAR_W / 2) * throttle);   // pin at the fill tip
+    c.fillStyle = INK_PIN;
+    c.fillRect(Math.min(tPinX, LX + TBAR_W - 1), tbY + BAR_H + 1, 1, PIN_H);
     } // end showReadouts — the bottom-left cluster
 
     // ── Center reticle: cross + deflection dot ── (STEERING indicators)
@@ -200,14 +315,20 @@ export class SupercruiseHud {
     // Gated by showReticle (default true): hidden in free-look, where the cross +
     // deflection dot don't belong (§free-look-interaction-redesign Part 1). The
     // speed/throttle readouts above always draw — only these two hide.
+    // ⛔ FOUR fillRect ARMS AROUND A GAP, NOT A STROKED CROSS. The old cross was one path stroked
+    // 1px wide through the exact centre pixel, which straddles it: the mark the pilot aims with was
+    // two grey half-rows. These are four opaque texel bars with a CROSS_GAP hole at centre, so the
+    // body being aimed at is never covered by the aiming mark.
     if (state.showReticle !== false) {
-      c.strokeStyle = '#64ff82'; c.fillStyle = '#64ff82';
-      c.beginPath(); c.moveTo(cx - 10, cy); c.lineTo(cx + 10, cy);
-      c.moveTo(cx, cy - 10); c.lineTo(cx, cy + 10); c.stroke();
-      const jr = Math.min(innerWidth, innerHeight) * 0.25;
-      c.beginPath();
-      c.arc(cx + state.deflection.x * jr, cy + state.deflection.y * jr, 4, 0, Math.PI * 2);
-      c.fill();
+      c.fillStyle = INK_RETICLE;
+      c.fillRect(cx + CROSS_GAP, cy, CROSS_ARM, 1);
+      c.fillRect(cx - CROSS_GAP - CROSS_ARM + 1, cy, CROSS_ARM, 1);
+      c.fillRect(cx, cy + CROSS_GAP, 1, CROSS_ARM);
+      c.fillRect(cx, cy - CROSS_GAP - CROSS_ARM + 1, 1, CROSS_ARM);
+      const jr = Math.min(w, h) * 0.25;
+      const dx = Math.round(cx + state.deflection.x * jr);
+      const dy = Math.round(cy + state.deflection.y * jr);
+      c.fillRect(dx - ((DOT - 1) >> 1), dy - ((DOT - 1) >> 1), DOT, DOT);
     }
 
     // ── Target cue: ETA + drop label ──
@@ -217,8 +338,7 @@ export class SupercruiseHud {
     if (hasTarget) {
       const p = this._project(state.targetPos);
       if (p) {
-        c.font = '13px monospace';
-        const cueY = p.y + 28;        // offset below the body, clear of the name label
+        const cueY = Math.round(p.y) + 7;   // offset below the body, clear of the name label
 
         // ETA "M:SS" = distance / speed. CONTEXTUAL (§targeting-brackets-
         // contextual-eta Unit 3): the counter LINE is drawn ONLY when the aim
@@ -237,40 +357,33 @@ export class SupercruiseHud {
               eta = `${m}:${s.toString().padStart(2, '0')}`;
             }
           }
-          c.fillStyle = '#9fe8ff';
-          c.fillText(eta, p.x + 18, cueY);
+          this._drawPixelText(eta, this._clampX(p.x + 4, eta), cueY, { color: INK_CYAN });
         }
 
         // Drop label: SAFE TO DROP (green) / SLOW DOWN (amber).
         if (state.dropState === 'in-window') {
-          c.fillStyle = '#7bff9e';
-          c.fillText('SAFE TO DROP', p.x + 18, cueY + 16);
+          this._drawPixelText('SAFE TO DROP', this._clampX(p.x + 4, 'SAFE TO DROP'),
+            cueY + TEXT_H + 2, { color: INK_GREEN });
         } else if (tooFast) {
-          c.fillStyle = '#ffb84d';
-          c.fillText('SLOW DOWN', p.x + 18, cueY + 16);
+          this._drawPixelText('SLOW DOWN', this._clampX(p.x + 4, 'SLOW DOWN'),
+            cueY + TEXT_H + 2, { color: INK_AMBER });
         }
       }
     }
 
     // ── Flight-assist mode readout (upper-center, reticle green) ──
     // The toast announces each mode on entry; this is the persistent indicator
-    // of which assist mode is live while flying. One fillText, no new layout.
+    // of which assist mode is live while flying. One string, no new layout.
     if (state.flightMode && showReadouts) {
-      c.fillStyle = '#64ff82';
-      c.font = '14px monospace';
-      c.textAlign = 'center';
-      c.fillText(`MODE: ${state.flightMode.toUpperCase()}`, cx, 28);
-      c.textAlign = 'left';
+      this._drawPixelText(`MODE: ${state.flightMode.toUpperCase()}`, cx, 6,
+        { color: INK_RETICLE, align: 'center' });
     }
 
     // Mass-lock hint: a brief "TOO CLOSE" when the player tried to re-engage
     // supercruise inside a body's forced-drop zone (spec §Unit 5).
     if (state.massLockHint) {
-      c.fillStyle = '#ff7b6b';
-      c.font = '14px monospace';
-      c.textAlign = 'center';
-      c.fillText('TOO CLOSE — SUBLIGHT ONLY', innerWidth / 2, innerHeight / 2 + 48);
-      c.textAlign = 'left';
+      this._drawPixelText('TOO CLOSE — SUBLIGHT ONLY', cx, cy + 12,
+        { color: INK_RED, align: 'center' });
     }
   }
 

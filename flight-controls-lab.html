@@ -15,6 +15,14 @@
       overflow: hidden;
     }
     canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+    /* ⭐ The SupercruiseHud's backing store is the WORLD BUFFER since chrome-and-ui-at-240p, so
+       the browser stretches it here. Without this pair it would be stretched SMOOTHLY and the
+       lab would show a blurred HUD that the game does not have — the same two declarations, in
+       the same order, as `src/style.css` #canvas / #supercruise-hud. */
+    #supercruise-hud {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
 
     /* center reticle, mirrors the in-game HUD cross so we can eyeball drift */
     #reticle {

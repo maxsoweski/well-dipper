@@ -912,10 +912,16 @@ describe('FlightReadout — the overlay\'s drive/target readout, ported without 
     // _project() divergence above asserts the projection gate is really there.
     const hud = codeOf(HUD_PATH);
 
+    // ⚠ THE CLAIM IS THE SCALE, NOT THE ARITHMETIC. These pinned the exact expression
+    // (`lx + barW * speedToBarFrac(...)`) until chrome-and-ui-at-240p re-denominated the whole
+    // overlay in world-buffer pixels — the constants are now `LX`/`BAR_W` and the product is
+    // rounded to an integer texel. None of that touches the divergence being guarded, which is
+    // that BOTH marks are computed off the LOG fraction whatever the drive state. Matching the
+    // rest of the line loosely is what keeps this guard about its own subject.
     expect(hud, 'the overlay no longer computes its commanded pin with the log fraction')
-      .toMatch(/const pinX = lx \+ barW \* speedToBarFrac\(commandedSpeed\)/);
+      .toMatch(/const pinX =[^\n]*speedToBarFrac\(commandedSpeed\)/);
     expect(hud, 'the overlay no longer computes its drop tick with the log fraction')
-      .toMatch(/const tickX = lx \+ barW \* speedToBarFrac\(dropMaxSpeed\)/);
+      .toMatch(/const tickX =[^\n]*speedToBarFrac\(dropMaxSpeed\)/);
 
     // ONE call to the signed scale in the whole overlay — the fill, and nothing
     // else. This is the assertion that survives a rewrite of either line above:
@@ -1060,7 +1066,11 @@ describe('FlightReadout — the overlay\'s drive/target readout, ported without 
     // mentions — the file discusses "REV" in a comment two lines above the code.
     const hud = codeOf(HUD_PATH);
 
-    expect(hud, 'the overlay no longer draws SUBLIGHT').toMatch(/fillText\(\s*'SUBLIGHT'/);
+    // ⛔ `drawPixelText` AS WELL AS `fillText`: chrome-and-ui-at-240p moved every string on this
+    // overlay onto the repo's one bitmap face, so the vector call is gone from it. The private
+    // wrapper is named `_drawPixelText`, which this pattern matches as a substring on purpose.
+    expect(hud, 'the overlay no longer draws SUBLIGHT')
+      .toMatch(/(?:fillText|drawPixelText)\(\s*'SUBLIGHT'/);
     expect(hud, 'the overlay\'s REV prefix changed').toContain("'REV '");
     expect(hud, 'the overlay\'s unknown-ETA placeholder changed').toContain("'--:--'");
     expect(hud, 'the overlay now formats the mode line some other way')
