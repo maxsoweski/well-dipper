@@ -13,9 +13,14 @@
  * authored at the size it is drawn — which is why the machines this game is imitating used them.
  *
  * ⚠ THE THING THAT MAKES THIS NECESSARY IS NOT SIZE, IT IS ROWS. Measured on the cockpit: a label
- * glyph is 2.4 buffer px tall, which magnifies to about 11 SCREEN px — very close to what it is
+ * glyph is **2.14** buffer px tall, which magnifies to about 10 SCREEN px — very close to what it is
  * today. Its physical size is fine. What it does not have is enough pixel ROWS to be a letter, and
  * no amount of magnification adds rows. Five is the floor; this face is 5 tall.
+ * ⛔ 2.14, NOT THE 2.4 THIS COMMENT FIRST SAID. The panel's row count is the PIXEL fraction
+ * `(0.10/0.800)/tan(35 deg) x 240` = 42.84, not the ANGULAR fraction `14.25/70 x 240` = 48.9 — a
+ * perspective projection is linear in tan, not in angle, and `panelPose.js:34-49` already warns
+ * about exactly this under "PIXEL FRACTION, NOT ANGULAR FRACTION". Every panel figure derives from
+ * 42.84.
  *
  * ── ⛔ EXACTLY ONE GLYPH SET IN THIS REPO ───────────────────────────────────────────────────────
  *
@@ -50,6 +55,8 @@ export const ADVANCE = 4;
  *   - U+2014 EM DASH — `AlertCue`'s 'TOO CLOSE — SUBLIGHT ONLY' carries exactly one, and it is an
  *     em dash rather than a hyphen. Dropping it would silently mangle an alert the pilot flies with.
  *   - `,` specifically because speeds are thousands-separated before they reach the drawing code.
+ *   - `_` because the cockpit panel kit names things like T_EQ, and renaming call sites to dodge a
+ *     missing glyph is a worse fix than having the glyph.
  */
 const GLYPHS = Object.freeze({
   ' ': [0b000, 0b000, 0b000, 0b000, 0b000],
@@ -97,6 +104,7 @@ const GLYPHS = Object.freeze({
   '/': [0b001, 0b001, 0b010, 0b100, 0b100],
   '%': [0b101, 0b001, 0b010, 0b100, 0b101],
   '+': [0b000, 0b010, 0b111, 0b010, 0b000],
+  '_': [0b000, 0b000, 0b000, 0b000, 0b111],   // the cockpit kit has identifiers like T_EQ; adding the glyph beats a rename cascade
   '<': [0b001, 0b010, 0b100, 0b010, 0b001],
   '>': [0b100, 0b010, 0b001, 0b010, 0b100],
 });

@@ -50,10 +50,29 @@ title screen are the harness you use to configure the game, not the game.
   reinstate it.
 
 ⚠ **AND THE NUMBER HE APPROVED WAS MINE AND IT WAS WRONG BY 2x.** I told him "~5px glyphs". The type
-scale is fixed ratios of panel height (`PhosphorScreen.js:195-197`: display H/6, body H/17, label
-H/20) and the panels subtend **14.25 degrees** of a 70-degree FOV — measured off `cockpit.glb` from
-its own Eye_Point on 2026-07-29, not assumed. At 240 lines a panel is `14.25/70 x 240` = **48.9
-buffer px**, so display lands at 8.1, body at **2.9** and label at **2.4**. The tiers he actually
+scale is fixed ratios of panel height (`PhosphorScreen.js:194-200`: display H/6, body H/17, label
+H/20) and the panels are 0.20 m tall at 0.800 m from the eye — measured off `cockpit.glb` from its
+own Eye_Point, and re-read here from `public/assets/cockpit/cockpit-metrics.json` rather than from a
+comment.
+
+⛔ **AND MY FIRST NUMBER WAS 14% TOO HIGH, BY THE EXACT MISTAKE THIS REPO ALREADY WARNS ABOUT.** I
+computed `14.25/70 x 240` = 48.9 rows. That is the ANGULAR fraction, and a perspective projection is
+not linear in angle — it is linear in TAN. `panelPose.js:34-49` writes both forms out under the
+heading "PIXEL FRACTION, NOT ANGULAR FRACTION" and says plainly that "solving the angular form
+yields a panel that measures correct on a protractor and looks wrong in the cockpit". The right form
+is `(0.10/0.800) / tan(35 deg) x 240` = **42.84 rows**, confirmed by projecting all four measured
+corners through a 70-degree camera. So the tiers are:
+
+| tier | ratio | buffer px at 240p | what I first told Max |
+|------|-------|-------------------|-----------------------|
+| display | H/6 | **7.14** | 8.1 |
+| lead | H/11 | **3.89** | 4.4 |
+| body | H/17 | **2.52** | 2.9 |
+| label | H/20 | **2.14** | 2.4 |
+
+⚠ It is WORSE than he was told, not better, and it does not change his ruling — he generalised
+rather than retreating, and the generalisation is what governs. But every downstream number must be
+derived from 42.84, never 48.9. The tiers he actually
 reads are at half the figure he was given, and `PhosphorScreen.js:81` already calls H/20 "THE
 FLOOR". Re-put to him with the real arithmetic, he did not retreat — he generalised, which is the
 quote at the top of this file.
