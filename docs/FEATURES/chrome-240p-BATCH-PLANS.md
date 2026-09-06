@@ -249,6 +249,8 @@ Also: `body.hud-hidden #targeting-overlay { display: none }` (`style.css:831-834
 ## 3.5 ⛔ CORRECTIONS TO THIS PLAN, FOUND WHILE APPLYING STEPS 4 AND 5 (2026-09-07)
 
 The plan held up well; these are the places it did not, recorded so the next reader trusts the rest.
+⭐ **Item 2 is the one that reached Max's eyes.** It is a plan instruction that is actively wrong, not
+merely imprecise — read it before touching `_drawBrackets`.
 
 1. ⭐⭐ **THE `t - PX` ARITHMETIC IN STEP 5 IS OFF BY ONE.** The plan prescribes
    `bx - (sx > 0 ? t : 0)`, claiming the boundary becomes `[cx-h, cx+h)`. It does — but that is
@@ -258,27 +260,38 @@ The plan held up well; these are the places it did not, recorded so the next rea
    240p: lit columns `[-6..-3]` and `[3..6]` about the centre. The plan's DIAGNOSIS was right
    (thickness anchored outward, so selecting a body widened its square) and its BRANCH was right;
    only the amount was wrong.
-2. **The original was not "half a pixel off centre" at PX=1.** It was symmetric and `2h+3` wide —
+2. ⭐⭐⭐ **THE `vx` "FIX" IS WRONG AND IT DESTROYS THE RETICLE'S SHAPE. DO NOT APPLY IT.** The plan
+   says `vx = ox + sx * PX` "is one block *outward*, contradicting its own comment and the ASCII art
+   at `:220-224`. → `vx = ox - sx * t`." The observation is true and the conclusion is backwards:
+   **the outward step WAS the rounding.** It set the vertical arm one block out and one block down
+   from the horizontal, chamfering the vertex so the bracket read as the corner of a rounded square.
+   The ASCII diagram was the thing that was wrong. Applied as written, each corner becomes a **T** —
+   a stem one texel in from the end of a 3-4 texel arm. Max caught it on sight: *"the reticle no
+   longer reads like the same shape at all. The shape we're going for is the four corners of a
+   slightly rounded square."* ⛔ A plan noting that a comment and its code disagree tells you one of
+   them is wrong, NOT which. `_drawBrackets` now states the shape as two explicit rects per corner
+   with the `t x t` vertex block left empty, and its diagram is copied from measured output.
+3. **The original was not "half a pixel off centre" at PX=1.** It was symmetric and `2h+3` wide —
    it grew outward. The off-centre-by-`PX-1` asymmetry the plan is remembering is real but belongs
    to the historical PX=3 case, where the blocks are anchored top-left.
-3. ⭐ **STEP 4 NEEDS FOUR TEST FILES, NOT THREE.** `src/cockpit/__tests__/FlightReadout.test.js`
+4. ⭐ **STEP 4 NEEDS FOUR TEST FILES, NOT THREE.** `src/cockpit/__tests__/FlightReadout.test.js`
    source-scans `SupercruiseHud.js` in three places and is not in the plan's list or in V6's fence:
    two bar-mark guards pinning `lx + barW * speedToBarFrac(...)` verbatim, and
    `/fillText\(\s*'SUBLIGHT'/`. All three go red on step 4 as specified.
-4. **The off-screen ship chevron needed redesigning, not just re-denominating.** The plan converts
+5. **The off-screen ship chevron needed redesigning, not just re-denominating.** The plan converts
    its `halfW`/`halfH` and cull margin but leaves it a `translate`/`rotate` + `fill()` of a path —
    which antialiases unconditionally, leaving one blurred element on a canvas whose whole premise is
    hard texels. It is now rasterised by hand (`_fillTriangleTexels`), which also keeps the rotation
    continuous rather than snapping to eight directions.
-5. **Step 5 does NOT remove the Google-Fonts dependency.** It removes it from the reticle LABEL, which
+6. **Step 5 does NOT remove the Google-Fonts dependency.** It removes it from the reticle LABEL, which
    is what matters for the draw path. 'Pixelify Sans' still has five users in `src/style.css`, so
    `index.html:10` stays.
-6. **AC-MASK-AGREES-WITH-THE-ORACLE cannot be closed on an arbitrary window.** 0.587202 is stated in
+7. **AC-MASK-AGREES-WITH-THE-ORACLE cannot be closed on an arbitrary window.** 0.587202 is stated in
    its own contract as measured at "1600x900 CSS (exactly 16:9) … head centred". Coverage moves with
    aspect ratio and head pose, so on a 1.977:1 window it reads ~0.550 with the mask at ANY resolution
    from 41k to 2.3M sampled px. The portable half of the AC is its second clause — agreement with
    same-session `_cockpitOcclusion()` — which held at 0.0063.
-7. **V0/V1's predicted numbers assume a 2205x1130 window.** Nothing depends on them; just do not read
+8. **V0/V1's predicted numbers assume a 2205x1130 window.** Nothing depends on them; just do not read
    a different window's figures as a failure.
 
 ---
