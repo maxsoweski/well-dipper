@@ -117,7 +117,7 @@ export class RetroRenderer {
     // Render targets (created in resize())
     this.bgTarget = null;    // Full-res starfield
     this.sceneTarget = null; // Low-res scene objects
-    this.cockpitTarget = null; // Full-res cockpit interior (increment 7)
+    this.cockpitTarget = null; // Cockpit interior, on the WORLD buffer's grid (increment 7; AC-1 2026-09-06)
     this._cockpitScene = null;
     this._cockpitCamera = null;
     this.hudTarget = null;   // Small HUD overlay
@@ -315,9 +315,14 @@ export class RetroRenderer {
         sceneTexture: { value: null },
         hudTexture: { value: null },
         // ── THE COCKPIT LAYER (increment 7, AC-COCKPIT-IS-THERE) ──
-        // Its own full-resolution target, composited OVER the world and UNDER
-        // the palette remap. Full-res rather than the world's 1/3 chunk because
-        // the panels carry text the pilot has to read at 17 degrees.
+        // Its own target, composited OVER the world and UNDER the palette remap.
+        // ⭐ ON THE WORLD BUFFER'S GRID SINCE AC-1 (2026-09-06) — NOT full-res, which is what this
+        // comment used to say and what three docs still quote it for. The cabin is part of the
+        // picture, not chrome laid over it, so its edges have to land on the same lattice as
+        // everything else. The old argument for a full-res target — "the panels carry text the
+        // pilot has to read at 17 degrees" — was answered instead by authoring each panel's canvas
+        // at its REAL row count (`src/cockpit/panelBufferRows.js`), not by a bigger target. The
+        // allocation and the reasoning live in `resize()`.
         cockpitTexture: { value: null },
         cockpitEnabled: { value: 0 },
         // ⭐ THE TONE CURVE THREE WILL NOT APPLY FOR US. three r0.183 forces
@@ -1016,9 +1021,18 @@ export class RetroRenderer {
       magFilter: THREE.NearestFilter,
     });
 
-    // Full resolution, and with its own depth: the cockpit is a solid 3D object
-    // that must self-occlude. Alpha is what lets the world through the canopy.
-    this.cockpitTarget = new THREE.WebGLRenderTarget(width, height, {
+    // ⭐ THE WORLD BUFFER'S GRID, NOT THE WINDOW'S (2026-09-06, AC-1). The cabin is part of the
+    // picture, not chrome laid over it: drawn at window resolution it was the one surface in the
+    // frame whose edges did NOT land on the world's pixel lattice, so a rib read as a smooth modern
+    // edge against a 240-line world. `renderWidth`/`renderHeight` are that lattice, and
+    // `bufferForLines` carries the window's aspect, so the cockpit camera's aspect is unchanged —
+    // it is still `window.innerWidth / window.innerHeight` (main.js's resize handler).
+    // Still its OWN depth: the cockpit is a solid 3D object that must self-occlude. Still its own
+    // alpha, and that is unchanged too — the alpha IS the canopy aperture the world shows through.
+    // ⛔ THE PANEL BUFFERS MUST MOVE WITH THIS, IN THE SAME CHANGE. A 512-tall panel canvas was
+    // MINIFIED into a window-sized target and looked fine; against ~43 rows it is a ~12:1
+    // point-sample and the glyphs disintegrate. See `panelBufferRows.js`.
+    this.cockpitTarget = new THREE.WebGLRenderTarget(renderWidth, renderHeight, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
       depthBuffer: true,
@@ -1113,7 +1127,7 @@ export class RetroRenderer {
       u.hudEnabled.value = 0;
     }
 
-    // Pass 3.5: the cockpit, at full resolution, into its own target.
+    // Pass 3.5: the cockpit, on the world buffer's grid (see `resize()`), into its own target.
     // AFTER the world (it composites over it) and BEFORE the composite pass.
     // `autoClear = false` is NOT wanted here: the cockpit owns this target
     // outright and a stale frame behind a transparent canopy would ghost.

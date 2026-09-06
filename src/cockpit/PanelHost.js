@@ -27,6 +27,18 @@
  * `round(height * metrics.aspect)`, where the aspect was measured off the mesh.
  * Never the other way round, and never two independent numbers.
  *
+ * ⭐ SINCE 2026-09-06 THAT HEIGHT MAY ALSO BE A FUNCTION, `(role, metrics) => px`, and in the game
+ * it is. The cockpit is now rendered into the WORLD's pixel grid rather than the window's
+ * (RetroRenderer.resize), so a panel gets on the order of forty rows of screen, not hundreds — and
+ * the four screens do not get the SAME forty, because the lower pair sits nearer the eye. The game
+ * hands in a closure that solves each panel's real row count (`panelBufferRows.js`); the lab and
+ * the tests still hand in a plain number. Both stay in this one knob, so there is still exactly one
+ * place a buffer's size is decided.
+ *
+ * ⛔ AND THE KNOB IS ALL THIS FILE LEARNS. It calls the function and takes a number. It does not
+ * know what an eye is, what a camera is, or that a render buffer exists — those live in the
+ * closure `CockpitRig.remount` builds, for the same reason `makeCanvas` is injected (§2).
+ *
  * Two independent numbers is precisely how the screens got stretched before: the
  * display face has been re-proportioned five times as the cabin was re-fitted
  * (its aspect has been 3:2 and is 6:5 today), so any buffer whose shape is
@@ -385,7 +397,13 @@ export class PanelHost {
    * @param {object} root a three.js Object3D holding the loaded cockpit model
    * @param {object} [opts]
    * @param {Record<string,string>} [opts.roles] role → node name; DEFAULT_PANEL_ROLES
-   * @param {number} [opts.bufferHeightPx] the one resolution knob (see §1)
+   * @param {number|((role:string, metrics:object) => number)} [opts.bufferHeightPx]
+   *        the one resolution knob (see §1). A NUMBER is the same flat height for all four.
+   *        A FUNCTION is asked per panel, `(role, metrics)`, and must return a height in
+   *        pixels — that is how the game sizes each panel to the rows it actually gets on
+   *        screen (`panelBufferRows.js`). ⛔ The host does not build that function and must
+   *        not learn to: sizing needs the eye, the camera and the world buffer, and this
+   *        module knows about none of them. `CockpitRig.remount` binds them in.
    * @param {(w:number,h:number)=>object} [opts.makeCanvas] buffer factory
    * @param {RegExp} [opts.screenNodeRe] which nodes are glass; SCREEN_NODE_RE
    * @param {number} [opts.ambientRepaintMs] the unescalated repaint period
@@ -469,7 +487,29 @@ export class PanelHost {
       }
 
       const metrics = measureQuad(meshWorldPositions(mesh, label), meshWorldUvs(mesh, label));
-      const buffer = derivePanelBuffer(metrics, bufferHeightPx);
+      // ⭐ ASKED PER ROLE WHEN IT IS A FUNCTION. The four screens are the same size but NOT
+      // the same distance from the eye — the lower pair sits 0.744 m out against the upper
+      // pair's 0.800 — so at the world's resolution they are genuinely worth different row
+      // counts, and one flat number would over- or under-author two of them.
+      // ⛔ THE HOST STAYS IGNORANT OF EYES, CAMERAS AND RENDER BUFFERS. It measures quads;
+      // it passes `role` and the measurement out and takes a number back. Everything the
+      // number is derived FROM is bound into the closure by CockpitRig (see its remount).
+      const heightPx = typeof bufferHeightPx === 'function'
+        ? bufferHeightPx(role, metrics)
+        : bufferHeightPx;
+      // Validated HERE, naming the role, rather than left to derivePanelBuffer — which sees
+      // only a number and would report "buffer height must be positive, got NaN" for a
+      // panel it cannot name. A knob that misbehaves for ONE role (a missing eye, an fov of
+      // zero) is the likely failure, and the role is the only thing that locates it.
+      if (typeof bufferHeightPx === 'function' && (!Number.isFinite(heightPx) || heightPx < 1)) {
+        throw new Error(
+          `PanelHost: the bufferHeightPx function returned ${heightPx} for ${label}. It must ` +
+          `give a positive number of pixels for every role — a 0 or a NaN here becomes a ` +
+          `canvas the browser reports as 0 x 0, which accepts every drawing call and shows ` +
+          `nothing, and every pointer coordinate derived from it comes back Infinity.`,
+        );
+      }
+      const buffer = derivePanelBuffer(metrics, heightPx);
 
       const canvas = makeCanvas(buffer.width, buffer.height);
       if (!canvas || canvas.width !== buffer.width || canvas.height !== buffer.height) {

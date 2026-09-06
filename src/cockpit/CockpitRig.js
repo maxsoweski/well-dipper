@@ -295,7 +295,11 @@ export class CockpitRig {
    * @param {() => void} opts.pinCamera makes `camera` current for THIS frame
    * @param {() => {x:number,y:number,width:number,height:number}} opts.getViewport
    *        the RENDERED rect in CSS pixels, read fresh per pick
-   * @param {number} opts.bufferHeightPx the one knob PanelHost takes
+   * @param {number|((role:string, metrics:object, view:object) => number)} opts.bufferHeightPx
+   *        the one knob PanelHost takes. A NUMBER is a flat buffer height for all four
+   *        panels (the lab, and every test). A FUNCTION is called per panel and is handed a
+   *        THIRD argument PanelHost knows nothing about — `{eyePos, fovDeg, eyeFound}`, the
+   *        live view the rig alone holds. See `remount` for why the rig has to supply it.
    * @param {(surface:object) => object} opts.makeNav builds the NavComputer
    * @param {object} [opts.zoom] `{fill, durationMs, followCamera}`
    * @param {string[]} [opts.zoomableRoles]
@@ -335,6 +339,9 @@ export class CockpitRig {
     this.host = null;
     this.mover = null;
     this.picker = null;
+    // A `setBufferHeightPx` that arrived while a panel was off its socket, waiting for rest.
+    // See `setBufferHeightPx` for why it is deferred rather than taken immediately.
+    this._pendingRemount = false;
     this.navSource = null;
     this.navAdapter = null;
 
@@ -631,7 +638,31 @@ export class CockpitRig {
     this.hostError = null;
     if (!this.model) return;
     try {
-      this.host = PanelHost.fromRoot(this.model, { bufferHeightPx: this.bufferHeightPx });
+      // ⭐⭐ THE VIEW IS BOUND IN HERE, AND THE RIG IS THE ONLY OBJECT THAT CAN DO IT.
+      //
+      // A panel's buffer height now depends on where the PILOT'S EYE is, what the eye camera's
+      // fov is, and how coarse the world buffer is (`panelBufferRows.js`). PanelHost has none of
+      // those and must not learn them — it measures quads. So the game passes a function of
+      // `(role, metrics, view)` and this wrapper supplies the `view`.
+      //
+      // ⛔ AND IT CANNOT BE DONE FROM main.js, WHICH IS THE WHOLE POINT OF THE THIRD ARGUMENT.
+      // `main.js` assigns `_cockpitRig` only in `CockpitRig.load().then(...)` — i.e. AFTER
+      // `loadModel` has already called `_mountEye()` and this very `remount()`. A closure over
+      // there reaching for `_cockpitRig.eyePos` reads `null` on the FIRST mount and would size
+      // every panel off the origin, silently, exactly once, in the build the pilot actually sees.
+      // (`_mountEye` runs immediately before this and refuses that origin assumption BY NAME.)
+      // The rig, here, holds both the mounted eye and the eye camera at the moment PanelHost is
+      // built — nothing else in the program does.
+      //
+      // `eyeFound` rides along so a knob that wants to refuse a fallback-to-origin eye can see it;
+      // `panelBufferRows` currently sizes anyway, because a plausible-but-wrong panel size is a
+      // better failure than no panels at all, and the rig already reports `eyeFound` on its own.
+      const knob = typeof this.bufferHeightPx === 'function'
+        ? (role, metrics) => this.bufferHeightPx(role, metrics, {
+          eyePos: this.eyePos, fovDeg: this.camera?.fov, eyeFound: this.eyeFound,
+        })
+        : this.bufferHeightPx;
+      this.host = PanelHost.fromRoot(this.model, { bufferHeightPx: knob });
       for (const role of Object.keys(DEFAULT_PANEL_ROLES)) {
         if (this._painters[role]) this.host.setPainter(role, this._painters[role]);
       }
@@ -844,12 +875,49 @@ export class CockpitRig {
     if (starLight) this.setStarLight(starLight);
     this._pinCamera();
     if (this.mover) this.mover.update(Number.isFinite(dtMs) ? dtMs : 16);
+    // The deferred re-ask from `setBufferHeightPx`, taken the first frame the mover is back at
+    // rest. AFTER `mover.update()`, because that is the call that completes the last tween — so a
+    // dismissal lands its remount on the same frame it finishes, not one frame later. Guarded on
+    // `model` because `remount()` tears the host down before it checks for one, and would drop the
+    // panels without rebuilding them.
+    if (this._pendingRemount && this.model && (!this.mover || this.mover.state === 'rest')) {
+      this._pendingRemount = false;
+      this.remount();
+    }
     if (this.host) this.host.update(snapshot, nowMs);
   }
 
-  /** Change the buffer resolution. Rebuilds the host; keeps the nav computer. */
+  /**
+   * Change the buffer resolution. Rebuilds the host; keeps the nav computer.
+   *
+   * ⭐ ALSO THE RE-DERIVATION ENTRY POINT. When `px` is a FUNCTION nothing about it changes between
+   * calls — what changes is the `view` `remount` reads out of the rig. So `setBufferHeightPx(
+   * rig.bufferHeightPx)`, handing the knob straight back, is the honest way to say "the world moved
+   * under the panels, re-ask". main.js does exactly that when the render-line setting or the fov
+   * changes, neither of which fires a window resize.
+   *
+   * ⚠ THE REBUILD IS DEFERRED while a panel is zoomed or tweening — the knob is stored
+   * immediately, the `remount()` waits for the mover to reach `rest` and is taken in `update()`.
+   * The body says why.
+   *
+   * @param {number|((role:string, metrics:object, view:object) => number)} px
+   */
   setBufferHeightPx(px) {
     this.bufferHeightPx = px;
+    // ⛔ NOT WHILE A PANEL IS OFF ITS SOCKET. `remount()` disposes the mover first, and
+    // `PanelMover.dispose()` does not PAUSE a zoom — it restores every saved local transform
+    // verbatim and puts the state back to `rest`, so a panel that is zoomed or mid-tween SNAPS
+    // HOME and the zoom is simply gone. Both live callers are settings the pilot drags while
+    // looking at a panel (the fov slider fires on every `input` step, so a single drag is ~18 of
+    // these), which makes it reachable by ordinary use rather than by a corner: he opens the
+    // slider precisely to see how the zoomed panel reads at another field, and the first step
+    // takes away the thing he was comparing.
+    //
+    // So defer. The knob is already stored on the line above — the re-ask is taken in `update()`
+    // the first frame the mover reports `rest`. A panel that is the WRONG SIZE for one zoom is a
+    // cheap, recoverable failure; a zoom the pilot cannot hold is not.
+    if (this.mover && this.mover.state !== 'rest') { this._pendingRemount = true; return; }
+    this._pendingRemount = false;
     this.remount();
   }
 

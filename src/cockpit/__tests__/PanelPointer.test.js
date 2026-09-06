@@ -35,6 +35,7 @@
  * that over this file's own source.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { LinearFilter, NearestFilter, SRGBColorSpace } from 'three';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -472,6 +473,21 @@ for (const size of SIZES) {
 
       expect(() => createPanelTexture(undefined)).toThrow(/width and height/);
       expect(() => createPanelTexture({ width: W })).toThrow(/width and height/);
+    });
+
+    it('sets BOTH filters explicitly — magnification is NEAREST, minification LINEAR', () => {
+      // ⭐ AC-1 (2026-09-06). The panel buffer is now the row count the panel actually gets in the
+      // world's pixel grid (~43 rows for the upper pair at 240p), so the texture is MAGNIFIED in
+      // every real view — roughly 52-74 screen rows drawn from those 43. three's magFilter default
+      // is Linear, which ramps every hard texel edge into greys ON THE GPU. Nothing else can catch
+      // that: the one-ink guard watches `fillStyle` on the 2D context, i.e. what is IN the canvas,
+      // never what the sampler does with it. `RetroRenderer`'s cockpitTarget is Nearest/Nearest
+      // already; this is the glass inside it agreeing.
+      const texture = createPanelTexture({ width: W, height: H });
+      expect(texture.magFilter).toBe(NearestFilter);
+      expect(texture.minFilter).toBe(LinearFilter);
+      expect(texture.generateMipmaps).toBe(false);
+      expect(texture.colorSpace).toBe(SRGBColorSpace);
     });
 
     it('refuses a target that is not NavComputer-shaped', () => {

@@ -133,7 +133,7 @@ import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/Materi
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
 import { warmPlanetPrograms, swapMaterialWhenReady, restoreMaterialSwap, MATERIAL_SWAPS } from './rendering/ShaderWarmup.js';
-import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js'; import { setPosterizeLevels } from './rendering/posterizeLevels.js';  import { migrateToRenderLines, clampRenderLines, describeRenderLines } from './rendering/renderLines.js'; import { toggleMagnitudeLaw, MAGNITUDE_LAW } from './rendering/apparentMagnitude.js'; // ⛔ B2P RIDES THIS LINE: main.js carries ~700 line-anchored citations.
+import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js'; import { setPosterizeLevels } from './rendering/posterizeLevels.js';  import { migrateToRenderLines, clampRenderLines, describeRenderLines } from './rendering/renderLines.js'; import { toggleMagnitudeLaw, MAGNITUDE_LAW } from './rendering/apparentMagnitude.js'; import { panelBufferRows } from './cockpit/panelBufferRows.js'; import { resolveRenderBuffer } from './rendering/renderBuffer.js'; // ⛔ B2P RIDES THIS LINE: main.js carries ~700 line-anchored citations.
 // Instrument E's reproduction line has to report BOTH quantities named `compositionClass`, because
 // PLAN §12.5 fact 6 measured them to be different populations (only 65 of 209 world-engine gas-class
 // bodies fall inside the game's own GAS_TYPES set) and an assertion written against the wrong one is
@@ -4681,9 +4681,9 @@ CockpitRig.load({
   renderer: retroRenderer.renderer,
   camera: _cockpitCamera,
   pinCamera: () => _poseCockpitCamera(),
-  // The cockpit target is full-screen, so the picker's rect is the whole canvas.
+  // ⚠ CSS PIXELS, AND STILL CORRECT AFTER AC-1. `cockpitTarget` is no longer window-sized — it is the world buffer's grid now (RetroRenderer.resize) — but this rect is what `PanelPicker` unprojects a MOUSE position through, and a mouse position is in CSS pixels over the whole canvas. The canvas still fills the window, and the target's own resolution never entered this calculation.
   getViewport: () => ({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }),
-  bufferHeightPx: 512,
+  bufferHeightPx: (role, metrics, view) => panelBufferRows(metrics, { ...view, bufferHeight: resolveRenderBuffer(window.innerWidth, window.innerHeight).height }), // ⭐⭐ AC-1: EVERY PANEL IS AUTHORED AT THE ROWS IT ACTUALLY GETS. A flat 512 was right while the cabin drew at WINDOW resolution and every panel was minified on the way to the glass; against the world's ~43 rows it is a ~12:1 point-sample that shreds the glyphs, so this had to land in the SAME change as the cockpit target. `view` — {eyePos, fovDeg, eyeFound} — is supplied by CockpitRig.remount and NOT read from here: `_cockpitRig` is assigned in the `.then` below, i.e. AFTER `load()` has already run the first remount, so a closure reaching for `_cockpitRig.eyePos` would size the first mount off the origin, silently, exactly once, in the build the pilot sees. ⛔ `resolveRenderBuffer` is READ LIVE per panel per remount, never captured: RENDER_BUFFER is a shared mutable object that moves on every window resize and every resolution change (renderBuffer.js).
   // followCamera stays FALSE: head decoupling is its own increment and must not
   // arrive by default.
   zoom: { followCamera: false },
@@ -4848,7 +4848,7 @@ window._cockpit = () => (_cockpitRig ? {
   loadError: _cockpitRig.loadError,
   hostError: _cockpitRig.hostError,
   navError: _cockpitRig.navError,
-  panels: _cockpitRig.host ? _cockpitRig.host.panels.map((p) => p.role) : [],
+  panels: _cockpitRig.host ? _cockpitRig.host.panels.map((p) => p.role) : [], buffers: _cockpitRig.host ? _cockpitRig.host.panels.map((p) => ({ role: p.role, w: p.canvas.width, h: p.canvas.height })) : [], // ⭐ AC-2 IS UNVERIFIABLE WITHOUT THIS. Roles alone say the panels bound; they say nothing about the size they were authored at, which is the entire claim. Straight off the panel's own canvas — the surface the painter draws into and the texture wraps — so it cannot report a number the glass is not actually showing.
   eyeFound: _cockpitRig.eyeFound,
   screens: _cockpitRig.screenNodeNames,
   rendering: _cockpitShouldRender(),
@@ -6268,7 +6268,7 @@ function applySettingChange(key, value) {
     case 'renderLines':
       retroRenderer.renderLines = clampRenderLines(value);
       // ⭐ NO setDitherPixelScale HERE ANY MORE, AND ITS ABSENCE IS THE FIX. The magnification is now DERIVED from lines + window height, so resize() is the only place that knows it — and it has to be reapplied on WINDOW resize too, which a handler on the setting could never do (RetroRenderer.resize, renderLines.js).
-      retroRenderer.resize();
+      retroRenderer.resize(); if (_cockpitRig?.model) _cockpitRig.setBufferHeightPx(_cockpitRig.bufferHeightPx); // ⭐ AND THE PANELS RE-DERIVE, because their buffer height IS this setting (panelBufferRows.js) and a resolution change fires no window resize. Handing the knob straight back is the re-ask: the closure has not changed, the world under it has. AFTER `resize()`, which is the one writer of RENDER_BUFFER the knob then reads. Guarded on `model` because `remount()` tears the host down before checking for one — calling it pre-load would drop the panels and not rebuild them.
       break;
     case 'skyRenderLines':
       // ⭐ THE PAIR THAT USED TO BE HERE COLLAPSED INTO ONE CALL. It set the shared uniform (the stars'
@@ -6302,7 +6302,7 @@ function applySettingChange(key, value) {
       // `EYE_FOV` stays the exported DEFAULT both hosts build with — the lab
       // has no Settings to read. This is the live override.
       _cockpitCamera.fov = value;
-      _cockpitCamera.updateProjectionMatrix();
+      _cockpitCamera.updateProjectionMatrix(); if (_cockpitRig?.model) _cockpitRig.setBufferHeightPx(_cockpitRig.bufferHeightPx); // ⭐ THE PANELS RE-DERIVE OFF FOV TOO. A narrower field magnifies the glass — 43 rows at 70 degrees, 64 at 50 (panelBufferRows.js) — and nothing else would notice: the fov slider fires no resize. Same guard, same reason, as the renderLines case above.
       break;
     case 'zoomSensitivity':
       cameraController.scrollSensitivity = value;
@@ -6395,7 +6395,7 @@ function applySettingChange(key, value) {
       settings.reset();
       // Re-apply all defaults
       retroRenderer.renderLines = clampRenderLines(settings.get('renderLines'));
-      retroRenderer.resize();
+      retroRenderer.resize(); if (_cockpitRig?.model) _cockpitRig.setBufferHeightPx(_cockpitRig.bufferHeightPx); // ⭐ THE SECOND WRITER OF `renderLines`, AND IT NEEDED THE SAME RE-ASK (2026-09-06, AC-1). Reset moves the line count WITHOUT going through `applySettingChange`, and `populateSettingsUI()` only assigns `input.value` — it dispatches no event — so nothing downstream re-asks. Left out, a reset from 720p back to the 240 default kept the four panels authored at 129/138 rows against the ~43/46 they now occupy: the ~3:1 point-sample this whole change exists to prevent (`panelBufferRows.js`), arriving from the one button whose job is to restore a known-good state. Same guard and same ordering — AFTER `resize()`, the one writer of RENDER_BUFFER — as the `renderLines` case above.
       retroRenderer.setColorPalette(settings.get('colorPalette'));
       cameraController.autoRotateSpeed = settings.get('autoRotateSpeed');
       cameraController.scrollSensitivity = settings.get('zoomSensitivity');

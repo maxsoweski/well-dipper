@@ -85,7 +85,7 @@
  * reading it once at construction is a stale-size bug waiting for the first
  * resolution change.
  */
-import { CanvasTexture, LinearFilter, SRGBColorSpace } from 'three';
+import { CanvasTexture, LinearFilter, NearestFilter, SRGBColorSpace } from 'three';
 
 /**
  * The event object handed to the target's handlers.
@@ -238,6 +238,22 @@ export function assertTopLeftOrigin(mapFn, size) {
  * cost for a surface the pilot views close to head-on. Revisit if the screens
  * ever get looked at from a sharp angle.
  *
+ * ⭐⭐ magFilter = NEAREST IS THE THIRD LOAD-BEARING LINE, AND IT ONLY BECAME ONE
+ * ON 2026-09-06. While the panel buffer was a flat 512 rows it was always being
+ * MINIFIED onto the glass, so magFilter was never reached and three's Linear
+ * default cost nothing. Now the buffer IS the row count the panel gets in the
+ * world's pixel grid (`panelBufferRows.js`) — about 43 rows for the upper pair
+ * at 240p — so in every real view the texture is MAGNIFIED: roughly 52 to 74
+ * screen rows drawn from those 43. A Linear magFilter turns every hard texel
+ * edge into a bilinear ramp of greys ON THE GPU, which is precisely the "modern
+ * smooth" look the whole change exists to remove, and it would appear as the
+ * panels being blurrier AFTER a change made to sharpen them.
+ *
+ * ⛔ AND NO EXISTING TEST COULD SEE IT. The one-ink guard watches `fillStyle` on
+ * the 2D context — it proves the CANVAS holds two levels, and says nothing about
+ * what the sampler does with them. `RetroRenderer`'s `cockpitTarget` is already
+ * Nearest/Nearest; this makes the glass inside it agree.
+ *
  * @param {{width:number, height:number}} image a canvas (or anything with a size)
  * @returns {CanvasTexture}
  */
@@ -253,6 +269,9 @@ export function createPanelTexture(image) {
   texture.colorSpace = SRGBColorSpace;
   texture.generateMipmaps = false;
   texture.minFilter = LinearFilter;
+  // ⭐ EXPLICIT, because three's default here is Linear — omitting this line does not leave the
+  // setting "unset", it actively smooths a texture that is magnified in every real view.
+  texture.magFilter = NearestFilter;
   return texture;
 }
 

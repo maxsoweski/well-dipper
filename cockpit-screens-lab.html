@@ -345,17 +345,28 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     /**
      * The buffer heights [B] cycles, in pixels.
      *
-     * The list STARTS at the host's own default — imported, not retyped, so the
-     * first thing Max sees is whatever the game would actually ship even if that
-     * default is retuned later. The rest exist because the resolution knob is a
-     * DEFERRED decision and the only way to settle it is to look: a panel
-     * occupies about 260 screen pixels, so 256 is roughly native, 512 is 2x
-     * supersampled, and 1024 is where each doubling has quadrupled the
-     * rasterising cost AND the per-repaint texture upload, four times over
-     * because there are four panels — for a difference that may or may not be
-     * visible at all. That last clause is the whole question.
+     * ⛔⛔ RE-ANCHORED 2026-09-06 (AC-1), AND THE OLD LIST WOULD NOW LIE. The list used to START at
+     * `DEFAULT_PANEL_BUFFER_HEIGHT_PX` for a stated reason — "the first thing Max sees is whatever
+     * the game would actually ship" — and its other entries were chosen against "a panel occupies
+     * about 260 screen pixels". Both premises died when the cockpit dropped onto the world's pixel
+     * grid: the game now authors each panel at the rows it really gets (`panelBufferRows.js`), which
+     * is 43 for the upper pair and 46 for the lower at 240p/70°, and its smallest shipped value is
+     * 26 at 144p. Every entry in the old list was 5x-40x above anything that ships, so a legibility
+     * judgement made here would have passed at 512 rows and failed on the glass at 43 — the lab
+     * saying yes and the game saying no, with no instrument in between.
+     *
+     * ⭐ 43 AND 46 ARE THE SHIPPED PAIR AND 43 BOOTS, because it is the tighter of the two and the
+     * one that constrains legibility. 26 and 28 are the 144p floor, kept so the honest degradation
+     * below the era is reachable. The larger values stay as an A/B for the supersampling question
+     * they were added to answer — that question is still open, it is just no longer the default.
+     *
+     * ⚠ DEBT, LOGGED NOT CLOSED: the game passes a per-role FUNCTION now, so its two panel pairs get
+     * two different heights in one frame. This lab still cycles a single scalar across all four, so
+     * it cannot show the shipped configuration exactly — only either half of it. Converging it means
+     * handing the lab the same `panelBufferRows` closure against its own eye camera and a chosen line
+     * count. That is a lab change, not a game change, and it is not AC-1's to make.
      */
-    const BUFFER_HEIGHTS = [DEFAULT_PANEL_BUFFER_HEIGHT_PX, 256, 384, 768, 1024]
+    const BUFFER_HEIGHTS = [43, 46, 26, 28, DEFAULT_PANEL_BUFFER_HEIGHT_PX, 256, 384, 768, 1024]
       .filter((h, i, a) => a.indexOf(h) === i);
 
     /**
