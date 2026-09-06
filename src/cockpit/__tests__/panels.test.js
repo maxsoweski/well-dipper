@@ -1431,7 +1431,14 @@ describe('all three panels — nothing overlaps and nothing leaves the glass', (
   // 9). Painting TARGET onto an upper panel fails this guard truthfully — "SLOW DOWN" is nine
   // characters — but it fails about a configuration the game does not have, and a test that
   // reports a defect in a frame nobody renders is a test that gets muted.
-  const UPPER = [['upper 240p', 51, 43], ['upper 480p', 103, 86], ['upper 720p', 155, 129]];
+  // ⛔ 52, NOT 51, AT UPPER 240p — CORRECTED 2026-09-06 AGAINST THE RUNNING GAME. These widths are
+  // not free numbers: `derivePanelBuffer` takes `round(height * aspect)` and the faces are
+  // 0.240 x 0.200 m, so 43 * 1.2 = 51.6 rounds UP. `window._cockpit().buffers` reports 52 in HELM at
+  // 240p. Every other entry already agreed (86*1.2 = 103.2, 129*1.2 = 154.8, 46*1.2 = 55.2), which
+  // is exactly why the one that did not went unnoticed: a table that is right five times out of six
+  // reads as derived. A column narrow is the SAFE direction — it would reject a row the real panel
+  // has space for — but it means the guard has never run on the geometry that ships.
+  const UPPER = [['upper 240p', 52, 43], ['upper 480p', 103, 86], ['upper 720p', 155, 129]];
   const LOWER = [['lower 240p', 55, 46], ['lower 480p', 110, 92], ['lower 720p', 166, 138]];
   const SHIPPED = [
     ...UPPER.map((p) => [...p, [[paintDrive, 'DRIVE']]]),
