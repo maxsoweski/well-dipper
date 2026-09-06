@@ -39,6 +39,7 @@
  * what reaches his eye is the truth about the ship.
  */
 
+import { decodePixelText, FACE } from '../src/rendering/PixelText.js';
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -64,8 +65,9 @@ import { panelPainter } from '../src/cockpit/panelPainter.js';
 import { buildCockpitSnapshot } from '../src/cockpit/CockpitSnapshot.js';
 import { buildFlightReadout, flightReadoutStateFromSnapshot } from '../src/cockpit/FlightReadout.js';
 import { buildInfoRows, INFO_ROWS } from '../src/cockpit/InfoReadout.js';
-import { ALERT_TEXT, BLINK } from '../src/ui/AlertCue.js';
-import { PHOSPHOR, BLINK_MS, blinkOn } from '../src/cockpit/PhosphorScreen.js';
+import { ALERT_TEXT, BLINK, briefAlert } from '../src/ui/AlertCue.js';
+import { PHOSPHOR, BLINK_MS, blinkOn, PhosphorScreen } from '../src/cockpit/PhosphorScreen.js';
+import { fitDesignation } from '../src/cockpit/designation.js';
 import { formatSpeed } from '../src/ui/SpeedFormat.js';
 import { PanelHost, derivePanelBuffer, DEFAULT_PANEL_BUFFER_HEIGHT_PX } from '../src/cockpit/PanelHost.js';
 import { DEFAULT_PANEL_ROLES, SCREEN_NODE_RE } from '../src/cockpit/PanelLayout.js';
@@ -224,8 +226,24 @@ function paint(role, snapshot, nowMs, opts) {
   return panel.rec;
 }
 
-/** Just the strings a paint put on the glass, in draw order. */
-const drawnStrings = (rec) => rec.texts.map((t) => t.str);
+/**
+ * The strings a paint put on the glass — READ BACK OUT OF THE TEXELS.
+ *
+ * ⛔ `rec.texts` IS EMPTY NOW AND WILL STAY EMPTY. `chrome-and-ui-at-240p` moved the cockpit kit
+ * onto the repo's bitmap face, so every glyph arrives as `fillRect` texels and nothing calls
+ * `fillText` at all. Reading `rec.texts` here did not fail loudly — it returned `[]`, and every
+ * `toContain` in this file failed with "expected [] to include …", which reads like the painters
+ * stopped working rather than like the harness stopped looking in the right place.
+ *
+ * ⭐ AND THE REPLACEMENT IS STRICTLY HARDER. `decodePixelText` reconstructs each run from the
+ * texels actually drawn, so these assertions now ask the GLASS what it says instead of trusting the
+ * string a painter handed to `fillText` — a dropped glyph row, a fractional scale, or two runs
+ * landing on each other all fail here where the old form read perfectly.
+ */
+const decoded = (rec) => decodePixelText(rec.rects).map((d) => ({
+  str: d.text, x: d.x, y: d.y + d.scale * FACE.h, size: d.scale * FACE.h,
+}));
+const drawnStrings = (rec) => decoded(rec).map((t) => t.str);
 
 // ── The scripted flight ─────────────────────────────────────────────────────
 
@@ -547,7 +565,7 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
     // game, mounting its own version, could get it wrong with no test anywhere.
     const panel = makePanel('NAV');
     expect(() => LAB_PAINTERS.NAV(panel, frames[0].snapshot, 0)).not.toThrow();
-    expect(panel.rec.texts.length).toBeGreaterThan(0);
+    expect(decoded(panel.rec).length).toBeGreaterThan(0);
     expect(panelPainter(() => {})).toBeInstanceOf(Function);
 
     const labSource = readFileSync(join(HERE, '..', 'cockpit-screens-lab-panels.js'), 'utf8')
@@ -611,9 +629,16 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
     for (const { t, snapshot } of frames) {
       const readout = buildFlightReadout(flightReadoutStateFromSnapshot(snapshot));
       const strings = drawnStrings(paint('DRIVE', snapshot, t * 1000));
-      expect(strings, `@ ${t}s`).toContain(readout.speedText);
+      // ⚠ `speedValue`, NOT `speedText`. The DRIVE panel's display tier holds four characters at
+      // the game's resolution and "0.50 c" is six, so the model splits the same reading: the
+      // number is the hero and the unit is on the tier line under it. Both are still the model's
+      // own strings, which is what this test is about — see the pair asserted just below.
+      expect(strings, `@ ${t}s`).toContain(readout.speedValue);
+      expect(strings, `@ ${t}s`).toContain(readout.tierLine);
+      expect(`${readout.speedValue} ${readout.tierLine.replace(/^SUB /, '')}`, `@ ${t}s`)
+        .toBe(readout.speedText);
       if (snapshot.drive.speed < 0) {
-        expect(readout.speedText.startsWith('REV '), `@ ${t}s`).toBe(true);
+        expect(readout.speedValue.startsWith('REV '), `@ ${t}s`).toBe(true);
         checkedRev += 1;
       }
     }
@@ -624,8 +649,13 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
     let tagged = 0, untagged = 0;
     for (const { t, snapshot } of frames) {
       const strings = drawnStrings(paint('DRIVE', snapshot, t * 1000));
-      if (snapshot.drive.driveOn === false) { expect(strings, `@ ${t}s`).toContain('SUBLIGHT'); tagged += 1; }
-      else { expect(strings, `@ ${t}s`).not.toContain('SUBLIGHT'); untagged += 1; }
+      // ⚠ 'SUB', not 'SUBLIGHT'. The long word is exactly eight characters — the whole panel —
+      // and would leave the hero number with no unit under it, which is a number that means
+      // nothing. The model composes both; `READOUT_TEXT.SUBLIGHT` is unchanged for surfaces that
+      // have the room, and this asserts which one reaches this glass.
+      const sub = (strings.find((x) => x.startsWith('SUB ')) ?? '');
+      if (snapshot.drive.driveOn === false) { expect(sub, `@ ${t}s`).not.toBe(''); tagged += 1; }
+      else { expect(sub, `@ ${t}s`).toBe(''); untagged += 1; }
     }
     expect(tagged).toBeGreaterThan(10);
     expect(untagged).toBeGreaterThan(10);
@@ -639,7 +669,10 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
     // happening a second time on the way past.
     let checkedValues = 0;
     for (const { t, snapshot } of frames) {
-      const rows = buildInfoRows(snapshot);
+      // The panel asks the table for its BRIEF projection — five characters to a value on a
+      // nine-character panel — so the oracle asks for the same one. The long form still exists and
+      // still runs; it is asserted directly in InfoReadout's own tests.
+      const rows = buildInfoRows(snapshot, undefined, { brief: true });
       const strings = drawnStrings(paint('INFO', snapshot, t * 1000));
       for (const row of rows) {
         if (row.value === '') continue;
@@ -662,7 +695,11 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
     expect(after).toBeTruthy();
 
     const late = drawnStrings(paint('TARGET', after.snapshot, after.t * 1000));
-    expect(late).toContain(after.snapshot.target.name);
+    // Fitted to the glass. A designation longer than the panel loses its leading system name
+    // rather than being truncated into a plausible different identifier — `designation.js`.
+    const panel = makePanel('TARGET');
+    const screen = new PhosphorScreen(panel.ctx, { width: panel.canvas.width, height: panel.canvas.height });
+    expect(late).toContain(fitDesignation(after.snapshot.target.name, screen.colsAt(screen.type.body)));
     // Before the commit the snapshot carries no name, so the name cannot be on
     // the glass. Checking this way rather than for a placeholder string keeps
     // the assertion about the seam and not about TARGET's empty-state wording.
@@ -680,15 +717,15 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
       const nowMs = t * 1000;
       const strings = drawnStrings(paint('TARGET', snapshot, nowMs));
       if (!readout.drop) {
-        expect(strings, `@ ${t}s`).not.toContain(ALERT_TEXT.DROP_SAFE);
-        expect(strings, `@ ${t}s`).not.toContain(ALERT_TEXT.DROP_SLOW);
+        expect(strings, `@ ${t}s`).not.toContain(briefAlert(ALERT_TEXT.DROP_SAFE));
+        expect(strings, `@ ${t}s`).not.toContain(briefAlert(ALERT_TEXT.DROP_SLOW));
         continue;
       }
       if (blinkOn(readout.drop.blink, nowMs)) {
-        expect(strings, `@ ${t}s lit`).toContain(readout.drop.text);
+        expect(strings, `@ ${t}s lit`).toContain(briefAlert(readout.drop.text));
         litChecked += 1;
       } else {
-        expect(strings, `@ ${t}s dark`).not.toContain(readout.drop.text);
+        expect(strings, `@ ${t}s dark`).not.toContain(briefAlert(readout.drop.text));
         darkChecked += 1;
       }
     }
@@ -707,9 +744,9 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
       const nowMs = t * 1000;
       const onDrive = drawnStrings(paint('DRIVE', snapshot, nowMs));
       const onTarget = drawnStrings(paint('TARGET', snapshot, nowMs));
-      expect(onTarget, `@ ${t}s`).not.toContain(ALERT_TEXT.MASS_LOCK);
-      if (blinkOn(BLINK.FAST, nowMs)) { expect(onDrive, `@ ${t}s`).toContain(ALERT_TEXT.MASS_LOCK); litSeen += 1; }
-      else expect(onDrive, `@ ${t}s`).not.toContain(ALERT_TEXT.MASS_LOCK);
+      expect(onTarget, `@ ${t}s`).not.toContain(briefAlert(ALERT_TEXT.MASS_LOCK));
+      if (blinkOn(BLINK.FAST, nowMs)) { expect(onDrive, `@ ${t}s`).toContain(briefAlert(ALERT_TEXT.MASS_LOCK)); litSeen += 1; }
+      else expect(onDrive, `@ ${t}s`).not.toContain(briefAlert(ALERT_TEXT.MASS_LOCK));
     }
     expect(litSeen, 'the fast blink was never lit across the mass-lock leg').toBeGreaterThan(2);
   });
@@ -764,17 +801,56 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
     }
   });
 
-  it('scales the type with the buffer, so raising the resolution does not shrink the text', () => {
-    // The reason the type scale is fractions of H rather than pixels, and the
-    // reason the adapter reads the panel's own canvas instead of a constant.
-    // Doubling the buffer must double every font size; if it did not, the panel
-    // would look right at one setting and half-size at the next, with no error
-    // anywhere — the lab's own resolution control would be the thing breaking it.
-    const sizeOf = (rec) => parseFloat(/(\d+(?:\.\d+)?)px/.exec(rec.texts[0].font)[1]);
+  it('grows the type with the buffer, in whole grid units, never shrinking it', () => {
+    // The reason the adapter reads the panel's own canvas instead of a constant: type written in
+    // absolute pixels SHRINKS ON THE GLASS every time the resolution is raised, because the panel
+    // still occupies the same arc of the pilot's view. The lab's own resolution control would then
+    // be the thing breaking the panels, with no error anywhere.
+    //
+    // ⛔ THE OLD FORM — "doubling the buffer doubles the size", asserted to six decimal places —
+    // CANNOT HOLD ON A BITMAP FACE, and rewriting it is not a weakening. The face is drawn at
+    // integer multiples of its cell, because a glyph at 1.4x is resampled by the canvas into
+    // exactly the grey fringe `chrome-and-ui-at-240p` exists to remove. So the size steps: at
+    // H=256 the grid unit is 5 and at H=512 it is 11, a ratio of 2.2 rather than 2.
+    //
+    // The property that survives is the one that was actually being defended, and it is stronger
+    // than a single ratio because it is checked across the whole range: the type never gets
+    // smaller as the buffer grows, it does get bigger, and it tracks the buffer to within one
+    // grid unit — which is the most a stepped scale can promise and the least it must.
+    // ⚠ THE SIZE COMES FROM THE TEXELS, NOT FROM `ctx.font`. There is no font: the face is a
+    // bitmap and its cap height IS the size, which the decoder reports as `scale * FACE.h`.
+    // ⚠ MEASURED ON A KNOWN STRING, NOT ON "whatever decoded first". The hero picks its tier from
+    // what fits, so the first run on the glass is the display size at some buffers and the body
+    // size at others — and a comparison across that switch measures the switch, not the scale.
+    // 'THR' is always drawn, always at body size.
+    const sizeOf = (rec) => decoded(rec).find((d) => d.str === 'THR').size;
     const f = frames[80];
-    const small = paint('DRIVE', f.snapshot, f.t * 1000, { heightPx: 256 });
-    const large = paint('DRIVE', f.snapshot, f.t * 1000, { heightPx: 512 });
-    expect(sizeOf(large) / sizeOf(small)).toBeCloseTo(2, 6);
+    const at = (heightPx) => sizeOf(paint('DRIVE', f.snapshot, f.t * 1000, { heightPx }));
+
+    const heights = [128, 180, 256, 360, 512, 720, 1024];
+    const sizes = heights.map(at);
+    for (let i = 1; i < sizes.length; i++) {
+      expect(sizes[i], `type SHRANK from H=${heights[i - 1]} to H=${heights[i]}`)
+        .toBeGreaterThanOrEqual(sizes[i - 1]);
+    }
+    expect(sizes.at(-1), 'type did not grow at all across an eightfold range')
+      .toBeGreaterThan(sizes[0]);
+
+    // ⭐ THE TIGHT FORM, and it is exact rather than a tolerance picked to pass. The grid is 43
+    // rows — `2*pad + body + 6*lead` on a five-row cell, written out rather than imported so that
+    // moving it has to come here — so the ideal body size at a buffer of H is `5 * H/43`, and the
+    // shipped one is that FLOORED to whole cells. A stepped scale can therefore promise exactly
+    // two things: it never overshoots the ideal, and it is never a whole cell short of it.
+    const GRID_ROWS = 43;
+    for (let i = 0; i < sizes.length; i++) {
+      const ideal = FACE.h * (heights[i] / GRID_ROWS);
+      expect(sizes[i], `at H=${heights[i]} the type is ${sizes[i]}, ABOVE the ideal ${ideal.toFixed(1)}`)
+        .toBeLessThanOrEqual(ideal);
+      expect(ideal - sizes[i],
+        `at H=${heights[i]} the type is ${sizes[i]} against an ideal of ${ideal.toFixed(1)} — a ` +
+        `whole cell adrift, which is a scale that has stopped tracking the buffer`)
+        .toBeLessThan(FACE.h);
+    }
   });
 
   it('derives the buffer width from the measured aspect, never from a second number', () => {
@@ -893,7 +969,7 @@ describe('lab mounting path — PanelHost + the lab painters, on the real assets
     // And every panel actually drew — a host that repainted nothing would also
     // produce no errors, which is the vacuous way to pass the check above.
     for (const p of host.panels) {
-      expect(p.canvas._rec.texts.length, `${p.role} drew no text at all`).toBeGreaterThan(0);
+      expect(decoded(p.canvas._rec).length, `${p.role} drew no text at all`).toBeGreaterThan(0);
     }
     host.dispose();
   });

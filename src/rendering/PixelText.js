@@ -503,14 +503,30 @@ export function decodePixelText(rects) {
         let bad = 0;
         const decoded = [];
         for (const run of runs) {
-          const x0 = run[0];
-          const cells = Math.floor((run[run.length - 1] - x0) / (ADV * s)) + 1;
-          let text = '';
-          for (let c = 0; c < cells; c++) {
-            const ch = cellAt(x0 + c * ADV * s, y0);
-            if (ch === null) { text += '\uFFFD'; bad++; } else { text += ch; if (ch !== ' ') score++; }
+          // ⭐ TRY EVERY COLUMN ORIGIN, NOT JUST THE LEFTMOST TEXEL — the exact mirror of the row
+          // anchor search above, and it was missing. A run's first lit column is not its cell's
+          // left edge whenever the leading glyph is blank down its first column: '1' is lit only
+          // in columns 1-3 of five, and so are '-', '.' and ':'. Anchoring at `min(x)` shifted
+          // every such string one texel right and matched nothing, so "175" and "--:--" decoded as
+          // pure tofu and vanished — silently, because an all-tofu run is dropped.
+          let bestRun = null;
+          for (let k = 0; k < GW; k++) {
+            const x0 = run[0] - k * s;
+            const cells = Math.floor((run[run.length - 1] - x0) / (ADV * s)) + 1;
+            let text = '';
+            let good = 0;
+            let miss = 0;
+            for (let c = 0; c < cells; c++) {
+              const ch = cellAt(x0 + c * ADV * s, y0);
+              if (ch === null) { text += '\uFFFD'; miss++; } else { text += ch; if (ch !== ' ') good++; }
+            }
+            if (!bestRun || (good - miss) > (bestRun.good - bestRun.miss)) {
+              bestRun = { x0, text, good, miss };
+            }
           }
-          decoded.push({ x0, text });
+          score += bestRun.good;
+          bad += bestRun.miss;
+          decoded.push({ x0: bestRun.x0, text: bestRun.text });
         }
         // ⭐ UNMATCHED CELLS COUNT AGAINST AN ANCHOR, THEY DO NOT COME FREE. Scoring on resolved
         // cells alone made a WRONG origin competitive: a band is `GH * s` tall, so an anchor placed
