@@ -16,6 +16,11 @@
 // that it renders the characters the game actually emits, at the geometry it claims.
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 import {
   drawPixelText, measurePixelText, pixelTextHeight, hasGlyph,
   FACE, setPixelFace, pixelFaceNames,
@@ -199,14 +204,15 @@ describe('PixelText legibility floor', () => {
     expect(pairs, `confusable at <=2px on the ${FACE.name} face: ${pairs.join(' ')}`).toEqual(['D/O=2px']);
   });
 
-  it('…and the 3x5 reference face still FAILS it, which is why it is not the shipped face', () => {
-    // ⛔ A NON-VACUITY CHECK ON THE GATE ABOVE, and a fence against quietly re-shipping 3x5. If
-    // this ever passes, the metric has stopped measuring anything.
-    setPixelFace('3x5');
-    const pairs = confusablePairs(2);
-    expect(pairs.length).toBeGreaterThan(8);
-    expect(pairs).toContain('M/N=1px');
+  it('the gate is not vacuous — loosen the threshold and it finds plenty', () => {
+    // ⛔ THE NON-VACUITY CHECK, AND IT NO LONGER HAS A BAD FACE TO LEAN ON. It used to assert the
+    // 3x5 face failed at <=2px; that face is deleted (Max rejected it twice and it was a
+    // maintenance tax on every glyph addition). Widening the threshold proves the same thing
+    // without keeping a face nobody ships: if `confusablePairs` had stopped measuring similarity,
+    // it would return nothing at ANY threshold.
     setPixelFace('5x5');
+    expect(confusablePairs(2)).toEqual(['D/O=2px']);
+    expect(confusablePairs(6).length).toBeGreaterThan(10);
   });
 
   it('the taller A/B alternative clears the same bar, so the choice is size and not legibility', () => {
@@ -222,6 +228,66 @@ describe('PixelText legibility floor', () => {
       setPixelFace(face);
       const missing = [...LITERALS].filter((ch) => !hasGlyph(ch));
       expect(missing, `${face} cannot render ${missing.join('')}`).toEqual([]);
+    }
+    setPixelFace('5x5');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// ⭐ COCKPIT + NAV COVERAGE (chrome-and-ui-at-240p batch 2, step 1)
+//
+// ⛔ A MISSING GLYPH HERE IS A BLACK PANEL, NOT A MISSING CHARACTER. `drawPixelText` defaults to
+// `onMissing: 'throw'`, `PanelHost` catches a painter throw ONCE and then leaves that screen
+// frozen, and `NavPanel` clears the screen before it draws — so the pilot loses the whole panel.
+//
+// ⚠ SCANNED, NOT LISTED. The batch plan carried a hand-written list of missing characters; five of
+// them appear in no cockpit source at all and it missed five that do (`!` `=` `*` `|` and the
+// middle dot). A list goes stale silently the first time somebody edits a literal. This reads the
+// sources.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+describe('PixelText covers what the cockpit and nav actually draw', () => {
+  // ⚠ Every path is guarded by `existsSync` below, and that guard has already earned its keep:
+  // it caught `AlertCue.js` listed under src/cockpit when it lives in src/ui. A scan over a file
+  // that is not there reports ZERO missing characters, which is the most dangerous possible pass.
+  const SOURCES = [
+    'src/ui/NavComputer.js', 'src/ui/AlertCue.js',
+    'src/cockpit/PhosphorScreen.js', 'src/cockpit/InfoReadout.js', 'src/cockpit/FlightReadout.js',
+    'src/cockpit/panels/NavPanel.js', 'src/cockpit/panels/DrivePanel.js',
+    'src/cockpit/panels/InfoPanel.js', 'src/cockpit/panels/TargetPanel.js',
+  ];
+
+  /** Every character reachable from a drawn string literal in these files. */
+  function drawnCharacters() {
+    const found = new Map();
+    for (const rel of SOURCES) {
+      const abs = resolve(HERE, '..', rel);
+      if (!existsSync(abs)) throw new Error(`coverage scan points at a file that moved: ${rel}`);
+      const code = readFileSync(abs, 'utf8');
+      const re = /(?:fillText|strokeText|\.text|\.banner|drawPixelText)\(\s*(?:[A-Za-z_$][\w$.]*\s*,\s*)?(['`"])((?:\\.|(?!\1)[^\\])*)\1/g;
+      let m;
+      while ((m = re.exec(code))) {
+        // ⚠ Strip `${…}` spans first. Their contents are EXPRESSIONS, not glyphs — requiring a
+        // face to render `$`, `{` and `.` because a template interpolates would be nonsense.
+        const literal = m[2].replace(/\$\{[^}]*\}/g, '');
+        for (const ch of literal) if (!found.has(ch)) found.set(ch, rel);
+      }
+    }
+    return found;
+  }
+
+  it('finds real literals to check, so the assertion below cannot pass by scanning nothing', () => {
+    const found = drawnCharacters();
+    expect(found.size).toBeGreaterThan(30);
+    expect(found.has('A') || found.has('a')).toBe(true);
+  });
+
+  it('every face renders every character the cockpit and nav draw', () => {
+    const found = drawnCharacters();
+    for (const face of pixelFaceNames()) {
+      setPixelFace(face);
+      const missing = [...found.entries()].filter(([ch]) => !hasGlyph(ch));
+      expect(missing.map(([ch, src]) => `${JSON.stringify(ch)} (${src})`),
+        `${face} cannot render these — each one is a black panel`).toEqual([]);
     }
     setPixelFace('5x5');
   });

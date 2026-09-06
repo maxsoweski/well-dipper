@@ -76,62 +76,6 @@ export const FACE = { name: '', w: 0, h: 0, advance: 0 };
 
 const FACES = Object.freeze({
   /**
-   * ⛔ KEPT ONLY AS THE A/B REFERENCE. This is the face Max rejected; see the table above for the
-   * measurement. Do not route a surface at it.
-   */
-  '3x5': Object.freeze({
-    w: 3, h: 5, advance: 4, glyphs: Object.freeze({
-  ' ': [0b000, 0b000, 0b000, 0b000, 0b000],
-  A: [0b010, 0b101, 0b111, 0b101, 0b101],
-  B: [0b110, 0b101, 0b110, 0b101, 0b110],
-  C: [0b011, 0b100, 0b100, 0b100, 0b011],
-  D: [0b110, 0b101, 0b101, 0b101, 0b110],
-  E: [0b111, 0b100, 0b110, 0b100, 0b111],
-  F: [0b111, 0b100, 0b110, 0b100, 0b100],
-  G: [0b011, 0b100, 0b101, 0b101, 0b011],
-  H: [0b101, 0b101, 0b111, 0b101, 0b101],
-  I: [0b111, 0b010, 0b010, 0b010, 0b111],
-  J: [0b001, 0b001, 0b001, 0b101, 0b010],
-  K: [0b101, 0b101, 0b110, 0b101, 0b101],
-  L: [0b100, 0b100, 0b100, 0b100, 0b111],
-  M: [0b101, 0b111, 0b111, 0b101, 0b101],
-  N: [0b101, 0b111, 0b111, 0b111, 0b101],
-  O: [0b010, 0b101, 0b101, 0b101, 0b010],
-  P: [0b110, 0b101, 0b110, 0b100, 0b100],
-  Q: [0b010, 0b101, 0b101, 0b111, 0b011],
-  R: [0b110, 0b101, 0b110, 0b101, 0b101],
-  S: [0b011, 0b100, 0b010, 0b001, 0b110],
-  T: [0b111, 0b010, 0b010, 0b010, 0b010],
-  U: [0b101, 0b101, 0b101, 0b101, 0b011],
-  V: [0b101, 0b101, 0b101, 0b101, 0b010],
-  W: [0b101, 0b101, 0b111, 0b111, 0b101],
-  X: [0b101, 0b101, 0b010, 0b101, 0b101],
-  Y: [0b101, 0b101, 0b010, 0b010, 0b010],
-  Z: [0b111, 0b001, 0b010, 0b100, 0b111],
-  0: [0b111, 0b101, 0b101, 0b101, 0b111],
-  1: [0b010, 0b110, 0b010, 0b010, 0b111],
-  2: [0b110, 0b001, 0b010, 0b100, 0b111],
-  3: [0b110, 0b001, 0b010, 0b001, 0b110],
-  4: [0b101, 0b101, 0b111, 0b001, 0b001],
-  5: [0b111, 0b100, 0b110, 0b001, 0b110],
-  6: [0b011, 0b100, 0b111, 0b101, 0b111],
-  7: [0b111, 0b001, 0b010, 0b010, 0b010],
-  8: [0b111, 0b101, 0b111, 0b101, 0b111],
-  9: [0b111, 0b101, 0b111, 0b001, 0b110],
-  '.': [0b000, 0b000, 0b000, 0b000, 0b010],
-  ',': [0b000, 0b000, 0b000, 0b010, 0b100],
-  ':': [0b000, 0b010, 0b000, 0b010, 0b000],
-  '-': [0b000, 0b000, 0b111, 0b000, 0b000],
-  '—': [0b000, 0b000, 0b111, 0b000, 0b000],   // EM DASH — AlertCue's alert carries one
-  '/': [0b001, 0b001, 0b010, 0b100, 0b100],
-  '%': [0b101, 0b001, 0b010, 0b100, 0b101],
-  '+': [0b000, 0b010, 0b111, 0b010, 0b000],
-  '_': [0b000, 0b000, 0b000, 0b000, 0b111],   // the cockpit kit has identifiers like T_EQ; adding the glyph beats a rename cascade
-  '<': [0b001, 0b010, 0b100, 0b010, 0b001],
-  '>': [0b100, 0b010, 0b001, 0b010, 0b100],
-    }),
-  }),
-  /**
    * ⭐ THE SHIPPED FACE. Five columns is the width at which a letter can be distinguished by its
    * MIDDLE rather than only by its outline; five rows is as short as that can be carried.
    *
@@ -193,6 +137,25 @@ const FACES = Object.freeze({
   '_': [0b00000, 0b00000, 0b00000, 0b00000, 0b11111],
   '<': [0b00010, 0b00100, 0b01000, 0b00100, 0b00010],
   '>': [0b01000, 0b00100, 0b00010, 0b00100, 0b01000],
+  // ── ⭐ ADDED FOR THE COCKPIT AND NAV PANELS (batch 2 step 1) ──────────────────────────────
+  // ⚠ SOURCED BY SCANNING THE DRAWN LITERALS, not guessed and not taken from the batch plan,
+  // whose list named five characters no cockpit source emits and missed five that do.
+  // `drawPixelText` defaults to onMissing:'throw' and NavPanel CLEARS the screen before drawing,
+  // so an unmapped codepoint here is a BLACK PANEL, not a missing character.
+  '!': [0b00100, 0b00100, 0b00100, 0b00000, 0b00100],
+  "'": [0b00100, 0b00100, 0b00000, 0b00000, 0b00000],
+  '(': [0b00010, 0b00100, 0b00100, 0b00100, 0b00010],
+  ')': [0b01000, 0b00100, 0b00100, 0b00100, 0b01000],
+  '*': [0b00100, 0b10101, 0b01110, 0b10101, 0b00100],
+  '=': [0b00000, 0b11111, 0b00000, 0b11111, 0b00000],
+  '?': [0b01110, 0b10001, 0b00110, 0b00000, 0b00100],
+  '[': [0b01110, 0b01000, 0b01000, 0b01000, 0b01110],
+  ']': [0b01110, 0b00010, 0b00010, 0b00010, 0b01110],
+  '`': [0b01000, 0b00100, 0b00000, 0b00000, 0b00000],
+  '|': [0b00100, 0b00100, 0b00100, 0b00100, 0b00100],
+  '\u00b0': [0b01110, 0b01010, 0b01110, 0b00000, 0b00000],
+  '\u00b7': [0b00000, 0b00000, 0b00100, 0b00000, 0b00000],
+  '\u2295': [0b01110, 0b10101, 0b11111, 0b10101, 0b01110],
     }),
   }),
   /**
@@ -250,6 +213,25 @@ const FACES = Object.freeze({
   '_': [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b11111],
   '<': [0b00010, 0b00100, 0b01000, 0b10000, 0b01000, 0b00100, 0b00010],
   '>': [0b01000, 0b00100, 0b00010, 0b00001, 0b00010, 0b00100, 0b01000],
+  // ── ⭐ ADDED FOR THE COCKPIT AND NAV PANELS (batch 2 step 1) ──────────────────────────────
+  // ⚠ SOURCED BY SCANNING THE DRAWN LITERALS, not guessed and not taken from the batch plan,
+  // whose list named five characters no cockpit source emits and missed five that do.
+  // `drawPixelText` defaults to onMissing:'throw' and NavPanel CLEARS the screen before drawing,
+  // so an unmapped codepoint here is a BLACK PANEL, not a missing character.
+  '!': [0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00000, 0b00100],
+  "'": [0b00100, 0b00100, 0b00100, 0b00000, 0b00000, 0b00000, 0b00000],
+  '(': [0b00010, 0b00100, 0b01000, 0b01000, 0b01000, 0b00100, 0b00010],
+  ')': [0b01000, 0b00100, 0b00010, 0b00010, 0b00010, 0b00100, 0b01000],
+  '*': [0b00000, 0b00100, 0b10101, 0b01110, 0b10101, 0b00100, 0b00000],
+  '=': [0b00000, 0b00000, 0b11111, 0b00000, 0b11111, 0b00000, 0b00000],
+  '?': [0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b00000, 0b00100],
+  '[': [0b01110, 0b01000, 0b01000, 0b01000, 0b01000, 0b01000, 0b01110],
+  ']': [0b01110, 0b00010, 0b00010, 0b00010, 0b00010, 0b00010, 0b01110],
+  '`': [0b01000, 0b00100, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
+  '|': [0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100],
+  '\u00b0': [0b01110, 0b01010, 0b01110, 0b00000, 0b00000, 0b00000, 0b00000],
+  '\u00b7': [0b00000, 0b00000, 0b00000, 0b00100, 0b00000, 0b00000, 0b00000],
+  '\u2295': [0b00000, 0b01110, 0b10101, 0b11111, 0b10101, 0b01110, 0b00000],
     }),
   }),
 });
