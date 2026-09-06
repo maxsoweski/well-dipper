@@ -13164,7 +13164,7 @@ function renderFrame(alpha) {
     ? Math.atan2(camera.position.x, camera.position.z)
     : cameraController.smoothedYaw;
   if (systemMap) {
-    systemMap.update(camera, hudYaw, focusIndex, renderDt);
+    systemMap.update(camera, hudYaw, focusIndex, renderDt, retroRenderer.hudTarget?.height || 0);   // ⭐ the map's buffer is derived from the resolution setting now, so it has to be READ each frame, not captured (SystemMap._applyPixelFloors)
   }
   if (gravityWell && gravityWellVisible) {
     gravityWell.update(hudYaw);

@@ -44,10 +44,22 @@ export class SystemMap {
     const camDist = e * 2;
     this._tiltAngle = tiltAngle;
     this._camDist = camDist;
+    // The map's own buffer, in texels. 0 until the first update() carries it in — every pixel
+    // floor is derived from it, and _pxToWorld returns 0 rather than Infinity while it is unset.
+    this._bufferPx = 0;
+    this._focusRimWorld = 0;
 
-    // Wider frustum to account for foreshortened view at tilt angle
+    // ⭐⭐ ISOTROPIC SINCE 2026-09-06, AND IT IS A PRECONDITION RATHER THAN A TIDY-UP. The vertical
+    // half-height was e * 1.6 against a horizontal e * 1.2 — a 1.33:1 anisotropic frustum on a
+    // SQUARE target. three's sprite program scales in view space, ROTATES, and only then projects
+    // (sprite.glsl.js), so a rotating sprite under an anisotropic projection is SHEARED: it changes
+    // shape as it turns. The camera pointer below is now a rotating sprite, so this had to go first.
+    // ⚠ The 1.6 was there to fit orbits that foreshorten under the 35-degree tilt. 1.2 keeps that
+    // headroom on both axes rather than only one — the tilt compresses Z into Y, and a square
+    // frustum over a square buffer means one map unit is one texel in both directions, which is what
+    // makes a pixel floor expressible at all.
     const hFrustum = e * 1.2;
-    const vFrustum = e * 1.6;  // taller to fit orbits that compress vertically
+    const vFrustum = e * 1.2;
     const farPlane = camDist + e * 2;  // far enough to see everything through the tilted view
     this.camera = new THREE.OrthographicCamera(-hFrustum, hFrustum, vFrustum, -vFrustum, 0.1, farPlane);
     this.camera.position.set(0, camDist * Math.cos(tiltAngle), camDist * Math.sin(tiltAngle));
@@ -174,36 +186,41 @@ export class SystemMap {
 
   // ── Camera pointer (tiny arrow that moves with camera position and shows heading) ──
   _buildCameraIndicator() {
-    // Triangular pointer — points in the camera's facing direction.
-    // Moves around the map following the camera's XZ position in map-space.
-    // Sized to match planet dots so it's clearly visible.
-    const s = this.extent * 0.08; // pointer size (matches planet dot scale)
-    const shape = new THREE.Shape();
-    // Triangle pointing along +Z (forward)
-    shape.moveTo(0, s * 0.6);       // tip (front)
-    shape.lineTo(-s * 0.35, -s * 0.4);  // back-left
-    shape.lineTo(s * 0.35, -s * 0.4);   // back-right
-    shape.closePath();
+    // ⭐⭐ A SPRITE, NOT A ShapeGeometry MESH, SINCE 2026-09-06. The triangle was authored in world
+    // units (extent * 0.08) and rotated in the XZ plane, so on a buffer that is now ~121 texels
+    // across it became a sub-texel sliver that vanished at some headings and aliased at others — a
+    // vector glyph on a pixel grid, which is the whole defect this workstream exists to remove.
+    // A sprite carries a hand-authored pixel chevron and takes an absolute texel size from
+    // _applyPixelFloors, so it is the same legible shape at every resolution.
+    // ⚠ THIS IS WHY THE FRUSTUM HAD TO GO ISOTROPIC FIRST: three rotates a sprite in view space
+    // BEFORE projecting, so an anisotropic frustum shears it as it turns.
+    const S = 9;                       // odd, so the chevron has a true centre column
+    const canvas = document.createElement('canvas');
+    canvas.width = S;
+    canvas.height = S;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    // A solid chevron pointing UP (-Y in canvas space), widening toward the base.
+    const rows = [
+      [4, 4], [3, 5], [3, 5], [2, 6], [2, 6], [1, 7], [1, 7], [0, 8], [0, 8],
+    ];
+    rows.forEach(([x0, x1], y) => ctx.fillRect(x0, y, x1 - x0 + 1, 1));
+    // Notch the base so it reads as an arrowhead rather than a triangle at 9 texels.
+    ctx.clearRect(3, S - 2, 3, 2);
 
-    const geo = new THREE.ShapeGeometry(shape);
-    // ShapeGeometry creates in XY plane — we need XZ plane.
-    // Rotate vertices: swap Y→Z so the triangle lies flat on the map.
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      pos.setXYZ(i, x, 0, -y); // -Y → +Z so tip points along -Z (up on map)
-    }
-    pos.needsUpdate = true;
-    geo.computeBoundingSphere();
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    tex.needsUpdate = true;
 
-    const mat = new THREE.MeshBasicMaterial({
+    const mat = new THREE.SpriteMaterial({
+      map: tex,
       color: 0xffffff,
       depthWrite: false,
       depthTest: false,
-      side: THREE.DoubleSide,
     });
-    this._camPointer = new THREE.Mesh(geo, mat);
+    this._camPointer = new THREE.Sprite(mat);
     this._camPointer.renderOrder = 3; // on top of everything
     this.scene.add(this._camPointer);
   }
@@ -219,6 +236,74 @@ export class SystemMap {
   }
 
   /**
+   * One buffer texel, expressed in map world units.
+   *
+   * The map camera is an isotropic orthographic box of half-extent `extent * 1.2`, drawn into a
+   * square buffer of `_bufferPx` texels — so the whole box is `2 * extent * 1.2` world units across
+   * `_bufferPx` texels.
+   *
+   * ⚠ THE ZERO GUARD IS NOT OPTIONAL. `_bufferPx` is fed from the render target and is 0 until the
+   * first update() carries it. Dividing by it would hand every caller Infinity, and an Infinity
+   * sprite scale is a map blown out to a white screen rather than a visibly missing feature.
+   * @param {number} px @returns {number} world units
+   */
+  _pxToWorld(px) {
+    if (!this._bufferPx) return 0;
+    return (px * 2 * this.extent * 1.2) / this._bufferPx;
+  }
+
+  /**
+   * Re-derive every size that needs a pixel floor, for the buffer the map currently has.
+   *
+   * ⭐ WHY FLOORS AT ALL. Every size in this class was a FRACTION OF EXTENT — 6% for a star, 4-14%
+   * for a planet, 8% for the pointer. Those are resolution-independent in world terms and therefore
+   * resolution-DEPENDENT in pixels: on the old fixed 320 buffer a 4% planet was 15 texels, and on
+   * the 121-texel buffer the resolution setting now produces it is 5.8, with the smallest bodies
+   * under 3. Max, 2026-09-06: anything that does not read at this resolution gets redesigned.
+   *
+   * ⭐ FLOORS, NOT REPLACEMENTS. The proportional law is what makes a gas giant read as bigger than
+   * a rocky world, and that is worth keeping — it is the map's only size signal. So each size keeps
+   * its fraction and is then RAISED to a minimum expressed in texels. At a large buffer the floors
+   * are inert and the map looks exactly as it always did; at a small one they take over.
+   *
+   * ⚠ RECOMPUTED FROM `extent` AND `planetMapData`, never from the sprites' current scale, so this
+   * is idempotent — calling it twice for the same buffer cannot ratchet sizes upward.
+   */
+  _applyPixelFloors() {
+    const e = this.extent;
+    // Texel floors. A body has to be a recognisable disc, not a lit pixel — the starfield already
+    // owns "one lit pixel" and a planet that reads as a star is the illegibility being fixed.
+    const STAR_MIN_PX = 7;
+    const PLANET_MIN_PX = 4;
+    const POINTER_PX = 9;      // absolute: the chevron's authored texture is 9 texels
+    const FOCUS_RIM_PX = 2;    // rim thickness, added to the dot's diameter
+
+    if (this._starSprites && this._starSprites.length) {
+      const starSize = Math.max(e * 0.06, this._pxToWorld(STAR_MIN_PX));
+      this._starSprites[0].scale.set(starSize, starSize, 1);
+      if (this._starSprites[1]) {
+        const s2 = Math.max(e * 0.06 * 0.85, this._pxToWorld(STAR_MIN_PX));
+        this._starSprites[1].scale.set(s2, s2, 1);
+      }
+    }
+    if (this._planetSprites && this._planetSprites.length) {
+      const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
+      for (let i = 0; i < this._planetSprites.length; i++) {
+        const t = this.planetMapData[i].mapRadius / maxMapRadius;
+        const size = Math.max(e * (0.04 + t * 0.10), this._pxToWorld(PLANET_MIN_PX));
+        this._planetSprites[i].scale.set(size, size, 1);
+      }
+    }
+    if (this._camPointer) {
+      // ⚠ ABSOLUTE, not floored. The pointer is a hand-authored 9-texel glyph; drawing it at any
+      // other size resamples it and undoes the reason it stopped being a mesh.
+      const p = this._pxToWorld(POINTER_PX);
+      if (p > 0) this._camPointer.scale.set(p, p, 1);
+    }
+    this._focusRimWorld = this._pxToWorld(FOCUS_RIM_PX);
+  }
+
+  /**
    * Create a circular Sprite for the map.
    * Uses a shared circle texture so dots appear round, not square.
    * @param {number[]} color — [r, g, b] in 0–1
@@ -226,16 +311,28 @@ export class SystemMap {
    */
   _makeSprite(color, size) {
     if (!SystemMap._circleTexture) {
-      const s = 32;
+      // ⭐ AN 8x8 HARD DISC ON NEAREST, NOT A 32x32 ANTIALIASED ONE. A canvas `arc` fill is
+      // antialiased, and the map's buffer is now the world's grid — so a dot a few texels across was
+      // being minified from 32 with the default LinearFilter, which turns a 3-texel planet into a
+      // grey smudge with no edge. Authoring the disc AT roughly the size it is drawn, with hard
+      // coverage and Nearest sampling, gives it the same hard edge every other surface now has.
+      const s = 8;
       const canvas = document.createElement('canvas');
       canvas.width = s;
       canvas.height = s;
       const ctx = canvas.getContext('2d');
-      ctx.beginPath();
-      ctx.arc(s / 2, s / 2, s / 2 - 1, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
-      ctx.fill();
+      // Explicit per-texel coverage: no arc(), because arc() antialiases and that is the defect.
+      const r = s / 2, c = (s - 1) / 2;
+      for (let y = 0; y < s; y++) {
+        for (let x = 0; x < s; x++) {
+          if ((x - c) * (x - c) + (y - c) * (y - c) <= (r - 0.5) * (r - 0.5)) ctx.fillRect(x, y, 1, 1);
+        }
+      }
       SystemMap._circleTexture = new THREE.CanvasTexture(canvas);
+      SystemMap._circleTexture.magFilter = THREE.NearestFilter;
+      SystemMap._circleTexture.minFilter = THREE.NearestFilter;
+      SystemMap._circleTexture.generateMipmaps = false;
       SystemMap._circleTexture.needsUpdate = true;
     }
 
@@ -261,7 +358,15 @@ export class SystemMap {
    * @param {number} focusIndex — -1 = overview, 0+ = planet index
    * @param {number} deltaTime — frame time in seconds (for blink animation)
    */
-  update(mainCamera, mainYaw, focusIndex, deltaTime) {
+  update(mainCamera, mainYaw, focusIndex, deltaTime, bufferPx) {
+    // ⭐ THE MAP NOW KNOWS HOW MANY PIXELS IT HAS. Its buffer used to be a fixed 320 square and is
+    // now derived from the resolution setting (RetroRenderer.resize), so every size below that
+    // wants a pixel floor has to be recomputed when it changes — a value cached at construction
+    // would strand the map at whatever the setting was when the system loaded.
+    if (Number.isFinite(bufferPx) && bufferPx >= 1 && bufferPx !== this._bufferPx) {
+      this._bufferPx = bufferPx;
+      this._applyPixelFloors();
+    }
     const sys = this.systemState;
 
     // ── Update star positions ──
@@ -290,8 +395,12 @@ export class SystemMap {
     const cx = mainCamera.position.x * this.sceneToMap;
     const cz = mainCamera.position.z * this.sceneToMap;
     this._camPointer.position.set(cx, 0.3, cz);
-    // Rotate pointer to show camera heading (account for map rotation)
-    this._camPointer.rotation.y = -mainYaw - this._mapYaw;
+    // Rotate pointer to show camera heading (account for map rotation).
+    // ⚠ SAME SIGN AS THE MESH IT REPLACED. A Sprite has no meaningful `rotation.y` — it always
+    // faces the camera — so the angle moves to `material.rotation`, which spins it in screen space.
+    // The expression is unchanged: negating it here to "compensate for screen space" would point
+    // the chevron the wrong way, which is a heading indicator lying about heading.
+    this._camPointer.material.rotation = -mainYaw - this._mapYaw;
 
     // ── Focus ring ──
     if (focusIndex >= 0 && focusIndex < this._planetSprites.length) {
@@ -302,8 +411,14 @@ export class SystemMap {
       // Size the highlight sprite slightly larger than the planet dot (stroke effect)
       const maxMapRadius = Math.max(...this.planetMapData.map(p => p.mapRadius));
       const t = this.planetMapData[focusIndex].mapRadius / maxMapRadius;
-      const dotSize = this.extent * (0.04 + t * 0.10);
-      const strokeSize = dotSize * 1.35; // slightly larger = visible green border
+      // ⭐ AN ABSOLUTE RIM, NOT A RATIO. 1.35x of a dot is a proportional border: on the buffer the
+      // resolution setting now produces, 1.35 x a 4-texel planet is 5.4, so the visible green rim is
+      // 0.7 of a texel per side and rounds away to nothing on the smallest bodies — exactly the ones
+      // hardest to see. A fixed texel rim is the same readable thickness on every body.
+      // ⚠ Mirrors the floored size from _applyPixelFloors rather than the raw fraction, or the rim
+      // would sit INSIDE a floored dot and never show.
+      const dotSize = Math.max(this.extent * (0.04 + t * 0.10), this._pxToWorld(4));
+      const strokeSize = dotSize + 2 * (this._focusRimWorld || 0);
       this._focusRing.scale.set(strokeSize, strokeSize, 1);
 
       // Blink animation: 3 quick on/off flashes when transitioning
