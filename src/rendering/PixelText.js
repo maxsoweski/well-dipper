@@ -156,6 +156,40 @@ const FACES = Object.freeze({
   '\u00b0': [0b01110, 0b01010, 0b01110, 0b00000, 0b00000],
   '\u00b7': [0b00000, 0b00000, 0b00100, 0b00000, 0b00000],
   '\u2295': [0b01110, 0b10101, 0b11111, 0b10101, 0b01110],
+  // ── ⭐ LOWERCASE (Max, 2026-09-07: *"I'd prefer to be able to use lowercase too"*) ────────
+  // ⛔ NO TRUE DESCENDERS ON THE 5-ROW FACE. Five rows have nothing below the baseline, so g, j,
+  // p, q and y sit ON it. That is what small bitmap faces have always done, and the alternative —
+  // a sixth row — costs a row on every line of every cockpit panel, which is the budget Max just
+  // asked to shrink. The 5x7 face below does have room and uses it.
+  // ⚠ FIRST DRAFT SCORED EIGHT confusable pairs with a/e and u/v ONE pixel apart, and I was about
+  // to report that a 5-row cell cannot carry lowercase. Redrawing eight glyphs took it to three.
+  // Second time this session a draft nearly got mistaken for the design space.
+  a: [0b00000, 0b00000, 0b01110, 0b10110, 0b01111],
+  b: [0b10000, 0b10000, 0b11100, 0b10010, 0b11100],
+  c: [0b00000, 0b00000, 0b01110, 0b10000, 0b01110],
+  d: [0b00010, 0b00010, 0b01110, 0b10010, 0b01110],
+  e: [0b00000, 0b00000, 0b01110, 0b11100, 0b01110],
+  f: [0b00110, 0b01000, 0b11100, 0b01000, 0b01000],
+  g: [0b00000, 0b01110, 0b10010, 0b01110, 0b01100],
+  h: [0b10000, 0b10000, 0b11100, 0b10010, 0b10010],
+  i: [0b00100, 0b00000, 0b01100, 0b00100, 0b01110],
+  j: [0b00010, 0b00000, 0b00110, 0b10010, 0b01100],
+  k: [0b10000, 0b10010, 0b10100, 0b11000, 0b10110],
+  l: [0b01100, 0b00100, 0b00100, 0b00100, 0b00110],
+  m: [0b00000, 0b00000, 0b11010, 0b10101, 0b10101],
+  n: [0b00000, 0b00000, 0b11100, 0b10010, 0b10010],
+  o: [0b00000, 0b00000, 0b01100, 0b10010, 0b01100],
+  p: [0b00000, 0b11100, 0b10010, 0b11100, 0b10000],
+  q: [0b00000, 0b01110, 0b10010, 0b01110, 0b00011],
+  r: [0b00000, 0b00000, 0b10110, 0b11000, 0b10000],
+  s: [0b00000, 0b00000, 0b01110, 0b01100, 0b11100],
+  t: [0b01000, 0b11100, 0b01000, 0b01000, 0b00110],
+  u: [0b00000, 0b00000, 0b10010, 0b10010, 0b01110],
+  v: [0b00000, 0b00000, 0b10010, 0b01100, 0b00100],
+  w: [0b00000, 0b00000, 0b10101, 0b10101, 0b01010],
+  x: [0b00000, 0b00000, 0b10010, 0b01100, 0b10010],
+  y: [0b00000, 0b10010, 0b01110, 0b00010, 0b01100],
+  z: [0b00000, 0b00000, 0b11110, 0b00100, 0b11110],
     }),
   }),
   /**
@@ -232,6 +266,40 @@ const FACES = Object.freeze({
   '\u00b0': [0b01110, 0b01010, 0b01110, 0b00000, 0b00000, 0b00000, 0b00000],
   '\u00b7': [0b00000, 0b00000, 0b00000, 0b00100, 0b00000, 0b00000, 0b00000],
   '\u2295': [0b00000, 0b01110, 0b10101, 0b11111, 0b10101, 0b01110, 0b00000],
+  // ── ⭐ LOWERCASE (Max, 2026-09-07: *"I'd prefer to be able to use lowercase too"*) ────────
+  // ⛔ NO TRUE DESCENDERS ON THE 5-ROW FACE. Five rows have nothing below the baseline, so g, j,
+  // p, q and y sit ON it. That is what small bitmap faces have always done, and the alternative —
+  // a sixth row — costs a row on every line of every cockpit panel, which is the budget Max just
+  // asked to shrink. The 5x7 face below does have room and uses it.
+  // ⚠ FIRST DRAFT SCORED EIGHT confusable pairs with a/e and u/v ONE pixel apart, and I was about
+  // to report that a 5-row cell cannot carry lowercase. Redrawing eight glyphs took it to three.
+  // Second time this session a draft nearly got mistaken for the design space.
+  a: [0b00000, 0b00000, 0b01110, 0b00010, 0b01110, 0b10010, 0b01111],
+  b: [0b10000, 0b10000, 0b11100, 0b10010, 0b10010, 0b10010, 0b11100],
+  c: [0b00000, 0b00000, 0b01110, 0b10000, 0b10000, 0b10001, 0b01110],
+  d: [0b00001, 0b00001, 0b01111, 0b10001, 0b10001, 0b10001, 0b01111],
+  e: [0b00000, 0b00000, 0b01110, 0b10001, 0b11111, 0b10000, 0b01110],
+  f: [0b00110, 0b01001, 0b01000, 0b11100, 0b01000, 0b01000, 0b01000],
+  g: [0b00000, 0b00000, 0b01111, 0b10001, 0b01111, 0b00001, 0b01110],
+  h: [0b10000, 0b10000, 0b11100, 0b10010, 0b10010, 0b10010, 0b10010],
+  i: [0b00100, 0b00000, 0b01100, 0b00100, 0b00100, 0b00100, 0b01110],
+  j: [0b00010, 0b00000, 0b00110, 0b00010, 0b00010, 0b10010, 0b01100],
+  k: [0b10000, 0b10000, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010],
+  l: [0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00011],
+  m: [0b00000, 0b00000, 0b11010, 0b10101, 0b10101, 0b10101, 0b10101],
+  n: [0b00000, 0b00000, 0b10110, 0b11001, 0b10001, 0b10001, 0b10001],
+  o: [0b00000, 0b00000, 0b01110, 0b10001, 0b10001, 0b10001, 0b01110],
+  p: [0b00000, 0b00000, 0b11100, 0b10010, 0b11100, 0b10000, 0b10000],
+  q: [0b00000, 0b00000, 0b01111, 0b10010, 0b01110, 0b00010, 0b00011],
+  r: [0b00000, 0b00000, 0b10110, 0b11001, 0b10000, 0b10000, 0b10000],
+  s: [0b00000, 0b00000, 0b01111, 0b10000, 0b01110, 0b00001, 0b11110],
+  t: [0b01000, 0b01000, 0b11100, 0b01000, 0b01000, 0b01001, 0b00110],
+  u: [0b00000, 0b00000, 0b10001, 0b10001, 0b10001, 0b10011, 0b01101],
+  v: [0b00000, 0b00000, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100],
+  w: [0b00000, 0b00000, 0b10001, 0b10001, 0b10101, 0b10101, 0b01010],
+  x: [0b00000, 0b00000, 0b10001, 0b01010, 0b00100, 0b01010, 0b10001],
+  y: [0b00000, 0b00000, 0b10001, 0b10001, 0b01111, 0b00001, 0b01110],
+  z: [0b00000, 0b00000, 0b11111, 0b00010, 0b00100, 0b01000, 0b11111],
     }),
   }),
 });
@@ -280,7 +348,23 @@ export function pixelTextHeight(scale = 1) { return _active.h * scale; }
 
 /** @param {string} ch @returns {boolean} whether the face can render it */
 export function hasGlyph(ch) {
-  return Object.prototype.hasOwnProperty.call(_active.glyphs, String(ch).toUpperCase());
+  return glyphFor(String(ch)) !== undefined;
+}
+
+/**
+ * The rows for a character, exact case first.
+ *
+ * ⭐ THE UPPERCASE FALLBACK IS DELIBERATE AND MUST STAY. It is what let this face be uppercase-only
+ * for its whole life without any caller knowing, and it is what keeps a face that has NOT authored
+ * lowercase working the moment one is added elsewhere. Exact-case first is what makes lowercase
+ * actually render where it exists.
+ * @private
+ */
+function glyphFor(ch) {
+  const g = _active.glyphs;
+  if (Object.prototype.hasOwnProperty.call(g, ch)) return g[ch];
+  const up = ch.toUpperCase();
+  return Object.prototype.hasOwnProperty.call(g, up) ? g[up] : undefined;
 }
 
 /**
@@ -307,8 +391,7 @@ export function drawPixelText(ctx, str, x, y, opts = {}) {
   const prev = ctx.fillStyle;
   ctx.fillStyle = color;
   for (const raw of s) {
-    const ch = raw.toUpperCase();
-    let rows = glyphs[ch];
+    let rows = glyphs[raw] ?? glyphs[raw.toUpperCase()];
     if (!rows) {
       if (onMissing === 'throw') {
         ctx.fillStyle = prev;
