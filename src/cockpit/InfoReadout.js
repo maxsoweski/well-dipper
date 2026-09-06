@@ -179,6 +179,126 @@ export function formatTidalState(value) {
 }
 
 /**
+ * ── THE BRIEF PROJECTION, ADDED 2026-09-08 ──────────────────────────────────
+ *
+ * chrome-and-ui-at-240p draws the cockpit at the game's resolution. A panel is
+ * then 46 rows tall and a letter needs five of them, so a row is a 3-character
+ * label hard-left and a 5-character value hard-right. `co2-n2 0.85 bar` is
+ * fifteen characters and cannot exist there in any form.
+ *
+ * ⛔⛔ THE MIX COMES OFF THE GLASS. IT DOES NOT COME OUT OF THIS FILE.
+ *
+ * Max, 2026-09-08, ruling on exactly this: *"this is fine but know we'll
+ * probably switch this up in the near future so don't get rid of any code that
+ * allows you to display what we want to display."*
+ *
+ * So `format` is untouched and still returns the full string; `brief` is a
+ * SECOND formatter over the SAME raw reading. Nothing is deleted, no row leaves
+ * the table, and changing our mind about what a panel shows is one edit here
+ * rather than an archaeology exercise. That is this module's own stated design —
+ * "THE PIPELINE IS THE DELIVERABLE AND THE FIELDS ARE DISPOSABLE" — being
+ * honoured rather than a new rule.
+ *
+ * ⚠ THIS IS STILL A CHARACTER BUDGET, NOT A GEOMETRY ONE, and the distinction is
+ * the same one `INFO_VALUE_MAX_CHARS` already makes. This module does not learn
+ * the panel's size, shape or font. What it does not know — how many characters
+ * fit on ONE PARTICULAR panel — stays with the panel, which is why the BODY row
+ * has no `brief`: fitting a designation to a width is the painter's job.
+ */
+
+/** A 3-character label and a 5-character value: what a row is at the game's resolution. */
+export const PANEL_LABEL_CHARS = 3;
+export const PANEL_VALUE_CHARS = 5;
+
+/**
+ * Uppercase, cut to the budget, and drop a separator left dangling by the cut.
+ *
+ * ⭐ ONE RULE RATHER THAN A TABLE OF NINETEEN ABBREVIATIONS, and that is a
+ * deliberate refusal to invent. `type` is an OPEN vocabulary — worldClass.js
+ * emits ocean/terrestrial/ice/lava/venus/carbon/rocky, the giant roll adds
+ * gas-giant/hot-jupiter/sub-neptune/saturnian/neptunian, EXOTIC_TYPES adds seven
+ * more, and SolarSystemData carries hand-authored ones — so any table I wrote
+ * would be incomplete the first time a class was added, and silently. Checked
+ * over the whole known vocabulary: the first five characters are distinct for
+ * every one of them, so truncation loses no distinction it is asked to carry.
+ */
+export function fitWord(text, max = PANEL_VALUE_CHARS) {
+  return String(text).toUpperCase().slice(0, max).replace(/[-_ ]+$/, '');
+}
+
+/**
+ * `kind` is a CLOSED vocabulary — CockpitSnapshot writes exactly star, planet or
+ * moon — so this one gets the table the open vocabulary above does not.
+ * ⛔ And it needs one: truncating "planet" to five gives **PLANE**, which reads
+ * as an aircraft. That is the case that proves a blanket rule is not enough.
+ */
+export const CLASS_BRIEF = Object.freeze({ planet: 'PLNT', moon: 'MOON', star: 'STAR' });
+
+export function briefClass(value) {
+  const t = formatText(value);
+  return t === null ? null : (CLASS_BRIEF[t.toLowerCase()] ?? fitWord(t));
+}
+
+export function briefType(value) {
+  const t = formatText(value);
+  return t === null ? null : fitWord(t);
+}
+
+/**
+ * Kelvin with the unit dropped — the `TEQ` label carries it, and it has to go:
+ * "410 K" is five characters but "1200 K" is six, so keeping the unit would put
+ * a unit on cold worlds and none on hot ones. A column that changes shape with
+ * its own value is harder to read at a glance than one that never does.
+ */
+export function briefKelvin(value) {
+  return Number.isFinite(value) ? String(Math.round(value)) : null;
+}
+
+/**
+ * The iron fraction alone. The surface type is dropped here because `TYP`
+ * already carries it — an overlap being removed, not information being lost.
+ */
+export function briefComposition(value) {
+  if (!isPlainObject(value)) return null;
+  const fe = value.ironFraction;
+  if (!Number.isFinite(fe)) return null;
+  // 0.31 -> FE.31 (the leading zero is the one character worth spending elsewhere).
+  return fe >= 1 ? `FE${fe.toFixed(1)}` : `FE${fe.toFixed(2).slice(1)}`;
+}
+
+/**
+ * ⛔ THE ONE ROW THAT ACTUALLY LOSES SOMETHING, and Max ruled on it directly:
+ * the pressure stays and the gas mix comes off. `co2-n2` is six characters on
+ * its own, and the pressure is the number that changes as you descend.
+ *
+ * `retained === false` still reads NONE rather than blank — airless is
+ * information, blank means "we do not know", and they are different facts.
+ *
+ * Precision scales with magnitude for the reason `formatAtmosphere` gives: the
+ * real range spans four orders (a thin remnant near 0.01 bar to a giant's 1000),
+ * and a fixed two decimals would spend the whole budget on a giant.
+ */
+export function briefAtmosphere(value) {
+  if (!isPlainObject(value)) return null;
+  if (typeof value.retained !== 'boolean') return null;
+  if (!value.retained) return 'NONE';
+  const p = value.pressure;
+  if (!Number.isFinite(p)) return 'YES';        // retained, nothing further known
+  if (p >= 10) return String(Math.round(p));    // 1000 bar is four characters
+  return p.toFixed(2);                          // 0.85
+}
+
+export function briefTidalState(value) {
+  if (!isPlainObject(value)) return null;
+  if (typeof value.locked !== 'boolean') return null;
+  if (!value.locked) return 'FREE';
+  const k = typeof value.lockType === 'string' ? value.lockType.trim().toLowerCase() : '';
+  if (k === 'synchronous') return 'SYNC';
+  if (k.startsWith('3:2')) return '3:2';
+  return k ? fitWord(k) : 'LOCK';
+}
+
+/**
  * THE TABLE. One row per line: what it is called, where it comes from, how it is
  * written down. This is the thing Max asked for — "expand/adjust the systems
  * generating that info" is an edit to this array and nothing else.
@@ -210,13 +330,16 @@ export function formatTidalState(value) {
  * snapshot grows a second, undocumented contract.
  */
 export const INFO_ROWS = Object.freeze([
-  { label: 'BODY',  read: (s) => s?.survey?.name,        format: formatText },
-  { label: 'CLASS', read: (s) => s?.survey?.kind,        format: formatText },
-  { label: 'TYPE',  read: (s) => s?.survey?.type,        format: formatText },
-  { label: 'T_EQ',  read: (s) => s?.survey?.tEq,         format: formatKelvin },
-  { label: 'COMP',  read: (s) => s?.survey?.composition, format: formatComposition },
-  { label: 'ATMO',  read: (s) => s?.survey?.atmosphere,  format: formatAtmosphere },
-  { label: 'TIDAL', read: (s) => s?.survey?.tidalState,  format: formatTidalState },
+  // `abbr`/`brief` are the panel-budget projection; `label`/`format` are untouched and still
+  // produce the full string. BODY deliberately has NO `brief` — fitting a designation to a
+  // particular panel's width is the painter's job, not this table's.
+  { label: 'BODY',  abbr: '',    read: (s) => s?.survey?.name,        format: formatText,        brief: formatText, headline: true },
+  { label: 'CLASS', abbr: 'CLS', read: (s) => s?.survey?.kind,        format: formatText,        brief: briefClass },
+  { label: 'TYPE',  abbr: 'TYP', read: (s) => s?.survey?.type,        format: formatText,        brief: briefType },
+  { label: 'T_EQ',  abbr: 'TEQ', read: (s) => s?.survey?.tEq,         format: formatKelvin,      brief: briefKelvin },
+  { label: 'COMP',  abbr: 'CMP', read: (s) => s?.survey?.composition, format: formatComposition, brief: briefComposition },
+  { label: 'ATMO',  abbr: 'ATM', read: (s) => s?.survey?.atmosphere,  format: formatAtmosphere,  brief: briefAtmosphere },
+  { label: 'TIDAL', abbr: 'TID', read: (s) => s?.survey?.tidalState,  format: formatTidalState,  brief: briefTidalState },
 ].map((row) => Object.freeze(row)));   // frozen per ROW as well — a shallow freeze
                                        // on the array alone still lets a panel
                                        // rewrite a row's formatter for everyone.
@@ -261,8 +384,13 @@ export const INFO_ROWS = Object.freeze([
  * @param {object|null} snapshot one frame from CockpitSnapshotProvider
  * @returns {string} the rendered value, or BLANK
  */
-export function renderInfoValue(row, snapshot) {
-  if (!row || typeof row.read !== 'function' || typeof row.format !== 'function') return BLANK;
+export function renderInfoValue(row, snapshot, opts = {}) {
+  // ⭐ `brief` SELECTS A FORMATTER; IT NEVER SUBSTITUTES FOR A MISSING ONE. A row without a brief
+  // form falls back to its full one, which keeps "one line in one place" true — adding a row does
+  // not require remembering to add two formatters — and keeps the failure visible as a value that
+  // is too long rather than as a value that silently vanished.
+  const format = (opts.brief && typeof row?.brief === 'function') ? row.brief : row?.format;
+  if (!row || typeof row.read !== 'function' || typeof format !== 'function') return BLANK;
 
   let raw;
   try {
@@ -275,7 +403,7 @@ export function renderInfoValue(row, snapshot) {
 
   let text;
   try {
-    text = row.format(raw);
+    text = format(raw);
   } catch {
     return BLANK;
   }
@@ -285,7 +413,17 @@ export function renderInfoValue(row, snapshot) {
   if (!text) return BLANK;
   if (text.includes('[object ')) return BLANK;
 
-  return text.length > INFO_VALUE_MAX_CHARS ? text.slice(0, INFO_VALUE_MAX_CHARS) : text;
+  // The backstop tightens with the projection. ⚠ It CLAMPS rather than blanks, deliberately: a
+  // value one character over is still mostly readable, where a blank row tells the pilot the
+  // reading is missing when it is not. A clamp that fires is a formatter bug, and the test suite
+  // asserts none of the shipped ones ever reach it.
+  // ⛔ THE HEADLINE ROW IS EXEMPT FROM THE VALUE BUDGET, and it has to be. BODY is not a value in a
+  // 5-character column — it is the panel's heading, drawn unlabelled across the full width, and
+  // fitting a designation to a particular panel's width is the painter's job (a painter can drop a
+  // leading system name; this module cannot, because it does not know how wide the glass is).
+  // Without this, "Caph b II" was clamped to "Caph " — a truncation that reads as a real name.
+  const cap = (opts.brief && !row.headline) ? PANEL_VALUE_CHARS : INFO_VALUE_MAX_CHARS;
+  return text.length > cap ? text.slice(0, cap) : text;
 }
 
 /**
@@ -305,10 +443,16 @@ export function renderInfoValue(row, snapshot) {
  * @param {Array} [rows] the table to render; defaults to INFO_ROWS
  * @returns {Array<{label:string, value:string}>}
  */
-export function buildInfoRows(snapshot, rows = INFO_ROWS) {
+export function buildInfoRows(snapshot, rows = INFO_ROWS, opts = {}) {
   if (!Array.isArray(rows)) return [];
+  const brief = !!opts.brief;
   return rows.map((row) => ({
-    label: typeof row?.label === 'string' ? row.label : '',
-    value: renderInfoValue(row, snapshot),
+    // In brief mode the label comes from `abbr`, and `?? row.label` is the same fallback rule the
+    // value uses: a table extended with a new row still renders, with a label that is too long
+    // rather than a row that has lost its name.
+    label: brief
+      ? (typeof row?.abbr === 'string' ? row.abbr : (typeof row?.label === 'string' ? row.label : ''))
+      : (typeof row?.label === 'string' ? row.label : ''),
+    value: renderInfoValue(row, snapshot, { brief }),
   }));
 }

@@ -62,12 +62,13 @@ import { buildCockpitSnapshot } from '../CockpitSnapshot.js';
 import { PhosphorScreen, PHOSPHOR } from '../PhosphorScreen.js';
 import { buildFlightReadout, flightReadoutStateFromSnapshot } from '../FlightReadout.js';
 import { buildInfoRows, INFO_ROWS } from '../InfoReadout.js';
-import { ALERT_TEXT } from '../../ui/AlertCue.js';
+import { ALERT_TEXT, briefAlert } from '../../ui/AlertCue.js';
 import { formatSpeed, C_IN_SCENE_PER_S } from '../../ui/SpeedFormat.js';
 
-import { paintDrive } from '../panels/DrivePanel.js';
+import { paintDrive, shortMode, formatSpeedCap, formatTurnCap } from '../panels/DrivePanel.js';
 import { paintTarget, formatDistance } from '../panels/TargetPanel.js';
 import { paintInfo } from '../panels/InfoPanel.js';
+import { fitDesignation } from '../designation.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PANEL_DIR = join(HERE, '..', 'panels');
@@ -351,33 +352,57 @@ describe('panels.test.js — this file does not disable itself', () => {
 // ── 1. The strings are the models' own ──────────────────────────────────────
 
 describe('DRIVE — every string is the flight model\'s, unchanged', () => {
-  it('draws the speed, the ceilings, the mode line and the mass-lock banner', () => {
+  it('draws the speed, its tier, the mode and the mass-lock banner', () => {
     const { log } = paint(paintDrive, FLYING, 0);
     const texts = drawn(log);
 
     // Against the MODEL: a painter that recomputes the speed — drops the REV
     // prefix, picks its own tier, rounds differently — diverges here even if it
     // looks plausible on its own.
-    expect(texts).toContain(FLYING_READOUT.speedText);
-    // And against a LITERAL, so a builder that silently changed its answer cannot
+    expect(texts).toContain(FLYING_READOUT.speedValue);
+    expect(texts).toContain(FLYING_READOUT.tierLine);
+    // And against LITERALS, so a builder that silently changed its answer cannot
     // drag this test along with it.
-    expect(FLYING_READOUT.speedText).toBe('0.50 c');
+    expect(FLYING_READOUT.speedValue).toBe('0.50');
+    expect(FLYING_READOUT.tierLine).toBe('c');
+    // ⭐ THE UNIT IS SPLIT OFF THE NUMBER, NOT DROPPED. The display tier holds four characters on
+    // a panel this wide, and "0.50 c" is six — so a hero drawn from `speedText` fell back to body
+    // size on every frame and the panel had no hero at all. Both halves are still on the glass and
+    // still the model's own strings; this asserts the pair, so losing either one fails.
+    expect(`${FLYING_READOUT.speedValue} ${FLYING_READOUT.tierLine}`)
+      .toBe(FLYING_READOUT.speedText);
 
-    // The two ceilings. CAP goes through the game's one speed formatter, so it is
-    // checked against that formatter's own output as well as against the literal.
+    // ⛔ CAP AND TURN ARE GONE FROM THE GLASS, BY MAX'S RULING OF 2026-09-08 ("1, okay"). The panel
+    // is 43 rows and holds seven lines, the hero takes two of them, and these were the two rows
+    // with nowhere to go. CAP's real job is already drawn as the drop tick on the speed bar.
+    expect(texts, 'CAP came back to the drive screen').not.toContain('CAP');
+    expect(texts, 'TURN came back to the drive screen').not.toContain('TURN');
+    // ⭐ AND THE FORMATTERS ARE STILL THERE AND STILL CORRECT. Max's ruling came with *"don't get
+    // rid of any code that allows you to display what we want to display"*, so what came off is the
+    // DRAW, not the ability. Asserting them directly is what keeps that true rather than polite.
     const cap = formatSpeed(4000);
-    expect(rowValue(log, 'CAP')).toBe(`${cap.value} ${cap.unit}`);
-    expect(rowValue(log, 'CAP')).toBe('1,996 c');
+    expect(formatSpeedCap(4000)).toBe(`${cap.value} ${cap.unit}`);
+    expect(formatSpeedCap(4000)).toBe('1,996 c');
     // 0.7 rad/s is 40.1 deg/s. Whole degrees: a decimal place is unreadable at
     // this angular size and tells the pilot nothing they can act on.
-    expect(rowValue(log, 'TURN')).toBe('40 deg/s');
+    expect(formatTurnCap(0.7)).toBe('40 deg/s');
 
-    // The mode line arrives already prefixed and uppercased by the model.
-    expect(texts).toContain(FLYING_READOUT.modeLine);
+    // The mode, with the prefix stripped — "MODE: MANUAL" is twelve characters and the panel is
+    // eight. The model still composes the long form and the panel still reads it from there.
+    // ⚠ READ ON A DARK BLINK PHASE, BECAUSE THE BANNER TAKES THIS LINE WHILE IT IS LIT. The panel
+    // is 43 rows and has no room for a seventh element, so at most one of the two is ever drawn;
+    // `FLYING` is mass-locked, and at t=0 the fast tier is lit.
+    const quiet = drawn(paint(paintDrive, FLYING, 350).log);
+    expect(quiet).toContain(shortMode(FLYING_READOUT.modeLine));
     expect(FLYING_READOUT.modeLine).toBe('MODE: MANUAL');
+    expect(shortMode(FLYING_READOUT.modeLine)).toBe('MANUAL');
+    expect(texts, 'the mode was drawn under the banner rather than replaced by it')
+      .not.toContain('MANUAL');
 
-    // The drive's own warning, in the HUD's exact words (em dash included).
-    expect(texts).toContain(ALERT_TEXT.MASS_LOCK);
+    // The drive's own warning, at the width a banner has. The long form is untouched and is what
+    // the DOM overlay still draws; `briefAlert` is the lookup between them.
+    expect(texts).toContain(briefAlert(ALERT_TEXT.MASS_LOCK));
+    expect(briefAlert(ALERT_TEXT.MASS_LOCK)).toBe('TOOCLOSE');
   });
 
   it('keeps the REV prefix on a reversing ship', () => {
@@ -394,22 +419,33 @@ describe('DRIVE — every string is the flight model\'s, unchanged', () => {
       sublightCap: 0.002,
     });
     const model = buildFlightReadout(flightReadoutStateFromSnapshot(reversing));
-    expect(drawn(paint(paintDrive, reversing, 0).log)).toContain(model.speedText);
+    // ⭐ THE PREFIX RIDES ON THE HERO, NOT ON THE TIER LINE, and that is deliberate: it belongs to
+    // the number it negates. It costs the hero its size when reversing — "REV 150" is seven
+    // characters and the display tier holds four — and a smaller correct number beats a large
+    // wrong one, which is what a magnitude with no direction is.
+    expect(drawn(paint(paintDrive, reversing, 0).log)).toContain(model.speedValue);
+    expect(model.speedValue).toBe('REV 150');
     expect(model.speedText).toBe('REV 150 km/s');
   });
 
-  it('says nothing about the drive being on — the absence of SUBLIGHT is the statement', () => {
+  it('says nothing about the drive being on — the absence of SUB is the statement', () => {
     const flying = drawn(paint(paintDrive, FLYING, 0).log);
-    expect(flying).not.toContain('SUBLIGHT');
+    expect(flying, 'supercruise announced itself').not.toContain('SUB');
+    expect(flying, 'the tier line lost the unit').toContain('c');
 
-    // Drive off: the tag appears. The model keys this on `driveOn === false`
-    // strictly, so a frame that merely forgot the field must not claim the ship
-    // dropped out of supercruise.
+    // Drive off: the tag appears, and it shares its line with the unit. ⚠ "SUB", not "SUBLIGHT" —
+    // the long word is exactly eight characters and would leave the hero number with no unit under
+    // it, which is a number that means nothing. The model composes both; the panel draws the one
+    // that fits, and `READOUT_TEXT.SUBLIGHT` is unchanged for the surfaces that have room.
     const off = buildCockpitSnapshot({
       scModel: { speed: 0.001, driveOn: false, throttle: 0.5, speedCap: () => 0.01, turnRateCap: () => 0.7 },
       sublightCap: 0.002,
     });
-    expect(drawn(paint(paintDrive, off, 0).log)).toContain('SUBLIGHT');
+    const offModel = buildFlightReadout(flightReadoutStateFromSnapshot(off));
+    expect(drawn(paint(paintDrive, off, 0).log)).toContain(offModel.tierLine);
+    expect(offModel.tierLine).toBe('SUB km/s');
+    expect(offModel.sublightTag, 'the long form was removed rather than left alone')
+      .toBe('SUBLIGHT');
   });
 
   it('draws the speed as the largest thing on the panel', () => {
@@ -417,7 +453,7 @@ describe('DRIVE — every string is the flight model\'s, unchanged', () => {
     // it is the first casualty of adding rows: the natural fix for a crowded panel
     // is to shrink the number nobody is supposed to have to look for.
     const { log } = paint(paintDrive, FLYING, 0);
-    expectStrictlyBiggest(log, FLYING_READOUT.speedText);
+    expectStrictlyBiggest(log, FLYING_READOUT.speedValue);
   });
 });
 
@@ -428,52 +464,91 @@ describe('TARGET — name, distance, ETA and the approach cue', () => {
 
     expect(texts).toContain('Veskol b');
 
-    // 250 scene units is a quarter of an AU (ScaleConstants: 1 AU = 1000 u).
-    expect(rowValue(log, 'DIST')).toBe('0.25 AU');
-    expect(rowValue(log, 'DIST')).toBe(formatDistance(250));
+    // ⛔ THE DISTANCE HAS NO LABEL ANY MORE, AND THAT IS THE FIX FOR A REAL DEFECT rather than a
+    // tidy-up. A row is a 3-character label and a 5-character value on a 9-character panel;
+    // `formatDistance` emits up to eight ("14959 Mm", "0.25 AU"). Drawn as `row('DIST', …)` the
+    // label and the value OVERLAPPED — the value's first glyph landing on the label's last — and
+    // the result on the glass was a smear of half-glyphs, not a clipped row.
+    //
+    // ⭐ IT WAS FOUND BECAUSE THESE TESTS READ THE TEXELS BACK. The overlap came back from
+    // `decodePixelText` as a run of replacement characters that no assertion had asked for. A test
+    // that trusted the string handed to `fillText` would have been green on a broken panel.
+    //
+    // Nothing is lost by dropping the label: the panel carries exactly one distance and the number
+    // brings its own unit.
+    expect(texts).toContain('0.25 AU');            // 250 scene units = a quarter AU (1 AU = 1000 u)
+    expect(texts).toContain(formatDistance(250));
+    expect(texts, 'the distance grew a label it has no room for').not.toContain('DST');
 
-    // The ETA is the model's string, not a second division of distance by speed.
+    // The ETA is the model's string, not a second division of distance by speed. It keeps its
+    // label: 'ETA' plus '4:09' is seven characters, and '--:--' is exactly five.
     expect(rowValue(log, 'ETA')).toBe(FLYING_READOUT.eta);
     expect(FLYING_READOUT.eta).toBe('4:09');
 
-    // Too fast to drop → SLOW DOWN, in the HUD's words.
-    expect(texts).toContain(ALERT_TEXT.DROP_SLOW);
-    expect(texts).not.toContain(ALERT_TEXT.DROP_SAFE);
+    // Too fast to drop → SLOW DOWN, at the width a banner has. Nine characters, and the long form
+    // is unchanged for the DOM overlay that still draws it.
+    expect(texts).toContain(briefAlert(ALERT_TEXT.DROP_SLOW));
+    expect(texts).not.toContain(briefAlert(ALERT_TEXT.DROP_SAFE));
   });
 
-  it('draws the target name as the largest thing on the panel when it fits', () => {
-    expectStrictlyBiggest(paint(paintTarget, FLYING, 0).log, 'Veskol b');
+  it('draws a short designation at the display tier, and a long one at body size', () => {
+    // ⭐ "SHOUT THE SHORT NAME" IS MEASURED, NOT ASSERTED. The display tier is two cells tall and
+    // holds four characters here; the body tier holds nine. So the panel picks the largest tier
+    // that holds the FITTED name, which means a short designation genuinely shouts and a long one
+    // is legible rather than absent. 'Veskol b' is eight characters and takes the body tier.
+    const { log, screen } = paint(paintTarget, FLYING, 0);
+    const hero = ops(log, 'fillText').find((e) => e.text === 'Veskol b');
+    expect(hero, 'the name was not drawn at all').toBeTruthy();
+    expect(hero.size).toBe(screen.type.body);
+    expect('Veskol b'.length).toBeGreaterThan(screen.colsAt(screen.type.display));
+
+    // ⚠ 'Sol b' would NOT take the display tier: it is five characters and the tier holds four.
+    // The fixture is a name that genuinely fits, so this asserts the branch rather than the label.
+    const short = buildCockpitSnapshot({
+      selectedTarget: { kind: 'star', name: 'Sol' }, targetDistance: 250,
+    });
+    const shortLog = paint(paintTarget, short, 0).log;
+    const shortHero = ops(shortLog, 'fillText').find((e) => e.text === 'Sol');
+    expect(shortHero, 'a short designation was not drawn').toBeTruthy();
+    expect(shortHero.size, 'a name that fits the display tier was drawn small anyway')
+      .toBe(screen.type.display);
+    expectStrictlyBiggest(shortLog, 'Sol');
   });
 
-  it('drops the name one size — never below body size — rather than clip a long one', () => {
-    // A real procedural designation: NameGenerator embeds ~70 bits of position
-    // injectively, so 14-20 characters is ordinary and a planet suffix adds more.
-    // This is the COMMON case, not an edge one.
+  it('fits a long designation by dropping the system, and never draws it twice', () => {
+    // A real procedural designation: NameGenerator embeds ~70 bits of position injectively, so
+    // 14-20 characters is ordinary and a planet suffix adds more. This is the COMMON case.
+    //
+    // ⛔ THIS TEST'S OLD SUBJECT — "draw at display size, measure the probe, clear the whole buffer
+    // and redraw one size down" — IS GONE, and it was a defect rather than a feature at the game's
+    // resolution. The display tier holds FOUR characters on this panel, so the probe overflowed on
+    // essentially every body, and the "one size down" landed at body size, where a 21-character
+    // name also does not fit and drew off both edges anyway. The panel was broken before this
+    // workstream touched it, which is what Max was told and what he ruled on.
+    //
+    // ⭐ MAX'S RULING, 2026-09-08 ("2. sounds good"): shout the short name and the distance, and
+    // DROP the full designation. Not "the full name small underneath" — off the glass.
     const long = buildCockpitSnapshot({
       selectedTarget: { kind: 'planet', name: 'PVX J4K7Q2M+9XP3RWZ b' },
       targetDistance: 250,
     });
     const { log, screen } = paint(paintTarget, long, 0);
+    const texts = drawn(log);
 
-    const nameDraws = ops(log, 'fillText').filter((e) => e.text === 'PVX J4K7Q2M+9XP3RWZ b');
-    // Drawn twice: once as the probe at display size, once for real one size down.
-    expect(nameDraws.length).toBe(2);
-    expect(sizeOf(nameDraws[0])).toBeCloseTo(screen.type.display, 6);
-    expect(sizeOf(nameDraws[1])).toBeCloseTo(screen.type.body, 6);
+    expect(texts, 'the full designation is back on the glass')
+      .not.toContain('PVX J4K7Q2M+9XP3RWZ b');
+    expect(texts).toContain(fitDesignation('PVX J4K7Q2M+9XP3RWZ b', screen.colsAt(screen.type.body)));
 
-    // And the probe was WIPED, not left underneath. Two full clears, the second
-    // after the first name draw — otherwise the hero is two overlapping strings.
-    const clears = fullClears(log);
-    expect(clears.length).toBe(2);
-    expect(log.indexOf(clears[1])).toBeGreaterThan(log.indexOf(nameDraws[0]));
-
-    // A short name takes the single-clear path.
+    // ⛔ ONE CLEAR, ALWAYS. The probe-and-redraw made every other element's ordering load-bearing:
+    // a label painted before the hero was wiped by the overflow path, on exactly the long names
+    // that most needed saying what they were. Nothing draws twice now, so nothing can be wiped.
+    expect(fullClears(log).length, 'the panel cleared itself twice — a probe came back').toBe(1);
     expect(fullClears(paint(paintTarget, FLYING, 0).log).length).toBe(1);
 
-    // HONEST LIMIT: the stub's advance width is a made-up 0.6 em, so what is
-    // proved here is that the DECISION works and wipes correctly — not that this
-    // particular name fits on real glass. Only the platform's monospace face
-    // knows that, and only Max's eye can confirm it.
+    // ⚠ WHAT THIS DOES NOT PROVE. That the fitted string is the RIGHT thing to say about this body
+    // is Max's judgement, not a measurement. What is proved is that it fits the glass, that the
+    // panel says something rather than nothing, and that no identifier is silently truncated into
+    // a plausible different one — which is `designation.js`'s whole subject.
   });
 
   it('keeps a STEADY cue lit at every phase of the clock', () => {
@@ -482,8 +557,12 @@ describe('TARGET — name, distance, ETA and the approach cue', () => {
     // steady tier that quietly started blinking would be saying the opposite of
     // what it means.
     for (const t of [0, 400, 900, 1500, 2000]) {
-      expect(drawn(paint(paintTarget, SAFE, t).log)).toContain(ALERT_TEXT.DROP_SAFE);
+      expect(drawn(paint(paintTarget, SAFE, t).log)).toContain(briefAlert(ALERT_TEXT.DROP_SAFE));
     }
+    // Nine characters, which is what the lower pair of screens holds. The long form is untouched
+    // and is still what the DOM overlay draws.
+    expect(briefAlert(ALERT_TEXT.DROP_SAFE)).toBe('SAFE DROP');
+    expect(ALERT_TEXT.DROP_SAFE).toBe('SAFE TO DROP');
   });
 });
 
@@ -510,7 +589,12 @@ const WARP_PICKED = buildCockpitSnapshot({
 
 describe('TARGET — the warp destination, once the body selection is gone', () => {
   it('draws the destination name when a warp target is picked and nothing is selected', () => {
-    expect(drawn(paint(paintTarget, WARP_PICKED, 0).log)).toContain('PVX J4K7Q2M+9XP3RWZ');
+    // Fitted to the glass, like any other designation — a warp destination is not exempt from a
+    // nine-character panel. What matters is that the destination is ANNOUNCED: before this painter
+    // read `warp.targetName`, picking a destination emptied the glass and named it nowhere.
+    const { log, screen } = paint(paintTarget, WARP_PICKED, 0);
+    expect(drawn(log)).toContain(
+      fitDesignation('PVX J4K7Q2M+9XP3RWZ', screen.colsAt(screen.type.body)));
   });
 
   it('labels it, so a destination cannot be misread as the body under the reticle', () => {
@@ -518,29 +602,36 @@ describe('TARGET — the warp destination, once the body selection is gone', () 
     // what a burn will hit, the other is what a warp will leave for. NavComputer
     // already calls it WARP TARGET on its own prism view (NavComputer.js:1860);
     // the same words here mean the glass agrees with itself.
+    // ⚠ 'WARP', not 'WARP TARGET': eleven characters on a nine-character panel. The long form is
+    // still NavComputer's and still what its prism view draws; this is the same word at the width
+    // the glass has, and the word that survives is the one that discriminates.
     const texts = drawn(paint(paintTarget, WARP_PICKED, 0).log);
-    expect(texts).toContain('WARP TARGET');
+    expect(texts).toContain('WARP');
     // And the label is absent when there is a body instead — otherwise it is
     // decoration rather than a discriminator.
-    expect(drawn(paint(paintTarget, FLYING, 0).log)).not.toContain('WARP TARGET');
+    expect(drawn(paint(paintTarget, FLYING, 0).log)).not.toContain('WARP');
   });
 
-  it('draws the label after the hero, so an overflowing name cannot wipe it', () => {
-    // ⚠ THIS TEST EXISTS BECAUSE THE OBVIOUS ONE CANNOT FAIL, MEASURED NOT
-    // IMAGINED. `WARP_PICKED`'s designation overflows at display size, so
-    // `drawHeroName` takes its re-clear path; a label painted BEFORE that clear
-    // is gone from the glass. But `drawn()` reads the fillText LOG, not pixels,
-    // and a later `clear()` removes nothing from a log — so with the label moved
-    // above `drawHeroName`, every other assertion in this block stayed green.
-    // ORDER against the second clear is the only thing that discriminates.
+  it('cannot lose the label to a re-clear, because there is no longer one to lose it to', () => {
+    // ⭐ THE HAZARD THIS TEST GUARDED IS GONE, AND THE TEST SAYS SO RATHER THAN BEING DELETED.
+    //
+    // It used to assert ORDER: `drawHeroName` measured a probe at display size and, on overflow,
+    // cleared the WHOLE buffer and redrew — so a label painted before that clear vanished from the
+    // glass, on exactly the long designations that most needed saying what they were. And the
+    // obvious assertion could not catch it, because `drawn()` reads a log and a later `clear()`
+    // removes nothing from a log; only the ordering against the second clear discriminated.
+    //
+    // The painter measures instead of probing now, so it draws each element exactly once and the
+    // ordering stopped being load-bearing. ⛔ THE RIGHT REPLACEMENT IS THE STRUCTURAL PROPERTY, not
+    // a re-run of an ordering that no longer decides anything: exactly one clear, on the frame that
+    // used to need two. If a probe is ever reintroduced, this goes red.
     const { log } = paint(paintTarget, WARP_PICKED, 0);
+    expect(fullClears(log).length,
+      'the panel cleared itself twice — a measure-by-drawing probe is back, and with it the ' +
+      'ordering hazard this test used to defend against').toBe(1);
 
-    const clears = fullClears(log);
-    expect(clears.length, 'the fixture no longer overflows; this test proves nothing').toBe(2);
-
-    const label = ops(log, 'fillText').find((e) => e.text === 'WARP TARGET');
-    expect(label, 'the label was never drawn').toBeTruthy();
-    expect(log.indexOf(label)).toBeGreaterThan(log.indexOf(clears[1]));
+    const texts = drawn(log);
+    expect(texts, 'the label was never drawn').toContain('WARP');
   });
 
   it('leaves DIST and ETA blank for a destination that has no in-system range', () => {
@@ -549,7 +640,12 @@ describe('TARGET — the warp destination, once the body selection is gone', () 
     // ETA model has nothing to divide. A painter that reached for the drive's
     // numbers here would print a confident reading of the wrong thing.
     const { log } = paint(paintTarget, WARP_PICKED, 0);
-    expect(rowValue(log, 'DIST')).toBe('');
+    const texts = drawn(log);
+    // The distance line is unlabelled, so "blank" means the line is simply not there — there is no
+    // label left behind to read as a reading of zero.
+    expect(texts.some((t) => /\d/.test(t) && /km|Mm|AU/.test(t)),
+      'a distance was printed for a destination that has none').toBe(false);
+    // ETA keeps its label and blanks its value, which is what holds the line.
     expect(rowValue(log, 'ETA')).toBe('');
   });
 
@@ -566,40 +662,58 @@ describe('TARGET — the warp destination, once the body selection is gone', () 
       targetDistance: 250,
       warpTarget: { name: 'PVX J4K7Q2M+9XP3RWZ' },
     });
-    const texts = drawn(paint(paintTarget, both, 0).log);
+    const { log, screen } = paint(paintTarget, both, 0);
+    const texts = drawn(log);
     expect(texts).toContain('Veskol b');
-    expect(texts).not.toContain('PVX J4K7Q2M+9XP3RWZ');
-    expect(texts).not.toContain('WARP TARGET');
+    expect(texts).not.toContain(
+      fitDesignation('PVX J4K7Q2M+9XP3RWZ', screen.colsAt(screen.type.body)));
+    expect(texts).not.toContain('WARP');
   });
 });
 
 describe('INFO — the dossier, straight off the table', () => {
   it('draws every row of buildInfoRows, in order, label and value verbatim', () => {
     const { log } = paint(paintInfo, FLYING, 0);
-    const rows = buildInfoRows(FLYING);
+    // ⭐ THE PANEL ASKS THE TABLE FOR ITS BRIEF PROJECTION, so the oracle does too. Asking for the
+    // long form here and expecting the panel to match would assert that the redesign did not
+    // happen. What is still being tested is the property that matters and has not changed: the
+    // painter draws what the table hands it, in the table's order, verbatim.
+    const rows = buildInfoRows(FLYING, undefined, { brief: true });
+    const [headline, ...labelled] = rows;
 
-    for (const row of rows) {
+    for (const row of labelled) {
       expect(drawn(log)).toContain(row.label);
       expect(rowValue(log, row.label)).toBe(row.value);
     }
+    // The first row is the panel's HEADING — unlabelled, across the full width — so it is asserted
+    // as a drawn string rather than as a row value. That is the table's instruction (`headline`),
+    // not the painter's opinion about what BODY is.
+    expect(drawn(log)).toContain(headline.value);
 
     // The order is the table's order, top to bottom on the glass.
     const labelsInDrawOrder = ops(log, 'fillText')
-      .filter((e) => rows.some((r) => r.label === e.text))
+      .filter((e) => labelled.some((r) => r.label === e.text))
       .map((e) => e.text);
-    expect(labelsInDrawOrder).toEqual(rows.map((r) => r.label));
+    expect(labelsInDrawOrder).toEqual(labelled.map((r) => r.label));
     const ys = ops(log, 'fillText')
-      .filter((e) => rows.some((r) => r.label === e.text))
+      .filter((e) => labelled.some((r) => r.label === e.text))
       .map((e) => e.y);
     expect([...ys].sort((a, b) => a - b)).toEqual(ys);
 
-    // And the literals, so a table that silently changed shape is visible here
-    // rather than being agreed with.
-    expect(rowValue(log, 'BODY')).toBe('Veskol b');
-    expect(rowValue(log, 'T_EQ')).toBe('374 K');
-    expect(rowValue(log, 'COMP')).toBe('silicate Fe0.31');
-    expect(rowValue(log, 'ATMO')).toBe('co2-n2 0.85 bar');
-    expect(rowValue(log, 'TIDAL')).toBe('free');
+    // And the literals, so a table that silently changed shape is visible here rather than being
+    // agreed with. ⛔ Every value is five characters or fewer, which is the budget; the one that
+    // LOSES something is ATM, and it loses the gas mix, by Max's ruling of 2026-09-08.
+    expect(headline.value).toBe('Veskol b');
+    expect(rowValue(log, 'TEQ')).toBe('374');
+    expect(rowValue(log, 'CMP')).toBe('FE.31');
+    expect(rowValue(log, 'ATM')).toBe('0.85');
+    expect(rowValue(log, 'TID')).toBe('FREE');
+    // ⭐ AND THE LONG FORM IS STILL PRODUCIBLE FROM THE SAME READING. This is the half of Max's
+    // ruling that is easy to lose: the mix came off the GLASS, not out of the pipeline.
+    const long = Object.fromEntries(buildInfoRows(FLYING).map((r) => [r.label, r.value]));
+    expect(long.ATMO).toBe('co2-n2 0.85 bar');
+    expect(long.COMP).toBe('silicate Fe0.31');
+    expect(long.T_EQ).toBe('374 K');
   });
 
   it('holds the line for a moon, which has no equilibrium temperature', () => {
@@ -618,20 +732,21 @@ describe('INFO — the dossier, straight off the table', () => {
     });
     const { log } = paint(paintInfo, moon, 0);
 
-    expect(drawn(log)).toContain('T_EQ');
-    expect(rowValue(log, 'T_EQ')).toBe('');
-    expect(rowValue(log, 'TIDAL')).toBe('synchronous');
+    expect(drawn(log)).toContain('TEQ');
+    expect(rowValue(log, 'TEQ')).toBe('');
+    expect(rowValue(log, 'TID')).toBe('SYNC');
 
-    // Every row still drew, blank or not. A row that vanished with its value
-    // would make every row beneath it jump up the glass — and a pilot glancing at
-    // a readout whose lines have moved reads the wrong one.
-    const labels = ops(log, 'fillText').filter((e) => INFO_ROWS.some((r) => r.label === e.text));
-    expect(labels.length).toBe(INFO_ROWS.length);
+    // Every labelled row still drew, blank or not. A row that vanished with its value would make
+    // every row beneath it jump up the glass — and a pilot glancing at a readout whose lines have
+    // moved reads the wrong one.
+    const abbrs = INFO_ROWS.filter((r) => !r.headline).map((r) => r.abbr);
+    const labels = ops(log, 'fillText').filter((e) => abbrs.includes(e.text));
+    expect(labels.length).toBe(abbrs.length);
 
     // And at exactly the same baselines as a frame with every value present.
     const full = paint(paintInfo, FLYING, 0).log;
     const yOf = (l, label) => ops(l, 'fillText').find((e) => e.text === label).y;
-    for (const r of INFO_ROWS) expect(yOf(log, r.label)).toBe(yOf(full, r.label));
+    for (const a of abbrs) expect(yOf(log, a)).toBe(yOf(full, a));
   });
 
   it('names no field of its own — the table is the only place fields are listed', () => {
@@ -643,7 +758,7 @@ describe('INFO — the dossier, straight off the table', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
 
-    for (const label of INFO_ROWS.map((r) => r.label)) {
+    for (const label of INFO_ROWS.flatMap((r) => [r.label, r.abbr]).filter(Boolean)) {
       expect(code, `InfoPanel.js mentions the row label ${label} in code`).not.toContain(label);
     }
     for (const field of ['survey', 'tEq', 'composition', 'atmosphere', 'tidalState']) {
@@ -791,18 +906,33 @@ function q(v) {
  */
 function findThrottleFrame(log, screen) {
   const barW = screen.width - screen.type.pad * 2;
-  const edges = ops(log, 'fillRect')
+  const candidates = ops(log, 'fillRect')
     // ⛔ SQUARES ARE GLYPH TEXELS, NOT FRAME EDGES. Since the kit moved onto the bitmap face a
     // letter is drawn as `hair x hair` fillRects, and 'exactly one hairline tall' matched every
     // one of them — 640 of them on a DRIVE panel. A frame edge is a long thin rect and never
     // square, which is the same discriminator `decodePixelText` uses to ignore furniture.
     .filter((r) => r.w !== r.h)
     .filter((r) => Math.abs(r.h - screen.hair) < 1e-9 && r.w < barW - 1e-9);
+
+  // ⛔ A HAIRLINE-TALL RECT IS NOT NECESSARILY A FRAME EDGE, and on the grid it stopped being one.
+  // `bar()` insets its FILL by `hair * 2` top and bottom, so a bar `5 * hair` tall — which is
+  // exactly what a body-sized slot is — has a fill of precisely `hair`. Height alone then matched
+  // four rects (two frame edges and two fills) and this helper threw on a panel that was drawn
+  // perfectly. The two frame edges are the pair that SHARE AN x AND A WIDTH, and they are the
+  // widest such pair, because every fill is inset inside them.
+  const byExtent = new Map();
+  for (const r of candidates) {
+    const key = `${q(r.x)}|${q(r.w)}`;
+    byExtent.set(key, [...(byExtent.get(key) ?? []), r]);
+  }
+  const pairs = [...byExtent.values()].filter((g) => g.length === 2);
+  const edges = pairs.sort((a, b) => b[0].w - a[0].w)[0] ?? [];
   if (edges.length !== 2) {
     throw new Error(
-      `expected the throttle bar's two horizontal frame edges, found ${edges.length}. ` +
-      `Deleting the screen.bar() call for the throttle lands here — without this ` +
-      `throw the oracle comparison would be trivially true on an empty region.`,
+      `expected the throttle bar's two horizontal frame edges, found ${candidates.length} ` +
+      `hairline-tall rects but no matching pair among them. Deleting the screen.bar() call for ` +
+      `the throttle lands here — without this throw the oracle comparison would be trivially ` +
+      `true on an empty region.`,
     );
   }
   const [top, bottom] = edges.sort((a, b) => a.y - b.y);
@@ -1107,9 +1237,15 @@ describe('all three panels — a frame with nothing in it draws no numbers', () 
     // in this assertion: an instrument that is present and blank is the honest
     // picture, and a label that vanished with its reading would be a seventh
     // element appearing and disappearing on the glass.
-    expect(drawn(paint(paintDrive, EMPTY, 0).log)).toEqual(['0.0 km/s', 'SUBLIGHT', 'THR', 'CAP', 'TURN']);
-    expect(drawn(paint(paintTarget, EMPTY, 0).log)).toEqual(['DIST', 'ETA']);
-    expect(drawn(paint(paintInfo, EMPTY, 0).log)).toEqual(INFO_ROWS.map((r) => r.label));
+    // ⚠ THE LIST SHRANK, AND EVERY REMOVAL IS A RULING RATHER THAN A DRIFT. CAP and TURN came off
+    // DRIVE (Max, 2026-09-08); the speed's unit moved onto the tier line beside the drive state, so
+    // the hero is '0.0' and the line below it is 'SUB km/s'; TARGET's distance lost its label,
+    // which is why only 'ETA' remains there; and INFO's labels are the table's three-character
+    // `abbr` forms, with the heading row unlabelled by design.
+    expect(drawn(paint(paintDrive, EMPTY, 0).log)).toEqual(['0.0', 'SUB km/s', 'THR']);
+    expect(drawn(paint(paintTarget, EMPTY, 0).log)).toEqual(['ETA']);
+    expect(drawn(paint(paintInfo, EMPTY, 0).log))
+      .toEqual(INFO_ROWS.filter((r) => !r.headline).map((r) => r.abbr));
   });
 
   it('draws exactly one number on an empty frame, and it is the model\'s own', () => {
@@ -1121,7 +1257,7 @@ describe('all three panels — a frame with nothing in it draws no numbers', () 
     const numeric = (log) => drawn(log).filter((s) => /\d/.test(s));
 
     const emptyReadout = buildFlightReadout(flightReadoutStateFromSnapshot(EMPTY));
-    expect(numeric(paint(paintDrive, EMPTY, 0).log)).toEqual([emptyReadout.speedText]);
+    expect(numeric(paint(paintDrive, EMPTY, 0).log)).toEqual([emptyReadout.speedValue]);
     expect(numeric(paint(paintTarget, EMPTY, 0).log)).toEqual([]);
     expect(numeric(paint(paintInfo, EMPTY, 0).log)).toEqual([]);
   });
@@ -1136,15 +1272,20 @@ describe('all three panels — a frame with nothing in it draws no numbers', () 
       flightMode: 'manual',
     });
     const target = paint(paintTarget, noTarget, 0);
-    expect(rowValue(target.log, 'DIST')).toBe('');
+    // The distance line is unlabelled, so "blank" is the absence of the line rather than a label
+    // with nothing after it. `formatDistance` returning '' is what makes `text()` draw nothing.
+    expect(drawn(target.log).some((t) => /km|Mm|AU/.test(t)),
+      'a distance was printed with no target to measure').toBe(false);
     expect(rowValue(target.log, 'ETA')).toBe('');
 
-    // And the same drive frame with the cap accessors gone — the shape the
-    // snapshot writes as null, not as 0.
-    const noCaps = buildCockpitSnapshot({ scModel: { speed: 1.0, driveOn: true, throttle: 0.4 } });
-    const drive = paint(paintDrive, noCaps, 0);
-    expect(rowValue(drive.log, 'CAP')).toBe('');
-    expect(rowValue(drive.log, 'TURN')).toBe('');
+    // ⭐ AND THE DRIVE'S CEILINGS, WHICH ARE NO LONGER ON THE GLASS, ARE STILL BLANK-NOT-ZERO AT
+    // THE FORMATTER. Max cut the rows and kept the code (*"don't get rid of any code that allows
+    // you to display what we want to display"*), so the property that made them safe to draw is
+    // asserted where it now lives — a null cap is the shape the snapshot writes, not a 0.
+    expect(formatSpeedCap(null)).toBe('');
+    expect(formatSpeedCap(undefined)).toBe('');
+    expect(formatTurnCap(null)).toBe('');
+    expect(formatTurnCap(undefined)).toBe('');
   });
 
   it('formatDistance answers blank, never a zero, for a missing distance', () => {
@@ -1168,8 +1309,8 @@ describe('all three panels — a blinking alert actually alternates', () => {
     const lit = drawn(paint(paintDrive, FLYING, 0).log);
     const dark = drawn(paint(paintDrive, FLYING, 350).log);
 
-    expect(lit).toContain(ALERT_TEXT.MASS_LOCK);
-    expect(dark).not.toContain(ALERT_TEXT.MASS_LOCK);
+    expect(lit).toContain(briefAlert(ALERT_TEXT.MASS_LOCK));
+    expect(dark).not.toContain(briefAlert(ALERT_TEXT.MASS_LOCK));
     expect(lit).not.toEqual(dark);
   });
 
@@ -1178,8 +1319,8 @@ describe('all three panels — a blinking alert actually alternates', () => {
     const lit = drawn(paint(paintTarget, FLYING, 0).log);
     const dark = drawn(paint(paintTarget, FLYING, 1500).log);
 
-    expect(lit).toContain(ALERT_TEXT.DROP_SLOW);
-    expect(dark).not.toContain(ALERT_TEXT.DROP_SLOW);
+    expect(lit).toContain(briefAlert(ALERT_TEXT.DROP_SLOW));
+    expect(dark).not.toContain(briefAlert(ALERT_TEXT.DROP_SLOW));
     expect(lit).not.toEqual(dark);
   });
 
@@ -1192,10 +1333,10 @@ describe('all three panels — a blinking alert actually alternates', () => {
     // panel really is asking it rather than deciding for itself.
     // -100 ms is 1700 ms into an 1800 ms cycle: DARK. The naive form reads it as
     // -100 < 1200 and lights the banner.
-    expect(drawn(paint(paintTarget, FLYING, -100).log)).not.toContain(ALERT_TEXT.DROP_SLOW);
+    expect(drawn(paint(paintTarget, FLYING, -100).log)).not.toContain(briefAlert(ALERT_TEXT.DROP_SLOW));
     // -3500 ms is 100 ms into the cycle: lit. Without this the assertion above
     // would also pass on a panel that had gone permanently dark for t < 0.
-    expect(drawn(paint(paintTarget, FLYING, -3500).log)).toContain(ALERT_TEXT.DROP_SLOW);
+    expect(drawn(paint(paintTarget, FLYING, -3500).log)).toContain(briefAlert(ALERT_TEXT.DROP_SLOW));
   });
 
   it('leaves the rest of the panel untouched while an alert blinks', () => {
@@ -1205,9 +1346,22 @@ describe('all three panels — a blinking alert actually alternates', () => {
     const lit = ops(paint(paintDrive, FLYING, 0).log, 'fillText');
     const dark = ops(paint(paintDrive, FLYING, 350).log, 'fillText');
 
-    const withoutBanner = (entries) => entries.filter((e) => e.text !== ALERT_TEXT.MASS_LOCK);
-    expect(withoutBanner(lit).map((e) => [e.text, e.x, e.y]))
-      .toEqual(withoutBanner(dark).map((e) => [e.text, e.x, e.y]));
+    // ⚠ THE MODE LINE IS THE ONE THING THAT DOES CHANGE, AND IT IS SUPPOSED TO. A 43-row panel has
+    // no room for a seventh element, so the banner TAKES the mode's line rather than being painted
+    // over it — an alert outranks a mode readout, and "you are too close" is the thing to know
+    // while it is true. Everything ABOVE that line is what must not move, and that is what this
+    // compares: the speed, its tier, and both bars, at identical positions in both phases.
+    const banner = briefAlert(ALERT_TEXT.MASS_LOCK);
+    const modeLine = shortMode(FLYING_READOUT.modeLine);
+    const above = (entries) => entries
+      .filter((e) => e.text !== banner && e.text !== modeLine)
+      .map((e) => [e.text, e.x, e.y]);
+    expect(above(lit)).toEqual(above(dark));
+    // And the exchange is exactly one for one, so neither can quietly go missing.
+    expect(drawn(paint(paintDrive, FLYING, 0).log)).toContain(banner);
+    expect(drawn(paint(paintDrive, FLYING, 0).log)).not.toContain(modeLine);
+    expect(drawn(paint(paintDrive, FLYING, 350).log)).toContain(modeLine);
+    expect(drawn(paint(paintDrive, FLYING, 350).log)).not.toContain(banner);
   });
 });
 
@@ -1252,6 +1406,95 @@ describe('all three panels — nothing is drawn below the legibility floor', () 
 
 // ── 7. Housekeeping the host relies on ──────────────────────────────────────
 
+/**
+ * ── ⛔ THE GUARD THAT SHOULD HAVE EXISTED BEFORE THE REDESIGN ──────────────────────────────────
+ *
+ * Two collisions shipped into this workstream and neither was visible in a spec:
+ *
+ *   1. TARGET drew `row('DIST', '0.25 AU')` — a 3-character label and an 8-character value on a
+ *      9-character panel — and the value's first glyph landed ON the label's last. The result was
+ *      not a clipped row but a smear of half-glyphs.
+ *   2. DRIVE dropped the speed bar into a six-row grid slot, and `bar()` draws its pin two
+ *      hairlines ABOVE the frame and its tick two BELOW. The pin overlapped the tier line and the
+ *      tick overlapped the throttle frame.
+ *
+ * Both were found by accident, from tofu the decoder returned that no assertion had asked about.
+ * ⭐ THE PROPERTY IS CHEAP AND TOTAL, so it is asserted directly and at every shipped resolution:
+ * nothing a painter draws may leave the glass, and no two strings may share a texel. A layout
+ * cannot collide and stay green.
+ */
+describe('all three panels — nothing overlaps and nothing leaves the glass', () => {
+  // The upper pair (NAV, DRIVE) and the lower pair (INFO, TARGET) at 240p, 480p and 720p, projected
+  // from `cockpit-metrics.json` through the 70-degree camera. See `chrome-240p-BATCH-PLANS.md` §0.5.
+  // ⛔ EACH PAINTER ON THE PAIR IT ACTUALLY LIVES ON, not on both. `PanelLayout.js:53-56` puts
+  // DRIVE on `Screen_UR` (upper, 8 characters) and INFO/TARGET on `Screen_LL`/`Screen_LR` (lower,
+  // 9). Painting TARGET onto an upper panel fails this guard truthfully — "SLOW DOWN" is nine
+  // characters — but it fails about a configuration the game does not have, and a test that
+  // reports a defect in a frame nobody renders is a test that gets muted.
+  const UPPER = [['upper 240p', 51, 43], ['upper 480p', 103, 86], ['upper 720p', 155, 129]];
+  const LOWER = [['lower 240p', 55, 46], ['lower 480p', 110, 92], ['lower 720p', 166, 138]];
+  const SHIPPED = [
+    ...UPPER.map((p) => [...p, [[paintDrive, 'DRIVE']]]),
+    ...LOWER.map((p) => [...p, [[paintTarget, 'TARGET'], [paintInfo, 'INFO']]]),
+  ];
+
+  const boxes = (log) => ops(log, 'fillText').map((e) => ({
+    text: e.text, x: e.x, y: e.y - e.size, w: measurePixelText(e.text, e.size / FACE.h), h: e.size,
+  }));
+  const hits = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+  for (const [name, W, H, painters] of SHIPPED) {
+    it(`keeps every panel inside a ${name} buffer, with no two strings on one texel`, () => {
+      for (const [painter, label] of painters) {
+        const ctx = makeRecordingCtx();
+        const screen = new PhosphorScreen(ctx, { width: W, height: H });
+        painter(screen, FLYING, 0);
+
+        // ⚠ NON-VACUITY FIRST. A painter that drew nothing would satisfy every assertion below,
+        // and at a small buffer "drew nothing" is a plausible failure rather than a silly one.
+        const drawnBoxes = boxes(ctx.log);
+        expect(drawnBoxes.length, `${label} drew no text at all on a ${name} panel`)
+          .toBeGreaterThan(0);
+
+        for (const b of drawnBoxes) {
+          expect(b.x >= 0 && b.y >= 0 && b.x + b.w <= W && b.y + b.h <= H,
+            `${label} drew "${b.text}" at (${b.x}, ${b.y}) ${b.w}x${b.h}, outside a ${W}x${H} ` +
+            `panel. Type that runs off the glass is not clipped by anything — it simply is not ` +
+            `there, and the panel reads as a shorter word.`).toBe(true);
+        }
+        for (let i = 0; i < drawnBoxes.length; i++) {
+          for (let j = i + 1; j < drawnBoxes.length; j++) {
+            expect(hits(drawnBoxes[i], drawnBoxes[j]),
+              `${label} drew "${drawnBoxes[i].text}" and "${drawnBoxes[j].text}" on top of each ` +
+              `other on a ${name} panel. Overlapping glyphs do not read as either string; they ` +
+              `read as a smear, which is how the DIST row shipped broken.`).toBe(false);
+          }
+        }
+
+        // ⭐ AND NOTHING DECODED AS TOFU. A replacement character means the decoder could not read
+        // a cell back, which on a panel whose every glyph came from the shipped face means two
+        // runs are interfering — the symptom that exposed both collisions above.
+        for (const b of drawnBoxes) {
+          expect(b.text.includes('\uFFFD'),
+            `${label} put an unreadable cell on a ${name} panel: ${JSON.stringify(b.text)}`)
+            .toBe(false);
+        }
+      }
+    });
+  }
+
+  it('fits every panel inside the row budget the kit reports', () => {
+    // The kit answers `lines` and `colsAt`; a painter that ignores either walks off the glass at
+    // some resolution and not at others, which is the hardest kind of layout bug to reproduce.
+    for (const [name, W, H] of SHIPPED) {
+      const screen = new PhosphorScreen(makeRecordingCtx(), { width: W, height: H });
+      expect(screen.type.lines, `${name} stopped holding seven lines`).toBeGreaterThanOrEqual(7);
+      expect(screen.colsAt(), `${name} holds too few characters for a 3+5 row`)
+        .toBeGreaterThanOrEqual(8);
+    }
+  });
+});
+
 describe('all three panels — each clears its own glass', () => {
   it('paints the buffer black before drawing anything', () => {
     // PanelHost deliberately does NOT clear before calling a painter: clearing
@@ -1261,8 +1504,15 @@ describe('all three panels — each clears its own glass', () => {
     // within a second at 12.5 Hz.
     for (const painter of [paintDrive, paintTarget, paintInfo]) {
       const { log } = paint(painter, FLYING, 0);
-      expect(fullClears(log).length).toBeGreaterThanOrEqual(1);
-      expect(log.indexOf(fullClears(log)[0])).toBeLessThan(log.findIndex((e) => e.op === 'fillText'));
+      const clears = fullClears(log);
+      expect(clears.length).toBeGreaterThanOrEqual(1);
+      // ⚠ THE "FIRST DRAW" IS A `fillRect` NOW, NOT A `fillText`. Since the kit moved onto the
+      // bitmap face nothing calls fillText at all, so `findIndex(op === 'fillText')` returned -1
+      // and this assertion read "0 < -1" — it could not pass, and had it been written the other
+      // way round it could not have FAILED. The first ink is the first rect that is not the clear.
+      const firstInk = log.findIndex((e) => e.op === 'fillRect' && !clears.includes(e));
+      expect(firstInk, 'the painter drew nothing at all').toBeGreaterThan(-1);
+      expect(log.indexOf(clears[0])).toBeLessThan(firstInk);
     }
   });
 });

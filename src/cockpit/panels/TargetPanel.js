@@ -78,29 +78,34 @@ import { blinkOn } from '../PhosphorScreen.js';
 import { buildFlightReadout, flightReadoutStateFromSnapshot } from '../FlightReadout.js';
 import { KM_PER_SCENE } from '../../ui/SpeedFormat.js';
 import { AU_TO_SCENE } from '../../core/ScaleConstants.js';
+import { fitDesignation } from '../designation.js';
+import { briefAlert } from '../../ui/AlertCue.js';
 
 /**
  * Where things sit, as fractions of the buffer height — fixed, so that a warning
  * appearing never shoves the distance and the ETA up the glass. See DrivePanel's
  * header for the full argument.
  */
-const LAYOUT = Object.freeze({
-  KIND_BASELINE: 0.10,
-  HERO_BASELINE: 0.22,
-  ROW_FIRST_BASELINE: 0.50,
-  BANNER_BASELINE: 0.88,
-});
+// ⛔ `LAYOUT` IS GONE. It placed everything at a fraction of the buffer height, which was right for
+// a 512-tall panel canvas and is wrong the moment the panel IS the game's 46 rows: 0.88 of 46 is
+// 40.48, and a glyph on a fractional baseline is resampled into the grey fringe this workstream
+// removes. Slots on the grid replace it, and its stated property — that a warning appearing never
+// shoves the distance and the ETA up the glass — is now structural rather than arithmetical,
+// because the banner has a slot of its own that nothing else can occupy.
 
 /**
  * What the hero is, when it is not the body under the reticle.
  *
- * Drawn only for a warp destination, never for a selected body — a label that
- * appeared in both states would be decoration rather than a discriminator. The
- * words are NavComputer's own (`NavComputer.js:1860` draws `WARP TARGET` over
- * its prism view), so the two surfaces that can name a destination name it
- * identically.
+ * Drawn only for a warp destination, never for a selected body — a label that appeared in both
+ * states would be decoration rather than a discriminator. The words are NavComputer's own
+ * (`NavComputer.js:1860` draws `WARP TARGET` over its prism view), so the two surfaces that can
+ * name a destination name it identically.
+ *
+ * ⚠ AND THE PANEL DRAWS THE SHORT ONE. "WARP TARGET" is eleven characters and the glass is nine.
+ * The long form stays exported and unchanged for the overlay, which is not being coarsened.
  */
 const WARP_KIND = 'WARP TARGET';
+const WARP_KIND_BRIEF = 'WARP';
 
 /** Below this many km the reading is written in km. */
 const KM_TIER_MAX_KM = 1000;
@@ -174,30 +179,38 @@ export function formatDistance(sceneUnits) {
 }
 
 /**
- * Draw the selected body's name as big as it will go, and no smaller than body
- * size. Returns nothing; see the header for why this measures by drawing, and why
- * it MUST be the first thing painted after a clear.
+ * Draw the target's designation as big as it will go.
+ *
+ * ── ⭐ MAX'S RULING, 2026-09-08: "SHOUT THE SHORT NAME AND THE DISTANCE" ────────────────────────
+ *
+ * *"2. sounds good"*, against a rendered proposal. ⛔ This is NOT the batch plan's option (a) — he
+ * did not take "big discriminator with the full name small underneath". The full designation comes
+ * OFF the glass; it is not relegated to small type, and there is no second line for it.
+ *
+ * ── WHAT THIS REPLACED, AND WHY IT WAS ALREADY BROKEN ───────────────────────────────────────────
+ *
+ * The old version drew the name at the display tier, measured its own probe, and on overflow
+ * cleared the whole buffer and redrew ONE size down. At the game's resolution that mechanism is not
+ * merely unnecessary, it is a defect: the display tier holds FOUR characters on a 55-texel panel,
+ * so a nine-character designation overflowed on essentially every body, and the "one size down"
+ * landed at body size — where it also did not fit, and drew off both edges anyway. The panel was
+ * broken TODAY, before any of this work.
+ *
+ * The replacement measures the same thing the kit already knows: how many characters each tier
+ * holds. The name is fitted to the panel's width FIRST (dropping the leading system name, never
+ * truncating an identifier — see `designation.js`), and then drawn at the largest tier that holds
+ * the result. A short designation therefore genuinely shouts, which is what was asked for.
+ *
+ * ⛔ NO PROBE, NO RE-CLEAR. The old "measure by drawing" forced this to be the first thing painted
+ * after a clear, and made every other element's ordering load-bearing. Nothing here draws twice.
  * @private
  */
-function drawHeroName(screen, name) {
-  const W = screen.width;
-  const y = screen.height * LAYOUT.HERO_BASELINE;
-
-  // Null/empty name draws nothing at all and returns null — no target, no hero,
-  // no placeholder. A '—' or 'NO TARGET' here would be inventing a reading.
-  const box = screen.text(name, W / 2, y, { size: screen.type.display, align: 'centre' });
-  if (!box) return;
-
-  // The glass minus one margin either side. `pad` is the kit's own margin, so the
-  // name is held to the same edge every other element respects.
-  if (box.w <= W - screen.type.pad * 2) return;
-
-  // Overflowed. Wipe the probe and redraw one size down — ONE step, to a size
-  // that is still nearly three times the legibility floor. There is deliberately
-  // no shrink-to-fit loop: that is how a 13-pixel readout quietly becomes an
-  // 8-pixel one, and the kit throws below the floor rather than allow it.
-  screen.clear();
-  screen.text(name, W / 2, y, { size: screen.type.body, align: 'centre' });
+function drawHeroName(screen, name, top) {
+  const t = screen.type;
+  const fitted = fitDesignation(name, screen.colsAt(t.body));
+  if (!fitted) return null;   // no target, no hero, no placeholder — a '—' would invent a reading
+  const size = fitted.length <= screen.colsAt(t.display) ? t.display : t.body;
+  return screen.text(fitted, screen.width / 2, top + size, { size, align: 'centre' });
 }
 
 /**
@@ -222,45 +235,53 @@ export function paintTarget(screen, snapshot, nowMs) {
   // which used to type out "Warp Target" on that same click, is suppressed in
   // HELM (main.js:662, AC-OVERLAYS-RETIRE-IN-HELM). Without this, picking a
   // destination emptied the glass and announced the destination nowhere.
-  //
-  // ⚠ The snapshot has carried `warp.targetName` since increment 6
-  // (CockpitSnapshot.js:208) and no painter read it. PanelHost's own header
-  // (PanelHost.js:128-129) asserts the destination name "is still TRUE during a
-  // warp" — a documented intent that was contradicted by every painter.
   const warpName = target.name ? null : (snapshot?.warp?.targetName || null);
 
-  const H = screen.height;
   const t = screen.type;
+  const lineTop = (i) => t.pad + i * t.lead;
+  const baseline = (i) => lineTop(i) + t.body;
 
   screen.clear();
 
-  // FIRST, always — `drawHeroName` may clear again. See the header.
-  drawHeroName(screen, target.name || warpName);
-
-  // AFTER the hero, and the ordering is load-bearing for the same reason: the
-  // overflow path re-clears the whole buffer, so a label painted first would
-  // vanish on exactly the long designations that most need saying what they are.
+  // ── Slot 0: what kind of thing the hero is ──
+  // Still drawn only for a warp destination. The ordering that used to be load-bearing here is
+  // not any more — nothing re-clears the buffer — but the label stays above the name because that
+  // is where a caption belongs, not because the painter would otherwise wipe it.
   if (warpName) {
-    screen.text(WARP_KIND, screen.width / 2, H * LAYOUT.KIND_BASELINE, {
-      size: t.label, align: 'centre',
-    });
+    screen.text(WARP_KIND_BRIEF, screen.width / 2, baseline(0), { align: 'centre' });
   }
 
-  // ── The two readings ──
-  // DIST is the raw distance; ETA is the model's, verbatim. `readout.eta` is
-  // already '--:--' for "aimed at it but not closing" and null for "not aimed at
-  // it at all", which draws the label with a blank value — the row holds its line
-  // either way, so the numbers below never move.
-  const row0 = H * LAYOUT.ROW_FIRST_BASELINE;
-  screen.row('DIST', formatDistance(target.distance), row0);
-  screen.row('ETA', readout.eta, row0 + t.lead);
+  // ── Slots 1-2: the designation ──
+  drawHeroName(screen, target.name || warpName, lineTop(1));
 
-  // ── The approach cue ──
-  // Words and a blink tier, no colour. SAFE TO DROP is steady and therefore
-  // always lit; SLOW DOWN blinks slowly. The `readout.drop &&` half of the guard
-  // stops `blinkOn` being asked about an absent cue, which it throws on by design.
+  // ── Slot 3: the distance, on a line of its own ──
+  //
+  // ⛔ NOT A LABELLED ROW, AND THIS IS THE DEFECT THAT FOUND ITSELF. A row is a 3-character label
+  // and a 5-character value on a 9-character panel, and `formatDistance` emits up to EIGHT
+  // ("14959 Mm", "0.25 AU"). Drawn as `row('DST', …)` the label and the value OVERLAPPED — the
+  // value's first glyph landed on top of the label's last — and the result was not a clipped row
+  // but a smear of half-glyphs. It was found because the panel tests decode text back out of the
+  // texels, so the overlap came back as a tofu run that no assertion had asked for; a test that
+  // trusted the string handed to `fillText` would have been perfectly green.
+  //
+  // The distance gets the whole line instead. Nothing is lost by dropping the label: this panel
+  // carries exactly one distance, and the number brings its own unit — "0.25 AU" cannot be read as
+  // anything else. A label here would be three characters spent saying what the only number of its
+  // kind on the glass already says.
+  screen.text(formatDistance(target.distance), screen.width - t.pad, baseline(3), { align: 'right' });
+
+  // ── Slot 4: the ETA ──
+  // The model's, verbatim. `readout.eta` is already '--:--' for "aimed at it but not closing" and
+  // null for "not aimed at it at all", which draws the label with a blank value — the row holds its
+  // line either way, so nothing below it moves. Five characters, and '--:--' is exactly five.
+  screen.row('ETA', readout.eta, baseline(4));
+
+  // ── Slot 6: the approach cue ──
+  // Words and a blink tier, no colour. SAFE TO DROP is steady and therefore always lit; SLOW DOWN
+  // blinks slowly. The `readout.drop &&` half of the guard stops `blinkOn` being asked about an
+  // absent cue, which it throws on by design.
   if (readout.drop && blinkOn(readout.drop.blink, nowMs)) {
-    screen.banner(readout.drop.text, H * LAYOUT.BANNER_BASELINE);
+    screen.banner(briefAlert(readout.drop.text), baseline(6));
   }
 }
 

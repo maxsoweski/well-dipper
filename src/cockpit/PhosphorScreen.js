@@ -510,6 +510,29 @@ export class PhosphorScreen {
    */
   _scaleFor(size) { return Math.max(1, Math.round(size / FACE.h)); }
 
+  /**
+   * How many characters fit between the margins at a size.
+   *
+   * ⭐ THE NUMBER EVERY PANEL NEEDS AND NONE OF THEM SHOULD DERIVE ITSELF. A run of n characters is
+   * `n * advance * scale - scale` texels wide — the last one carries no trailing gap — so the fit
+   * is `(usable + scale) / (advance * scale)`. A painter that computes this itself is a painter
+   * that will be wrong the first time the face or the padding changes, silently, by overflowing
+   * the glass rather than by throwing.
+   *
+   * ⚠ ON THE REAL PANELS THIS IS 8 AND 9. The upper pair (NAV, DRIVE) measures 51.41 texels across
+   * at 240 lines and the lower pair (INFO, TARGET) 55.28 — see `chrome-240p-BATCH-PLANS.md` §0.5,
+   * which also records that the plan's own 12/13 were the OLD 3x5 face's numbers, and that the
+   * same arithmetic reproduces them at `advance` 4, which is what validates it.
+   *
+   * @param {number} [size] a size from `this.type`; defaults to body
+   * @returns {number} whole characters, never below 0
+   */
+  colsAt(size = this.type.body) {
+    const scale = this._scaleFor(size);
+    const usable = this.width - 2 * this.type.pad;
+    return Math.max(0, Math.floor((usable + scale) / (FACE.advance * scale)));
+  }
+
   // ── The only two places a colour is ever set ──────────────────────────────
   // Every drawing method below goes through these. That is what makes "one ink"
   // a property of the file rather than a promise each method keeps.
@@ -765,7 +788,15 @@ export class PhosphorScreen {
         // The zero mark. Without it a bipolar bar at rest is visually identical
         // to a bipolar bar with no reading at all, and "stopped" and "no data"
         // are very different things to tell a pilot.
-        c.fillRect(centreX - hair / 2, fillY, hair, fillH);
+        // ⛔ FULL INNER HEIGHT, NOT `fillH`, AND THE REASON IS AN INVARIANT RATHER THAN TASTE.
+        // `decodePixelText` tells glyph texels from bar furniture by one rule, stated in its own
+        // header: "a glyph texel is always a SQUARE of the scale. Bars, frames, ticks and pins are
+        // not." At `fillH` this mark broke that rule the moment a bar became a body-tall grid slot
+        // — `fillH = h - 4*hair`, so a `5*hair` bar gives a mark exactly `hair` by `hair`, and the
+        // decoder read the throttle's zero mark as a character and returned tofu in the middle of
+        // the panel's text. Spanning the inner height is both non-square and the better mark: at
+        // 240p it is three texels of centre tick instead of one.
+        c.fillRect(centreX - hair / 2, y + hair, hair, Math.max(hair, h - hair * 2));
       } else {
         const span = clamp(frac, 0, 1) * (w - inset * 2);
         if (span > 0) c.fillRect(x + inset, fillY, span, fillH);

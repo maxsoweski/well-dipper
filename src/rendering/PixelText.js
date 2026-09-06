@@ -500,6 +500,7 @@ export function decodePixelText(rects) {
           else runs.push([x]);
         }
         let score = 0;
+        let bad = 0;
         const decoded = [];
         for (const run of runs) {
           const x0 = run[0];
@@ -507,16 +508,29 @@ export function decodePixelText(rects) {
           let text = '';
           for (let c = 0; c < cells; c++) {
             const ch = cellAt(x0 + c * ADV * s, y0);
-            if (ch === null) { text += '\uFFFD'; } else { text += ch; if (ch !== ' ') score++; }
+            if (ch === null) { text += '\uFFFD'; bad++; } else { text += ch; if (ch !== ' ') score++; }
           }
           decoded.push({ x0, text });
         }
-        if (!best || score > best.score) best = { y0, score, decoded };
+        // ⭐ UNMATCHED CELLS COUNT AGAINST AN ANCHOR, THEY DO NOT COME FREE. Scoring on resolved
+        // cells alone made a WRONG origin competitive: a band is `GH * s` tall, so an anchor placed
+        // on the middle of one line reaches down into the NEXT line and decodes its top rows as the
+        // bottom of a phantom cell. Measured on a real TARGET panel — "0.25 AU" on one baseline and
+        // "ETA"/"4:09" on the next produced two runs that were never drawn, "__\uFFFD" and
+        // "\uFFFD.\uFFFD\uFFFD", at baselines a third of a line apart from anything.
+        if (!best || (score - bad) > (best.score - best.bad)) best = { y0, score, bad, decoded };
       }
       if (!best || best.score === 0) continue;
 
       for (const { x0, text } of best.decoded) {
         if (!/[^\s\uFFFD]/.test(text)) continue;
+        // ⛔ A RUN WITH AN UNMATCHED CELL IS NOT EMITTED, AND ITS TEXELS ARE NOT CONSUMED.
+        // This decoder exists so panel tests can ask the GLASS what it says; a run it could not
+        // fully read is a run it has mis-anchored, and reporting it invents text that no painter
+        // drew — which is worse than reporting nothing, because an assertion written against the
+        // invented string then passes. Leaving the texels unconsumed is the other half: they are
+        // still available to the correct anchor, which is how the real line is recovered.
+        if (text.includes('\uFFFD')) continue;
         // Consume this run's texels so a later anchor cannot decode them a second time.
         for (let c = 0; c < text.length; c++) {
           for (let r = 0; r < GH; r++) {
