@@ -693,6 +693,78 @@ Each panel's `normal` equals its own `-centre` normalised, so the panels are **a
 
 ---
 
+## 0.5 ⛔ CORRECTIONS FOUND 2026-09-08 — THE COLUMN BUDGET, AND WHICH PANEL IS WHICH
+
+⭐ **Read this before designing any panel content.** Two of §1's and §4's numbers are wrong, and the
+second one has been wrong in a way that reads plausibly.
+
+### (i) The column arithmetic died with the 3×5 face
+
+§1's **row** maths still holds — both faces are five rows tall, so seven lines is still
+`2·pad + 5 + 6·6 = 43` and DRIVE still totals 43 exactly. Its **column** maths does not. The shipped
+5×5 face has `advance` **6** where the 3×5 had 4, so:
+
+    chars across = floor((floor(cols) - 2·pad + 1) / advance)
+
+⚠ **Validate the method before trusting a new number from it:** at `advance = 4` it returns **12**
+and **13**, which is what §1 derived independently. That agreement is the only reason to believe 8
+and 9.
+
+### (ii) ⛔ INFO IS ON THE LOWER PAIR. THE HANDOFF AND §4 BOTH GROUPED IT WITH THE UPPER.
+
+The live role map is `PanelLayout.js:53-56` and it is **not** the pairing the plan assumed:
+
+| role | node | pair | head-on rows × cols | chars across | value budget |
+|---|---|---|---|---|---|
+| NAV | `Screen_UL` | upper, d=0.800 | 42.84 × 51.41 | **8** | 4 |
+| DRIVE | `Screen_UR` | upper, d=0.800 | 42.84 × 51.41 | **8** | 4 |
+| INFO | `Screen_LL` | lower, d=0.744 | 46.07 × 55.28 | **9** | **5** |
+| TARGET | `Screen_LR` | lower, d=0.744 | 46.07 × 55.28 | **9** | **5** |
+
+All four screens are 0.24 × 0.20 m (`cockpit-metrics.json` `/screens`); only the eye distance differs.
+So **INFO gets five characters to a value, not four**, and NAV is the panel that drops to four.
+
+⭐ The general form, and it is the session's own lesson wearing a different hat: *the arithmetic was
+right and the input was wrong.* A number recomputed correctly off the wrong panel is not a weaker
+answer than no number — it is a more dangerous one, because it carries the authority of having been
+derived.
+
+### (iii) §4's "what is NOT his" list has two entries that are now his
+
+- ⛔ *"Labels shorten to 3 characters and values to 8"* — that was a 12-column row. Values are **5**
+  on INFO/TARGET and **4** on NAV/DRIVE.
+- ⛔ *"INFO keeps all seven fields… nothing comes off, so there is nothing to ask"* — the seven
+  **rows** survive; one of their **values** does not. At five characters `ATM` keeps the pressure and
+  loses the gas mix (`co2-n2` is six characters on its own). `CMP` dropping "rock" is not a loss —
+  `TYP` already carries the surface type — but the gas mix genuinely comes off the glass. **That is a
+  content decision and it is Max's.**
+
+### (iv) The lab that renders all of this
+
+`cockpit-panel-budget-lab.html` (repo root, served at `/well-dipper/`). It imports the shipped
+`drawPixelText`, PhosphorScreen's own `TYPE_RATIOS`, and runs a real survey snapshot through
+`buildInfoRows`, so the "today" column is today's actual mechanism rather than an impression of it,
+and the strings are the ones the game would really draw. It projects the panel sizes from
+`cockpit-metrics.json` in the open rather than quoting them.
+⚙ It carries an `assertFits` guard that logs a panel overflow to the console — added because the
+first draft silently drew three panels past their own floor. **The guard was probed by sabotage**
+(pushing a row start down 20 texels, watching it fire, reverting); a fit check that has never failed
+is not yet a check.
+
+---
+
+## 0.6 MAX'S RULINGS, 2026-09-08 — (a) AND (b) ARE CLOSED
+
+- **(a) CAP and TURN come off DRIVE.** *"1, okay"*. The throttle bar stays.
+- **(b) TARGET shouts the short name and the distance, and drops the full designation.** *"2. sounds
+  good"*. ⚠ This is **not** §4(b)'s option (a) — Max did not take "big discriminator with the full
+  name small underneath". The full designation comes OFF the glass; it is not relegated to small
+  type. Nine characters at scale 1 is what the panel has, and a nine-character name at the display
+  tier would be 106 texels on a 55-texel panel, so the hero tier cannot carry a name at all.
+- **(c) The value budget — OPEN.** *"3. let me see what your rec looks like"* → the lab above.
+
+---
+
 ## 1. THE TYPE SCALE, SETTLED
 
 Stop deriving type from ratios of panel height. Ratios cannot land a bitmap face on integer rows, and snapping them independently makes the character budget wander with resolution. Derive from a **grid**, so the layout is the invariant and only the texel size moves.

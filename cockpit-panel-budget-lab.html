@@ -1,0 +1,471 @@
+<!doctype html>
+<!--
+  COCKPIT PANEL BUDGET LAB — what a readout can SAY once the panel is drawn at the game's resolution
+  ==================================================================================================
+  Workstream: docs/WORKSTREAMS/chrome-and-ui-at-240p/   (AC-2, AC-3)
+  URL:  http://localhost:5175/well-dipper/cockpit-panel-budget-lab.html
+        (vite.config.js sets base '/well-dipper/' in dev — the bare root path 404s.)
+
+  ── THE ONE QUESTION THIS PAGE EXISTS TO ANSWER ────────────────────────────────────────────────
+
+  Max, 2026-09-06: "we simply need to redesign anything that does not read properly at this new
+  resolution". Drawing the cockpit at the game's resolution works — the cabin, bezels and ribs land
+  on the world's grid — but in the same frame the INFO panel becomes a column of grey mush, because
+  PhosphorScreen sizes type as a FRACTION OF PANEL HEIGHT and a panel is only ~43-46 rows tall.
+
+  So the panels get redesigned around a bitmap face at a fixed texel size. That fixes legibility and
+  immediately raises the content question, which is Max's and not mine:
+
+        A ROW IS A 3-CHARACTER LABEL HARD-LEFT AND ITS VALUE HARD-RIGHT.
+        THE VALUE GETS FIVE CHARACTERS ON INFO AND FOUR ON DRIVE.
+        WHAT CAN A FIELD SAY IN THAT?
+
+  This page renders the answer rather than describing it, because the previous four wrong turns in
+  this workstream were all cases of a spec reading fine and the screen reading wrong.
+
+  ── ⛔ THE HANDOFF'S NUMBER WAS OFF BY ONE, AND THIS IS WHY ─────────────────────────────────────
+
+  handoff-2026-09-08 §4 groups "DRIVE / INFO" as the UPPER pair at 51.41 cols and "TARGET / NAV" as
+  the LOWER pair. The live role map is `PanelLayout.js:53-56` and it is:
+
+        NAV -> Screen_UL     DRIVE -> Screen_UR        (upper, d=0.800, 42.84 x 51.41)
+        INFO -> Screen_LL    TARGET -> Screen_LR       (lower, d=0.744, 46.07 x 55.28)
+
+  INFO is on the LOWER, WIDER pair. So an INFO value gets FIVE characters, not four; NAV is the one
+  that drops to four alongside DRIVE. Nothing about the method changed — only which panel the width
+  was read off. Every figure on this page is recomputed below from the mesh, in the open.
+
+  ── WHAT MAKES THIS PAGE HONEST ────────────────────────────────────────────────────────────────
+
+    1. THE FACE IS THE SHIPPED FACE. `drawPixelText` is imported from src/rendering/PixelText.js and
+       called exactly as the HUD and reticle call it. No glyphs are redrawn here.
+    2. THE "TODAY" COLUMN IS TODAY'S ACTUAL MECHANISM — PhosphorScreen's own TYPE_RATIOS and its
+       bold-monospace vector font, at the panel's real row count. It is not a caricature of the
+       problem; it is the problem.
+    3. THE STRINGS COME OUT OF THE REAL PIPELINE. `buildInfoRows` from src/cockpit/InfoReadout.js
+       formats a survey snapshot through the shipped formatters, so "co2-n2 0.85 bar" is what the
+       game would genuinely put on the glass, not a worst case I chose.
+    4. THE PANEL SIZE IS DERIVED FROM THE MESH, not typed. width/height/distanceFromEye come out of
+       public/assets/cockpit/cockpit-metrics.json and are projected through the game's 70-degree FOV
+       in the code below, where the arithmetic can be read.
+
+  ⚠ WHAT THIS PAGE IS NOT. It is not the cockpit. It answers a STATIC question — how many characters
+  fit, and does the result read — which is the one kind of question a lab may answer for this project
+  (feedback_showcase-by-parking-the-live-game: "A lab file is still right for things that ARE static:
+  measured ink, glyph ladders, palettes, layout"). Whether the whole picture coheres is AC-9 and is
+  Max's eye in the running game, never this page.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cockpit panel budget — what a readout can say at 240p</title>
+<style>
+  :root { --ink:#EDE8DE; --dim:#8b8378; --rule:#2a2a28; --bg:#131312; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; padding:0 32px 40px; }
+  h1 { font-size:17px; letter-spacing:.06em; margin:0 0 4px; text-transform:uppercase; }
+  h2 { font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim);
+       margin:38px 0 12px; border-bottom:1px solid var(--rule); padding-bottom:6px; }
+  p  { max-width:74ch; color:#c9c3b8; margin:8px 0; }
+  .sub { color:var(--dim); margin:0 0 22px; }
+  .quote { border-left:2px solid #55504a; padding-left:12px; color:#a9a297; margin:14px 0; max-width:74ch; }
+  .row { display:flex; gap:34px; flex-wrap:wrap; align-items:flex-start; margin:18px 0 8px; }
+  .cell { display:flex; flex-direction:column; gap:8px; }
+  .cap { font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--dim); }
+  .cap b { color:var(--ink); font-weight:600; }
+  .note { font-size:11px; color:var(--dim); max-width:34ch; line-height:1.5; }
+  canvas { image-rendering: pixelated; background:#000; display:block; border:1px solid #333; }
+  .bad  { color:#e08b7a; }
+  .good { color:#8fce9b; }
+  #bar { position:sticky; top:0; margin:0 -32px 18px; background:#0c0c0b; border-bottom:1px solid var(--rule);
+         padding:10px 32px; display:flex; gap:14px; align-items:center; font-size:12px; z-index:9; }
+  button { background:#1e1e1c; color:var(--ink); border:1px solid #3a3a37; padding:5px 12px;
+           font:inherit; cursor:pointer; letter-spacing:.04em; }
+  button[data-on="1"] { background:var(--ink); color:#000; border-color:var(--ink); }
+  table { border-collapse:collapse; font-size:12px; margin:10px 0; }
+  td,th { border:1px solid var(--rule); padding:4px 10px; text-align:left; }
+  th { color:var(--dim); font-weight:400; letter-spacing:.06em; text-transform:uppercase; }
+  code { color:#b9d8c6; }
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <span style="color:var(--dim)">magnification</span>
+  <button data-z="true">true size (240p)</button>
+  <button data-z="4">×4</button>
+  <button data-z="8">×8</button>
+  <button data-z="16">×16</button>
+  <span id="zinfo" style="color:var(--dim);margin-left:10px"></span>
+</div>
+
+<h1>What a cockpit readout can say at the game's resolution</h1>
+<p class="sub" id="derive">measuring…</p>
+
+<div class="quote">
+  “I want the whole game to read as a 5th gen game … some things like the resolution are harder
+  limits to get that aesthetic; so we simply need to redesign anything that does not read properly
+  at this new resolution.” — Max, 2026-09-06
+</div>
+
+<h2>1 · INFO — the panel the question was asked about</h2>
+<p>INFO sits on <code>Screen_LL</code>, the lower and wider pair, so its values get
+<b>five</b> characters. Left is what today's mechanism puts on the glass at that size; middle is the
+recommendation; right is what keeping the full strings would actually cost.</p>
+<div class="row" id="info-row"></div>
+
+<h2>2 · DRIVE — with CAP and TURN cut</h2>
+<p>DRIVE is on <code>Screen_UR</code>, the upper pair: <b>four</b> characters to a value, and eight
+across the whole panel. That is why the mass-lock banner has to change too — its shipped text is
+<code>TOO CLOSE — SUBLIGHT ONLY</code>, twenty-five characters.</p>
+<div class="row" id="drive-row"></div>
+
+<h2>3 · TARGET — the short name and the distance</h2>
+<p>TARGET shares the lower pair with INFO, so it also gets nine characters. It is worth seeing what
+today's column is: that panel is <b class="bad">already broken</b>, before any of this work — it
+prints the full designation and, when that overflows, shrinks it straight past the point a letter is
+a letter.</p>
+<div class="row" id="target-row"></div>
+
+<h2>4 · The glyph ladder — every character this face can draw</h2>
+<p>Shown at the size a panel actually draws it, so the judgement about the face is made on the same
+ink the panels use.</p>
+<div class="row" id="ladder-row"></div>
+
+
+
+<script type="module">
+import { drawPixelText, measurePixelText, FACE } from './src/rendering/PixelText.js';
+import { PHOSPHOR, TYPE_RATIOS } from './src/cockpit/PhosphorScreen.js';
+import { buildInfoRows } from './src/cockpit/InfoReadout.js';
+
+/* ── PANEL GEOMETRY, PROJECTED FROM THE MESH ─────────────────────────────────────────────────────
+   Straight out of cockpit-metrics.json /screens: every screen is 0.24 x 0.20 m; the upper pair sits
+   0.800 m from the eye and the lower pair 0.744 m. Each panel's normal equals its own -centre
+   normalised, so the panels are AIMED AT THE EYE and a head-on view is reachable — which makes
+   head-on the FLOOR. Sizing to the floor means every other view is magnified, never minified.
+
+   ⛔ PIXEL FRACTION, NOT ANGULAR FRACTION. A perspective projection is linear in tan, not in angle.
+   The contract's 48.9 rows is the angular form and is 14% high; panelPose.js:34-49 warns about
+   exactly this. rows = LINES * h / (d * 2*tan(fov/2)). */
+const LINES = 240, FOV = 70;
+const K = 2 * Math.tan(FOV / 2 * Math.PI / 180);
+const project = (w, h, d) => ({ rows: LINES * h / (d * K), cols: LINES * w / (d * K) });
+
+const UPPER = project(0.24, 0.20, 0.800);   // NAV, DRIVE   -> 42.84 x 51.41
+const LOWER = project(0.24, 0.20, 0.744);   // INFO, TARGET -> 46.07 x 55.28
+
+/* ── THE GRID ────────────────────────────────────────────────────────────────────────────────────
+   Stop deriving type from ratios of panel height; ratios cannot land a bitmap face on integer rows.
+   pad is one grid unit, a line is the face's height, and leading is one unit of air. Seven lines is
+   what INFO's seven fields need, and it is exactly what the upper panel's 43 rows allow:
+       2*pad + h + 6*lead = 2 + 5 + 36 = 43. */
+const PAD = 1, LEAD = FACE.h + 1, LINESN = 7;
+
+/* Characters that fit across a panel: a run of n chars is n*advance - 1 texels wide (the last
+   character carries no trailing gap), inside the padding.
+   ⚠ THIS IS THE FIGURE TO CHECK BEFORE DESIGNING ON IT. On the old 3x5 face (advance 4) it returns
+   12 and 13 — exactly what the batch plan derived independently — which is what validates it. */
+const charsAcross = (cols, adv = FACE.advance) => Math.floor((Math.floor(cols) - 2 * PAD + 1) / adv);
+
+/* A label-and-value row: the value's budget is what is left once a 3-character label and one
+   character of air are taken off the front. */
+const valueBudget = (cols) => {
+  const usable = Math.floor(cols) - 2 * PAD;
+  const label = 3 * FACE.advance - 1;                 // 17 texels
+  const gap   = FACE.advance;                         // one character of air, minimum
+  return Math.floor((usable - label - gap + 1) / FACE.advance);
+};
+
+const UPPER_N = charsAcross(UPPER.cols), LOWER_N = charsAcross(LOWER.cols);
+const UPPER_V = valueBudget(UPPER.cols), LOWER_V = valueBudget(LOWER.cols);
+
+document.getElementById('derive').textContent =
+  `face ${FACE.name} (${FACE.w}x${FACE.h}, advance ${FACE.advance}) · ` +
+  `upper ${UPPER.rows.toFixed(2)}x${UPPER.cols.toFixed(2)} → ${UPPER_N} chars across, ${UPPER_V} to a value · ` +
+  `lower ${LOWER.rows.toFixed(2)}x${LOWER.cols.toFixed(2)} → ${LOWER_N} chars across, ${LOWER_V} to a value · ` +
+  `(same method on the old 3x5 face returns ${charsAcross(UPPER.cols, 4)} and ${charsAcross(LOWER.cols, 4)}, which is what the batch plan derived)`;
+
+/* ── A REAL SURVEY, THROUGH THE REAL FORMATTERS ──────────────────────────────────────────────────
+   The shape PlanetGenerator/PhysicsEngine actually produce. buildInfoRows runs the shipped
+   formatters over it, so the "today" column shows strings the game would really draw. */
+const SNAPSHOT = { survey: {
+  name: 'Caph b II', kind: 'moon', type: 'terrestrial', tEq: 410,
+  composition: { surfaceType: 'rock', ironFraction: 0.31 },
+  atmosphere: { retained: true, type: 'thin', composition: 'co2-n2', pressure: 0.85 },
+  tidalState: { locked: true, lockType: 'synchronous' },
+} };
+const TODAY_ROWS = buildInfoRows(SNAPSHOT);
+
+/* ── THE RECOMMENDATION ──────────────────────────────────────────────────────────────────────────
+   Line 1 carries the body's designation unlabelled at the panel's full width; the six remaining
+   fields become label-and-value rows. Every abbreviation below is a compression, EXCEPT one:
+
+     ⛔ ATM LOSES THE GAS MIX. "co2-n2" is six characters on its own and the pressure is the number
+        a pilot flies by, so the pressure stays and the mix comes off. That is a real content loss
+        and it is the one thing on this page that is Max's call, not mine.
+
+   CMP keeps the iron fraction and drops "rock", because the surface type is what TYP already says —
+   so that one is an overlap being removed, not information being lost. */
+const REC_ROWS = [
+  ['CLS', 'MOON'],
+  ['TYP', 'ROCK'],
+  ['TEQ', '410 K'],
+  ['CMP', 'FE.31'],
+  ['ATM', '0.85'],
+  ['TID', 'SYNC'],
+];
+
+/* ── DRAWING ─────────────────────────────────────────────────────────────────────────────────────
+   Every panel is drawn into a canvas that IS the panel's texel grid — no downsampling step, because
+   at these sizes a downsample is where the truth goes. The display blit is nearest-neighbour. */
+function texelCanvas(cols, rows) {
+  const c = document.createElement('canvas');
+  c.width = Math.round(cols); c.height = Math.round(rows);   // the whole texel rows the panel covers
+  const x = c.getContext('2d');
+  x.fillStyle = PHOSPHOR.BACK; x.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+function assertFits(what, lastRow, height) {
+  if (lastRow <= height) return true;
+  console.error(`PANEL OVERFLOW — ${what}: last ink row ${lastRow} > panel height ${height}. ` +
+                `The layout does not fit the glass and what is drawn above is not the answer.`);
+  return false;
+}
+
+const px = (ctx, s, x, y, opts = {}) =>
+  drawPixelText(ctx, s, x, y, { color: PHOSPHOR.INK, onMissing: 'tofu', ...opts });
+
+/* TODAY: PhosphorScreen's own mechanism — TYPE_RATIOS as fractions of panel height, drawn with the
+   kit's bold monospace vector font. This is not an impression of the defect, it is the defect. */
+function drawToday(cols, rows) {
+  const c = texelCanvas(cols, rows), x = c.getContext('2d');
+  const H = c.height, body = H * TYPE_RATIOS.body, label = H * TYPE_RATIOS.label;
+  const pad = H * TYPE_RATIOS.pad, lead = H * TYPE_RATIOS.lead;
+  x.fillStyle = PHOSPHOR.INK; x.textBaseline = 'alphabetic';
+  TODAY_ROWS.forEach((r, i) => {
+    const y = pad + body + i * lead;
+    x.font = `700 ${label}px monospace`; x.textAlign = 'left';
+    x.fillText(r.label, pad, y);
+    x.font = `700 ${body}px monospace`;  x.textAlign = 'right';
+    x.fillText(r.value, c.width - pad, y);
+  });
+  return c;
+}
+
+/* THE RECOMMENDATION: the same seven fields on the grid, at the face's real size. */
+function drawInfoRec(cols, rows) {
+  const c = texelCanvas(cols, rows), x = c.getContext('2d');
+  px(x, 'CAPH B II', PAD, PAD);                                   // 9 chars, exactly the panel
+  x.fillStyle = PHOSPHOR.INK;
+  x.fillRect(PAD, PAD + FACE.h + 2, c.width - 2 * PAD, 1);        // the rule the spare rows buy
+  const top = PAD + FACE.h + 5;                                   // clear of the rule, not on it
+  REC_ROWS.forEach(([label, value], i) => {
+    const y = top + i * LEAD;
+    px(x, label, PAD, y);
+    px(x, value, c.width - PAD, y, { align: 'right' });
+  });
+  assertFits('INFO recommended', top + (REC_ROWS.length - 1) * LEAD + FACE.h, c.height);
+  return c;
+}
+
+/* THE COST OF KEEPING THE FULL STRINGS: the same rows at the same texel size, on the panel width
+   they would require. Drawn at the same scale as the real panel, with the real panel's edge marked,
+   so the size difference is the message rather than a number in a paragraph. */
+function drawWide(rows) {
+  const need = Math.max(...TODAY_ROWS.map(r => 2 * PAD + measurePixelText(r.label) + FACE.advance + measurePixelText(r.value)));
+  const c = texelCanvas(need, rows), x = c.getContext('2d');
+  TODAY_ROWS.forEach((r, i) => {
+    const y = PAD + i * LEAD;
+    px(x, r.label, PAD, y);
+    px(x, r.value, c.width - PAD, y, { align: 'right' });
+  });
+  assertFits('INFO full-strings', PAD + (TODAY_ROWS.length - 1) * LEAD + FACE.h, c.height);
+  x.fillStyle = '#e08b7a';                                        // where the real glass ends
+  x.fillRect(Math.floor(LOWER.cols), 0, 1, c.height);
+  return { canvas: c, need };
+}
+
+/* DRIVE, today and cut. The hero speed is the face at integer scale 2 — the same face, not a second
+   one; the plan's `display` tier is 10 rows and that is what 5 x 2 is. */
+function drawDriveToday(cols, rows) {
+  const c = texelCanvas(cols, rows), x = c.getContext('2d');
+  const H = c.height, body = H * TYPE_RATIOS.body, label = H * TYPE_RATIOS.label;
+  const disp = H * TYPE_RATIOS.display, pad = H * TYPE_RATIOS.pad, lead = H * TYPE_RATIOS.lead;
+  x.fillStyle = PHOSPHOR.INK; x.textBaseline = 'alphabetic';
+  x.font = `700 ${disp}px monospace`; x.textAlign = 'center';
+  x.fillText('1.42 c', c.width / 2, H * 0.20);
+  x.font = `700 ${label}px monospace`;
+  x.fillText('SUPERCRUISE', c.width / 2, H * 0.28);
+  x.fillRect(pad, H * 0.33, c.width - 2 * pad, H * 0.07);
+  x.fillRect(pad, H * 0.435, (c.width - 2 * pad) * 0.62, H * 0.05);
+  ['CAP', 'TURN'].forEach((l, i) => {
+    const y = H * 0.545 + i * lead;
+    x.font = `700 ${label}px monospace`; x.textAlign = 'left';  x.fillText(l, pad, y);
+    x.font = `700 ${body}px monospace`;  x.textAlign = 'right'; x.fillText(i ? '18 deg/s' : '2.10 c', c.width - pad, y);
+  });
+  x.font = `700 ${body}px monospace`; x.textAlign = 'left';
+  x.fillText('MODE: MANUAL', pad, H * 0.76);
+  x.textAlign = 'center';
+  x.fillText('TOO CLOSE — SUBLIGHT ONLY', c.width / 2, H * 0.92);
+  return c;
+}
+function drawDriveRec(cols, rows) {
+  const c = texelCanvas(cols, rows), x = c.getContext('2d');
+  const W = c.width, inner = W - 2 * PAD;
+
+  //  row  1-10  the speed, at integer scale 2 — the SAME face, not a second one. The plan's
+  //             `display` tier is ten rows and 5 x 2 is exactly that.
+  px(x, '1.42', W / 2, 1, { scale: 2, align: 'center' });
+  //  row 12-16  the unit and the mode band
+  px(x, 'CRUISE', W / 2, 12, { align: 'center' });
+  //  row 18-21  the speed bar: frame in ink, the drop window knocked out in the background colour
+  x.fillStyle = PHOSPHOR.INK;  x.fillRect(PAD, 18, inner, 4);
+  x.fillStyle = PHOSPHOR.BACK; x.fillRect(PAD + 1 + Math.round((inner - 2) * 0.55), 19, inner, 2);
+  //  row 23-27  the throttle, its bar starting from the label's measured ink rather than a guess
+  px(x, 'THR', PAD, 23);
+  const thrX = PAD + measurePixelText('THR') + FACE.advance;
+  x.fillStyle = PHOSPHOR.INK;
+  x.fillRect(thrX, 24, Math.round((W - PAD - thrX) * 0.62), 3);
+  //  row 29-33  the mode. "MODE: MANUAL" is twelve characters and the panel is eight, so the
+  //             prefix goes; the row's position is what says it is the mode.
+  px(x, 'MANUAL', PAD, 29);
+  //  row 35-41  the mass-lock banner, inverted. Its shipped text is "TOO CLOSE — SUBLIGHT ONLY",
+  //             twenty-five characters. Eight is the panel.
+  const bannerTop = 35;
+  x.fillStyle = PHOSPHOR.INK; x.fillRect(PAD, bannerTop, inner, FACE.h + 2);
+  drawPixelText(x, 'TOOCLOSE', PAD + Math.round((inner - measurePixelText('TOOCLOSE')) / 2), bannerTop + 1,
+                { color: PHOSPHOR.BACK, onMissing: 'tofu' });
+
+  assertFits('DRIVE recommended', bannerTop + FACE.h + 2, c.height);
+  return c;
+}
+
+function drawTargetToday(cols, rows) {
+  const c = texelCanvas(cols, rows), x = c.getContext('2d');
+  const H = c.height, body = H * TYPE_RATIOS.body, label = H * TYPE_RATIOS.label;
+  const disp = H * TYPE_RATIOS.display, pad = H * TYPE_RATIOS.pad, lead = H * TYPE_RATIOS.lead;
+  x.fillStyle = PHOSPHOR.INK; x.textBaseline = 'alphabetic'; x.textAlign = 'center';
+  // The overflow shrink is the defect, reproduced: the panel measures the designation at the
+  // display tier, finds it too wide, and scales it down until it fits — straight past the floor.
+  const full = 'Caph b II (Kepler-442 c)';
+  x.font = `700 ${disp}px monospace`;
+  const shrunk = disp * Math.min(1, (c.width - 2 * pad) / x.measureText(full).width);
+  x.font = `700 ${shrunk}px monospace`;
+  x.fillText(full, c.width / 2, H * 0.22);
+  x.font = `700 ${label}px monospace`;
+  x.fillText('WARP TARGET', c.width / 2, H * 0.36);
+  [['DIST', '1.42 Gm'], ['ETA', '2:14']].forEach(([l, v], i) => {
+    const y = H * 0.55 + i * lead;
+    x.font = `700 ${label}px monospace`; x.textAlign = 'left';  x.fillText(l, pad, y);
+    x.font = `700 ${body}px monospace`;  x.textAlign = 'right'; x.fillText(v, c.width - pad, y);
+    x.textAlign = 'center';
+  });
+  x.font = `700 ${body}px monospace`;
+  x.fillText('SAFE TO DROP', c.width / 2, H * 0.92);
+  return c;
+}
+
+function drawTargetRec(cols, rows) {
+  const c = texelCanvas(cols, rows), x = c.getContext('2d');
+  const W = c.width, inner = W - 2 * PAD;
+  px(x, 'TARGET', PAD, 1);                                  // what the panel is
+  px(x, 'CAPH B II', W / 2, 7, { align: 'center' });         // the short name, 9 chars, full width
+  x.fillStyle = PHOSPHOR.INK; x.fillRect(PAD, 14, inner, 1);
+  [['DST', '1.4Gm'], ['ETA', '2:14']].forEach(([l, v], i) => {
+    const y = 17 + i * LEAD;
+    px(x, l, PAD, y);
+    px(x, v, W - PAD, y, { align: 'right' });
+  });
+  px(x, 'WARP', PAD, 29);
+  const bannerTop = 35;                                      // "SAFE TO DROP" is 12; nine is the panel
+  x.fillStyle = PHOSPHOR.INK; x.fillRect(PAD, bannerTop, inner, FACE.h + 2);
+  drawPixelText(x, 'SAFE DROP', PAD + Math.round((inner - measurePixelText('SAFE DROP')) / 2), bannerTop + 1,
+                { color: PHOSPHOR.BACK, onMissing: 'tofu' });
+  assertFits('TARGET recommended', bannerTop + FACE.h + 2, c.height);
+  return c;
+}
+
+function drawLadder() {
+  const glyphs = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz.:+-<>';
+  const perLine = 34, lines = Math.ceil(glyphs.length / perLine);
+  const c = texelCanvas(perLine * FACE.advance + 1, lines * LEAD + 1);
+  const x = c.getContext('2d');
+  for (let i = 0; i < lines; i++) px(x, glyphs.slice(i * perLine, (i + 1) * perLine), 1, 1 + i * LEAD);
+  return c;
+}
+
+/* ── PRESENTATION ────────────────────────────────────────────────────────────────────────────────
+   "True size" is the honest default: the game buffer is 240 lines stretched to the height of the
+   view, so a texel is (view height / 240) screen pixels. Read live rather than assumed, because the
+   answer differs on every window. */
+let zoom = 'true';
+const trueZoom = () => Math.max(1, window.innerHeight / LINES);
+const z = () => (zoom === 'true' ? trueZoom() : zoom);
+
+function blit(src, note, capHtml) {
+  const cell = document.createElement('div'); cell.className = 'cell';
+  const cap = document.createElement('div'); cap.className = 'cap'; cap.innerHTML = capHtml;
+  const out = document.createElement('canvas');
+  const s = z();
+  out.width = Math.round(src.width * s); out.height = Math.round(src.height * s);
+  out.style.width = out.width + 'px'; out.style.height = out.height + 'px';
+  const x = out.getContext('2d'); x.imageSmoothingEnabled = false;
+  x.drawImage(src, 0, 0, out.width, out.height);
+  cell.append(cap, out);
+  if (note) { const n = document.createElement('div'); n.className = 'note'; n.innerHTML = note; cell.append(n); }
+  return cell;
+}
+
+function render() {
+  const wide = drawWide(LOWER.rows);
+  document.getElementById('info-row').replaceChildren(
+    blit(drawToday(LOWER.cols, LOWER.rows),
+      `The seven fields are all there and none of them is a letter. Body text is ` +
+      `<b>${(LOWER.rows * TYPE_RATIOS.body).toFixed(1)}</b> pixel rows tall; five is the floor.`,
+      `<b>TODAY</b> — today's mechanism, at the real panel size`),
+    blit(drawInfoRec(LOWER.cols, LOWER.rows),
+      `Nine characters of designation, then six rows of ${LOWER_V}. Only <span class="bad">ATM</span> ` +
+      `actually loses something: the gas mix comes off and the pressure stays.`,
+      `<b class="good">RECOMMENDED</b> — ${LOWER_N} across, ${LOWER_V} to a value`),
+    blit(wide.canvas,
+      `Keeping "co2-n2 0.85 bar" intact needs <b>${wide.need}</b> texels where the glass has ` +
+      `<b>${Math.floor(LOWER.cols)}</b>. The red line is where the real panel ends — everything ` +
+      `right of it is off the screen.`,
+      `<b class="bad">THE ALTERNATIVE</b> — full strings, at the width they'd need`),
+  );
+  document.getElementById('drive-row').replaceChildren(
+    blit(drawDriveToday(UPPER.cols, UPPER.rows), '', `<b>TODAY</b> — with CAP and TURN`),
+    blit(drawDriveRec(UPPER.cols, UPPER.rows),
+      `CAP and TURN are gone, so the speed, the two bars, the mode and the banner each get a full ` +
+      `line. <code>MODE:</code> drops as a prefix and the mass-lock banner goes to ` +
+      `${UPPER_N} characters.`,
+      `<b class="good">RECOMMENDED</b> — ${UPPER_N} across, ${UPPER_V} to a value`),
+  );
+  document.getElementById('target-row').replaceChildren(
+    blit(drawTargetToday(LOWER.cols, LOWER.rows),
+      `Not a mock-up of a defect — this is the shrink-to-fit the panel does today, at the panel's ` +
+      `real size.`,
+      `<b class="bad">TODAY</b> — the full designation, shrunk to fit`),
+    blit(drawTargetRec(LOWER.cols, LOWER.rows),
+      `The short name at full width, the distance and ETA as rows, and the drop cue as a banner the ` +
+      `panel can actually hold.`,
+      `<b class="good">RECOMMENDED</b> — short name and distance`),
+  );
+  document.getElementById('ladder-row').replaceChildren(
+    blit(drawLadder(), '', `<b>THE FACE</b> — ${FACE.name}, as the panels draw it`));
+  document.getElementById('zinfo').textContent =
+    `1 texel = ${z().toFixed(2)} screen px` + (zoom === 'true' ? ` (this window / 240 lines)` : '');
+  document.querySelectorAll('#bar button').forEach(b =>
+    b.dataset.on = String(b.dataset.z === String(zoom) ? 1 : 0));
+}
+
+document.querySelectorAll('#bar button').forEach(b => b.addEventListener('click', () => {
+  zoom = b.dataset.z === 'true' ? 'true' : Number(b.dataset.z); render();
+}));
+window.addEventListener('resize', () => { if (zoom === 'true') render(); });
+render();
+</script>
+</body>
+</html>
