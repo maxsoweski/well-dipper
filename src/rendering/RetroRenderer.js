@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { POSTERIZE_QUANTUM } from './posterizeLevels.js';
 import { bufferForLines, RENDER_LINES_DEFAULT, SKY_RENDER_LINES_DEFAULT } from './renderLines.js';   // ⭐ resolution is a LINE COUNT now, not a divisor; that file carries why.
 import { setPixelScale } from './pixelScaleUniform.js';
-import { setSkyPixelScale } from './skyPixelScale.js';   // ⭐ the sky's OWN line count, independent of the world's — Max wants to tune the relationship, not inherit it.
+import { setSkyPixelScale } from './skyPixelScale.js';
+import { setRenderBuffer } from './renderBuffer.js';   // ⭐ the world grid, published once so chrome can share it (renderBuffer.js)   // ⭐ the sky's OWN line count, independent of the world's — Max wants to tune the relationship, not inherit it.
 
 /**
  * RetroRenderer — dual-resolution multi-pass compositor.
@@ -87,7 +88,14 @@ export class RetroRenderer {
     // HUD (system map) — set via setHud()
     this._hudScene = null;
     this._hudCamera = null;
-    this._hudSize = 320;   // HUD render target resolution (square)
+    // ⭐ DERIVED IN resize(), NOT A CONSTANT, SINCE 2026-09-06. A fixed 320 ignored the resolution
+    // setting entirely: measured live at 240p on a 2023x1023 window, one HUD texel was 0.815
+    // SCREEN px against the world's 4.263 — the minimap drew 5.2x FINER than the world beside
+    // it, and vertically it was being MINIFIED (320 texels into 261 screen px) with
+    // NearestFilter, which aliases rather than chunks. Worse, the relationship inverts as the
+    // setting moves, so the Resolution slider silently changed which of two co-visible
+    // surfaces looked sharper. 0 until the first resize; see the derivation there.
+    this._hudSize = 0;
     this._hudFrac = 0.255; // HUD width as fraction of screen width
 
     // ── WebGL Renderer ──
@@ -936,8 +944,36 @@ export class RetroRenderer {
     // allocation-vs-shader disagreement that produced the 13.5px checker (pixelScaleUniform.js).
     this.pixelScale = world.scale;
     setPixelScale(world.scale);
+    // ⭐ AND PUBLISH THE GRID ITSELF, for the same reason and from the same one place: chrome
+    // that has to share the world's pixels needs its dimensions, and a consumer deriving them
+    // separately is how the allocation and the shaders came apart before (renderBuffer.js).
+    setRenderBuffer(world.width, world.height, world.scale);
 
     this.renderer.setSize(width, height, false);
+
+    // ⭐⭐ HOISTED ABOVE THE hudTarget ALLOCATION ON 2026-09-06, AND THE ORDER IS NOW LOAD-BEARING.
+    // This block assigns `_hudFrac`, and `_hudSize` is derived FROM `_hudFrac` below. While
+    // `_hudSize` was the constant 320 the order did not matter and this sat at the bottom of
+    // resize(); the moment the allocation reads `_hudFrac`, running after it means the FIRST resize
+    // on a portrait phone allocates against the landscape 0.255 seeded in the constructor and stays
+    // one resize stale. ⛔ Do not move it back down.
+    // ⚠ Addresses the uniform directly rather than through the `const u` further down, so this does
+    // not reorder the lines around cockpitTarget that the cockpit workstream owns.
+    {
+      const hudU = this._compositeMesh.material.uniforms;
+      const isPortrait = height > width;
+      const isMobile = 'ontouchstart' in window;
+      if (isPortrait && isMobile) {
+        // Portrait mobile: smaller HUD in top-right to avoid mobile menu overlap
+        this._hudFrac = 0.35;
+        hudU.hudRect.value.set(0.62, 0.55, 0.35, 0.35);
+      } else {
+        // Landscape / desktop: normal bottom-right position
+        this._hudFrac = 0.255;
+        hudU.hudRect.value.set(0.73, 0.02, 0.255, 0.255);
+      }
+    }
+
 
     if (this.bgTarget) this.bgTarget.dispose();
     if (this.sceneTarget) this.sceneTarget.dispose();
@@ -966,6 +1002,15 @@ export class RetroRenderer {
     this.sceneTarget.depthTexture.format = THREE.DepthStencilFormat;
     this.sceneTarget.depthTexture.type = THREE.UnsignedInt248Type;
 
+    // ⭐ THE HUD IS NOW MEASURED IN WORLD BUFFER PIXELS. The composite draws it as a square of
+    // side `_hudFrac x windowWidth` (the shader takes hudRect.w against a window-sized
+    // `resolution`), and the world buffer is `renderWidth` px across that same width — so
+    // `_hudFrac * renderWidth` IS that square expressed in world pixels. Parity by
+    // construction, on every window, every aspect and every line count, with no constant.
+    // ⚠ `renderWidth`, not `world.width`: master's divisor-era resize() also names a local
+    // `renderWidth`, so this edit survives the lane-A merge either way.
+    // ⚠ Floor of 8 so a tiny window cannot allocate a 1-texel map, which would read as gone.
+    this._hudSize = Math.max(8, Math.round(this._hudFrac * renderWidth));
     this.hudTarget = new THREE.WebGLRenderTarget(this._hudSize, this._hudSize, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
@@ -985,19 +1030,6 @@ export class RetroRenderer {
     u.hudTexture.value = this.hudTarget.texture;
     u.cockpitTexture.value = this.cockpitTarget.texture;
     u.resolution.value.set(width, height);
-
-    // Adjust HUD position/size based on orientation
-    const isPortrait = height > width;
-    const isMobile = 'ontouchstart' in window;
-    if (isPortrait && isMobile) {
-      // Portrait mobile: smaller HUD in top-right to avoid mobile menu overlap
-      this._hudFrac = 0.35;
-      u.hudRect.value.set(0.62, 0.55, 0.35, 0.35);
-    } else {
-      // Landscape / desktop: normal bottom-right position
-      this._hudFrac = 0.255;
-      u.hudRect.value.set(0.73, 0.02, 0.255, 0.255);
-    }
 
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
