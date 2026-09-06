@@ -46,6 +46,7 @@
  * and its describe.skipIf pattern is deliberately NOT copied.
  */
 import { describe, it, expect } from 'vitest';
+import { decodePixelText, FACE } from '../../rendering/PixelText.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -144,6 +145,31 @@ const stubWidth = (str, size) => String(str).length * STUB_CHAR_W * size;
  * is RECORDED and caught by the one-ink assertions, rather than crashing with
  * "beginPath is not a function" and being fixed by adding it to the stub.
  */
+
+// ── ⭐ TEXT IS READ BACK OUT OF THE TEXELS NOW ─────────────────────────────────────────────────
+// chrome-and-ui-at-240p moved the cockpit kit onto the repo's bitmap face, so nothing calls
+// `ctx.fillText` any more and the first argument these tests used to read no longer exists.
+// ⛔ THE REPLACEMENT IS NOT A SELF-REPORT. `decodePixelText` reconstructs each string from the
+// `fillRect` texels actually recorded, so every assertion below still asks the GLASS what it says
+// — and asks it harder than before: a dropped glyph row or a fractional scale now fails, where a
+// `fillText` string argument would have read perfectly either way.
+function decodedText(log) {
+  const rects = log.filter((e) => e.op === 'fillRect');
+  return decodePixelText(rects).map((d) => {
+    const px = d.scale * FACE.h;
+    // ⚠ ANY texel of the run, not the one at (x, y): a glyph's first lit pixel is rarely its
+    // top-left corner, so an exact-corner lookup returned undefined and reported `fillStyle: null`
+    // — which read as "text drawn with no colour set" in the one-ink checks.
+    const src = rects.find((r) => r.x >= d.x && r.x < d.x + d.text.length * FACE.advance * d.scale
+      && r.y >= d.y && r.y < d.y + FACE.h * d.scale && r.w === d.scale);
+    return {
+      op: 'fillText', text: d.text, x: d.x, y: d.y, size: px,
+      // `font` is synthesised so the existing FONT_SIZE_RE size readers keep working unchanged.
+      font: `${px}px bitmap`, fillStyle: src ? src.fillStyle : null,
+    };
+  });
+}
+
 function makeRecordingCtx() {
   const log = [];
   const state = {
@@ -188,7 +214,7 @@ function makeRecordingCtx() {
   return ctx;
 }
 
-const ops = (log, op) => log.filter((e) => e.op === op);
+const ops = (log, op) => (op === 'fillText' ? decodedText(log) : log.filter((e) => e.op === op));
 const styleSets = (log) =>
   log.filter((e) => e.op === 'set' && (e.prop === 'fillStyle' || e.prop === 'strokeStyle'));
 

@@ -346,3 +346,89 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
     console.log(`[PIXEL-FACE] ${next} (${FACE.w}x${FACE.h})`);
   });
 }
+
+/**
+ * Read strings back OUT of recorded `fillRect` calls.
+ *
+ * ⭐ WHY THIS EXISTS. Every test in this repo that asks "what did the panel say?" did it by
+ * recording `ctx.fillText` and reading its first argument. Bitmap text reaches the context as
+ * anonymous texels, so that question became unanswerable the moment the cockpit moved onto the
+ * world's pixel grid — and the tempting replacement is a class SELF-REPORT ("the painter says it
+ * drew X"), which is exactly what this lane refuses elsewhere, because a self-report agrees with
+ * the code rather than checking it.
+ *
+ * Decoding restores the original standard and raises it: the assertion now depends on the actual
+ * texels landing in the actual positions, so a face whose draw path dropped a row, or a caller
+ * that scaled text off the grid, fails where a `fillText` string argument would still have read
+ * perfectly. It answers "what is ON THE GLASS", never "what did the code intend".
+ *
+ * ⚠ IT DECODES AGAINST THE ACTIVE FACE. Switch faces and re-run; do not cache the result.
+ *
+ * @param {Array<{x:number,y:number,w:number,h:number}>} rects every fillRect the context saw
+ * @returns {Array<{text:string, x:number, y:number, scale:number}>} runs, in reading order
+ */
+export function decodePixelText(rects) {
+  const { w: GW, h: GH, advance: ADV, glyphs } = _active;
+  const byKey = new Map();
+  for (const ch of Object.keys(glyphs)) byKey.set(glyphs[ch].join(','), ch);
+
+  // A glyph texel is always a SQUARE of the scale. Bars, frames, ticks and pins are not, which is
+  // what keeps panel furniture out of the decode.
+  const square = (rects || []).filter((r) => r && r.w === r.h && r.w > 0
+    && Number.isInteger(r.x) && Number.isInteger(r.y));
+  const out = [];
+
+  for (const s of [...new Set(square.map((r) => r.w))].sort((a, b) => a - b)) {
+    const pool = square.filter((r) => r.w === s);
+    const at = new Set(pool.map((r) => `${r.x},${r.y}`));
+    const claimed = new Set();
+
+    for (const y0 of [...new Set(pool.map((r) => r.y))].sort((a, b) => a - b)) {
+      if (claimed.has(y0)) continue;
+      // A band is the GH rows starting at y0, on the scale's own row pitch.
+      const band = pool.filter((r) => r.y >= y0 && r.y < y0 + GH * s && (r.y - y0) % s === 0);
+      if (!band.length) continue;
+
+      // ⭐ SPLIT THE BAND INTO RUNS BEFORE DECODING, AND RE-ANCHOR THE CELL GRID ON EACH.
+      // A label hard-left and its value hard-right share one baseline, and the value's glyphs are
+      // NOT on the label's 6-texel cell lattice — decoding the whole band on one origin turned
+      // "ERIS" into five replacement characters. The gap threshold is two full cells: one space
+      // inside a word is at most `2*ADV - (GW-1)` texels of clear air, two spaces are strictly
+      // more, so words survive and columns separate.
+      const columns = [...new Set(band.map((r) => r.x))].sort((a2, b2) => a2 - b2);
+      const runs = [];
+      for (const x of columns) {
+        const last = runs[runs.length - 1];
+        if (last && x - last[last.length - 1] <= 2 * ADV * s) last.push(x);
+        else runs.push([x]);
+      }
+
+      let bandHadText = false;
+      for (const run of runs) {
+        const x0 = run[0];
+        const cells = Math.floor((run[run.length - 1] - x0) / (ADV * s)) + 1;
+        let text = '';
+        for (let c = 0; c < cells; c++) {
+          const cx = x0 + c * ADV * s;
+          const rows = [];
+          for (let r = 0; r < GH; r++) {
+            let mask = 0;
+            for (let col = 0; col < GW; col++) {
+              if (at.has(`${cx + col * s},${y0 + r * s}`)) mask |= 1 << (GW - 1 - col);
+            }
+            rows.push(mask);
+          }
+          const key = rows.join(',');
+          text += byKey.has(key) ? byKey.get(key) : (rows.some(Boolean) ? '\uFFFD' : ' ');
+        }
+        // ⛔ A RUN OF PURE FURNITURE IS NOT A STRING. If nothing matched a glyph, these were
+        // square fills that happened to line up — report nothing rather than a row of U+FFFD.
+        if (!/[^\s\uFFFD]/.test(text)) continue;
+        bandHadText = true;
+        out.push({ text: text.trimEnd(), x: x0, y: y0, scale: s });
+      }
+      if (bandHadText) for (let r = 0; r < GH; r++) claimed.add(y0 + r * s);
+    }
+  }
+  return out.sort((a, b) => (a.y - b.y) || (a.x - b.x));
+}
