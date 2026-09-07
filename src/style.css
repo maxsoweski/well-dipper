@@ -1254,3 +1254,23 @@ body.hud-hidden #targeting-overlay {
 #nav-computer-canvas:active {
   cursor: grabbing;
 }
+
+/* ── THE NAV COMPUTER'S LOW-RESOLUTION VIEW MODES ────────────────────────────────────────────────
+   Toggled by `navViewModes.applySurface()` when `NavComputer.viewMode` is set; absent otherwise, so
+   the nav Max has today is untouched.
+
+   ⭐ THE BACKING STORE SHRINKS IN JS, THE BOX DOES NOT, AND THESE TWO LINES ARE WHAT MAKE THAT A
+   PIXELATED IMAGE RATHER THAN A BILINEAR SMEAR. Same properties, same order, as `#canvas` above and
+   as `#supercruise-hud, #targeting-overlay` — three surfaces on the world's grid, spelled once. */
+#nav-computer-canvas.nav-lowres {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: none;   /* a 1px hairline is a third of a texel at 240p: a smudge, not a line */
+}
+
+/* Full bleed. Design 2's whole idea is a map that reaches all four edges, and the shipped overlay's
+   20px letterbox contradicts it. Max's call, 2026-09-07: "2 ok". */
+.nav-computer-panel.nav-lowres {
+  width: 100vw;
+  height: 100vh;
+}

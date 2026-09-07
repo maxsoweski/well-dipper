@@ -16,7 +16,7 @@ import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
 import alea from 'alea';
-import { simClockMs } from '../core/SimClock.js';  import { navTabHeight, navChromeReserve, navDrawH, navMapOriginY, navMapSize, navCommitButton, navTextInset } from './navLayout.js';  import { wrapPixelTypeCtx, navUnitCap } from './navPixelType.js';  import { prismMarkerMayShow } from './navPrismCull.js';   // ⚠ appended to this line, not added as new lines: ~700 line-anchored citations ride this file
+import { simClockMs } from '../core/SimClock.js';  import { navTabHeight, navChromeReserve, navDrawH, navMapOriginY, navMapSize, navCommitButton, navTextInset } from './navLayout.js';  import { wrapPixelTypeCtx, navUnitCap } from './navPixelType.js';  import { prismMarkerMayShow } from './navPrismCull.js';  import { makeViewModeDriver, nextViewMode, loadViewMode, saveViewMode } from './navViewModes/index.js';   // ⚠ appended to this line, not added as new lines: ~700 line-anchored citations ride this file
 
 /**
  * NavComputer — 5-level interactive galaxy navigation.
@@ -252,7 +252,7 @@ export class NavComputer {
     // per-paint write is for a rebuilt PhosphorScreen: the panel comes back at a new buffer height
     // with a new `unit`, and re-stating is what makes the driver track a resolution change with no
     // listener.
-    this.pixelType = null;
+    this.pixelType = null;  this.viewMode = null;  this._viewDriverInst = null;  this._viewModesEnabled = false;   // ⭐ THE VIEW-MODE AXIS — `null` is today's nav BY CONSTRUCTION, not by inspection: render() returns before any mode code and _resizeCanvas keeps its rect path, exactly the way `pixelType: null` never enters navPixelType.js. ⛔ Enabled ONLY by activate(), which _openCockpitNav never calls, so the cockpit panel can never acquire a mode. See navViewModes/index.js.
 
     // Fraction of the panel the orrery fills once the 50 px chrome reserve is
     // reclaimed. Consulted ONLY on the bare path — the default path keeps its
@@ -346,7 +346,7 @@ export class NavComputer {
       // search field. This capture-phase handler runs BEFORE the input's own
       // listeners, so without this guard the six pan/zoom letters would be
       // preventDefaulted out of the text field.
-      if (this._searchFocused) return;
+      if (this._searchFocused) return;  if (this._viewModesEnabled && (e.code === 'KeyV' || (e.code === 'KeyL' && this.viewMode === 'bars'))) { if (e.code === 'KeyV') { this.viewMode = nextViewMode(this.viewMode); saveViewMode(this.viewMode); this._resizeCanvas(); } else { (this._viewDriverInst ||= makeViewModeDriver(this)).toggleList(); } e.preventDefault(); e.stopPropagation(); return; }   // ⭐ V cycles CURRENT -> RAIL -> BARS; L is design 2's list mode, its own key in the lab. ⛔ Max never uses the browser console, so every A/B he runs has to be a keypress.
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF'].includes(e.code)) {
         this._heldKeys.add(e.code);
         e.preventDefault();
@@ -583,7 +583,7 @@ export class NavComputer {
   }
 
   activate() {
-    this.attachKeys();
+    this.attachKeys();  this._viewModesEnabled = true;  this.viewMode = loadViewMode();   // ⭐ THE OVERLAY-ONLY GATE FOR VIEW MODES, AND IT IS NOT `_bare`: `_openCockpitNav` never calls activate() — attachKeys' note above records exactly why — so an instance that has been activated IS the DOM overlay, structurally, and the cockpit panel can never acquire a mode. ⛔ attachKeys() STAYS FIRST ON THIS LINE: prismPan.test.js pins `activate() { this.attachKeys();` as a control against activate() growing its own copy of the listener pair.
     this._resizeCanvas();
     this._showSearch();
   }
@@ -610,10 +610,10 @@ export class NavComputer {
   }
 
   _resizeCanvas() {
-    const rect = this._canvas.getBoundingClientRect();
-    if (this._canvas.width !== rect.width || this._canvas.height !== rect.height) {
-      this._canvas.width = rect.width;
-      this._canvas.height = rect.height;
+    const rect = this._canvas.getBoundingClientRect();  const b = this.viewMode ? (this._viewDriverInst ||= makeViewModeDriver(this)).bufferFor(rect, this._canvas) : rect;   // ⭐ 427x240 at 240p, upscaled by CSS — the idiom SupercruiseHud._syncBuffer and TargetingReticle._resize already use. `null` keeps rect, so today's overlay does not move.
+    if (this._canvas.width !== b.width || this._canvas.height !== b.height) {
+      this._canvas.width = b.width;
+      this._canvas.height = b.height;
     }
   }
 
@@ -1431,7 +1431,7 @@ export class NavComputer {
     }
 
     this._renderLevelTabs(ctx, w, h);
-    this._renderHUD(ctx, w, h);
+    this._renderHUD(ctx, w, h);  if (this.viewMode) (this._viewDriverInst ||= makeViewModeDriver(this)).render(ctx, w, h);   // ⭐⭐ A VIEW MODE PAINTS OVER THE LEGACY FRAME, AND THE ORDER IS THE WHOLE POINT — IT IS NOT LAZINESS. This class LOADS INSIDE ITS PAINTERS: `_renderLocal` calls `_ensureStarsLoaded` (:1881) and `_renderSystem` lazily resolves `_systemData` (:2443-2465). Dispatching BEFORE them — which is what this line did first — returns early, so `_localStars` stays EMPTY and every design draws a correct layout over no data. It looks exactly like an adapter bug. ⛔ AND THE FIX IS NOT TO CALL THE LOADERS FROM THE DRIVER: that copies `yWindowHalf = rad * 2` and ~20 lines of resolveArrivalSystem setup into a second place, which is the same defect shape as AC-4's two copies of `btnY = drawH - 52` feeding one hit-test. Painting over duplicates NOTHING. Each design's first act is an opaque full-canvas `rect(0,0,W,H,INK.BG)`, so no legacy pixel survives; the cost is one wasted legacy pass, and the honest optimisation later is to LIFT the loaders out of the painters, not to clone them.
   }
 
   dispose() {
