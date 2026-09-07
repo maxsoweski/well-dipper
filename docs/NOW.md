@@ -6,6 +6,10 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (HANDOFF) — ▶ **NEXT SESSION: MAKE EVERY ELEMENT IN THE TWO NEW NAV MENUS FUNCTIONAL.** All pushed, `eb9bb33`. ⭐ Max: *"use workflows/subagents to continue implementation of this new menu system, beginning by identifying every single element you've created and scoping/planning how that functionality should work (every single thing needs to be functional and navigable by the player), reusing systems from the old design where feasible, and continue until all are functionally implemented. You should be able to test the basic functionality since these are all menu systems."*
+>
+> ▶ **READ `docs/FEATURES/handoff-2026-09-07-nav-menus-make-everything-work.md` FIRST.** It carries the element inventory (working / advertised-but-dead / needs-measuring), the line-fold trap, the hover reuse seam, and the CDP driver. ⭐ Max on both designs: *"I like both versions... let's keep both"* — BOTH ship, so the diegetic panel eventually represents TWO sources.
+
 > ## ▶ 2026-09-07 (latest+2) — ⛔⛔ **THE WHOLE FEATURE WAS INERT IN THE RUNNING GAME, AND EVERY TEST PASSED.** `258f6d9`. Max: *"I'm still seeing the old menus."* He was right.
 >
 > ⛔⛔ **THE `V` KEY WAS DEAD CODE, NOT BROKEN LOGIC — AND THE CAUSE IS THIS FILE'S OWN CONVENTION.** `NavComputer.js` keeps its line count fixed so its ~700 line-anchored citations stay valid, so new statements are **FOLDED onto existing lines**. The V clause had been folded in AFTER a `//` note about the ladder keys — and **a `//` comment mid-line comments out every statement after it on that line**. Present, parsed, unreachable. ⭐ **THE FOLDING CONVENTION AND `//` COMMENTS ARE INCOMPATIBLE. Every comment on a folded line must be `/* */`.**
