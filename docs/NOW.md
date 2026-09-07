@@ -6,6 +6,26 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (latest) — **BOTH NAV DESIGNS ARE BUILT, OPERABLE, AND VERIFIED LIVE AT 240p. MAX'S EYE IS THE ONLY THING LEFT.** `a10adc7` + `3121c91`, lane A, **unpushed**. Max greenlit the contract and ruled the full-bleed question: *"1 greenlight 2 ok"*.
+>
+> ▶ **HOW TO SEE IT: ORRERY → `N` → `V`.** ⛔ **ORRERY, NOT HELM** — in HELM the `N` key opens the cockpit panel and there is no overlay (`main.js:5900`). `V` cycles CURRENT → RAIL (design 1) → BARS (design 2); `L` is design 2's list mode. The choice persists. Shots: `VM-0-current`, `VM-1-rail-prism`, `VM-2-bars-prism`, `VM-3-bars-galaxy`, `VM-4-rail-system` at the repo root.
+>
+> ⭐ **MEASURED LIVE:** the overlay was **1560x860** (the predicted number, confirmed) and is now **427x240 into a 1600x900 box**, `crisp-edges`, full-bleed. Design 1 lists **27 stars with distances and spectral classes at once** — SOL, PROXIMA CENTAURI, RIGIL KENTAURUS off the real catalog — against today's one-at-a-time hover. Tabs drill, SYSTEM resolved **Sol's 41 bodies**, and the commit bar read **BURN** not WARP because it knows you are there.
+>
+> ⭐⭐ **THE DESIGNS WERE EXTRACTED BY SCRIPT, NOT RETYPED.** Max ruled on two PICTURES; hand-transcribing ~500 lines of texel-exact draw code is a chance to ship one he did not rule on, invisibly, because the drift would read as a design decision rather than a typo. `designs.js`'s bodies are byte-identical to `nav-240p-lab.html` and the diff against it is the audit. The lab's own shape allowed it: every design function reads exactly two objects, `S` and `D`, so the block drops into a factory that closes over them. ⛔ Which is why they are MUTATED, never replaced.
+>
+> ⭐⭐ **THE WIRING SEAM IS HOVER, NOT CLICKS.** `_handleClick` never reads a coordinate to drill — it reads `_hoveredTile` / `_hoveredLocalStar` / `_hoveredBody`, and the zoom animation, stack push, drill sound and system resolution are all already correct downstream. A mode writes those three fields from its own list geometry and inherits ~150 lines for free.
+>
+> ⛔ **AND THE ORDER OF THE DISPATCH IS LOAD-BEARING.** This class **LOADS INSIDE ITS PAINTERS** (`_renderLocal` → `_ensureStarsLoaded` :1881; `_renderSystem` resolves `_systemData` :2443). Dispatching a mode BEFORE them returned early and every design drew a correct layout over an EMPTY star list — which looks exactly like an adapter bug. A mode paints OVER the legacy frame instead, duplicating nothing.
+>
+> ⛔ **ONE REAL DEFECT FOUND, AND IT IS AC-4'S FROM THE OTHER DIRECTION:** the legacy tab strip is **32 rows of a 240-row buffer**, and design 1's full-width COMMIT row sits inside it — so `[ WARP ]` changed level instead of warping. Gated on `_modeTabIdx`.
+>
+> ⚠ **THREE THINGS ARE KNOWN-OPEN AND NONE IS HIDDEN.** (1) Design 1's SYSTEM ladder walks **3 of Sol's 15 laddered bodies off the end of the axis** into a red `+3 OFF AXIS` — the lab predicted this at its own draw site and chose to DRAW the failure. **Max's call.** (2) The map PANE is not a picker in either design; the list is, at every level. Inverting the designs' own projections would be a third copy of code that must stay verbatim. (3) The DOM search box now stands down in a mode (it was lying across the chrome), so `/ SEARCH` in both hint rows advertises nothing.
+>
+> ⚠ **PRE-EXISTING, NOT INTRODUCED:** the SYSTEM tab does nothing when `_localStars` is empty (it resolves via `_findNearestStar`), so reaching SYSTEM from GALAXY or SECTOR silently fails in today's nav too.
+>
+> `NavComputer.js` length-stable at **4711**. Suites: `tests/` 20 failed / same 8 files, `src/cockpit` 698, `src/ui` **327** (+21).
+
 > ## ▶ 2026-09-07 (later) — **THE VIEW-MODES WORKSTREAM IS SCOPED AND WAITING ON MAX'S GREENLIGHT; TWO OF THE PREDECESSOR HANDOFF'S FINDINGS DID NOT SURVIVE MEASUREMENT.** `27a71c5`. `docs/WORKSTREAMS/nav-fullscreen-view-modes/` — `intent.md` + a validated 10-AC `contract.json`, active.
 >
 > ⭐⭐ **THE FULL-SCREEN NAV IS NOT AT 240p AND NEVER HAS BEEN, so this is not a redesign sitting on working plumbing.** `NavComputer._resizeCanvas` (`:612-617`) sets `canvas.width = rect.width` off `getBoundingClientRect()` — no `bufferForLines`, no dpr multiply, ~1560x860 — and the class imports **nothing** from `renderBuffer.js`. `#nav-computer-canvas` carries no `image-rendering` at all (`style.css:1246`). ⭐ The idiom to copy exists TWICE already: `SupercruiseHud._syncBuffer` (`:114-129`) and `TargetingReticle._resize` (`:213-226`) both take the backing store from `resolveRenderBuffer` and the style box from the window, with the pixelated pair at `style.css:38-40`. ⭐ And `_getCanvasPos` (`:4334-4339`) needs **no change** — it multiplies by `canvas.width / rect.width` and every draw site is in backing-store units too, so both sides scale and cancel.

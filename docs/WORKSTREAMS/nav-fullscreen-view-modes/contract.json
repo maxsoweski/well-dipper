@@ -2,7 +2,7 @@
   "workstream": "nav-fullscreen-view-modes",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verifying",
   "acceptanceCriteria": [
     {
       "id": "AC-1",
@@ -12,7 +12,8 @@
       "verifyVia": {
         "input": "Press N with Resolution at 240p, then change it to 288 and 360 with the nav open.",
         "observable": "The overlay canvas backing store equals resolveRenderBuffer(innerWidth, innerHeight) — 427x240, 512x288, 640x360 on a 1600x900 viewport — while its CSS box stays the full panel, and #nav-computer-canvas carries image-rendering: pixelated so it upscales. Today NavComputer._resizeCanvas (src/ui/NavComputer.js:612-617) sets canvas.width = rect.width off getBoundingClientRect(), giving ~1560x860: 3.58x the world's line count. ⭐ THE IDIOM ALREADY EXISTS TWICE — SupercruiseHud._syncBuffer (SupercruiseHud.js:114-129) and TargetingReticle._resize (TargetingReticle.js:213-226) both set the backing store from resolveRenderBuffer and the style box from the window, with the pixelated pair in style.css:38-40. _resizeCanvas becomes that shape. NavComputer imports nothing from renderBuffer today."
-      }
+      },
+      "progress": "BUILT + LIVE 2026-09-07 (a10adc7). Measured on the running game in ORRERY: overlay backing store 427x240 into a 1600x900 CSS box, image-rendering crisp-edges, panel full-bleed. Today's nav measured 1560x860 on the same display first — the handoff's predicted number, confirmed live."
     },
     {
       "id": "AC-2",
@@ -22,7 +23,8 @@
       "verifyVia": {
         "input": "At 240p, click each of the five level tabs, a 2D tile, a prism star, a body in SYSTEM, and the commit button.",
         "observable": "Level changes on each tab, the tile drills, the star and body select, and the commit button fires the burn/warp. ⭐ THE MAPPING SHOULD ALREADY BE CORRECT AND THAT IS WHY THIS AC EXISTS RATHER THAN A BUILD STEP: _getCanvasPos (NavComputer.js:4334-4339) maps (e.clientX - rect.left) * (canvas.width / rect.width), and every draw site in the file works in backing-store units too, so shrinking the store to 427 changes the ratio from 1.0 to 0.274 on BOTH sides and cancels. A click at the CSS centre (780,430) of a 1560x860 box lands at (213.5,120) — the centre of a 427x240 buffer. This is an unverified prediction until it is driven live; the eight hit-test sites are :4060, :4364, :4378-4380 and :4440-4443."
-      }
+      },
+      "progress": "BUILT + LIVE 2026-09-07 (3121c91). The prediction held: _getCanvasPos needed no change. ⛔ BUT A REAL DEFECT WAS FOUND — the legacy tab strip is 32 rows of a 240-row buffer and design 1's COMMIT row sits inside it, so [ WARP ] changed level instead of warping. Gated on _modeTabIdx. Tabs drill live; SYSTEM resolved Sol's 41 bodies; the commit bar correctly read BURN, not WARP."
     },
     {
       "id": "AC-3",
@@ -32,7 +34,8 @@
       "verifyVia": {
         "input": "Open the nav with no view mode selected, at every buffer, and compare the emitted pixels against the pre-change build.",
         "observable": "Byte-identical. viewMode defaults to null and null is today's path by construction — render() returns before any mode code, exactly the way pixelType: null never enters navPixelType.js. ⭐ AND THIS IS WHY navLayout's SATURATION IS NOT BEING TOUCHED, against the predecessor handoff's §4.7 which called it 'the single biggest thing to fix': that finding assumed the 240p fullscreen nav would be BUILT ON the existing renderer, so its desktop chrome (tabH 32 = 13.3% of 240 rows, navMapSize 160 = a 25% square in a 427-wide frame) would be inherited. Max instead ruled on two designs that draw their OWN chrome and never call navTabHeight / navChromeReserve / navMapSize. Nothing production-side is left above the h >= 160 threshold once the modes own the low-res surface, so desaturating would move the shipped overlay and the pinned fixtures to fix a surface that no longer exists. §4.7 reopens the moment anything asks the LEGACY renderer to draw into a low-res buffer."
-      }
+      },
+      "progress": "HELD 2026-09-07. viewMode defaults to null, render() never builds the driver and _resizeCanvas keeps its rect path — pinned by a test asserting _viewDriverInst is still null after a legacy render. navLayout untouched."
     },
     {
       "id": "AC-4",
@@ -42,7 +45,8 @@
       "verifyVia": {
         "input": "Open the nav at 240p, select design 1, and walk all five levels (GALAXY, SECTOR, REGION, PRISM, SYSTEM).",
         "observable": "Every level draws the map pane beside a persistent ranked rail carrying names and distances; the status row, hint row, tab row and full-width commit row all draw; and the lab's assertFits guard, ported with the design, reports no region overflow at any level or any of the three buffers."
-      }
+      },
+      "progress": "BUILT + LIVE 2026-09-07. Design 1 draws all five levels; live at PRISM it lists 27 stars with distances and spectral classes at once (SOL, PROXIMA CENTAURI, RIGIL KENTAURUS off the real catalog) against today's one-at-a-time hover. ⚠ ITS SYSTEM LADDER FAILS AS THE LAB PREDICTED: 3 of Sol's 15 laddered bodies run past the end of the axis and collide into a red '+3 OFF AXIS'. Drawn, not hidden. MAX'S CALL."
     },
     {
       "id": "AC-5",
@@ -52,7 +56,8 @@
       "verifyVia": {
         "input": "Open the nav at 240p, select design 2, and walk all five levels plus its list mode.",
         "observable": "The map fills the frame between an 8-row top bar (tabs left, one locator right) and an 8-row bottom bar (one ' · '-joined status line plus the commit chip); the list mode draws over the map plane; and the guard reports no overflow at any level or buffer."
-      }
+      },
+      "progress": "BUILT + LIVE 2026-09-07. Design 2 draws all five levels plus its L list mode; live it bleeds to all four edges with one status line and the tabs/locator bar."
     },
     {
       "id": "AC-6",
@@ -62,7 +67,8 @@
       "verifyVia": {
         "input": "With the nav open in the running game, press the mode key repeatedly.",
         "observable": "The picture cycles legacy -> design 1 -> design 2 -> legacy and the choice survives closing and reopening the nav. ⛔ Max does not use the browser console; any A/B he runs is a keypress."
-      }
+      },
+      "progress": "BUILT + LIVE 2026-09-07. V cycles CURRENT -> RAIL -> BARS -> CURRENT, driven live by keypress; L toggles design 2's list. Persisted to localStorage, tolerant of a blocked store."
     },
     {
       "id": "AC-7",
@@ -72,7 +78,8 @@
       "verifyVia": {
         "input": "Render the cockpit NAV panel headlessly at 52x43 before and after the change and compare.",
         "observable": "The panel instance's emitted pixels are unchanged and the src/cockpit suite is still 698 green. The panel and the overlay are TWO SEPARATE NavComputer instances (main.js:4700 builds the cockpit's, main.js:5895 builds _domNavComputer), so the view-mode axis is written on the DOM instance only and cannot cross. ⛔ NOT keyed off _bare — NavPanel.js:222 writes chromeless = false every paint, so _bare is permanently FALSE on the panel. Nothing writes the view-mode axis on the panel instance, the way nothing writes pixelType on the DOM one."
-      }
+      },
+      "progress": "HELD 2026-09-07, STRUCTURALLY. The gate is activate(), which _openCockpitNav never calls. Confirmed live: window._navComputer resolved to the cockpit instance at 52x43 with _viewModesEnabled false. src/cockpit still 698 green."
     },
     {
       "id": "AC-8",
@@ -82,7 +89,8 @@
       "verifyVia": {
         "input": "Render PRISM headlessly at the default 1.5 pc zoom and at the 10.34 pc ceiling, counting per-marker work and faded labels. No such test exists today — _renderLocal's per-marker loop has NO regression coverage at realistic density.",
         "observable": "A marker whose dashed line cannot cross the drawable rect does no drawing, no hover test and no _labelQueue push.\n\n⛔ THE PREDECESSOR HANDOFF'S §4.5 FIGURE DOES NOT REPRODUCE AND THIS AC IS RESCOPED ACCORDINGLY. It reported '143 markers projected, 120 (84%) off canvas at the default zoom'. Re-measured as a proper A/B — the real function against a () => true stub, same scene, 1560x860 — the saving is 0% at the default zoom, 0% at the 10.34 pc ceiling, 0% under rotation, 0% on a lateral pan, and 13% (31 of 237 arcs) on an R/F vertical pan. ⭐ The geometry explains it: the prism projects x = cx + dx * halfW * 0.92 where dx is normalised by the QUERY radius, so |dx| <= 1 and every queried star lands inside the frame. Only Y escapes, because it has its own window rather than the radius.\n\n⭐⭐ SO THIS IS NOT A PERFORMANCE AC. It is a correctness guard that becomes load-bearing the day AC-4 lands: halfW equals the canvas only while the prism owns the whole canvas, and design 1 gives the map 43 of 71 columns beside the rail. The moment the pane is narrower than the frame the projection and the query decouple and nothing bounds |dx|. Verified by sabotage — unwiring the filter makes the probe read 250 against 250 and fail."
-      }
+      },
+      "progress": "BUILT 2026-09-07 (27a71c5), rescoped — the handoff's 84% does not reproduce (0% at every view state but an R/F vertical pan, where it is 13%). Ships as a correctness guard for the day a design gives the map a narrower pane. Proved by sabotage."
     },
     {
       "id": "AC-9",
@@ -92,7 +100,8 @@
       "verifyVia": {
         "input": "Run all three suites, then open the nav via the N key, the mobile dock and an autopilot-initiated open, and complete a jump.",
         "observable": "The failing-test baseline is unchanged — tests/ 20 failed across the same 8 files, src/cockpit 698 passed, src/ui 295 passed. All three doors still route through _openCockpitNav (main.js:5912), the ORRERY / failed-GLB DOM fallback still appears, and a selected destination still commits and moves the ship."
-      }
+      },
+      "progress": "GREEN 2026-09-07. tests/ 20 failed across the same 8 files, src/cockpit 698, src/ui 327 (+21). ⚠ PARTIAL: the mobile-dock and autopilot-initiated doors have NOT been driven live — only the N key in ORRERY."
     },
     {
       "id": "AC-10",
@@ -101,7 +110,8 @@
       "verifyVia": {
         "input": "Max opens the nav in HELM at 240p and cycles the three modes with the mode key, with the world visible behind it.",
         "observable": "Max's holistic judgement that the nav coheres with the world rather than floating over it, and his ruling on which mode is the one to carry into the diegetic panel. No agent renders this verdict."
-      }
+      },
+      "progress": "OPEN — Max's eye. Screenshots captured at VM-0-current / VM-1-rail-prism / VM-2-bars-prism / VM-3-bars-galaxy / VM-4-rail-system."
     }
   ],
   "architecturalConnections": {
