@@ -12,7 +12,8 @@
         "observable": "Every drawn cell resolves to a real sector \u2014 zero dead cells \u2014 and no sector that was reachable before has become unreachable. The cells keep the chunky weight of today's design."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "progress": "\u2705 BUILT AND MEASURED 2026-09-07, live: S.mapProj is now size 36 (was 44), sq 216 / n 8 / cell 27 UNCHANGED so the chunk Max named is intact, 52 of 64 cells drawn, 0 drawn cells resolving to nothing (was 32), 0 sectors lost, dead ground in the drawn square 47.5% -> 21.5%. The reachable radius (18.000 kpc) is derived by bisecting 32 rays through the picker's OWN getSectorAt, not a radius of our choosing. \u25b6 AWAITING MAX'S EYES on the picture \u2014 shots/galaxy-design1-refitted.png against galaxy-design1-today.png."
     },
     {
       "id": "AC-2",
@@ -148,7 +149,8 @@
         "observable": "assertMark reports zero overflows at every angle, and the moon pips stay on the glass rather than being clipped at the pane edge."
       },
       "layer": "integration",
-      "live": false
+      "live": false,
+      "progress": "\u2705 2,880-frame sweep across both designs and all five levels: ZERO guard firings, against the old budget's overflows at the same angles, with a sabotage control proving the violation channel is live so the zero is not a dead wire. At the default tilt old and new both compute 205.50 \u2014 the picture cannot move."
     },
     {
       "id": "AC-16",
@@ -159,7 +161,7 @@
       },
       "layer": "integration",
       "live": true,
-      "progress": "\u2705 BUILT AND MUTATION-PROVED headlessly 2026-09-07. \u25b6 Still to confirm on the running game that a planet's mark visibly travels."
+      "progress": "\u25d0 BUILT AND MUTATION-PROVED HEADLESSLY 2026-09-07; \u26d4 LIVE CONFIRMATION STILL OPEN, AND THE ATTEMPT FOUND SOMETHING. Driving the running game: nav._systemData.planets[0]._live was UNDEFINED, and window._systemData (main.js:7588) was undefined too \u2014 meaning spawnSystem HAD NEVER RUN. In the ORRERY boot state the ship is in deep space with no system spawned, nav._currentSystemData is null, and NavComputer.js:2458 falls through to resolveArrivalSystem \u2014 so the SYSTEM screen is drawing a system the nav GENERATED FOR ITSELF, not a spawned one. \u2b50 Which means 'the actual orientation of the planets in the game' has no referent in that state: there are no in-game planets yet. The _live wiring is correct and is the right fix for when a system IS spawned; it simply cannot be exercised until one is. \u25b6 NEXT: select a body, commit the BURN/WARP, and re-run the 6-second sample with the system actually spawned. \u26a0 Do NOT mark this green on the headless proof alone \u2014 the whole workstream opened on a green test that pinned nothing."
     },
     {
       "id": "AC-17",
@@ -168,7 +170,8 @@
         "input": "Render both designs at every level with D.playerSector null.",
         "observable": "Every painter completes, the glass keeps updating, and no field a design reads is left without a default in state.js."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "\u2705 Four sites guarded, not one \u2014 d1Rail, d2Status, d3Left, d3Right. 10 paints (2 designs x 5 levels) with a null playerSector, 0 painter throws, and a control proves the OLD dereference really does throw TypeError on the same value. \u26a0 The guards draw em-dashes, never a fabricated sector \u2014 a placeholder would put four plausible numbers on the glass for a sector that does not exist."
     },
     {
       "id": "AC-12",
