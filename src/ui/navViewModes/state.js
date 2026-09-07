@@ -90,8 +90,17 @@
  *     picture at entry is unchanged and only a DRILL moves it — which is the point: today the
  *     designs are player-anchored, so clicking a sector drills the game while both designs keep
  *     drawing the player's, and "CLICK A SECTOR" is false in the way that matters.
- * ⛔ Rotation is deliberately absent. Neither prism hint advertises it and the designs' fixed
- * shallow tilt is part of the picture Max ruled on.
+ *
+ * ⭐⭐ ROTATION IS NOW WIRED, AND IT WAS THE ONE HOP MISSING — the note that used to sit here said
+ * it was "deliberately absent" because the designs' fixed shallow tilt was the picture Max ruled on.
+ * Measured since, with a liveness control: rotating the legacy camera left `S.prismHits`
+ * BYTE-IDENTICAL while nudging `_localCenter.z` by 0.0004 moved every mark — so the pilot was
+ * already dragging a camera nothing downstream could see, and "DRAG TO ROTATE" was a promise the
+ * glass could not keep. `S.cam` gains `rotX`/`rotY` and `S.sysCam` is new; the defaults are the
+ * designs' own fixed tilts, derived from the gains (see `PRISM_ROT_X0` / `SYSTEM_ROT_X0`), so the
+ * ruled-on picture is what a camera sitting at its default reproduces.
+ * ⛔ TWO PAIRS. Level 3 drags `_localRot*` and level 4 drags `_systemRot*`, clamped differently
+ * (`:4354` / `:4360`); one shared pair would make a prism drag turn the orrery.
  */
 
 import { generateSystemName, generatePlanetName, generateMoonName } from '../../generation/NameGenerator.js';
@@ -104,10 +113,81 @@ const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;
 /** kpc -> light years. */
 const KPC_TO_LY = 3261.56;
 
-/** `NavComputer._makeRng` (:315-327), the same shape — the names must match the instrument's. */
-function makeRng(seed) {
+// ── ⭐⭐ THE ROTATION DEFAULTS, AND THE GAINS COME FIRST (INTERFACE §1) ──────────────────────────
+//
+// The designs' fixed gains are NOT a rotation matrix. `projectPrism` scales dx by 0.92, dz by 0.42
+// and dy by 0.55, and `hypot(0.42, 0.55) = 0.692…` ≠ 1 — so today's picture factors as an
+// ELEVATION-ONLY rotation times an anisotropic scale, and the factorisation does not round-trip
+// bit-identically: `K*sin(rotX₀)` comes back as 0.42000000000000004, one or two ULP off.
+//
+// ⛔ THEREFORE THE GAINS ARE THE NAMED CONSTANTS AND THE ANGLE IS DERIVED FROM THEM, NEVER THE
+// OTHER WAY ROUND. Every consumer of the projection rounds, so no texel moves either way; but the
+// raw floats also feed the bounds culls and go UNROUNDED into `S.prismHits`, where `nearestHit`
+// measures a distance against a radius. The AC says byte-identical, so this does not gamble on a
+// float landing off a `.5`.
+/** `projectPrism`'s two vertical gains — the numbers in the draw code, not a reconstruction. */
+export const PRISM_DZ = 0.42, PRISM_DY = 0.55;
+/** The elevation those two gains ARE: `atan2(0.42, 0.55)` = 0.6521714117570698 rad (37.3667°). */
+export const PRISM_ROT_X0 = Math.atan2(PRISM_DZ, PRISM_DY);
+/** `d2System`'s TILT. ⭐ This one IS a true sine — `Math.sin(Math.asin(0.42)) === 0.42` exactly. */
+export const SYSTEM_TILT = 0.42;
+/** = 0.43344532006988595 rad, and the round trip through it is bit-identical. */
+export const SYSTEM_ROT_X0 = Math.asin(SYSTEM_TILT);
+
+/**
+ * An azimuth into `[0, 2π)`.
+ *
+ * ⛔ BECAUSE THE GAME'S TWO AZIMUTHS ARE UNCLAMPED AND UNWRAPPED AND GROW WITHOUT BOUND.
+ * `NavComputer:4353` writes `_localRotY = _dragStartRotY + dx * 0.008` and `:4359` does the same for
+ * `_systemRotY` — neither is clamped (only the two ELEVATIONS are, to `[0, π/2]` at level 3 and
+ * `[0.1, π/2]` at level 4, at `:4354` / `:4360`), so a pilot who keeps dragging one way walks them
+ * off to arbitrary magnitude and takes mantissa bits off every `sin`/`cos` downstream with him.
+ * ⭐ Wrapping is invisible to the picture — `sin` and `cos` are 2π-periodic — and it is done HERE,
+ * on the copy the designs read, never on the raw field: the HOST owns `_localRotY` and the legacy
+ * painters (`:1374`, `:1892`, `:3605`) read it, so touching it would move a picture nobody asked to
+ * move. Two pairs in, two pairs out; this is the only arithmetic applied to either.
+ */
+export function wrapTau(v) {
+  if (!Number.isFinite(v)) return 0;
+  const TAU = Math.PI * 2;
+  const r = v % TAU;
+  return r < 0 ? r + TAU : r;
+}
+
+/**
+ * `NavComputer._makeRng` (:315-327), THE SAME SHAPE — and until 2026-09-08 it was not, while the
+ * comment on this very line asserted that it was.
+ *
+ * ⛔⛔ THE OLD BODY WAS `{ next, child }` AND IT MADE EVERY BODY NAME ON THE GLASS A SWALLOWED ERROR.
+ * `NameGenerator.generatePlanetName` opens on `rng.float()` and `generateMoonName` calls
+ * `rng.float()` / `rng.int()` / `rng.pick()`; none of those existed here, so every single call threw
+ * `TypeError: rng.float is not a function` straight into `buildBodies`' `catch`, and every name Max
+ * has ever read at SYSTEM was the fallback `(star.name || 'S') + ' ' + 'bcdefghijk'[i]`. That
+ * alphabet has ELEVEN letters and Sol has THIRTEEN planets, so the last three rows literally read
+ * `Sol undefined` — measured live off `S.bodyHits`, and reproduced headlessly.
+ *
+ * ⚠ AND THE COMMENT WAS THE TRAP, WHICH IS WHY THIS ONE IS LONG. A reader checking the claim rather
+ * than the code closed it as fine. The instrument's rng exposes `float`, `int`, `pick`, `bool`,
+ * `chance` and `child`; this now exposes exactly those six and nothing else. `next` is GONE — it was
+ * this file's own invention, nothing outside these three call sites could ever reach it (the symbol
+ * is module-local and unexported), and `grep -rn '\.next()' src/` finds no consumer. Keeping it
+ * would have been the same lie in the other direction: a shape that is "the same" plus one.
+ *
+ * ⚠ `generateSystemName` ignores its rng entirely (`NameGenerator.js:571` comment, and it derives
+ * from position), which is why `nameFor` never showed the fault and only the BODY names were wrong.
+ */
+export function makeRng(seed) {
   const fn = alea(seed);
-  return { next: () => fn(), child: (tag) => makeRng(String(seed) + ':' + tag) };
+  return {
+    float: () => fn(),
+    int: (minOrMax, max) => {
+      if (max === undefined) return Math.floor(fn() * minOrMax); // int(max) → [0, max)
+      return minOrMax + Math.floor(fn() * (max - minOrMax + 1)); // int(min, max) → [min, max] inclusive
+    },
+    pick: (arr) => arr[Math.floor(fn() * arr.length)],
+    bool: (p) => fn() < (p || 0.5), chance: (p) => fn() < p,
+    child: (tag) => makeRng(String(seed) + ':' + tag),
+  };
 }
 
 /** `NavComputer._estimateBlockStarCount`'s arithmetic at a new call site, not a new pipeline. */
@@ -198,9 +278,33 @@ export function makeViewState() {
     chipRect: null,     // {x,y,w,h}                    — the drawn commit control
 
     /** THE DRIVER PUBLISHES THESE. `cam` is the prism camera the game already runs and `view` is the
-     *  2D frame it already drills; both are byte-identical to today's values at entry (see header). */
-    cam:  { x: 0, y: 0, z: 0, radius: 0.0015 },
+     *  2D frame it already drills; both are byte-identical to today's values at entry (see header).
+     *
+     *  ⛔⛔ TWO ROTATION PAIRS, NOT ONE, AND FOLDING THEM WOULD MAKE A PRISM DRAG TURN THE ORRERY.
+     *  The game keeps `_localRot*` (level 3) and `_systemRot*` (level 4) distinct and CLAMPS THEM
+     *  DIFFERENTLY — `[0, π/2]` at `:4354` against `[0.1, π/2]` at `:4360` — and `_handleMouseDown`
+     *  snapshots whichever pair the level owns (`:4402-4408`). One shared pair would be two
+     *  different gestures writing one field.
+     *  ⛔ AND BOTH NEED A DEFAULT HERE EVEN THOUGH `refresh()` writes them every frame. A painter
+     *  reading `S.sysCam.rotX` off an undefined `S.sysCam` throws; `PanelHost` catches a painter
+     *  throw ONCE and then stops uploading, so the glass keeps showing the last good frame and
+     *  looks alive — indistinguishable from a working nav until Max clicks something.
+     *  ⭐ The defaults are the DESIGNS' OWN fixed tilts (see PRISM_ROT_X0 / SYSTEM_ROT_X0 above), so
+     *  a frame drawn before the first `refresh()` — the lab's case, and the first paint's — is the
+     *  picture Max ruled on rather than a top-down one. */
+    cam:  { x: 0, y: 0, z: 0, radius: 0.0015, rotX: PRISM_ROT_X0, rotY: 0 },
+    sysCam: { rotX: SYSTEM_ROT_X0, rotY: 0 },
     view: { cx: 8, cz: 0, size: 44 },
+
+    /** ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5). Max: *"clicking on a cell from the grid should
+     *  highlight it, then zoom into it"* — so it is written on a committed map click BEFORE the
+     *  drill starts and cleared when the drill lands, which makes it visible for the whole zoom
+     *  rather than for the tick it was written in.
+     *  ⛔ `i`/`j` ARE THE DESIGN'S OWN GRID COORDINATES, NOT the game's `col`/`row`: `row = n-1-j`
+     *  is the Z-flip and it lives in `picking.tileOf`, on the other side of this field.
+     *  ⛔ `null` IS THE DEFAULT AND IT HAS TO BE DECLARED — see the note above; the lab reads it
+     *  unguarded at its draw site. */
+    pick: null,       // { level, i, j, tMs } | null
 
     /** SORT + PAGE (AC-8, AC-9). `sortLabel` exists because Max never uses a browser console — an
      *  active sort key that is not on the glass is not an affordance, it is a secret. */
@@ -251,12 +355,30 @@ export function makeViewState() {
     if (!sys || !star) return rows;
     const rng = makeRng(star.seed + ':names');
     const planets = sys.planets || [];
+    // ── ⛔⛔ THE CATCHES BELOW NOW COUNT, BECAUSE A SILENT ONE IS WHAT HID AC-10 FOR A WHOLE
+    //    WORKSTREAM. Both `catch`es fired on EVERY body of EVERY system for as long as this file has
+    //    existed — `rng.float is not a function`, 39 of 39 on Sol — and produced a plausible-looking
+    //    name each time, so nothing anywhere reported anything. A fallback that cannot be
+    //    distinguished from a success is not a fallback, it is a disguise.
+    //    ⭐ SO THE COUNT AND THE FIRST ERROR GO SOMEWHERE OBSERVABLE: `D.fail`, which is the
+    //    channel the designs' own two catches already use (`designs.js:247`, `:255`), plus one
+    //    `console.error`. It is loud ONCE PER SYSTEM, not once per body — `buildBodies` is called
+    //    only when `cache.sysRef` moves — so a real fault is a line Max or a test can see and a
+    //    working build is silent.
+    //    ⚠ THE ERROR'S NAME RIDES THE MESSAGE ON PURPOSE. `TypeError` means THIS FILE is wrong;
+    //    anything else may legitimately mean "that generator had no name for this body". The two
+    //    were indistinguishable before, and the wrong one was assumed.
+    const nameFail = { n: 0, first: '' };
+    const noteFail = (what, e) => {
+      nameFail.n++;
+      if (!nameFail.first) nameFail.first = `${what} threw ${(e && e.name) || 'Error'}: ${(e && e.message) || e}`;
+    };
     planets.forEach((p, i) => {
       const pd = p.planetData;
       if (!pd) return;
       let pname = '';
       try { pname = generatePlanetName(rng.child('p' + i), star.name || 'STAR', i, planets.length); }
-      catch (e) { pname = (star.name || 'S') + ' ' + 'bcdefghijk'[i]; }
+      catch (e) { noteFail('generatePlanetName', e); pname = (star.name || 'S') + ' ' + 'bcdefghijk'[i]; }
       // ⛔ NEITHER FIELD MAY BE UNDEFINED. Both designs call `.toUpperCase()` on `name` and `cls`
       // unguarded — `d1Rail`'s detail block does it twice on one line — and `displayClassOf` returns
       // undefined for planet data it does not recognise, which is reachable from any generator
@@ -265,6 +387,18 @@ export function makeViewState() {
       rows.push({ kind: 'planet', name: pname || '—', au: Number(p.orbitRadiusAU) || 0, cls: displayClassOf(pd) || 'unknown',
                   rE: pd.radiusEarth, T: pd.T_eq, hab: pd.habitability?.score ?? null,
                   rings: !!pd.rings, moons: p.moons?.length || 0, pd,
+                  // ⭐⭐ `ang` IS THE ORBITAL ANGLE, AND DROPPING IT WAS A LIVE DEFECT (INTERFACE §2).
+                  // `d2System:1160` placed each body at `i * 1.7 + 0.6` — `i` being the DRAW-LOOP
+                  // INDEX — and `[`/`]` re-sorts `D.bodies` right above this function, so pressing
+                  // the sort key at SYSTEM teleported every planet around its ring. The real angle
+                  // was never missing: `StarSystemGenerator:550` draws it and sets it on the wrapper
+                  // at `:609`, `SolarSystemData:723/846` does the deterministic equivalent for Sol,
+                  // and the LEGACY orrery has always read it (`NavComputer:2756`, `:3215`,
+                  // `const angle = p.orbitAngle || 0`). This row simply never copied it across.
+                  // ⚠ `|| 0` RATHER THAN `?? 0` IS DELIBERATE AND LOSSLESS HERE: an angle of exactly
+                  // 0 and an absent angle are the same ray, and `Number(undefined)` is NaN, which
+                  // would put `cos`/`sin` of NaN into the draw code.
+                  ang: Number(p.orbitAngle) || 0,
                   // ⭐ pIdx / mIdx are THIS ADAPTER'S ADDITION, not the lab's, and they are what lets a
                   // rail row hand `_hoveredBody` the { type, index } shape the SHIPPED click handler
                   // already understands. Without them the flat list's position would have to be
@@ -273,16 +407,38 @@ export function makeViewState() {
       (p.moons || []).forEach((m, j) => {
         let mname = '';
         try { mname = generateMoonName(rng.child(`m${i}.${j}`), pname, j, p.moons.length); }
-        catch (e) { mname = pname + ' ' + (j + 1); }
+        catch (e) { noteFail('generateMoonName', e); mname = pname + ' ' + (j + 1); }
         rows.push({ kind: 'moon', name: mname || '—', au: Number(p.orbitRadiusAU) || 0, cls: m.type || 'moon',
                     rE: m.radiusEarth, T: m.T_eq, hab: null, rings: false, moons: 0, parent: i,
+                    // ⛔ A MOON TAKES ITS PARENT'S ANGLE, NOT ITS OWN, AND THE REASON IS THAT THE
+                    // TWO ARE IN DIFFERENT FRAMES. A moon does have an angle — `startAngle`, from
+                    // `MoonGenerator:181/415` and `SolarSystemData:802/829` — but it is the phase of
+                    // the moon around its PLANET, while `ang` here is the phase of a body around the
+                    // SYSTEM'S STAR, which is the only thing `d2System` can place: it puts a body at
+                    // `(rOf(b.au), b.ang)` and this row's `au` is ALREADY the parent's
+                    // `orbitRadiusAU` (line above). Using `startAngle` would scatter every moon
+                    // around the star's ring at a radius it never occupies, at a scale roughly four
+                    // orders of magnitude too large. Parent's angle + parent's AU puts the moon
+                    // exactly where the moon is: on its planet.
+                    // ⚠ AND THE ORRERY'S MOON PIPS ARE SCREEN-SPACE BADGES BY DESIGN (INTERFACE §1),
+                    // so the moon's own phase has no draw site to go to even if it were wanted.
+                    ang: Number(p.orbitAngle) || 0,
                     pIdx: i, mIdx: j });
       });
     });
     (sys.asteroidBelts || []).forEach((b, i) => {
+      // ⚠ NO `ang` ON A BELT, AND THAT IS CORRECT RATHER THAN AN OMISSION (INTERFACE §2): a belt is
+      // drawn as a FULL RING, so it has no phase to be at. A `0` here would be a real angle that
+      // happens to mean "nothing", which is the shape of the defect this whole field fixes.
       rows.push({ kind: 'belt', name: 'BELT ' + ('ABC'[i] || (i + 1)), au: Number(b.centerRadiusAU) || 0, cls: 'belt',
                   rE: null, T: null, hab: null, rings: false, moons: 0, widthAU: b.widthAU });
     });
+    if (nameFail.n) {
+      const line = `navViewModes/state.js buildBodies: ${nameFail.n}/${rows.length} body names fell back — ${nameFail.first}`;
+      D.fail.push(line);
+      // eslint-disable-next-line no-console
+      console.error(line);
+    }
     return rows;
   }
 
@@ -313,6 +469,20 @@ export function makeViewState() {
     const lc = nav._localCenter || { x: 0, y: 0, z: 0 };
     S.cam.x = lc.x; S.cam.y = lc.y; S.cam.z = lc.z;
     S.cam.radius = Number.isFinite(nav._localRadius) ? nav._localRadius : 0.0015;
+    // ── ⭐⭐ AND THE ROTATION, WHICH IS THE ONE HOP THAT WAS MISSING. Measured with a liveness
+    //    control on the running game: nudging `_localCenter.z` by 0.0004 moved every published mark,
+    //    and `_localRotY += 1.1` with `_localRotX = 0.15` left `S.prismHits` BYTE-IDENTICAL — the
+    //    pilot has been rotating a camera the designs could not see. `S.cam` was already the pipe;
+    //    these four lines are the whole of it.
+    //    ⛔ TWO PAIRS, INDEPENDENTLY SOURCED. `_localRot*` is the prism's and `_systemRot*` is the
+    //    orrery's; they are clamped differently and dragged at different levels (see the `S` literal).
+    //    ⛔ THE AZIMUTHS ARE WRAPPED, THE ELEVATIONS ARE NOT. `wrapTau` explains why the raw fields
+    //    are left alone; the elevations arrive already clamped into `[0, π/2]` by the drag handler
+    //    and `_tiltAnim`'s π/2 start is inside it, so there is nothing to fold.
+    S.cam.rotX = Number.isFinite(nav._localRotX) ? nav._localRotX : PRISM_ROT_X0;
+    S.cam.rotY = wrapTau(nav._localRotY);
+    S.sysCam.rotX = Number.isFinite(nav._systemRotX) ? nav._systemRotX : SYSTEM_ROT_X0;
+    S.sysCam.rotY = wrapTau(nav._systemRotY);
     const vc = nav._viewCenter || { x: 8, z: 0 };
     S.view.cx = vc.x; S.view.cz = vc.z;
     S.view.size = Number.isFinite(nav._viewSize) ? nav._viewSize : 44;

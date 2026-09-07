@@ -48,9 +48,24 @@ import { makeViewState, SORT_KEYS } from './state.js';
 import { makeDesigns } from './designs.js';
 import { railGeometry, barsGeometry, tabIndexAt } from './geometry.js';
 import { pickSector, pickTile, pickPrismStar, pickBody, bodyIdentity,
-         usableProj, gridNFallback, tileOf, HOVER_FIELD } from './picking.js';
+         usableProj, insideProj, cellAt, gridNFallback, tileOf, HOVER_FIELD } from './picking.js';
 import { makeSearch } from './search.js';
 import { FACE, measurePixelText } from '../../rendering/PixelText.js';
+import { simClockMs } from '../../core/SimClock.js';
+
+/**
+ * How long a click-highlight survives a click that DRILLS NOTHING.
+ *
+ * ⛔ IT IS A BACKSTOP, NOT THE MECHANISM. The highlight's real end is the drill landing — see
+ * `agePick` — and every drill this can start is 400-500 ms (`NavComputer:4641/4667/4690`), so under
+ * normal use this constant is never reached. It exists because a click that resolves to a cell and
+ * then finds nothing to drill (level 0 outside the disc, a tile the handler declines) would
+ * otherwise leave a frame on the glass forever, and a highlight that never goes out stops meaning
+ * "this is what you just picked".
+ * ⭐ MEASURED IN SIM MILLISECONDS, the same clock `_startDrillAnim` uses, so the backstop and the
+ * thing it is backing up cannot drift apart under a throttled tab.
+ */
+const PICK_HOLD_MS = 700;
 
 /**
  * The cycle the mode key walks. `null` first, so the default is today's nav and the first press
@@ -145,6 +160,64 @@ export function makeViewModeDriver(nav) {
     S.mapProj = null; S.listGeom = null; S.tabRects = null; S.chipRect = null;
     S.searchGeom = null;
     S.prismHits = []; S.bodyHits = []; S.railTiles = [];
+    // ⛔ `S.pick` IS NOT IN THIS LIST AND MUST NOT BE. Everything above is published by the PAINT and
+    // is one frame's worth by construction; `S.pick` is published by the CLICK and has to outlive
+    // the frames between the click and the drill landing — which is the entire feature. Clearing it
+    // here would write it and erase it in the same tick and leave Max exactly what he already has.
+  }
+
+  /**
+   * ⭐ THE CLICK-HIGHLIGHT'S LIFETIME (INTERFACE §5). Max, on the drill:
+   * *"clicking on a cell from the grid should highlight it, then zoom into it"* — a sequence, so the
+   * frame has to be on the glass THROUGH the zoom, not before it.
+   *
+   * ⭐⭐ AND THE CLEAR IS THE LEVEL CHANGE, WHICH IS EXACTLY WHEN THE DRILL LANDS. `_startDrillAnim`
+   * does NOT move `_levelIndex`; `_updateAnim` assigns `this._levelIndex = this._anim.toLevel` only
+   * once `elapsed >= duration` (`NavComputer:1278-1281`). So the highlighted cell is drawn for every
+   * frame of the 400-500 ms zoom and goes out on the frame the new level appears — which is the
+   * behaviour asked for, obtained from the instrument's own state rather than from a timer racing it.
+   */
+  function agePick() {
+    const pk = S.pick;
+    if (!pk) return;
+    if (pk.level !== S.level) { S.pick = null; return; }
+    if (simClockMs() - (pk.tMs || 0) > PICK_HOLD_MS) S.pick = null;
+  }
+
+  /**
+   * Record the cell a committed map click landed on, BEFORE `_handleClick` drills it.
+   *
+   * ⛔ SECTOR AND REGION ONLY (levels 1-2), AND GALAXY'S EXCLUSION IS THE INTERESTING ONE.
+   * PRISM and SYSTEM are obvious: they publish MARKS (`S.prismHits` / `S.bodyHits`), not a lattice,
+   * so there is no cell for the lab to frame. GALAXY draws a grid and is still excluded, because at
+   * level 0 THE CELL IS NOT WHAT GETS ZOOMED INTO: the drill identity is the containing SECTOR
+   * (`pickSector` → `getSectorAt`), one of 775 in an irregular density-adaptive quadtree, and
+   * `_handleClick` flies to `s.centerX/centerZ` at `s.size` — a rectangle that need not coincide
+   * with, or even sit inside, the 8x8 cell under the cursor. Framing the cell there would be the
+   * glass promising "this is where you are going" about somewhere else, which is the defect shape
+   * this workstream keeps finding rather than a smaller version of the feature. At 1-2 the cell IS
+   * the drill target, exactly (`tileOf`), which is what makes the highlight true.
+   * ⚠ SO GALAXY HAS NO CLICK-HIGHLIGHT. If Max wants one there it needs the SECTOR's own drawn
+   * rectangle published out of the paint, not this field — log it, do not approximate it here.
+   * ⛔ AND IT REUSES `cellAt`, NEVER ITS OWN ARITHMETIC. The `i`/`j` written here are the same pair
+   * `pickTile` hands to `tileOf` on its way to the `col`/`row` the drill consumes, so the cell that
+   * lights up and the cell that gets zoomed into cannot come apart. Restating the grid here would be
+   * the AC-4 defect shape — two copies of one geometry, one of them silently wrong.
+   * ⚠ A DRAG IS NOT A CLICK, and this runs BEFORE the handler's own test says so. `_handleClick`
+   * rejects a pointer that moved more than 5 texels (`:4494-4496`) and `_handleMouseUp` never resets
+   * `_dragStartX/Y`, so the same test is available here and answers the same way. Without it a
+   * pan across the map would light a cell it is not going to drill.
+   */
+  function notePick(x, y) {
+    S.pick = null;
+    if (S.level !== 1 && S.level !== 2) return;
+    const dx = x - nav._dragStartX, dy = y - nav._dragStartY;
+    if (Number.isFinite(dx) && Number.isFinite(dy) && dx * dx + dy * dy > 25) return;
+    const p = usableProj(S);
+    if (!p || !insideProj(p, x, y)) return;
+    const c = cellAt(p, x, y);
+    if (!c) return;
+    S.pick = { level: S.level, i: c.i, j: c.j, tMs: simClockMs() };
   }
 
   /** Paint one frame in the active mode. Returns false if the mode is unknown — caller draws legacy. */
@@ -154,6 +227,7 @@ export function makeViewModeDriver(nav) {
     S.design = design;
     lastW = w; lastH = h;
     refresh(nav, { width: w, height: h, lines: h });
+    agePick();   // ⭐ AFTER refresh — it tests `S.level`, which refresh has just made current.
     if (!D.ready) return false;
     violations.length = 0;
     designs.resetViolations();
@@ -630,10 +704,14 @@ export function makeViewModeDriver(nav) {
       if ((S.ladderScroll || 0) > 0 && p.x <= caps.x0 + CAP_GRAB) { scrollLadder(-1); return null; }
       if ((S.ladderScroll || 0) < S.ladderMax && p.x >= caps.x1 - CAP_GRAB) { scrollLadder(1); return null; }
     }
+    // ⭐ THE CLICK-HIGHLIGHT IS RECORDED AT BOTH FALL-THROUGHS AND NOWHERE ELSE — see `notePick`.
+    // Every `return null` above ate the click (the drawn search, a ladder cap), and a click that was
+    // eaten drills nothing, so highlighting it would be the glass making a promise nothing keeps.
+    // The two returns below are the only paths on which `_handleClick` goes on to pick a tile.
     const inStrip = bars ? (p.y >= 0 && p.y < g2.BAR) : (p.y >= g2.tabY && p.y < g2.tabY + g2.LEAD);
-    if (!inStrip) return p;
+    if (!inStrip) { notePick(p.x, p.y); return p; }
     const i = tabIndexAt(g2, p.x, bars);
-    if (i < 0) return p;
+    if (i < 0) { notePick(p.x, p.y); return p; }
     nav._modeTabIdx = i;
     // The handler only asks `p.y >= h - navTabHeight(h)`, so the bottom row is inside the strip at
     // every buffer without this file needing to know what navTabHeight returns.

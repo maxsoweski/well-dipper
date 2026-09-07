@@ -26,10 +26,12 @@
  * overlap that real data does not reliably contain, a CSS box the harness does not have, and a
  * system whose body list has the shape that makes `pIdx` differ from a slot.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { makeHeadlessNav, clickAt } from './helpers/headlessNav.mjs';
 import { makeDesigns } from '../navViewModes/designs.js';
-import { SORT_KEYS } from '../navViewModes/state.js';
+import { SORT_KEYS, makeRng, makeViewState, wrapTau,
+         PRISM_DZ, PRISM_DY, SYSTEM_TILT } from '../navViewModes/state.js';
+import { generatePlanetName, generateMoonName, generateSystemName } from '../../generation/NameGenerator.js';
 import { projRect, worldAt } from '../navViewModes/picking.js';
 
 /** `ZOOM_STOPS[0]`, read off the design code rather than retyped — a pinned copy cannot go stale. */
@@ -511,16 +513,114 @@ describe('the mode is fed the camera and the frame the game already runs', () =>
       .not.toBe(drv.S.prismHits.map((h) => `${h.ref.seed}@${h.x.toFixed(3)},${h.y.toFixed(3)}`).join('|'));
   });
 
-  it('⛔ ROTATION IS STILL NOT AN INPUT, deliberately', async () => {
-    // Neither prism hint advertises it, and swapping the designs' fixed shallow tilt for the legacy
-    // camera's full 3D rotation would change the picture Max ruled on.
+  // ⛔⛔ THIS CASE USED TO ASSERT THE OPPOSITE — "ROTATION IS STILL NOT AN INPUT, deliberately",
+  // pinning `S.prismHits` byte-identical across a rotation. That was true and is now the defect:
+  // measured live on 2026-09-08, `_localRotY += 1.1` with `_localRotX = 0.15` left every published
+  // mark unmoved while a 0.0004 nudge to `_localCenter.z` moved all of them, so the pilot has been
+  // dragging a camera the designs cannot see, under a hint that says DRAG TO ROTATE. The pixel half
+  // is the LAB's (`projectPrism` / `d2System` read these fields); what the DRIVER owes is the two
+  // pairs, sourced separately and wrapped, and that is what is pinned here.
+  it('⭐⭐ THE TWO ROTATION PAIRS ARE PUBLISHED, AND THEY ARE INDEPENDENT', async () => {
+    // ⛔ TWO PAIRS, NOT ONE. The game clamps `_localRotX` to [0, π/2] (:4354) and `_systemRotX` to
+    // [0.1, π/2] (:4360) and drags them at different levels; folding them into one field would make
+    // a prism drag turn the orrery, which is a defect no pixel test would attribute correctly.
+    const { nav, drv } = await loadedNav();
+    nav._levelIndex = 3;
+    nav._localRotX = 0.42; nav._localRotY = 1.11;
+    nav._systemRotX = 1.23; nav._systemRotY = 2.34;
+    nav.render();
+    expect(drv.S.cam.rotX, 'the prism elevation is not published').toBe(0.42);
+    expect(drv.S.cam.rotY, 'the prism azimuth is not published').toBeCloseTo(1.11, 12);
+    expect(drv.S.sysCam.rotX, 'the orrery elevation is not published').toBe(1.23);
+    expect(drv.S.sysCam.rotY, 'the orrery azimuth is not published').toBeCloseTo(2.34, 12);
+
+    // ⭐ AND MOVING ONE PAIR DOES NOT MOVE THE OTHER — the half a folded field would break.
+    nav._localRotX = 1.0; nav._localRotY = 0.25;
+    nav.render();
+    expect(drv.S.sysCam.rotX, 'a PRISM drag moved the ORRERY elevation').toBe(1.23);
+    expect(drv.S.sysCam.rotY, 'a PRISM drag turned the ORRERY').toBeCloseTo(2.34, 12);
+    nav._systemRotX = 0.5; nav._systemRotY = 0.75;
+    nav.render();
+    expect(drv.S.cam.rotX, 'an ORRERY drag moved the PRISM elevation').toBe(1.0);
+    expect(drv.S.cam.rotY, 'an ORRERY drag turned the PRISM').toBeCloseTo(0.25, 12);
+  });
+
+  it('⭐ the defaults are the DESIGNS\' OWN tilts, derived from the gains — not zero', async () => {
+    // ⛔ DERIVED FROM `0.42` / `0.55`, NEVER THE OTHER WAY ROUND. `projectPrism` scales dz by 0.42
+    // and dy by 0.55 and `hypot(0.42, 0.55) ≠ 1`, so today's picture is an elevation-only rotation
+    // times an anisotropic scale — and the factorisation does NOT round-trip bit-identically
+    // (`K*sin(rotX₀)` returns 0.42000000000000004). The gains are the constants; a default written
+    // as a decimal angle would be the same gamble in a form nobody could see.
+    const { S } = makeViewState();
+    expect(PRISM_DZ).toBe(0.42);
+    expect(PRISM_DY).toBe(0.55);
+    expect(S.cam.rotX).toBe(Math.atan2(0.42, 0.55));
+    expect(S.cam.rotY).toBe(0);
+    // ⭐ d2System's TILT is a TRUE sine, and this round trip IS exact.
+    expect(Math.sin(Math.asin(SYSTEM_TILT))).toBe(0.42);
+    expect(S.sysCam.rotX).toBe(Math.asin(0.42));
+    expect(S.sysCam.rotY).toBe(0);
+  });
+
+  it('⛔⛔ `S.cam.rotY` STAYS IN [0, 2π) ACROSS MANY REAL DRAGS — the raw field does not', async () => {
+    // ⚠ THE INPUT IS THE DRAG, NOT AN ASSIGNMENT. `_handleMouseMove`'s level-3 branch (:4353) writes
+    // `_localRotY = _dragStartRotY + dx * 0.008` with NO clamp and NO wrap, so a pilot who keeps
+    // dragging the same way walks the field off to arbitrary magnitude and takes mantissa bits off
+    // every sin/cos downstream. A test that set `_localRotY = 100` directly would pass over a wrap
+    // that only ever sees assignments; these are `mousedown → mousemove → mouseup` triples.
     const { nav, drv } = await loadedNav();
     nav._levelIndex = 3;
     nav.render();
-    const before = drv.S.prismHits.map((h) => `${h.x},${h.y}`).join('|');
-    nav._localRotY += 1.2; nav._localRotX = 1.4;
+    const TAU = Math.PI * 2;
+    const seen = [];
+    for (let k = 0; k < 24; k++) {
+      nav._handleMouseDown({ clientX: 10, clientY: 120 });
+      nav._handleMouseMove({ clientX: 420, clientY: 120 });   // +3.28 rad of azimuth per drag
+      nav._handleMouseUp();
+      nav.render();
+      seen.push(drv.S.cam.rotY);
+      expect(drv.S.cam.rotY, `drag ${k}: azimuth left [0, 2π)`).toBeGreaterThanOrEqual(0);
+      expect(drv.S.cam.rotY, `drag ${k}: azimuth left [0, 2π)`).toBeLessThan(TAU);
+    }
+    // ⛔ LIVENESS CONTROL — without this the case is vacuous, because "it stayed in range" is also
+    // what a field that never left the range says. The RAW field must have gone well past 2π, or
+    // there was nothing to wrap and the wrap is untested.
+    expect(Math.abs(nav._localRotY), 'the drags did not push the raw field past 2π — nothing to wrap')
+      .toBeGreaterThan(TAU * 3);
+    // and it is a real rotation, not a constant: the wrapped value has to actually vary
+    expect(new Set(seen.map((v) => v.toFixed(6))).size, 'the published azimuth never changed')
+      .toBeGreaterThan(4);
+  }, 30000);
+
+  it('⛔ AND SO DOES `S.sysCam.rotY` — same unclamped write, on the OTHER pair', async () => {
+    // ⚠ DESIGN 2, NOT DESIGN 1, AND THAT IS THE INTERFACE'S §4 SPLIT RATHER THAN A TEST CONVENIENCE:
+    // at SYSTEM design 1 draws a LADDER, so the HOST diverts the drag to `S.ladderScroll` and returns
+    // before `_systemRotY` (`NavComputer:4355`). Design 2 draws the orrery, so it keeps the rotation.
+    // A first pass at this case dragged in `rail` and read a flat 0 — the wrong mode, not dead code.
+    const { nav, drv } = await loadedNav({ mode: 'bars' });
+    const TAU = Math.PI * 2;
+    nav._levelIndex = 4;
+    for (let k = 0; k < 12; k++) {
+      nav._handleMouseDown({ clientX: 10, clientY: 120 });
+      nav._handleMouseMove({ clientX: 420, clientY: 120 });
+      nav._handleMouseUp();
+    }
     nav.render();
-    expect(drv.S.prismHits.map((h) => `${h.x},${h.y}`).join('|')).toBe(before);
+    expect(Math.abs(nav._systemRotY), 'liveness: the raw orrery azimuth never left range').toBeGreaterThan(TAU);
+    expect(drv.S.sysCam.rotY).toBeGreaterThanOrEqual(0);
+    expect(drv.S.sysCam.rotY, 'the orrery azimuth left [0, 2π)').toBeLessThan(TAU);
+    expect(Math.sin(drv.S.sysCam.rotY), 'and the wrap changed the picture')
+      .toBeCloseTo(Math.sin(nav._systemRotY), 9);
+  }, 30000);
+
+  it('⛔ THE RAW `_localRotY` IS LEFT ALONE — the HOST owns it and legacy reads it', async () => {
+    // `_renderLocal` (:1892) and the supercruise heading (:3605) read the raw field, so wrapping it
+    // in place would move a picture nobody asked to move. The wrap belongs to the COPY.
+    const { nav } = await loadedNav();
+    nav._levelIndex = 3;
+    nav._localRotY = 40.5;
+    nav.render();
+    expect(nav._localRotY, 'the driver wrote back onto the instrument\'s own field').toBe(40.5);
   });
 
   it('S.view follows the drill stack, so a drill moves the picture', async () => {
@@ -999,9 +1099,20 @@ describe('what none of this may break', () => {
     // the glass keeps showing the last good frame and looks alive.
     const { drv } = await loadedNav();
     for (const k of ['mapProj', 'prismHits', 'bodyHits', 'railTiles', 'listGeom', 'tabRects',
-                     'chipRect', 'cam', 'view', 'sortIdx', 'sortLabel', 'listOffset', 'search']) {
+                     'chipRect', 'cam', 'view', 'sysCam', 'pick', 'sortIdx', 'sortLabel',
+                     'listOffset', 'search']) {
       expect(drv.S, `S.${k} has no default`).toHaveProperty(k);
       expect(drv.S[k], `S.${k} is undefined`).not.toBe(undefined);
+    }
+    // ⚠ `sysCam` AND `pick` ARE THE 2026-09-08 ADDITIONS AND THEY CARRY THE SAME RISK AS `search`
+    // did: a design reads them UNGUARDED at its draw site, so an absent one is not a blank mark, it
+    // is a painter throw — caught ONCE by PanelHost, after which the glass shows the last good frame
+    // forever and looks alive. `pick` is legitimately `null`; the point is that it EXISTS.
+    for (const k of ['rotX', 'rotY']) {
+      expect(drv.S.cam, `S.cam.${k} has no default`).toHaveProperty(k);
+      expect(drv.S.sysCam, `S.sysCam.${k} has no default`).toHaveProperty(k);
+      expect(Number.isFinite(drv.S.cam[k]), `S.cam.${k} is not a number`).toBe(true);
+      expect(Number.isFinite(drv.S.sysCam[k]), `S.sysCam.${k} is not a number`).toBe(true);
     }
     // ⚠ The shape grew when AC-11 landed the DRAWN field: the highlight and the resolved rows are
     // read by the paint, so they live on `S` beside the query. Asserted as a whole object on purpose
@@ -1025,5 +1136,359 @@ describe('what none of this may break', () => {
     nav._levelIndex = 3; drv.S.level = 3;
     nav._handleMouseMove({ clientX: mark.x, clientY: mark.y });
     expect(nav._hoveredLocalStar, 'the pilot clicked a star that is not on the glass').toBe(null);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// 8.  ⛔⛔ AC-10 — EVERY BODY NAME ON THE GLASS WAS A SWALLOWED `TypeError`.
+//
+// Live at SYSTEM on Sol, the published `S.bodyHits` read `Sol b … Sol k, Sol undefined,
+// Sol undefined, Sol undefined`. `state.js`'s `makeRng` returned `{ next, child }` while
+// `NameGenerator` calls `float`, `int` and `pick`, so `buildBodies`' catch fired on EVERY body of
+// EVERY system and every name was the fallback `'bcdefghijk'[i]` — an alphabet with eleven letters
+// against Sol's thirteen planets. And the comment on the function asserted it was the same shape as
+// `NavComputer._makeRng`, which is how it survived a read.
+//
+// ⭐ THE FIRST CASE IS A PURE UNIT TEST ON PURPOSE. The fault is in a function's SHAPE; the cheapest
+// sample that can fail is the shape itself, and routing it through a render would only add ways for
+// it to pass for the wrong reason.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('the adapter\'s rng is the shape the name generator actually calls', () => {
+  it('⛔ exposes float / int / pick / bool / chance / child — the instrument\'s six', () => {
+    const rng = makeRng('seed');
+    for (const k of ['float', 'int', 'pick', 'bool', 'chance', 'child']) {
+      expect(typeof rng[k], `rng.${k} is missing — this is exactly the AC-10 fault`).toBe('function');
+    }
+    // and each one behaves, because "it exists" was never the question — `next` existed too
+    expect(rng.float()).toBeGreaterThanOrEqual(0);
+    expect(rng.float()).toBeLessThan(1);
+    const i = makeRng('s').int(3, 7);
+    expect(Number.isInteger(i) && i >= 3 && i <= 7, `int(3,7) returned ${i}`).toBe(true);
+    expect(makeRng('s').int(4)).toBeLessThan(4);
+    expect(['a', 'b', 'c']).toContain(makeRng('s').pick(['a', 'b', 'c']));
+    expect(typeof makeRng('s').bool()).toBe('boolean');
+    expect(typeof makeRng('s').chance(0.5)).toBe('boolean');
+    expect(typeof makeRng('s').child('x').float()).toBe('number');
+    // ⭐ AND IT IS DETERMINISTIC OFF THE SEED, which is what makes a name stable across frames.
+    expect(makeRng('abc').float()).toBe(makeRng('abc').float());
+    expect(makeRng('abc').float()).not.toBe(makeRng('xyz').float());
+  });
+
+  it('⛔ `generatePlanetName` and `generateMoonName` DO NOT THROW on it — they threw on every call', () => {
+    // The old shape failed here with `TypeError: rng.float is not a function`, 39 times out of 39
+    // on Sol. `generateSystemName` never did, because it ignores its rng entirely — which is why
+    // only the BODY names were wrong and the fault looked like a naming quirk.
+    const rng = makeRng(12345 + ':names');
+    for (let i = 0; i < 13; i++) {
+      const p = rng.child('p' + i);
+      let name;
+      expect(() => { name = generatePlanetName(p, 'Sol', i, 13); }).not.toThrow();
+      expect(typeof name, `planet ${i} produced no name`).toBe('string');
+      expect(name.length, `planet ${i} produced an empty name`).toBeGreaterThan(0);
+      expect(name, `planet ${i} is the 'bcdefghijk' fallback running off its end`).not.toMatch(/undefined/);
+      for (let j = 0; j < 3; j++) {
+        let m;
+        expect(() => { m = generateMoonName(rng.child(`m${i}.${j}`), name, j, 3); }).not.toThrow();
+        expect(typeof m).toBe('string');
+        expect(m.length).toBeGreaterThan(0);
+      }
+    }
+    expect(() => generateSystemName(makeRng(1), { x: 8, y: 0, z: 0 })).not.toThrow();
+  });
+
+  it('⭐ a HEALTHY build is silent — otherwise the signal below is worth nothing', async () => {
+    const { drv } = await trappySystem();
+    expect(drv.D.bodies.length, 'the fixture built no bodies at all').toBeGreaterThan(3);
+    expect(drv.D.fail.filter((f) => /buildBodies/.test(f))).toEqual([]);
+    // and the names really are the generator's, not the eleven-letter fallback
+    for (const b of drv.D.bodies) expect(b.name, `${b.kind} name`).not.toMatch(/undefined/);
+  }, 30000);
+
+  it('⛔ AND A FAILURE IS LOUD NOW — a throwing generator lands on `D.fail` and on the console', async () => {
+    // The defect was not the wrong rng; it was that the wrong rng cost NOTHING to have. A catch that
+    // swallows a TypeError on every call and returns a plausible string is a disguise, so the
+    // fallback now counts itself onto the channel `designs.js`'s own two catches already use.
+    // ⚠ THE SABOTAGE IS THE REAL FAULT, REPLAYED: a name generator that throws a TypeError, driven
+    // through the real `buildBodies`. Reaching it means substituting the module, because every other
+    // way in (a seed that throws on `toString`, a name object that throws on concat) fires OUTSIDE
+    // the two catches under test and would prove nothing about them.
+    vi.resetModules();
+    vi.doMock('../../generation/NameGenerator.js', () => ({
+      generateSystemName: () => 'STUB',
+      generatePlanetName: () => { throw new TypeError('rng.float is not a function'); },
+      generateMoonName: () => { throw new TypeError('rng.float is not a function'); },
+    }));
+    try {
+      const { makeViewState: mk } = await import('../navViewModes/state.js');
+      const { S, D, refresh } = mk();
+      // a nav stub, because the fault is entirely inside the adapter and a real instrument would
+      // only add ways for the case to pass for the wrong reason
+      const stub = {
+        _levelIndex: 4, _localCenter: { x: 8, y: 0, z: 0 }, _localRadius: 0.0015,
+        _viewCenter: { x: 8, z: 0 }, _viewSize: 44, _playerX: 8, _playerY: 0, _playerZ: 0,
+        _localStars: [], _localRotX: 0.5, _localRotY: 0.3, _systemRotX: 0.5, _systemRotY: 0,
+        _systemStar: { seed: 77, name: 'Loud', wx: 8, wy: 0, wz: 0 },
+        _systemData: { star: { type: 'G' }, zones: {}, asteroidBelts: [],
+          planets: [{ orbitRadiusAU: 1, orbitAngle: 1,
+                      moons: [{ type: 'rock', radiusEarth: 0.2, T_eq: 250 }],
+                      planetData: { radiusEarth: 1, T_eq: 280, habitability: { score: 0.5 }, rings: false } }] },
+      };
+      const err = []; const realErr = console.error; console.error = (m) => err.push(String(m));
+      try { refresh(stub, { width: 427, height: 240, lines: 240 }); } finally { console.error = realErr; }
+
+      expect(D.bodies.length, 'the fixture built nothing to fail on').toBe(2);
+      const lines = D.fail.filter((f) => /buildBodies/.test(f));
+      expect(lines.length, 'a name generator that throws produced no record at all').toBe(1);
+      expect(lines[0], 'the COUNT is what tells "one odd body" from "every body on the glass"')
+        .toMatch(/2\/2 body names fell back/);
+      expect(lines[0], 'a TypeError must be nameable as a programming error, not a missing name')
+        .toMatch(/TypeError/);
+      expect(err.length, 'nothing was said out loud — this is exactly how AC-10 survived').toBe(1);
+      // and it is ONE line per system, not one per body: a fault that shouts 39 times is noise
+      expect(S.level).toBe(4);
+    } finally {
+      vi.doUnmock('../../generation/NameGenerator.js');
+      vi.resetModules();
+    }
+  }, 60000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// 9.  ⛔⛔ THE ORBITAL ANGLE — `d2System` placed bodies at `i * 1.7 + 0.6`, the DRAW-LOOP INDEX.
+//     With `[` / `]` re-sorting `D.bodies`, pressing the sort key at SYSTEM teleported every planet
+//     around its ring. The angle was never missing — `StarSystemGenerator:550` draws it, `:609` sets
+//     it, and the LEGACY orrery has always read it (`NavComputer:2756`). `buildBodies` dropped it.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('every planet row carries its orbital angle', () => {
+  it('⭐ `ang` is the generator\'s own `orbitAngle`, the number the legacy orrery already draws', async () => {
+    const { nav, drv } = await loadedNav();
+    nav._systemStar = { wx: 8, wy: 0, wz: 0, seed: 909, spectral: 'G', name: 'Angled' };
+    nav._systemData = {
+      star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 },
+      asteroidBelts: [{ centerRadiusAU: 3, widthAU: 0.4 }],
+      planets: [
+        { orbitRadiusAU: 1, orbitAngle: 0.75, moons: [{ type: 'rock', radiusEarth: 0.2, T_eq: 250, startAngle: 5.5 }],
+          planetData: { radiusEarth: 1, T_eq: 280, habitability: { score: 0.8 }, rings: false } },
+        { orbitRadiusAU: 8, orbitAngle: 4.25, moons: [],
+          planetData: { radiusEarth: 3, T_eq: 120, habitability: { score: 0 }, rings: false } },
+        { orbitRadiusAU: 30, moons: [],   // ⚠ NO ANGLE AT ALL — the row must still be drawable
+          planetData: { radiusEarth: 9, T_eq: 60, habitability: { score: 0 }, rings: true } },
+      ],
+    };
+    nav._levelIndex = 4;
+    nav.render();
+    const at = (au) => drv.D.bodies.find((b) => b.kind === 'planet' && b.au === au);
+    expect(at(1).ang, 'the planet row dropped its orbital angle').toBe(0.75);
+    expect(at(8).ang).toBe(4.25);
+    // ⛔ A MISSING ANGLE IS 0, NEVER NaN. `Number(undefined)` is NaN and `cos(NaN)` puts a body
+    // nowhere at all — a blank ring rather than a body at a default heading.
+    expect(at(30).ang).toBe(0);
+    expect(Number.isFinite(at(30).ang)).toBe(true);
+    // ⛔ AND IT IS NOT THE DRAW-LOOP INDEX, which is what it was. `i*1.7+0.6` for the three planets
+    // would be 0.6 / 2.3 / 4.0, and the middle one is the tell — the fixture picks angles no index
+    // can produce so a regression to the index cannot pass by coincidence.
+    expect(drv.D.bodies.filter((b) => b.kind === 'planet').map((b) => b.ang))
+      .not.toEqual([0.6, 2.3, 4.0]);
+
+    // ⭐ A MOON TAKES ITS PARENT'S ANGLE, NOT ITS OWN `startAngle` (5.5 here). The two are in
+    // different frames: `startAngle` is the phase around the PLANET, `ang` is the phase around the
+    // STAR, and this row's `au` is already the parent's. Using the moon's own would fling it around
+    // the star's ring at a radius it never occupies.
+    const moon = drv.D.bodies.find((b) => b.kind === 'moon');
+    expect(moon.ang, 'the moon was placed on its own phase, in the wrong frame').toBe(0.75);
+    expect(moon.au, 'and it shares its parent\'s radius, which is what makes that correct').toBe(1);
+
+    // ⚠ A BELT KEEPS NO ANGLE — it is a full ring, so it has no phase to be at, and a `0` would be
+    // a real angle that happens to mean "nothing".
+    const belt = drv.D.bodies.find((b) => b.kind === 'belt');
+    expect(belt.ang).toBe(undefined);
+  }, 30000);
+
+  it('⛔⛔ SORTING `D.bodies` MOVES NO BODY\'S ANGLE — the sort-key teleport', async () => {
+    // ⚠ THE INPUT IS THE KEYPRESS. `[` and `]` are bound through `_onKeyDown` (:349) and the whole
+    // defect is that the SORT is what moved the planets, so a test that re-sorted the array itself
+    // would be testing the comparator rather than the thing that broke.
+    const { nav, drv } = await loadedNav();
+    nav._systemStar = { wx: 8, wy: 0, wz: 0, seed: 4242, spectral: 'G', name: 'Ringed' };
+    nav._systemData = {
+      star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
+      planets: [1.2, 0.4, 9.0, 2.7, 40].map((au, i) => ({
+        orbitRadiusAU: au, orbitAngle: 0.31 + i * 1.13, moons: [],
+        planetData: { radiusEarth: 1 + i, T_eq: 300 - i * 40, habitability: { score: 0.1 * i }, rings: false },
+      })),
+    };
+    nav._levelIndex = 4;
+    nav.render();
+    // the truth: which angle belongs to which planet, by the identity that survives a sort
+    const truth = new Map(drv.D.bodies.filter((b) => b.kind === 'planet').map((b) => [b.pIdx, b.ang]));
+    expect(truth.size).toBe(5);
+    expect([...truth.values()].every(Number.isFinite)).toBe(true);
+
+    const orders = [];
+    for (let k = 0; k < 6; k++) {                       // walk the whole key list and back round
+      press(nav, 'BracketRight');
+      nav.render();
+      const planets = drv.D.bodies.filter((b) => b.kind === 'planet');
+      orders.push(planets.map((b) => b.pIdx).join(','));
+      for (const b of planets) {
+        expect(b.ang, `sort ${drv.S.sortLabel}: planet ${b.pIdx}'s angle moved with the sort`)
+          .toBe(truth.get(b.pIdx));
+      }
+    }
+    // ⛔ LIVENESS CONTROL: if the key never re-ordered anything, "the angles held" says nothing.
+    expect(new Set(orders).size, 'the sort key never changed the draw order — the case is vacuous')
+      .toBeGreaterThan(1);
+  }, 30000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// 10. ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5). Max: "clicking on a cell from the grid should highlight
+//     it, then zoom into it" — a SEQUENCE, so the frame has to be on the glass through the zoom.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('a clicked cell is highlighted, and stays highlighted into the zoom', () => {
+  for (const [mode, level] of [['rail', 1], ['bars', 1], ['rail', 2]]) {
+    it(`⭐ ${mode} L${level}: the click publishes the cell, and it survives the frames after it`, async () => {
+      const { nav, drv } = await loadedNav({ mode });
+      nav._levelIndex = level;
+      nav.render();
+      expect(drv.S.pick, 'nothing has been clicked yet').toBe(null);
+      const p = drv.S.mapProj, r = projRect(p);
+      const i = 3, j = 5;
+      const x = r.x + (i + 0.5) * p.cell, y = r.y + (j + 0.5) * p.cell;
+      nav._handleMouseMove({ clientX: x, clientY: y });
+      clickAt(nav, x, y);
+
+      // ⛔ THE COORDINATES ARE THE DESIGN'S OWN `i`/`j`, NOT the game's col/row. `row = n-1-j` is the
+      // Z-flip, and handing the flipped pair to the lab would frame the MIRRORED cell — which looks
+      // like a plausible highlight, right up until it is not the one that zooms.
+      expect(drv.S.pick, `${mode} L${level}: the click published no highlight`).toBeTruthy();
+      expect(drv.S.pick.i).toBe(i);
+      expect(drv.S.pick.j).toBe(j);
+      expect(drv.S.pick.j, 'the highlight is carrying the game\'s flipped row').not.toBe(p.n - 1 - j);
+      expect(drv.S.pick.level).toBe(level);
+      expect(Number.isFinite(drv.S.pick.tMs)).toBe(true);
+
+      // ⛔⛔ AND IT SURVIVES THE FRAMES. Written-and-cleared in one tick is what Max already has.
+      nav.render();
+      expect(drv.S.pick, `${mode} L${level}: ONE render() ate the highlight`).toBeTruthy();
+      expect([drv.S.pick.i, drv.S.pick.j]).toEqual([i, j]);
+      nav.render(); nav.render(); nav.render();
+      expect(drv.S.pick, 'four frames of the zoom ate the highlight').toBeTruthy();
+      // ⭐ and the drill it is highlighting really is running, so this is the ZOOM's frames
+      expect(nav._anim?.toLevel, 'no drill was started, so there is no zoom to stay visible for')
+        .toBe(level + 1);
+    }, 30000);
+  }
+
+  it('⛔ IT GOES OUT WHEN THE DRILL LANDS, which is the level change and not a timer', async () => {
+    // `_startDrillAnim` does NOT move `_levelIndex`; `_updateAnim` assigns `toLevel` only once the
+    // 400-500 ms have elapsed (:1278-1281). So the highlight's life IS the zoom's, taken off the
+    // instrument's own state rather than from a clock racing it.
+    // ⚠ THE DRILL IS LANDED BY REWINDING ITS OWN `startTime`, NOT BY SETTING THE GLOBAL SIM CLOCK.
+    //    `_setSimClockMs` would have to be reached through a STATIC import here, while the harness
+    //    imports NavComputer DYNAMICALLY — and one `vi.resetModules()` earlier in this file leaves
+    //    those two holding different copies of `SimClock.js`, so the test writes one clock and the
+    //    instrument reads the other. Measured: it silently never landed the drill. Moving the anim's
+    //    own field touches nothing outside this nav.
+    const { nav, drv } = await loadedNav();
+    nav._levelIndex = 1;
+    nav.render();
+    const p = drv.S.mapProj, r = projRect(p);
+    const x = r.x + 2.5 * p.cell, y = r.y + 1.5 * p.cell;
+    nav._handleMouseMove({ clientX: x, clientY: y });
+    clickAt(nav, x, y);
+    expect(drv.S.pick).toBeTruthy();
+    expect(nav._levelIndex, 'the level moved before the zoom, so there was nothing to watch').toBe(1);
+    nav.render();
+    expect(drv.S.pick, 'the highlight went out during the zoom').toBeTruthy();
+    expect(nav._anim, 'no drill to land').toBeTruthy();
+    nav._anim.startTime -= nav._anim.duration + 100;      // the drill lands
+    nav.render();
+    expect(nav._levelIndex, 'the fixture did not actually land the drill').toBe(2);
+    expect(drv.S.pick, 'the highlight outlived the drill it belonged to').toBe(null);
+  }, 30000);
+
+  it('⛔ A DRAG-PAN LIGHTS NOTHING — it is not a click and it drills nothing', async () => {
+    // `_handleClick` rejects a pointer that moved >5 texels (:4494-4496) AFTER `remapClick` has
+    // already run, so the highlight has to apply the same test itself or a pan lights a cell that
+    // is never going to zoom.
+    const { nav, drv } = await loadedNav();
+    nav._levelIndex = 1;
+    nav.render();
+    const p = drv.S.mapProj, r = projRect(p);
+    const x = r.x + 2.5 * p.cell, y = r.y + 1.5 * p.cell;
+    nav._handleMouseDown({ clientX: x - 40, clientY: y - 30 });
+    nav._handleMouseMove({ clientX: x, clientY: y });
+    nav._handleMouseUp();
+    nav._handleClick({ clientX: x, clientY: y, button: 0 });
+    expect(drv.S.pick, 'a pan lit a cell it was never going to drill').toBe(null);
+  }, 30000);
+
+  it('⛔ A CLICK THE MODE ATE LIGHTS NOTHING EITHER — tabs, caps, the drawn field', async () => {
+    const { nav, drv } = await loadedNav();
+    nav._levelIndex = 1;
+    nav.render();
+    // the design's own tab strip — a level change, not a cell
+    const g = drv.geo(nav._canvas.width, nav._canvas.height);
+    clickAt(nav, nav._canvas.width * 0.1, g.tabY + 2);
+    expect(drv.S.pick, 'a tab click lit a map cell').toBe(null);
+    // and the drawn search, which consumes every click while it is open
+    nav._levelIndex = 1; nav.render();
+    const p = drv.S.mapProj, r = projRect(p);
+    const x = r.x + 2.5 * p.cell, y = r.y + 1.5 * p.cell;
+    drv.searchOpen();
+    nav.render();
+    clickAt(nav, x, y);
+    expect(drv.S.pick, 'a click on the open search field lit the map underneath it').toBe(null);
+  }, 30000);
+
+  it('⛔ PRISM AND SYSTEM PUBLISH NO CELL — they draw marks, not a lattice', async () => {
+    const { nav, drv } = await loadedNav();
+    nav._levelIndex = 3;
+    nav.render();
+    const hit = isolatedHit(drv.S.prismHits);
+    nav._handleMouseMove({ clientX: hit.x, clientY: hit.y });
+    clickAt(nav, hit.x, hit.y);
+    expect(drv.S.pick, 'a star glyph published a grid cell').toBe(null);
+  }, 30000);
+
+  it('⛔ AND NEITHER DOES GALAXY, WHICH DRAWS A GRID — the cell is not the drill target there', async () => {
+    // ⚠ THIS ONE IS NOT AN OVERSIGHT AND THE TEST EXISTS TO SAY SO. Design 1 draws an 8x8 lattice at
+    // level 0, but the identity `_handleClick` drills is the containing SECTOR — one of 775 in an
+    // irregular density-adaptive quadtree — and it flies to `s.centerX/centerZ` at `s.size`, which
+    // need not coincide with the cell under the cursor. A frame on the cell would be the glass
+    // promising "this is where you are going" about somewhere else.
+    const { nav, drv } = await loadedNav();
+    nav._levelIndex = 0;
+    nav.render();
+    const p = drv.S.mapProj, r = projRect(p);
+    expect(p?.level, 'the fixture drew no level-0 map').toBe(0);
+    const x = r.x + r.w * 0.34, y = r.y + r.h * 0.55;
+    nav._handleMouseMove({ clientX: x, clientY: y });
+    expect(nav._hoveredTile?.sector, 'the fixture point must resolve to a sector').toBeTruthy();
+    clickAt(nav, x, y);
+    expect(drv.S.pick, 'GALAXY framed a cell it was not going to zoom into').toBe(null);
+    expect(nav._anim?.toLevel, 'and it still drilled — the exclusion is the highlight, not the click')
+      .toBe(1);
+  }, 30000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// 11. `wrapTau`, on its own terms — the one piece of arithmetic this workstream added.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('wrapTau', () => {
+  it('folds any real into [0, 2π) and leaves the picture alone doing it', () => {
+    const TAU = Math.PI * 2;
+    for (const v of [0, 0.3, TAU - 1e-9, TAU, TAU + 0.5, 40.5, -0.5, -TAU, -100.25, 1e6]) {
+      const w = wrapTau(v);
+      expect(w, `wrapTau(${v}) = ${w}`).toBeGreaterThanOrEqual(0);
+      expect(w, `wrapTau(${v}) = ${w}`).toBeLessThan(TAU);
+      // ⭐ THE WRAP IS INVISIBLE, and that is the whole licence for doing it: sin and cos are
+      // 2π-periodic, so every consumer downstream sees the same picture it saw before.
+      expect(Math.sin(w)).toBeCloseTo(Math.sin(v), 9);
+      expect(Math.cos(w)).toBeCloseTo(Math.cos(v), 9);
+    }
+    // a non-finite azimuth is 0, never NaN — NaN into a projection is a blank screen
+    for (const v of [NaN, Infinity, -Infinity, undefined, null]) expect(wrapTau(v)).toBe(0);
   });
 });

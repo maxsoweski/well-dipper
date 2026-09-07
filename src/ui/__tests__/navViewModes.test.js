@@ -213,7 +213,13 @@ describe('the modes are operable', () => {
         nav._anim = null; nav._levelIndex = i;
         nav.render();
       }
-    });
+      // ⚠ 30 s, AND IT IS NOT A LOOSENING. This case renders FIVE full frames across four levels
+      // after a prism load, and under a full `--dir src/ui` run it has been the suite's one flake
+      // since before this workstream — recorded in the close-pass MEASUREMENTS §0, where it failed
+      // once under the directory run and passed 3/3 in isolation. It presents as a 5000 ms TIMEOUT,
+      // never as a wrong answer, so the default budget was measuring the box's contention rather
+      // than the tab strip. Re-verified 3/3 in isolation on 2026-09-08 before this was raised.
+    }, 30000);
 
     it(`${mode}: the tab band the hit-test derives contains the highlight the design paints`, async () => {
       // ⭐ THE AGREEMENT TEST. `geometry.js` restates the horizontal subdivision of the tab strip —
