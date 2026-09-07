@@ -6,6 +6,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (latest+2) — ⛔⛔ **THE WHOLE FEATURE WAS INERT IN THE RUNNING GAME, AND EVERY TEST PASSED.** `258f6d9`. Max: *"I'm still seeing the old menus."* He was right.
+>
+> ⛔⛔ **THE `V` KEY WAS DEAD CODE, NOT BROKEN LOGIC — AND THE CAUSE IS THIS FILE'S OWN CONVENTION.** `NavComputer.js` keeps its line count fixed so its ~700 line-anchored citations stay valid, so new statements are **FOLDED onto existing lines**. The V clause had been folded in AFTER a `//` note about the ladder keys — and **a `//` comment mid-line comments out every statement after it on that line**. Present, parsed, unreachable. ⭐ **THE FOLDING CONVENTION AND `//` COMMENTS ARE INCOMPATIBLE. Every comment on a folded line must be `/* */`.**
+>
+> ⭐⭐ **AND ALL 28 TESTS PASSED, BECAUSE NOT ONE DROVE THE KEYBOARD** — every one set `nav.viewMode` directly or called a driver method, so the suite was structurally incapable of seeing it. Same shape as the vacuous-probe lesson: *ask what would make this green test fail; if no input in its sample can, it is pinning nothing.* Five cases now go through `_onKeyDown` itself.
+>
+> ⭐ **FOUND BY DRIVING THE REAL GAME WITH THE MCP BROWSER SERVER STILL DOWN.** Chrome exposes the DevTools Protocol on **:9223** and Node 24 has a native `WebSocket`, so a ~35-line dependency-free CDP driver did the walk (`/tmp/claude-1000/cdp/`). ⭐ **The chrome-devtools MCP server being unavailable is NOT the same as the browser being unreachable** — worth remembering the next time it drops.
+>
+> ✅ **VERIFIED LIVE** (ORRERY, 240p, after reload): `V` takes the overlay null → rail (**1560x860 → 427x240**) → bars. On Sol the ladder reads **"1-14 OF 15"** with the line ending in `...`; four presses of `.` give **"1-15 OF 15"** with body F on the glass. **Zero guard violations** — the `+3 OFF AXIS` pile-up is gone. Shots `VM-5-ladder-start`, `VM-6-ladder-scrolled`.
+>
+> ⚠ **THE SCROLL IS A SMALL MOVEMENT ON SOL, and that is honest:** 15 laddered bodies need 120 texels of separation against a 232-texel pane, so most of Sol already fits and only the outermost overflow. A denser system moves further; nothing is hidden either way. Suites: `tests/` 20 / same 8, `src/cockpit` 698, `src/ui` **339**.
+
 > ## ▶ 2026-09-07 (latest+1) — **MAX KEEPS BOTH DESIGNS, AND THE SYSTEM LADDER SCROLLS.** `560d9da`, lane A, **unpushed**. *"1. I like both versions you've made for the new 240p menus, let's keep both 2. Let's make it scrollable; rather than 'off axis' have the line end in a '...' that we can scroll toward horizontally, revealing the other bodies in that direction."* ⭐ **BOTH DESIGNS SHIP** — so the diegetic panel now has TWO sources to represent, not one.
 >
 > ⭐⭐ **THE EDIT WENT IN THE LAB AND WAS RE-EXTRACTED.** `scripts/extract-nav-designs.mjs` now generates `designs.js` from `nav-240p-lab.html`, and `--check` regenerates and diffs, so drift is a **failing command** rather than a discovery. Editing the game's copy directly would have forked the two on the very first ruling and made the lab a frozen artifact — that is the debt, not the safe option. ⛔ It matches on **markers, not line ranges**: ranges work exactly once, and after any lab edit they point at the wrong code while still producing plausible output.
