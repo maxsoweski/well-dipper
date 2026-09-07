@@ -6,6 +6,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (latest+1) — **MAX KEEPS BOTH DESIGNS, AND THE SYSTEM LADDER SCROLLS.** `560d9da`, lane A, **unpushed**. *"1. I like both versions you've made for the new 240p menus, let's keep both 2. Let's make it scrollable; rather than 'off axis' have the line end in a '...' that we can scroll toward horizontally, revealing the other bodies in that direction."* ⭐ **BOTH DESIGNS SHIP** — so the diegetic panel now has TWO sources to represent, not one.
+>
+> ⭐⭐ **THE EDIT WENT IN THE LAB AND WAS RE-EXTRACTED.** `scripts/extract-nav-designs.mjs` now generates `designs.js` from `nav-240p-lab.html`, and `--check` regenerates and diffs, so drift is a **failing command** rather than a discovery. Editing the game's copy directly would have forked the two on the very first ruling and made the lab a frozen artifact — that is the debt, not the safe option. ⛔ It matches on **markers, not line ranges**: ranges work exactly once, and after any lab edit they point at the wrong code while still producing plausible output.
+>
+> ⭐ **WHY THE LADDER IS A WINDOW AND NOT A SMALLER SCALE.** The obvious fix — shrink the AU scale until everything fits — cannot work, and the separation pass is the reason: its job is 8 texels between neighbours, and **Sol's 15 laddered bodies need 120 texels of separation alone** against a pane with ~230. Any scale that fits them puts them back on top of each other. So the pass runs UNBOUNDED and the pane pans over the axis it produces. The line ends in three KEY texels **only at an end that continues**; click a cap, or `,` / `.`. The overflow guard is gone because running past the end is no longer a failure.
+>
+> ⛔ **STOPS AND CAPS COME FROM THE PAINT** (`S.ladderStops` / `ladderMax` / `ladderCaps` / `ladderVisible`, written by `d1Ladder`). Recomputing the separation in the hit-test is the AC-4 defect shape and would scroll to a position with no body in it. A cap click returns `null` from `remapClick` so the handler stands down — otherwise it would scroll AND select the body underneath.
+>
+> ⭐ **A TEST WAS VACUOUS AND FAILED HONESTLY BEFORE IT COULD LIE.** It asserted the scroll "reveals" bodies by scraping the recording context for text — but tags go through `drawPixelText`, which emits **fillRects**, so `rec.text` is always empty and the assertion measured nothing whatever the ladder did. `ladderVisible` exists because of that. Its fixture is **BUILT, not found**: a scroll test against whichever four-planet system the seed loads never overflows and asserts nothing.
+>
+> ⚠ **A REAL ROBUSTNESS GAP FELL OUT OF WRITING THAT FIXTURE.** `displayClassOf` returns undefined for planet data it does not recognise, and both designs call `.toUpperCase()` on `cls`/`name` unguarded — `d1Rail` twice on one line. Not a blank field: `PanelHost` catches a painter throw ONCE, then the glass **freezes on the last good frame and looks alive**. The adapter now defaults name, class and every AU.
+>
+> ⛔ **NOT VERIFIED LIVE** — the chrome-devtools MCP server disconnected mid-session, so the ladder landed on headless evidence only. The earlier live walk still stands for everything else. ▶ **NEXT: Max walks the ladder** (ORRERY → `N` → `V` → SYSTEM tab → click the `...` or press `.`). Suites: `tests/` 20 / same 8 files, `src/cockpit` 698, `src/ui` **334**.
+
 > ## ▶ 2026-09-07 (latest) — **BOTH NAV DESIGNS ARE BUILT, OPERABLE, AND VERIFIED LIVE AT 240p. MAX'S EYE IS THE ONLY THING LEFT.** `a10adc7` + `3121c91`, lane A, **unpushed**. Max greenlit the contract and ruled the full-bleed question: *"1 greenlight 2 ok"*.
 >
 > ▶ **HOW TO SEE IT: ORRERY → `N` → `V`.** ⛔ **ORRERY, NOT HELM** — in HELM the `N` key opens the cockpit panel and there is no overlay (`main.js:5900`). `V` cycles CURRENT → RAIL (design 1) → BARS (design 2); `L` is design 2's list mode. The choice persists. Shots: `VM-0-current`, `VM-1-rail-prism`, `VM-2-bars-prism`, `VM-3-bars-galaxy`, `VM-4-rail-system` at the repo root.

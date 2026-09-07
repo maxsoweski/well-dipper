@@ -46,7 +46,7 @@
         "input": "Open the nav at 240p, select design 1, and walk all five levels (GALAXY, SECTOR, REGION, PRISM, SYSTEM).",
         "observable": "Every level draws the map pane beside a persistent ranked rail carrying names and distances; the status row, hint row, tab row and full-width commit row all draw; and the lab's assertFits guard, ported with the design, reports no region overflow at any level or any of the three buffers."
       },
-      "progress": "BUILT + LIVE 2026-09-07. Design 1 draws all five levels; live at PRISM it lists 27 stars with distances and spectral classes at once (SOL, PROXIMA CENTAURI, RIGIL KENTAURUS off the real catalog) against today's one-at-a-time hover. ⚠ ITS SYSTEM LADDER FAILS AS THE LAB PREDICTED: 3 of Sol's 15 laddered bodies run past the end of the axis and collide into a red '+3 OFF AXIS'. Drawn, not hidden. MAX'S CALL."
+      "progress": "BUILT + LIVE 2026-09-07. Design 1 draws all five levels; live at PRISM it lists 27 stars with distances and spectral classes at once (SOL, PROXIMA CENTAURI, RIGIL KENTAURUS off the real catalog) against today's one-at-a-time hover.\n\n⭐ THE SYSTEM LADDER NOW SCROLLS, on Max's ruling after seeing it fail live: \"Let's make it scrollable; rather than 'off axis' have the line end in a '...' that we can scroll toward horizontally, revealing the other bodies in that direction.\" The separation pass runs unbounded and the pane is a window onto the axis it produces; the line ends in three KEY texels only at an end that continues; click a cap or press , / . to walk it. Nothing piles up and the overflow guard no longer fires. ⛔ Edited in the LAB and re-extracted, so the two cannot fork. ⚠ HEADLESS ONLY — chrome-devtools disconnected before the ladder could be walked live."
     },
     {
       "id": "AC-5",
@@ -111,7 +111,7 @@
         "input": "Max opens the nav in HELM at 240p and cycles the three modes with the mode key, with the world visible behind it.",
         "observable": "Max's holistic judgement that the nav coheres with the world rather than floating over it, and his ruling on which mode is the one to carry into the diegetic panel. No agent renders this verdict."
       },
-      "progress": "OPEN — Max's eye. Screenshots captured at VM-0-current / VM-1-rail-prism / VM-2-bars-prism / VM-3-bars-galaxy / VM-4-rail-system."
+      "progress": "PARTLY CLOSED 2026-09-07. Max, on both designs: \"I like both versions you've made for the new 240p menus, let's keep both\" — so BOTH SHIP, and the diegetic panel has two sources to represent rather than one. ⚠ STILL OPEN: he has not seen the scrolling ladder, which is the change he asked for in the same message."
     }
   ],
   "architecturalConnections": {
