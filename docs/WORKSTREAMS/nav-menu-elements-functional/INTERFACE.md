@@ -21,16 +21,22 @@ wrong.
 ⛔ Every one of these is a **pure write to `S` placed after every draw call whose values it reads**.
 Not one changes a pixel. Max ruled on these pictures.
 
+⚠ **SUPERSEDED IN ONE PLACE — `S.mapProj` IS NOT ONE UNIFORM SHAPE.** This block proposed a single
+`x0/y0/w/h/spanX/spanZ` rectangle for every 2D map. It was wrong, and §1d below is why: the three
+maps are three genuinely different projections, and flattening them would have put a second,
+lossy copy of each one here. What shipped carries a `kind` discriminator and each site's own
+fields; `picking.js` branches on `kind` in exactly one place and everything above it is
+kind-agnostic. Left in place rather than rewritten, because the reasoning that follows it is what
+the shipped code answers to.
+
 ```js
-/** The 2D map's affine projection — levels 0,1,2. Written by d1TwoD and d2TwoD. `null` otherwise. */
+/** The 2D map's projection — levels 0,1,2. Written by d1TwoD and d2TwoD. `null` otherwise. */
 S.mapProj = {
-  design,        // 1 | 2 — which design published this frame
-  level,         // S.level at publication, so a stale read can be rejected
-  x0, y0, w, h,  // the DRAWN picture's rectangle in buffer texels (NOT the region — see the dead
-                 // columns note below); a click outside it is a miss, never a clamp
-  cx, cz,        // the world point at the centre of that rectangle
-  spanX, spanZ,  // the world extent the rectangle covers, in kpc
-  n,             // grid subdivision drawn (0 = none)
+  design, level,                          // stamps, so a stale read can be rejected
+  kind: 'square' | 'wide' | 'block',      // ⛔ see §1d — three maps, three projections
+  /* 'square' */ ox, oy, sq, n, cell, cx, cz, size,
+  /* 'wide'   */ ox, oy, kpc, cx, cz, clip,
+  /* 'block'  */ bx, by, blk, n, cell, cx, cz, size,
 };
 /* inverse:  wx = cx + ((x - x0)/w - 0.5)*spanX      wz = cz + ((y - y0)/h - 0.5)*spanZ
    grid:     i  = floor((x - x0) / (w/n))            j  = floor((y - y0) / (h/n))         */
@@ -224,7 +230,12 @@ drv.tabLevel(dir)      // ±1. Returns void. Synthesises the click through the D
 drv.commit()           // fires the same _onCommit the [WARP]/[BURN] button fires. No-op if unarmed.
 drv.cycleSort(dir)     // ±1 through the active level's sort keys.
 drv.page(dir)          // ±1 page of the ranked list, clamped at both ends.
-drv.searchOpen()       // opens the DRAWN search. Sets nav._searchFocused so WASD stops being eaten.
+drv.searchOpen()       // opens the DRAWN search.
+/* ⛔ CORRECTED: it must NOT set `nav._searchFocused`. `_onKeyDown` opens with
+   `if (this._searchFocused) return;` and every view-mode clause — the searchKey routing included —
+   is folded onto that same line AFTER it, so setting the flag makes the drawn field unreachable the
+   instant it opens, Escape included. WASD is kept out of `_heldKeys` by `searchKey` consuming the
+   pan letters instead, which is the same outcome by a route that works. */
 drv.searchActive()     // boolean.
 drv.searchKey(e)       // one keystroke into the drawn field. Returns true if it consumed the key.
 ```
