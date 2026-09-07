@@ -151,6 +151,26 @@
       "live": false
     },
     {
+      "id": "AC-16",
+      "statement": "\u2b50 MAX'S BAR ON AC-13, AND IT WAS NOT MET BY THE REAL ANGLE ALONE: *\"I want the nav screen to reflect the actual orientation of the planets in the game.\"* Planets MOVE. main.js:7875 copies orbitAngle into the scene entry as a NUMBER, and from then on the sim advances only the copy (:11358, `entry.orbitAngle += entry.orbitSpeed * celestialDt`). The nav is handed system._systemData \u2014 the raw generation data, and main.js:7950's own comment says so \u2014 so reading p.orbitAngle draws every planet WHERE IT STARTED, forever. \u26d4 AND buildBodies RUNS ONCE PER SYSTEM (generating ~39 names is not cheap), so reading the live value inside it is not enough on its own: the row must be re-read every frame. Both halves are required. Fixed by a `_live` back-reference folded onto main.js:7878 (line count still 15161) plus a per-frame angle refresh in state.js that leaves the cached names alone.",
+      "verifyVia": {
+        "input": "At SYSTEM in design 2, watch a fast inner planet for several seconds while the game runs.",
+        "observable": "Its mark travels around its ring, staying where the planet actually is. Pinned by a test that moves the live angle between two renders WITHOUT changing the system object, so the cache is exercised; both halves mutation-proved \u2014 disabling the per-frame refresh fails with 'the orrery froze', ignoring _live fails with 'read the frozen generation angle'."
+      },
+      "layer": "integration",
+      "live": true,
+      "progress": "\u2705 BUILT AND MUTATION-PROVED headlessly 2026-09-07. \u25b6 Still to confirm on the running game that a planet's mark visibly travels."
+    },
+    {
+      "id": "AC-17",
+      "statement": "FOUND IN PASSING AND IT IS THE WORST FAILURE MODE THIS SURFACE HAS: d1Rail dereferences D.playerSector.name unguarded, and state.js can legitimately hand a null playerSector \u2014 getSectorAt returns null for any point past R > GALAXY_RADIUS * 1.2 = 18, so a player out there freezes the nav. \u26d4 It does not throw visibly: PanelHost catches a painter throw ONCE and then stops uploading, so the glass keeps showing the last good frame and LOOKS ALIVE. A dead screen that looks fine is worse than a crash.",
+      "verifyVia": {
+        "input": "Render both designs at every level with D.playerSector null.",
+        "observable": "Every painter completes, the glass keeps updating, and no field a design reads is left without a default in state.js."
+      },
+      "layer": "unit"
+    },
+    {
       "id": "AC-12",
       "statement": "Max walks both nav menus again, screen by screen, and each one holds up close.",
       "verifyVia": {
