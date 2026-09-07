@@ -6,10 +6,10 @@
   "acceptanceCriteria": [
     {
       "id": "AC-1",
-      "statement": "\"on the galaxy screen there are many sectors in the grid that are not accessible, so there's wasted space\" \u2014 at GALAXY, every part of the pane that looks clickable is clickable, and the galaxy that exists is on the glass. Design 1 wastes it one way (an 8x8 grid over a 216-texel square whose corners reach R~31 kpc, where no sector exists \u2014 the furthest of the 775 sits at R=21.2 kpc) and design 2 wastes it the opposite way (projection kind 'wide' crops the disc to a +/-11.33 kpc band, so about half of it is off-glass). BLOCKED ON MAX: which answer, decided on a rendered A/B, not on prose.",
+      "statement": "\u2b50 MAX RULED 2026-09-07: *\"I like removing the negative space; the chunky cells of design1 today are good but there are too many cells that are not selectable, so the solution is simply to remove the negative/non-selectable space and redraw the cells from there.\"* So the cells DO move and DO resize \u2014 remove the dead footprint, then re-lay the grid over what is left \u2014 and the CHUNKY WEIGHT is kept, he asked for it by name. \u26d4 This supersedes my earlier 'nothing on the glass may move' framing, which was my risk-minimising default and not his goal. MEASURED LIVE against the real 775: design 1 draws 8x8 over a 216-texel square and 32 of the 64 cells \u2014 exactly half \u2014 have a centre resolving to NO sector; 47.2% of the square's texels resolve to nothing; the dead cells are a complete RING (whole top row, whole bottom row, both side columns, plus the next ring's corners). The defect is AFFORDANCE, not function \u2014 pickSector already returns null out there correctly. \u26a0 Design 2 is NOT this fix: it has no cell grid at GALAXY and fails the opposite way, cropping 20 of 775 sectors off the glass.",
       "verifyVia": {
-        "input": "At GALAXY in each design, click at a sample of points across the whole map pane, including its extreme corners and its vertical edges.",
-        "observable": "Every click inside the drawn map region resolves to a real sector, or lands on ground that is drawn as visibly outside the galaxy. No click inside a drawn grid cell returns null. In design 2 the disc's full vertical extent is reachable."
+        "input": "At GALAXY in design 1, click every drawn cell, including every edge and corner cell.",
+        "observable": "Every drawn cell resolves to a real sector \u2014 zero dead cells \u2014 and no sector that was reachable before has become unreachable. The cells keep the chunky weight of today's design."
       },
       "layer": "integration",
       "live": true
@@ -121,14 +121,14 @@
     },
     {
       "id": "AC-13",
-      "statement": "FOUND IN PASSING, and it is live today without any rotation: design 2's orrery places every body at `a = i * 1.7 + 0.6` (d2System, lab:1406) where `i` is the DRAW-LOOP INDEX, not an orbital angle \u2014 and state.js:401 re-sorts D.bodies on [ / ] (AU / NAME / TEMP). So pressing the sort key at SYSTEM teleports every planet around its ring. The real angle exists and is simply dropped: StarSystemGenerator.js:550/609 and SolarSystemData.js:723/846 put `orbitAngle` on the planet wrapper and the LEGACY orrery already reads it (NavComputer.js:2853); buildBodies (state.js:265) never copies it across. \u26a0 Fixing it MOVES EVERY PLANET in design 2's orrery \u2014 a change to a picture Max ruled on, so it goes to him as a rendered A/B.",
+      "statement": "\u2b50 MAX RULED 2026-09-07, shown the A/B: *\"I want the nav screen to reflect the actual orientation of the planets in the game, so if B is correct then that's what we use.\"* B STAYS. And his words set a HIGHER bar than the A/B asked about: not merely 'a real angle once', but the planets' ACTUAL ORIENTATION IN THE GAME. Background: d2System placed bodies at `a = i * 1.7 + 0.6` where `i` is the DRAW-LOOP INDEX, and state.js re-sorts D.bodies on [ / ], so the sort key teleported every planet around its ring. The angle exists upstream (StarSystemGenerator.js:550/609, SolarSystemData.js:723/846) and the LEGACY orrery already reads it (NavComputer.js:2853); buildBodies never copied it across. \u26a0 OPEN SUB-QUESTION HIS RULING CREATES: the game ADVANCES orbitAngle every tick (main.js:3145, `entry.orbitAngle += entry.orbitSpeed * celestialDt`), and there is a pin/thaw mechanism at :3216. The nav is handed the live `system._systemData` (main.js:5781), so the plumbing is right \u2014 but a 4-second live sample showed the nav's angles STATIC. Either the planet objects are a snapshot, or orbits are pinned in ORRERY. Must be settled by measurement: does the nav's mark sit where the planet actually is RIGHT NOW?",
       "verifyVia": {
-        "input": "At SYSTEM in design 2, note where each planet sits on its ring, then press [ and ] to cycle the sort key.",
-        "observable": "Every body stays on its own ring at its own angle across every sort. The angles match the legacy orrery's, because both read the same p.orbitAngle."
+        "input": "At SYSTEM in design 2, watch a fast inner planet over time, and separately press [ and ] to cycle the sort key.",
+        "observable": "The nav's mark sits where that planet actually is in the game at that moment, and keeps tracking it as it orbits. Every body stays on its own ring across every sort."
       },
       "layer": "integration",
       "live": true,
-      "progress": "\u2705 BUILT AND VERIFIED, \u25b6 AWAITING MAX'S RULING ON THE PICTURE. Bodies now read b.ang from the real p.orbitAngle. \u26a0 It changes a picture Max ruled on, and the A/B is in shots/ with an honest read: A (old) looks better, B (real) is correct, and B clusters Sol's inner planets so their labels overlap where A's are clean."
+      "progress": "\u2705 Real angles built and live; \u25b6 MAX RULED FOR B. \u26a0 NOT YET CLOSED: his 'actual orientation' bar needs the live-tracking question answered. Measured 2026-09-07: nav angles static over 4s and D.bodies faithfully mirrored them, so the adapter is honest \u2014 but whether its SOURCE tracks the rendered planet is unsettled. \u26a0 ALSO OPEN: B clusters Sol's inner planets so numerals II/III/IV/VI/VII overlap where A's are clean. placeLabel tries 7 vertical offsets against other labels only and cannot solve an angular cluster; unreadable numerals are a defect, not a polish item, so the placer needs a pass."
     },
     {
       "id": "AC-14",
