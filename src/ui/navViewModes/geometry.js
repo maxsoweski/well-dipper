@@ -20,6 +20,14 @@
  * against the paint itself: it finds the highlight rectangle the design draws under the ACTIVE tab
  * and asserts the derived band contains it. A drift in either copy fails that test.
  *
+ * ── ⚠ AND TWO OF THEM ARE NOW A FALLBACK, NOT THE SOURCE ───────────────────────────────────────
+ *
+ * `S.tabRects` and `S.chipRect` are published by the paint (INTERFACE §1), and `index.js` prefers
+ * them: `tabLevel` places its synthetic click on `S.tabRects[i]` and `render()` publishes
+ * `S.chipRect` into `_commitButtonRect`. `tabW` / `tabs[]` / `chipX` below are what those degrade
+ * to for the window in which the lab has not published them yet, and for `listRowAt`, which has no
+ * published counterpart. ⛔ Nothing here should GROW: every new rectangle belongs at its draw site.
+ *
  * ── ⛔ AND THE CLICK ITSELF IS NOT REIMPLEMENTED ────────────────────────────────────────────────
  *
  * `NavComputer._handleClick` drives off HOVER STATE, not coordinates: `_hoveredTile` at the 2D

@@ -169,6 +169,29 @@ const S = {
   legend: true,
   ladderScroll: 0,        // design 1's SYSTEM ladder pans horizontally (Max, 2026-09-07)
   buf: { width: 427, height: 240 },
+  // ── ⭐ THE CALLER'S HALF OF THE SEAM. Everything from here down arrives from OUTSIDE the
+  //    designs — in the game from src/ui/navViewModes/state.js, on this page from buildData() and
+  //    the key handler below. The extractor strips this whole literal, so it costs the game nothing
+  //    and it is the only written-down record of the shape every design expects to be handed.
+  cam: { x: 0, y: 0, z: 0, radius: 0.0015 },   // the prism camera: anchor + half-extent, in kpc.
+                                               // buildData() re-anchors it to the player and sets
+                                               // radius = ZOOM_STOPS[0], which IS 0.0015 — the game's
+                                               // own entry state, so the picture does not move.
+  view: { cx: 0, cz: 0, size: 44 },   // the 2D frame levelView() reads at levels 1-2
+  sortIdx: 0,      // DRIVER: index into the active level's sort-key list
+  listOffset: 0,   // DRIVER: first row of the ranked list that is drawn
+  sortLabel: '',   // DRIVER writes it, design 1's hint row draws it — Max never opens a console, so
+                   // the active sort key has to be legible ON THE GLASS or it does not exist
+  // ── AND THE PAINT'S HALF. Every field below is written BY a draw site, for a hit-test to read.
+  //    ⛔ Restating any of these outside the paint is the AC-4 defect: two copies of one geometry,
+  //    one of them silently wrong, and the wrong one is the one the pilot clicks.
+  mapProj: null,    // d1TwoD / d2TwoD — the 2D projection at levels 0-2, `null` otherwise
+  prismHits: null,  // d1Prism / d2Prism — every star mark at PRISM, in DRAW ORDER
+  bodyHits: null,   // d1Ladder / d2System — every body mark at SYSTEM
+  railTiles: null,  // d1Rail levels 1-2 — the tiles its rows name, already sliced
+  listGeom: null,   // d2List — the row grid, and only when a list actually painted
+  tabRects: null,   // drawDesign2 — the tab strip's own rectangles
+  chipRect: null,   // drawDesign2 — the commit chip's rectangle and whether it is armed
 };
 
 // ── INKS.  Solid fills only.  Batch 1 established that at 240p there are exactly two representable
@@ -308,6 +331,13 @@ function buildData() {
   } catch (e) { D.nav = null; D.fail.push('NavGalaxyRenderer unavailable, using CPU fallback: ' + e.message); }
   D.player = D.gm.getStartPosition();                        // main.js:287
   D.playerSector = D.sectors.getSectorAt(D.player);
+  // ⭐ THE PAGE'S DEFAULT CAMERA AND FRAME, AND BOTH ARE THE GAME'S ENTRY STATE EXACTLY. On entering
+  // PRISM the game sets `_localCenter` to the player and `_localRadius` to 0.0015, which IS
+  // ZOOM_STOPS[0]; `_setupViewStackForPlayer` builds the player's sector and a tileSize*16 block,
+  // which is what `labViewForLevel` returns. So the two pictures Max ruled on are reproduced
+  // byte-for-byte on both sides of the seam, and only then do the pilot's keys move them.
+  S.cam = { x: D.player.x, y: D.player.y, z: D.player.z, radius: ZOOM_STOPS[0] };
+  S.view = labViewForLevel(S.level);
   D.note.push(`galaxy seed well-dipper-galaxy-1 · ${D.sectors.getSectors().length} sectors`);
 
   // ── SECTOR ROWS.  The estimated system count is NavComputer's own arithmetic
@@ -477,11 +507,20 @@ function blitLum(g, img, dx, dy, dw, dh, sqSide) {
 }
 
 // ── The extents each level looks at, taken from NavComputer._setupViewStackForPlayer (:1200-1225).
+// ⭐ LEVELS 1-2 NOW COME FROM `S.view` — THE CALLER'S FRAME, NOT A SELF-SUPPLIED ONE. These two
+//    lines used to anchor to the PLAYER at every level, so clicking a sector drilled the game into
+//    it while both designs kept drawing the player's: the picture did not follow the pilot, which is
+//    "CLICK A SECTOR" being false in the way that matters. The driver writes `S.view` from
+//    `nav._viewCenter`/`_viewSize`; this page writes it from `labViewForLevel`, which returns
+//    exactly what the deleted lines computed — so the picture is unchanged here, and unchanged at
+//    the game's entry state too, where `_setupViewStackForPlayer` builds the same two frames.
+// ⛔ LEVEL 0 IS NOT READ FROM `S.view`: it is the whole 44 kpc disc by definition, and there is no
+//    drill above it that could have moved it.
 function levelView(level) {
-  const p = D.player, sec = D.playerSector;
   if (level === 0) return { cx: 0, cz: 0, size: 44, n: 0 };
-  if (level === 1) return { cx: sec.centerX, cz: sec.centerZ, size: sec.size, n: 8 };
-  return { cx: p.x, cz: p.z, size: tileSize(p.x, p.z, 10000) * 16, n: 16 };
+  const v = S.view;
+  if (level === 1) return { cx: v.cx, cz: v.cz, size: v.size, n: 8 };
+  return { cx: v.cx, cz: v.cz, size: v.size, n: 16 };
 }
 function tileSize(x, z, target) {                  // NavComputer._computeTileSize (:1596-1602)
   const R = Math.hypot(x, z), theta = Math.atan2(z, x || 1e-10);
@@ -494,10 +533,23 @@ function tileSize(x, z, target) {                  // NavComputer._computeTileSi
 // ── PRISM PROJECTION.  A fixed top-down-ish view; the real camera is rotatable and that is not what
 //    this page is measuring. Zoom stops are the four Design 2 and Design 3 both asked for.
 const ZOOM_STOPS = [0.0015, 0.003, 0.006, 0.01034];   // kpc — default, and the wheel ceiling
+// This page's own cycle index for the Z key; it writes S.cam.radius and nothing else reads it.
+// ⛔ IT MUST STAY ON ITS OWN LINE INSIDE THE EXTRACTED SPAN — the extractor's departure 3 asserts
+//    on this exact declaration, newline included, before stripping it out of the game's copy.
 let zoomIdx = 0;
-function projectPrism(s, cx, cy, halfW, halfH, radius) {
-  const dx = (s.wx - D.player.x) / radius, dz = (s.wz - D.player.z) / radius;
-  const dy = (s.wy - D.player.y) / Math.max(radius, 1e-9);
+/**
+ * ⭐ THE CAMERA IS THE CALLER'S, NOT THIS PAGE'S. Anchor `S.cam.x/y/z`, scale `S.cam.radius`, both
+ * in kpc. This used to anchor to `D.player` and scale by `ZOOM_STOPS[zoomIdx]`, which is why moving
+ * the game's camera left the prism BYTE-IDENTICAL while moving the ship changed it: nothing the
+ * pilot could touch was an input to the picture, and `WASD PAN` / `R/F UP` were printed anyway.
+ * ⛔ ROTATION IS STILL NOT AN INPUT, DELIBERATELY. Neither prism hint advertises it, and swapping
+ * this fixed shallow tilt for the legacy camera's full 3D rotation would change the picture Max
+ * ruled on. The one hint that DID claim rotation was over the ladder, and it is corrected below.
+ */
+function projectPrism(s, cx, cy, halfW, halfH) {
+  const cam = S.cam, r = Math.max(cam.radius, 1e-9);
+  const dx = (s.wx - cam.x) / r, dz = (s.wz - cam.z) / r;
+  const dy = (s.wy - cam.y) / r;
   const rx = 0.92, tilt = 0.42;                      // a shallow tilt so height reads as a gap
   return { x: cx + dx * halfW * rx, y: cy + dz * halfH * tilt - dy * halfH * 0.55,
            py: cy + dz * halfH * tilt, depth: dz };
@@ -549,11 +601,21 @@ function drawDesign1(g, W, H) {
   d1Rail(g, railX, mapY, railW, railC, rows - 4);
 
   // ── HINT ─────────────────────────────────────────────────────────────────────────────────────
-  const hints = ['CLICK A SECTOR OR A LIST ROW   [ ] SORT   / SEARCH   TAB LEVEL',
-                 'CLICK A TILE OR A LIST ROW   [ ] SORT   / SEARCH   TAB LEVEL',
-                 'CLICK A TILE OR A LIST ROW   [ ] SORT   / SEARCH   TAB LEVEL',
-                 'CLICK A STAR OR A LIST ROW   [ ] SORT   / SEARCH   WASD PAN',
-                 'SELECT A BODY   DRAG TO ROTATE   [ ] SORT   TAB LEVEL'];
+  // ⭐ THE HINT NAMES THE ACTIVE SORT KEY. Max never opens a browser console, so a control he can
+  // use has to be legible ON THE GLASS or it does not exist for him. `S.sortLabel` is the driver's
+  // one-word name for the key that is on; empty is the honest default and the row then degrades to
+  // exactly what it has always said, which is why nothing here moves until a sort is wired.
+  const sortHint = S.sortLabel ? `[ ] SORT ${S.sortLabel}` : '[ ] SORT';
+  // ⛔ THE SYSTEM HINT SAID `DRAG TO ROTATE` OVER A LADDER, AND A LADDER HAS NO ROTATION. This
+  //    design draws no orrery at SYSTEM — it draws a scrolling sqrt(AU) axis — so the row now names
+  //    that axis's real controls: `,` and `.` step the window between stops, and the `...` caps
+  //    drawn at either end are click targets for the same step. 62 characters, which is exactly the
+  //    length of the GALAXY hint, so no buffer clips it any sooner than it already clipped that one.
+  const hints = [`CLICK A SECTOR OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
+                 `CLICK A TILE OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
+                 `CLICK A TILE OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
+                 `CLICK A STAR OR A LIST ROW   ${sortHint}   / SEARCH   WASD PAN`,
+                 `SELECT A BODY   SCROLL , . OR CLICK ...   ${sortHint}   TAB LEVEL`];
   const hintFull = hints[S.level] + (S.sabotage ? SAB : '');
   T(g, fit(hintFull, W - 2), 1, ry(rows - 3), { color: INK.DIM, rgn: 'hint', what: 'hint line' });
   // the guard must see the UNCLIPPED string, or it is not a guard — it is the clip
@@ -606,6 +668,15 @@ function d1TwoD(g, mapW, mapY, mapH) {
     if (cell < measurePixelText(t.id) + 3) return;
     plated(g, t.id, tx, ty, INK.DIM, 'map', 'tile id ' + t.id);
   });
+  // ⭐ THE PICK GEOMETRY, PUBLISHED BY THE CODE THAT DREW IT — the same principle as `region()` and
+  // as `S.ladderStops` below. A hit-test that restates `ox` / `sq` / `n` is a SECOND COPY of this
+  // layout, and two copies of one geometry with one silently wrong is the whole AC-4 defect shape.
+  // ⚠ THE PICTURE IS THE SQUARE, NOT THE REGION. The map region is `mapW` wide and the square is
+  //   `sq` wide at `ox`, so the columns either side are inside the region and outside the picture:
+  //   a click there is a MISS, never a clamp. That is why `ox`/`sq` are published and not the pane.
+  // ⛔ A PURE WRITE, PLACED AFTER EVERY DRAW CALL IT READS FROM. Not one texel above moves.
+  S.mapProj = { design: 1, level: S.level, kind: 'square',
+                ox, oy: mapY, sq, n, cell, cx: v.cx, cz: v.cz, size: v.size };
 }
 
 const AZ = 'ABCDEFGHIJKLMNOP';
@@ -620,11 +691,10 @@ function d1TileRows(v, n) {
 }
 
 function d1Prism(g, mapW, mapY, mapH, gaugeX) {
-  const radius = ZOOM_STOPS[zoomIdx];
   const cxp = mapW / 2, cyp = mapY + mapH / 2;
   const shown = [];
   for (const s of D.starRows) {
-    const p = projectPrism(s, cxp, cyp, mapW / 2, mapH / 2, radius);
+    const p = projectPrism(s, cxp, cyp, mapW / 2, mapH / 2);
     if (p.x < 0 || p.x >= mapW || p.y < mapY || p.y >= mapY + mapH) continue;   // ⭐ THE BOUNDS CULL
     shown.push({ s, p });                                                       // (there is none today)
     if (shown.length >= 240) break;                                             // and the draw cap
@@ -636,10 +706,17 @@ function d1Prism(g, mapW, mapY, mapH, gaugeX) {
     if (s.isReal) plus(g, p.x, p.y, INK.BODY);
     else rect(g, p.x, p.y, 1, 1, INK.DIM);
   }
+  // ⭐ EVERY STAR MARK, IN DRAW ORDER, OUT OF THE ARRAY THE CULL AND THE CAP BUILT. `shown` IS the
+  // publication's whole value: the bounds cull and the 240-mark draw cap live in the loop above and
+  // nowhere else, so a picker walking `D.starRows` would offer marks that are not on the glass.
+  // r = 3 is the largest drawn glyph's half-extent plus a texel — the two selection frames are 5x5
+  // and `plus` is 5 texels across — and the picker takes the NEAREST inside r, so marks that
+  // overlap at this radius resolve to the near one instead of to whichever was tested first.
+  S.prismHits = shown.map(({ s, p }) => ({ x: p.x, y: p.y, r: 3, ref: s }));
   // ⭐ EIGHT SINGLE-CHARACTER INDEX TAGS instead of 139 labels of which 100 are already faded
   const top = D.starRows.slice(0, 9).filter((s) => s.dist > 1e-6).slice(0, 8);
   top.forEach((s, i) => {
-    const p = projectPrism(s, cxp, cyp, mapW / 2, mapH / 2, radius);
+    const p = projectPrism(s, cxp, cyp, mapW / 2, mapH / 2);
     if (p.x < 1 || p.x + 3 + FACE.w + 1 >= mapW || p.y < mapY + 7 || p.y >= mapY + mapH) return;
     plated(g, String(i + 1), p.x + 3, p.y - 6, INK.TARGET, 'map', 'index tag ' + (i + 1));
   });
@@ -700,9 +777,17 @@ function d1Ladder(g, mapW, mapY, mapH) {
 
   const sx = (v) => x0 + 4 + v - scroll;
   const vis = (x) => x >= x0 && x <= x1;
+  // ⭐ AND THE MARKS THEMSELVES, on the same principle as the three lines above it: extended from
+  // "where the window stops" to "what a pilot can click". Every entry is pushed beside the draw
+  // that makes its mark and under the SAME `vis()` test, so a body that has scrolled off the axis
+  // is not offered to the picker — which is the one thing a restated layout could never get right.
+  const hits = [];
 
   // the star sits at virtual 0 and scrolls off with everything else
   if (vis(sx(0))) sprite(g, sx(0), axisY, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
+  // ⭐ THE SYSTEM STAR IS A TARGET. It is the one mark on this ladder a pilot will certainly click,
+  // and `ref: null` with `star: true` is how the picker tells it from a row of `D.bodies`.
+  if (vis(sx(0))) hits.push({ x: sx(0), y: axisY, r: 4, ref: null, moon: -1, star: true });
   const z = D.sys?.zones;
   if (z) {
     const a2 = Math.max(x0, sx(vpx(z.hzInnerAU))), b2 = Math.min(x1, sx(vpx(z.hzOuterAU)));
@@ -712,12 +797,19 @@ function d1Ladder(g, mapW, mapY, mapH) {
   shown.forEach((b, i) => {
     const x = sx(vx[i]);
     if (!vis(x)) return;
+    // r = 4 matches the 9x9 selection frame this body gets when it IS selected. A belt lands here
+    // too, with its own `ref.kind`, so the picker can recognise one and decline rather than leave a
+    // stale selection under a click that meant something.
+    hits.push({ x, y: axisY, r: 4, ref: b, moon: -1, star: false });
     const ink = b === D.selBody ? INK.TARGET : INK.BODY;
     if (b.kind === 'belt') { for (let k = -6; k <= 6; k += 2) { if (vis(x + k)) rect(g, x + k, axisY, 1, 1, INK.DIM); } }
     else {
       sprite(g, x, axisY, b.rE > 4 ? SP.giant5 : SP.terr3, ink);
       if (b.rings) rect(g, Math.max(x0, x - 4), axisY, Math.min(9, x1 - x + 4), 1, INK.DIM);
-      for (let m = 0; m < b.moons; m++) rect(g, x, axisY - 7 - m * 3, 1, 1, INK.DIM);
+      // ⭐ THE ONE PUBLICATION FOLDED INTO A DRAWN LINE, and only because the alternative is a
+      // second copy of `axisY - 7 - m * 3`. `rect()` now receives that value through `my`, which is
+      // the same expression evaluated once: identical arguments, identical texels.
+      for (let m = 0; m < b.moons; m++) { const my = axisY - 7 - m * 3; hits.push({ x, y: my, r: 2, ref: b, moon: m, star: false }); rect(g, x, my, 1, 1, INK.DIM); }
       if (b === D.selBody) frame(g, x - 4, axisY - 4, 9, 9, INK.TARGET);
     }
     const tag = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || '?';
@@ -741,6 +833,7 @@ function d1Ladder(g, mapW, mapY, mapH) {
       { color: INK.DIM, align: 'right', rgn: 'map', what: 'ladder window' });
   }
   if (vis(sx(0))) rect(g, sx(0) - 1, axisY - 1, 3, 3, INK.YOU);
+  S.bodyHits = hits;
 }
 
 function d1Rail(g, x, y, w, cols, rowCount) {
@@ -753,12 +846,21 @@ function d1Rail(g, x, y, w, cols, rowCount) {
   rect(g, x, y + LEAD - 1, w, 1, INK.RULE);
 
   const listRows = Math.max(2, rowCount - 9);
+  // ⭐ PAGING, AND THE SPLIT IT OBEYS. The pager reads `1-27 OF 27524` and there has never been a way
+  // to see the 28th. The CONTROL writes `S.listOffset`; THIS is the code that slices by it, and it
+  // publishes what it actually sliced as `S.listGeom` so the pager label, the drawn rows and the row
+  // picker cannot come apart. Exactly the `S.ladderScroll` / `S.ladderStops` split, one level up.
+  // ⛔ AT OFFSET 0 EVERY SLICE BELOW IS `slice(0, listRows)` EXACTLY AS IT ALWAYS WAS, and the label
+  //    reads `1-N OF T` exactly as it always did — nothing moves until a key is pressed.
+  const total = [D.sectorRows.length, 64, 256, D.starRows.length, D.bodies.length][S.level];
+  const off = Math.max(0, Math.min(Math.max(0, total - listRows), S.listOffset | 0));
+  S.listOffset = off;   // clamped here too, so a stale offset cannot page off the end of the data
   const detail = [];
   let lines = [];
 
   if (S.level === 0) {
-    lines = D.sectorRows.slice(0, listRows).map((r, i) =>
-      ({ txt: `${pad(String(i + 1), 2)} ${pad(r.s.name.toUpperCase(), cols - 16)} ${rpad(fmtK(r.n), 6)}`,
+    lines = D.sectorRows.slice(off, off + listRows).map((r, i) =>
+      ({ txt: `${pad(String(off + i + 1), 2)} ${pad(r.s.name.toUpperCase(), cols - 16)} ${rpad(fmtK(r.n), 6)}`,
          bar: r.n / D.sectorRows[0].n, sel: r.s.id === D.playerSector?.id }));
     const s = D.playerSector;
     detail.push([s.name.toUpperCase(), INK.KEY],
@@ -769,17 +871,27 @@ function d1Rail(g, x, y, w, cols, rowCount) {
       [`TARGET  ${fit((D.target?.name || '—').toUpperCase(), (cols - 8) * FACE.advance)}`, INK.TARGET]);
   } else if (S.level === 1 || S.level === 2) {
     const v = levelView(S.level);
-    const tiles = d1TileRows(v, v.n).slice(0, listRows);
+    // ⚠ THE BAR NORMALISES AGAINST THE WHOLE RANKING, NOT THE PAGE. `ranked[0]` is the densest tile
+    //   there is; against `tiles[0]` every page after the first would draw four full bars and say
+    //   nothing. Identical on page 1, which is the only page that existed before.
+    const ranked = d1TileRows(v, v.n);
+    const tiles = ranked.slice(off, off + listRows);
+    // ⭐ THE RAIL'S OWN ROWS, PUBLISHED. Rows are drawn at SECTOR and REGION today and clicking them
+    // does nothing at all, because nothing outside this branch could know which tile row N names.
+    // ⛔ It is THIS array — already ranked, already sliced, index-aligned with the drawn rows — and
+    //    not a second `d1TileRows(v, v.n)` call, whose ranking would have to agree with this one by
+    //    luck. `estStars` is deterministic, so it would agree today and stop agreeing silently.
+    S.railTiles = tiles;
     const idW = S.level === 2 ? 3 : 2;
     lines = tiles.map((t) => ({ txt: `${pad(t.id, idW)} ${pad('—', cols - idW - 13)} ${rpad(fmtK(t.n), 6)}`,
-                                bar: t.n / tiles[0].n, sel: false }));
+                                bar: t.n / ranked[0].n, sel: false }));
     const t = tiles[0];
     detail.push([t.id, INK.KEY], [`CENTRE  ${t.x.toFixed(1)}, ${t.z.toFixed(1)}`, INK.BODY],
       [`SYSTEMS ${fmtK(t.n)}`, INK.BODY], [`SPAN    ${(v.size / v.n).toFixed(3)} KPC`, INK.BODY],
       ['', INK.BODY], [`YOU     ${d1PlayerTile(v)}`, INK.YOU], ['TARGET  —', INK.DIM]);
   } else if (S.level === 3) {
-    lines = D.starRows.slice(0, listRows).map((s, i) => ({
-      txt: `${i < 8 && s.dist > 1e-6 ? i + 1 : '·'} ${pad(s.name.toUpperCase() || 'UNNAMED', cols - 13)} ` +
+    lines = D.starRows.slice(off, off + listRows).map((s, i) => ({
+      txt: `${off + i < 8 && s.dist > 1e-6 ? off + i + 1 : '·'} ${pad(s.name.toUpperCase() || 'UNNAMED', cols - 13)} ` +
            `${rpad(s.pc.toFixed(1), 5)} ${pad(s.spectral, 2)} ${s.mult > 1 ? s.mult : '·'}`,
       bar: 0, sel: s === D.selStar }));
     const s = D.selStar;
@@ -789,8 +901,8 @@ function d1Rail(g, x, y, w, cols, rowCount) {
       [`COMPS  ${s.mult > 1 ? 'MULTIPLE (' + s.mult + ')' : 'SINGLE'}`, INK.BODY],
       ['WARP ARMED', INK.TARGET]);
   } else {
-    lines = D.bodies.slice(0, listRows).map((b, i) => ({
-      txt: `${'123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || '?'}${b.kind === 'moon' ? '-' : ' '}` +
+    lines = D.bodies.slice(off, off + listRows).map((b, i) => ({
+      txt: `${'123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[off + i] || '?'}${b.kind === 'moon' ? '-' : ' '}` +
            `${pad((b.kind === 'moon' ? ' ' : '') + b.name.toUpperCase(), cols - 14)} ` +
            `${rpad(b.au.toFixed(2), 5)} ${rpad(b.T ? Math.round(b.T) + 'K' : '—', 5)}`,
       bar: 0, sel: b === D.selBody }));
@@ -810,13 +922,26 @@ function d1Rail(g, x, y, w, cols, rowCount) {
     if (L.bar > 0) for (let k = 0; k < Math.round(4 * L.bar); k++) rect(g, x + w - 23 + k * 6, yy + 1, 4, 4, INK.BODY);   // c67-c70
   });
   const pagerY = y + (lines.length + 1) * LEAD;
-  T(g, fit(`  1-${lines.length} OF ${[D.sectorRows.length, 64, 256, D.starRows.length, D.bodies.length][S.level]}   [ ] PAGE`, w),
-    x, pagerY, { color: INK.DIM, rgn: 'rail', what: 'pager' });
+  // ⛔ THE PAGER CANNOT ALSO BE SPELLED `[ ]`. The hint row two lines up has already given the
+  //    brackets to SORT, and two different controls sharing one name on one screen is a lie
+  //    whichever of them the key turns out to drive. SORT keeps `[` `]` because its hint is the one
+  //    repeated at every level; PAGE names `-` and `=`. Same eight characters, so nothing reflows.
+  // ⚠ AND THE RANGE GROWS AS YOU PAGE, WHICH EATS THE KEYS OFF THE RIGHT-HAND END. `fit()` truncates
+  //   from the right, so `1000-1026 OF 27524   - = PAGE` loses `- = PAGE` — the control's own name
+  //   disappears at exactly the moment you are using it. The compact form is only ever reached WHEN
+  //   PAGED, so the offset-0 row stays byte-identical to the one Max ruled on, at every buffer.
+  let pagerTxt = `  ${off + 1}-${off + lines.length} OF ${total}   - = PAGE`;
+  if (off > 0 && measurePixelText(pagerTxt) > w) pagerTxt = `  ${off + 1}-${off + lines.length}/${fmtK(total)}  - = PAGE`;
+  T(g, fit(pagerTxt, w), x, pagerY, { color: INK.DIM, rgn: 'rail', what: 'pager' });
   rect(g, x, pagerY + LEAD - 1, w, 1, INK.RULE);
   detail.forEach(([t, ink], i) => {
     if (!t) return;
     T(g, fit(t, w), x, pagerY + (i + 1) * LEAD, { color: ink, rgn: 'rail', what: 'detail ' + i });
   });
+  // ⭐ THE RAIL'S ROW GRID AND THE WINDOW IT IS SHOWING. `rows` is what was DRAWN and `offset` is
+  // what was SLICED, so a picker adding `offset` to a drawn row index lands on the row under the
+  // pointer at any page. Row i is drawn at `top + (i + 1) * lead`, the header sits on `top`.
+  S.listGeom = { top: y, lead: LEAD, rows: lines.length, x0: x - 1, x1: x + w + 1, offset: off, total };
 }
 function d1PlayerTile(v) {
   const i = Math.floor(((D.player.x - v.cx) / v.size + 0.5) * v.n);
@@ -841,6 +966,12 @@ function drawDesign2(g, W, H) {
   region('botbar', 0, H - BAR, W, BAR);
 
   rect(g, 0, 0, W, H, INK.BG);
+  // ⛔ LAST FRAME'S CANDIDATES DIE WITH LAST FRAME'S PICTURE. The fill above has just erased
+  // everything that was pickable; without this, a level change — or one press of L into list mode —
+  // leaves the previous picture's marks live UNDERNEATH the new one and the pilot clicks a star
+  // that is not there. Whichever painter runs below republishes what it actually draws, so this
+  // costs exactly one frame of nothing and closes a whole class of stale-pick defect at the source.
+  S.mapProj = null; S.prismHits = null; S.bodyHits = null; S.listGeom = null;
   if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
   else if (S.level === 3) d2Prism(g, W, mapY, mapH);
   else d2System(g, W, mapY, mapH);
@@ -849,12 +980,19 @@ function drawDesign2(g, W, H) {
   //    today it is answered five ways in three visual languages.
   rect(g, 0, 0, W, BAR - 1, INK.BG); rect(g, 0, BAR - 1, W, 1, INK.RULE);
   let tx = 4;
+  const tabRects = [];
   LEVELS.forEach((n, i) => {
     const w = measurePixelText(n);
     T(g, n, tx, 1, { color: i === S.level ? INK.KEY : INK.DIM, rgn: 'topbar', what: 'tab ' + n });
     if (i === S.level) rect(g, tx - 2, BAR - 2, w + 4, 1, INK.YOU);
+    tabRects.push({ x: tx - 2, y: 0, w: w + 4, h: BAR });
     tx += w + 6;
   });
+  // ⭐ THE STRIP'S OWN RECTANGLES. These tabs are proportionally spaced off the FACE, so their edges
+  // are knowable only to the loop that laid them out — the underline this loop draws under the
+  // active tab is `tx - 2, w + 4`, and so is the button. Restating `measurePixelText(n) + 6`
+  // anywhere else is the AC-4 defect with a face swap (`;`) as its trigger.
+  S.tabRects = tabRects;
   const loc = `${(D.here?.name || '—').toUpperCase()} · ${(D.playerSector?.name || '').toUpperCase()}`;
   const locW = measurePixelText(fit(loc, W - tx - 6));
   T(g, fit(loc, W - tx - 6), W - 4, 1, { color: INK.BODY, align: 'right', rgn: 'topbar', what: 'locator' });
@@ -874,6 +1012,10 @@ function drawDesign2(g, W, H) {
   if (armed) rect(g, chipX, H - BAR, chipW, BAR, INK.TARGET);
   T(g, isHere() ? '[BURN]' : '[WARP]', chipX + 3, H - BAR + 2,
     { color: armed ? INK.BG : INK.DIM, rgn: 'botbar', what: 'commit chip' });
+  // ⭐ THE CHIP'S RECTANGLE AND ITS ARMED STATE, from the two locals the fill and the label already
+  // used. The button that LOOKS live and the button that IS live now cannot come apart, and neither
+  // can WARP and BURN: one rectangle, one `armed`, one commit.
+  S.chipRect = { x: chipX, y: H - BAR, w: chipW, h: BAR, armed };
 }
 function d2Status() {
   if (S.level === 0) return ['GALAXY', (D.playerSector?.name || '').toUpperCase(),
@@ -882,7 +1024,7 @@ function d2Status() {
     `${d1TileRows(levelView(S.level), levelView(S.level).n)[0].n} SYSTEMS IN BEST TILE`, 'CLICK TO ENTER'];
   if (S.level === 3) return S.list
     ? ['PRISM LIST', `NEAREST ${D.starRows.length}`, 'L=MAP', 'ENTER TO WARP']
-    : ['PRISM', `VIEW ${(ZOOM_STOPS[zoomIdx] * 2000).toFixed(1)} PC ACROSS`, `${D.stars.length} STARS`,
+    : ['PRISM', `VIEW ${(S.cam.radius * 2000).toFixed(1)} PC ACROSS`, `${D.stars.length} STARS`,
        'L=LIST', 'WASD PAN', 'R/F UP'];
   const b = D.selBody;
   return b ? [b.name.toUpperCase(), b.cls.toUpperCase(), `${b.au.toFixed(2)} AU`,
@@ -908,6 +1050,13 @@ function d2TwoD(g, W, mapY, mapH) {
     const px = toX(D.player.x), py = toY(D.player.z);
     frame(g, px - 2, py - 2, 5, 5, INK.YOU);
     for (const d of [[0, -4], [0, 4], [-4, 0], [4, 0]]) rect(g, px + d[0], py + d[1], d[0] ? 3 : 1, d[0] ? 1 : 3, INK.YOU);
+    // ⭐ THE WIDE PROJECTION, PUBLISHED. `toX`/`toY` above are isotropic — the square is rendered at
+    // the WIDE extent and cropped, so one world pixel is one texel in BOTH axes — which collapses
+    // the whole inverse to an origin and a scale: wx = cx + (x - ox)*kpc, wz = cz + (y - oy)*kpc.
+    // ⚠ THE VERTICAL FIELD IS ONLY ±(mapH/2)·kpc, so about half the disc is off the glass BY
+    //   CONSTRUCTION. `clip` is the band that was actually painted; outside it a click is a miss.
+    S.mapProj = { design: 2, level: S.level, kind: 'wide', ox: W / 2, oy: mapY + mapH / 2,
+                  kpc: v.size / W, cx: v.cx, cz: v.cz, clip: { x: 0, y: mapY, w: W, h: mapH } };
   } else {
     // the drillable block is SQUARE in world space; the density bleeding past it is real map and is
     // knocked back with a 50% parity checker rather than a translucency that cannot survive 240p
@@ -929,16 +1078,22 @@ function d2TwoD(g, W, mapY, mapH) {
     const pj = Math.floor(((D.player.z - v.cz) / v.size + 0.5) * n);
     checker(g, bx + pi * cell + 1, mapY + pj * cell + 1, cell - 2, cell - 2, INK.YOU);
     frame(g, bx + pi * cell, mapY + pj * cell, cell, cell, INK.YOU);
+    // ⛔ THE BLOCK, AND NOT `toX`/`toY`. This branch never calls them: it lays a `blk`-wide square
+    //    at `bx` for the same `v.size` kpc that the density behind it spends the full `W` on. A
+    //    picker built on the wide projection therefore drills a tile roughly TWICE the size the
+    //    pilot clicked — which looks like an off-by-one in the grid and is not one.
+    S.mapProj = { design: 2, level: S.level, kind: 'block', bx, by: mapY, blk, n, cell,
+                  cx: v.cx, cz: v.cz, size: v.size };
   }
 }
 function d2Prism(g, W, mapY, mapH) {
-  const radius = ZOOM_STOPS[zoomIdx], cxp = W / 2, cyp = mapY + mapH / 2;
+  const cxp = W / 2, cyp = mapY + mapH / 2;
   if (S.list) return d2List(g, W, mapY, mapH);
   const cap = Math.max(200, Math.round(W * mapH / 160));
   let drawn = 0;
   const onScreen = [];
   for (const s of D.starRows) {
-    const p = projectPrism(s, cxp, cyp, W / 2, mapH / 2, radius);
+    const p = projectPrism(s, cxp, cyp, W / 2, mapH / 2);
     if (p.x < -2 || p.x > W + 2 || p.y < mapY - 2 || p.y > mapY + mapH + 2) continue;
     onScreen.push({ s, p });
     if (++drawn >= cap) break;
@@ -950,6 +1105,11 @@ function d2Prism(g, W, mapY, mapH) {
     if (s.isReal) { plus(g, p.x, p.y, SPECTRAL[s.spectral] || INK.BODY); if (s.mult > 1) { rect(g, p.x+2, p.y-2, 1, 1, INK.BODY); rect(g, p.x-2, p.y+2, 1, 1, INK.BODY); } }
     else rect(g, p.x, p.y, 1, 1, SPECTRAL[s.spectral] || INK.DIM);
   }
+  // ⭐ EVERY STAR MARK, IN DRAW ORDER, OUT OF THE ARRAY THIS DESIGN'S OWN CULL AND CAP BUILT.
+  // ⚠ IT IS NOT DESIGN 1'S ARRAY AND MUST NOT BE UNIFIED WITH IT: this cull carries ±2 texels of
+  //   slop so a glyph straddling the edge still draws, and this cap is `W*mapH/160` rather than a
+  //   flat 240. Both facts are only true here, and both change which marks exist.
+  S.prismHits = onScreen.map(({ s, p }) => ({ x: p.x, y: p.y, r: 3, ref: s }));
   // ⭐ LABELS ARE CAPPED AND NEVER FADED. A label that cannot find a slot IS NOT DRAWN — today 100
   // of 139 on-canvas labels at max zoom are drawn at 0.35 alpha, which at 240p reads as damage.
   const capN = Math.max(4, Math.floor(mapH / 22));
@@ -978,37 +1138,48 @@ function d2Prism(g, W, mapY, mapH) {
  *  that is the design, and it is the reason judge 2 rejected D2 as the base — a row cannot be
  *  cross-referenced against a dot when the dots are gone. Drawn so that objection is LOOKED AT. */
 function d2List(g, W, mapY, mapH) {
-  const radius = ZOOM_STOPS[zoomIdx], cxp = W / 2, cyp = mapY + mapH / 2;
+  const cxp = W / 2, cyp = mapY + mapH / 2;
   for (const s of D.starRows) {                      // the starfield, still there, knocked back
-    const p = projectPrism(s, cxp, cyp, W / 2, mapH / 2, radius);
+    const p = projectPrism(s, cxp, cyp, W / 2, mapH / 2);
     if (p.x < 0 || p.x >= W || p.y < mapY || p.y >= mapY + mapH) continue;
     rect(g, p.x, p.y, 1, 1, INK.RULE);
   }
   checker(g, 0, mapY, W, mapH, INK.BG);              // one 50% parity pass — no alpha anywhere, and
                                                      // half the starfield survives, as the design says
   const LEAD = FACE.h + 1, rows = Math.floor((mapH - 4) / LEAD) - 1;
+  // The same paging split as design 1's rail: the control writes `S.listOffset`, this slices by it.
+  const total = D.starRows.length;
+  const off = Math.max(0, Math.min(Math.max(0, total - Math.max(0, rows)), S.listOffset | 0));
+  S.listOffset = off;
   const cols = [4, 22, 148, 166, 208, 250];
   const hdr = ['N', 'NAME', 'SP', 'PC', 'PLANE', 'SYSTEM'];   // '#' is not in the face; tofu would lie
   hdr.forEach((h, i) => cols[i] < W - 8 && T(g, h, cols[i], mapY + 4, { color: INK.DIM, rgn: 'map', what: 'list header ' + h }));
-  D.starRows.slice(0, rows).forEach((s, i) => {
+  const drawn = D.starRows.slice(off, off + rows);
+  drawn.forEach((s, i) => {
     const y = mapY + 4 + (i + 1) * LEAD;
     const sel = s === D.selStar;
     if (sel) rect(g, 2, y - 1, W - 4, LEAD, INK.KEY);
     const ink = sel ? INK.BG : (s.isReal ? INK.BODY : INK.DIM);
     const put = (c, str, maxw) => cols[c] < W - 10 &&
       T(g, fit(str, Math.min(maxw, W - cols[c] - 6)), cols[c], y, { color: ink, rgn: 'map', what: 'list row ' + i });
-    put(0, String(i + 1), 16);
+    put(0, String(off + i + 1), 16);
     put(1, (s.name || 'UNNAMED').toUpperCase(), 119);
     put(2, s.spectral, 11);
     put(3, s.pc.toFixed(2), 35);
     put(4, ((s.wy - D.player.y) * 1000).toFixed(0) + ' PC', 35);
     put(5, s.isReal ? 'CATALOG' : 'PROCEDURAL', 173);
   });
+  // ⭐ THE ROW GRID, AND ONLY WHEN A LIST ACTUALLY PAINTED. This function runs at level 3 in list
+  // mode and nowhere else, so a picker trusting a stale `listGeom` picks list rows off a prism.
+  // `rows` here is what was DRAWN, not what would fit — the two differ at the end of the catalog,
+  // and the difference is rows the pilot can click that carry nobody.
+  if (drawn.length) S.listGeom = { top: mapY + 4, lead: LEAD, rows: drawn.length, x0: 2, x1: W - 2, offset: off, total };
 }
 
 function d2System(g, W, mapY, mapH) {
   const cxp = Math.round(W / 2), cyp = Math.round(mapY + mapH / 2);
   const tagsTaken = [];
+  const hits = [];
   const auMax = Math.max(1e-3, ...D.bodies.filter((b) => b.kind !== 'moon').map((b) => b.au));
   const maxR = Math.min(W / 2 - 8, mapH / 2 / 0.42 - 4);
   const rOf = (au) => 8 + (maxR - 8) * Math.sqrt(Math.max(0, au) / auMax);
@@ -1019,15 +1190,19 @@ function d2System(g, W, mapY, mapH) {
     dottedEllipse(g, cxp, cyp, r, r * TILT, INK.RULE, b.kind === 'belt' ? 5 : 2);
   }
   sprite(g, cxp, cyp, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
+  hits.push({ x: cxp, y: cyp, r: 4, ref: null, moon: -1, star: true });
   D.bodies.filter((b) => b.kind !== 'moon').forEach((b, i) => {
     const r = rOf(b.au), a = (i * 1.7 + 0.6);
     const x = Math.round(cxp + Math.cos(a) * r), y = Math.round(cyp + Math.sin(a) * r * TILT);
-    if (b.kind === 'belt') { rect(g, x, y, 1, 1, INK.DIM); return; }
+    if (b.kind === 'belt') { hits.push({ x, y, r: 3, ref: b, moon: -1, star: false }); rect(g, x, y, 1, 1, INK.DIM); return; }
+    hits.push({ x, y, r: 4, ref: b, moon: -1, star: false });
     sprite(g, x, y, b.rE > 4 ? SP.giant5 : SP.terr3, INK.BODY);
     if (b.rings) { rect(g, x - 3, y - 2, 7, 1, INK.DIM); rect(g, x - 3, y + 2, 7, 1, INK.DIM); }
     if (b.hab > 0.5) for (const d of [[-2,0],[2,0],[0,-2],[0,2]]) rect(g, x + d[0], y + d[1], 1, 1, INK.TARGET);
     if (b === D.selBody) frame(g, x - 4, y - 4, 9, 9, INK.KEY);
-    for (let m = 0; m < b.moons; m++) rect(g, x + 4 + m * 2, y - 4, 1, 1, INK.DIM);
+    // The second and last folded publication, for the same reason as the ladder's: `mx`/`my` are
+    // the one evaluation of `x + 4 + m * 2` and `y - 4`, and `rect()` gets exactly those values.
+    for (let m = 0; m < b.moons; m++) { const mx = x + 4 + m * 2, my = y - 4; hits.push({ x: mx, y: my, r: 2, ref: b, moon: m, star: false }); rect(g, mx, my, 1, 1, INK.DIM); }
     const tag = roman(i + 1);
     if (r > 24) {
       const ly = placeLabel(tagsTaken, x + 4, y - 8, measurePixelText(tag), REGIONS.map);
@@ -1037,6 +1212,15 @@ function d2System(g, W, mapY, mapH) {
   sprite(g, cxp + 8, cyp, SP.diam5, INK.TARGET);
   const far = (D.sys?.binarySeparationAU > 100) ? [`» ${(D.sysStar?.name || '').toUpperCase()} B ${Math.round(D.sys.binarySeparationAU)}AU`] : [];
   if (far.length) T(g, fit(far.join('  '), W - 8), 4, mapY + 1, { color: INK.DIM, rgn: 'map', what: 'companion strip' });
+  // ⭐ THE ORRERY'S BODY MARKS, OUT OF THE ORBIT ARITHMETIC THAT PLACED THEM. The angle `i*1.7+0.6`
+  // is arbitrary and unrepeatable outside this loop — nothing else in the build could reconstruct
+  // where a planet was actually drawn, which is precisely why this has to come out of the paint.
+  // ⚠ A MOON PIP CARRIES ITS PARENT IN `ref` AND ITS PIP INDEX IN `moon`. Downstream a moon pick is
+  //   only consumed in planet detail; in the mode this orrery is drawn in it falls through and
+  //   CLEARS the selection, so the parent is the live walk and `{type:'moon'}` is a dead click.
+  // ⚠ A BELT GETS AN ENTRY TOO, so the picker can RECOGNISE one and return no pick, rather than
+  //   silently leaving whatever was selected before under a click that clearly meant the belt.
+  S.bodyHits = hits;
 }
 function roman(n) { return ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI'][n - 1] || String(n); }
 
@@ -1124,7 +1308,7 @@ function drawDesign3(g, W, H) {
 function d3Stats() {
   if (S.level === 0) return [`${D.sectorRows.length} SECTORS`, `SCALE 44 KPC`, `${fmtK(D.sectorRows.reduce((a, r) => a + r.n, 0))} SYSTEMS`];
   if (S.level <= 2) { const v = levelView(S.level); return [`${v.n * v.n} TILES`, `SCALE ${v.size.toFixed(2)} KPC`, `TILE ${(v.size / v.n).toFixed(3)} KPC`]; }
-  if (S.level === 3) return [`VIEW ${(ZOOM_STOPS[zoomIdx] * 2000).toFixed(1)} PC`, `LOADED ${D.stars.length}`,
+  if (S.level === 3) return [`VIEW ${(S.cam.radius * 2000).toFixed(1)} PC`, `LOADED ${D.stars.length}`,
                              `REAL ${D.starRows.filter((s) => s.isReal).length}`];
   return [`${D.sys?.star?.type || '?'} MAIN SEQ`, `${(D.sys?.planets || []).length} PLANETS`,
           `${D.bodies.filter((b) => b.kind === 'moon').length} MOONS`];
@@ -1143,11 +1327,11 @@ function d3TwoD(g, x, y, w, h) {
   if (D.target) sprite(g, ox + ((D.target.wx - v.cx) / v.size + 0.5) * sq, oy + ((D.target.wz - v.cz) / v.size + 0.5) * sq, SP.diam5, INK.TARGET);
 }
 function d3Prism(g, x, y, w, h) {
-  const radius = ZOOM_STOPS[zoomIdx], cxp = x + w / 2, cyp = y + h / 2;
+  const cxp = x + w / 2, cyp = y + h / 2;
   let glyphs = 0, dust = 0;
   const shown = [];
   for (const s of D.starRows) {
-    const p = projectPrism(s, cxp, cyp, w / 2, h / 2, radius);
+    const p = projectPrism(s, cxp, cyp, w / 2, h / 2);
     if (p.x < x || p.x >= x + w - 4 || p.y < y || p.y >= y + h) continue;
     if (glyphs < 240) { shown.push({ s, p }); glyphs++; }
     else if (dust < 1200) { rect(g, p.x, p.y, 1, 1, INK.RULE); dust++; }   // ⭐ the dust layer
@@ -1246,6 +1430,19 @@ function d3Right(cols) {
 const canvas = document.getElementById('glass');
 const g = canvas.getContext('2d');
 
+/** ⭐ THIS PAGE'S STAND-IN FOR THE GAME'S VIEW STACK. In the game the driver writes `S.view` from
+ *  `nav._viewCenter` / `nav._viewSize`, which follow the drill; here there is no drill, so the frame
+ *  is recomputed from the level — and it returns EXACTLY what `levelView` used to compute inline for
+ *  each level, which is why nothing on this page moved when the seam went in.
+ *  ⛔ LEVEL 1 AND LEVEL 2 ARE DIFFERENT FRAMES (a sector, then a tileSize*16 block around the ship),
+ *     so this cannot be computed once at boot — it re-runs every frame, off `S.level`. */
+function labViewForLevel(level) {
+  const p = D.player, sec = D.playerSector;
+  if (level <= 0) return { cx: 0, cz: 0, size: 44 };
+  if (level === 1) return { cx: sec.centerX, cz: sec.centerZ, size: sec.size };
+  return { cx: p.x, cz: p.z, size: tileSize(p.x, p.z, 10000) * 16 };
+}
+
 let _lastStage = '';
 function draw() {
   const { width: W, height: H } = bufferForLines(window.innerWidth, window.innerHeight, S.lines);
@@ -1267,6 +1464,7 @@ function draw() {
   g.imageSmoothingEnabled = false;
   rect(g, 0, 0, W, H, INK.BG);
   if (!D.ready) { T(g, 'LOADING REAL GALAXY DATA', 6, 6, { color: INK.DIM }); return; }
+  S.view = labViewForLevel(S.level);   // the caller's job in the game; this page's job here
   try {
     if (S.design === 1) drawDesign1(g, W, H);
     else if (S.design === 2) drawDesign2(g, W, H);
@@ -1302,9 +1500,10 @@ function paintChrome(mag) {
   document.getElementById('legend').innerHTML =
     `<span><span class="k">1 2 3</span> design</span>` +
     `<span><span class="k">← →</span> level</span>` +
-    `<span><span class="k">R</span> line count (144/180/240/288/360/480/720)</span>` +
-    `<span><span class="k">Z</span> prism zoom (±${(ZOOM_STOPS[zoomIdx] * 1000).toFixed(2)} pc)</span>` +
-    `<span><span class="k">S</span> next system (${(D.sysStar?.name || '—').toUpperCase()}, ${D.bodies.length} bodies)</span>` +
+    `<span><span class="k">P</span> line count (144/180/240/288/360/480/720)</span>` +
+    `<span><span class="k">Z</span> prism zoom (±${(S.cam.radius * 1000).toFixed(2)} pc)</span>` +
+    `<span><span class="k">W A S D</span> pan · <span class="k">R F</span> up/down — the prism camera, the keys the glass advertises</span>` +
+    `<span><span class="k">N</span> next system (${(D.sysStar?.name || '—').toUpperCase()}, ${D.bodies.length} bodies)</span>` +
     `<span><span class="k">;</span> face — 5x5 &harr; 5x7, PixelText's own live A/B</span>` +
     `<span><span class="k">L</span> Design 2's list mode${S.list ? ' (ON)' : ''}</span>` +
     `<span><span class="k">X</span> sabotage the guard</span>` +
@@ -1320,12 +1519,28 @@ addEventListener('keydown', (e) => {
   if (k === '1' || k === '2' || k === '3') S.design = +k;
   else if (k === 'ArrowRight') S.level = (S.level + 1) % 5;
   else if (k === 'ArrowLeft') S.level = (S.level + 4) % 5;
-  else if (k === 'r' || k === 'R') S.lines = RENDER_LINE_OPTIONS[(RENDER_LINE_OPTIONS.indexOf(S.lines) + 1) % RENDER_LINE_OPTIONS.length];
-  else if (k === 'z' || k === 'Z') zoomIdx = (zoomIdx + 1) % ZOOM_STOPS.length;
+  else if (k === 'p' || k === 'P') S.lines = RENDER_LINE_OPTIONS[(RENDER_LINE_OPTIONS.indexOf(S.lines) + 1) % RENDER_LINE_OPTIONS.length];
+  else if (k === 'z' || k === 'Z') { zoomIdx = (zoomIdx + 1) % ZOOM_STOPS.length; S.cam.radius = ZOOM_STOPS[zoomIdx]; }
+  // ⭐ THE SIX KEYS THE GLASS ADVERTISES, HONOURED HERE TOO. Both designs print `WASD PAN` and
+  // design 2 prints `R/F UP`; a page that draws those words and does not move the picture is the
+  // exact defect this workstream exists to close, and a spec that cannot be flown is not a spec.
+  // One step is a fifth of the current half-extent, so the picture moves a readable amount at every
+  // zoom stop rather than a texel at one and off the glass at another.
+  // ⛔ R AND S NOW BELONG TO THE PILOT, so this page's own two controls moved: P is the line count
+  //    and N is the next system. Both are announced in the legend below.
+  else if (k.length === 1 && 'wasdrfWASDRF'.includes(k)) {
+    const step = S.cam.radius * 0.2;
+    if (k === 'w' || k === 'W') S.cam.z -= step;
+    else if (k === 's' || k === 'S') S.cam.z += step;
+    else if (k === 'a' || k === 'A') S.cam.x -= step;
+    else if (k === 'd' || k === 'D') S.cam.x += step;
+    else if (k === 'r' || k === 'R') S.cam.y += step;
+    else S.cam.y -= step;
+  }
   else if (k === 'x' || k === 'X') { S.sabotage = !S.sabotage; if (S.sabotage) console.warn('NAV-240p SABOTAGE ON — an over-long hint/status string is now handed to assertFits UNCLIPPED. The guard must fire.'); }
   else if (k === 'l' || k === 'L') { S.list = !S.list; S.design = 2; S.level = 3; }
   else if (k === 'h' || k === 'H') S.legend = !S.legend;
-  else if (k === 's' || k === 'S') { sysPick = (sysPick + 1) % Math.max(1, (D.sysCands || [1]).length);
+  else if (k === 'n' || k === 'N') { sysPick = (sysPick + 1) % Math.max(1, (D.sysCands || [1]).length);
                                      buildSystem(D.sysCands[sysPick]); S.level = 4; }
   else if (k === ',' || k === '.') { const st = S.ladderStops || []; const cur = S.ladderScroll || 0;
     const next = k === '.' ? st.find((v) => v > cur) : [...st].reverse().find((v) => v < cur);
