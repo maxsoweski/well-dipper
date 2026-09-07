@@ -46,9 +46,13 @@ const rowsFor = (d, bufferHeight, fovDeg = FOV, eyePos = ORIGIN) =>
   panelBufferRows(screenAt(d, eyePos), { eyePos, fovDeg, bufferHeight });
 
 describe('panelBufferRows — the shipped table', () => {
-  // lines:                     144  180  240  288  360  480  720
-  const UPPER = { 144: 26, 180: 32, 240: 43, 288: 51, 360: 64, 480: 86, 720: 129 };
-  const LOWER = { 144: 28, 180: 35, 240: 46, 288: 55, 360: 69, 480: 92, 720: 138 };
+  // ⭐ NARROWED 2026-09-07 with RENDER_LINE_OPTIONS, on Max's ruling that only 240/288/360 are
+  // wanted as comparison options. The dropped rows were 144: 26/28, 180: 32/35, 480: 86/92,
+  // 720: 129/138 — recorded here rather than deleted, because they are what this table must say
+  // again if a mode ever comes back, and re-deriving them is how a wrong number gets in.
+  // lines:               240  288  360
+  const UPPER = { 240: 43, 288: 51, 360: 64 };
+  const LOWER = { 240: 46, 288: 55, 360: 69 };
 
   it('covers exactly the offered render modes and nothing else', () => {
     // If a line count is ever added to the settings, this test tells you the table is short

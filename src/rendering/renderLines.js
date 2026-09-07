@@ -44,11 +44,26 @@
 /**
  * The offered line counts. Discrete and named rather than a range, because these are REAL MODES and
  * the values between them are not more era-accurate for being reachable.
- * ⭐ 240 and 288 are the NTSC and PAL active-line counts; 480 is the progressive mode the N64 (and
- * the PSX at 512x480 interlaced) could reach. 144/180 are below the era and offered because Max
- * judges this by eye and asked for range; 360/720 are above it for the same reason.
+ *
+ * ⭐⭐ NARROWED TO THREE, 2026-09-07, ON MAX'S RULING: *"going forward for all these menus and main
+ * gameplay I only need 240, 288 and 360 as comparison options"*. The list was
+ * `[144, 180, 240, 288, 360, 480, 720]`.
+ *
+ * 240 and 288 are the NTSC and PAL active-line counts — the era's two real modes. 360 is just above
+ * them and stays because he judges this by eye and wants one step of headroom to compare against.
+ * The four that went were the ones bracketing the era rather than sitting in it: 144/180 are below
+ * anything that shipped, and 480/720 are a generation past the look the whole program is aimed at.
+ *
+ * ⛔ THIS IS A SETTINGS LIST, NOT A CAPABILITY LIMIT. Nothing anywhere assumes a bound — every
+ * consumer either iterates this array or derives from the live buffer, so restoring a value is
+ * editing this one line. `RENDER_LINES_MIN`/`MAX` derive from it and had no other reader.
+ *
+ * ⚠ WHAT HAPPENS TO A STORED 480 OR 720: `clampRenderLines` snaps to the NEAREST surviving mode, so
+ * 480 lands on 360 and 144 lands on 240 — the settings are read and converted, never reset, which is
+ * the same promise `migrateToRenderLines` makes below. Nobody's picture vanishes; it moves to the
+ * closest thing still offered.
  */
-export const RENDER_LINE_OPTIONS = [144, 180, 240, 288, 360, 480, 720];
+export const RENDER_LINE_OPTIONS = [240, 288, 360];
 
 /** ⭐ Max, 2026-09-06: "I do like the 240p the most I think." NTSC active lines. */
 export const RENDER_LINES_DEFAULT = 240;

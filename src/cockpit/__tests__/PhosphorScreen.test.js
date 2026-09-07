@@ -414,21 +414,51 @@ describe('PhosphorScreen — the type scale is a whole number of grid units (rul
   });
 
   /**
-   * ⭐ THE PROPERTY THE WHOLE GRID EXISTS FOR, and the one AC-2 and AC-3 need in order to be
-   * checkable at all: from 240p up the panel is the SAME PICTURE, only sharper. Under the old
-   * ratios the character budget wandered with the resolution, so a layout that fit at one setting
-   * silently overflowed at another and there was no single thing to accept.
+   * ⭐ THE PROPERTY THE WHOLE GRID EXISTS FOR — RE-DERIVED 2026-09-07, AND THE OLD VERSION OF THIS
+   * TEST WAS VACUOUS FOR EVERY MODE THAT NOW SHIPS.
    *
-   * The heights are the real ones: `RENDER_LINE_OPTIONS` at 240/480/720 lines projects the upper
-   * panel to 43/86/129 rows and the lower to 46/92/138.
+   * It asserted `lines === 7` at 240/480/720 and passed. Those are 43, 86 and 129 rows — exactly
+   * 1x, 2x and 3x `gridRows()`. On an exact multiple the division in `typeScale` has no remainder
+   * and seven is all you get. The sample contained no other kind of number, so "the same seven-line
+   * layout at EVERY shipped resolution" was really "at every multiple of the grid", and nothing
+   * said so.
+   *
+   * Max narrowed the options to 240/288/360 on 2026-09-07, and 288 and 360 are NOT multiples of 43:
+   *
+   *     lines = floor((h - 2*pad*unit - body*unit) / (lead*unit)) + 1,  pad 1, body 5, lead 6
+   *     upper  43 -> floor(36/6)+1 = 7      lower  46 -> floor(39/6)+1 = 7
+   *     upper  51 -> floor(44/6)+1 = 8      lower  55 -> floor(48/6)+1 = 9
+   *     upper  64 -> floor(57/6)+1 = 10     lower  69 -> floor(62/6)+1 = 11
+   *
+   * ⚠ SO TWO OF THE THREE SHIPPED MODES HAND THE PANEL MORE ROWS THAN ITS LAYOUT IS AUTHORED FOR.
+   * That is not a defect — the painters read `lines` and INFO draws its seven, so the extra rows are
+   * unused space at the bottom — but it means the panel is NOT byte-for-byte the same picture at
+   * 288 and 360, which is what the old assertion claimed. The invariant that actually holds, and the
+   * one AC-2 and AC-3 need, is the second one below: the type SHAPE never changes. Pin both, exactly,
+   * rather than restating the false one as a range.
    */
-  it('is the same seven-line layout at every shipped resolution — only the texels grow', () => {
-    const upper = [43, 86, 129].map(typeScale);
-    const lower = [46, 92, 138].map(typeScale);
-    for (const [name, panels] of [['upper', upper], ['lower', lower]]) {
-      for (const t of panels) {
-        expect(t.lines, `the ${name} panel stopped holding seven lines at unit ${t.unit}`).toBe(7);
+  it('holds its authored seven lines at 240p and gains unused rows at the two non-multiple modes', () => {
+    const UPPER = { 43: 7, 51: 8, 64: 10 };   // 240p, 288p, 360p
+    const LOWER = { 46: 7, 55: 9, 69: 11 };
+    for (const [name, table] of [['upper', UPPER], ['lower', LOWER]]) {
+      for (const [h, expected] of Object.entries(table)) {
+        expect(typeScale(Number(h)).lines,
+          `the ${name} panel's line count at ${h} rows moved`).toBe(expected);
       }
+      // ⭐ Never fewer than the seven the layout is authored for. THIS is the load-bearing half:
+      // a mode that handed the panel six rows would silently drop INFO's last field.
+      for (const h of Object.keys(table)) {
+        expect(typeScale(Number(h)).lines).toBeGreaterThanOrEqual(7);
+      }
+    }
+  });
+
+  it('is the SAME TYPE SHAPE at every shipped resolution — only the texels grow', () => {
+    // The invariant the old test meant to catch and did catch, stated on its own so it cannot be
+    // confused with the line count again. Ratios between the tiers, in units, must not move.
+    const upper = [43, 51, 64].map(typeScale);
+    const lower = [46, 55, 69].map(typeScale);
+    for (const [name, panels] of [['upper', upper], ['lower', lower]]) {
       const shapes = panels.map((t) => `${t.display / t.unit}/${t.body / t.unit}/${t.lead / t.unit}`);
       expect(new Set(shapes).size, `the ${name} panel is a different layout at different ` +
         `resolutions: ${shapes.join(' vs ')}`).toBe(1);

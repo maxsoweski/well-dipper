@@ -91,9 +91,13 @@ describe('migrateToRenderLines', () => {
 
   it('treats a value over 16 as lines and 16-or-under as a legacy divisor', () => {
     // Unambiguous by magnitude: the old setting was clamped to 8, a line count is never under 100.
-    expect(migrateToRenderLines(288, 4.5, 1130)).toBe(288);   // new key wins
-    expect(migrateToRenderLines(undefined, 3, 1440)).toBe(480); // 1440/3 = 480 exactly
-    expect(migrateToRenderLines(undefined, 1, 1130)).toBe(720); // full-res divisor -> the top mode
+    // ⭐ RE-DERIVED 2026-09-07 when RENDER_LINE_OPTIONS narrowed to [240, 288, 360] (Max: only
+    // those three as comparison options). The arithmetic is unchanged; the SNAP TARGETS moved,
+    // because 480 and 720 are no longer offered. This is the migration keeping its promise —
+    // a stored setting is converted to the nearest thing that still exists, never reset.
+    expect(migrateToRenderLines(288, 4.5, 1130)).toBe(288);   // new key wins, and 288 still ships
+    expect(migrateToRenderLines(undefined, 3, 1440)).toBe(360); // 1440/3 = 480 -> nearest is 360
+    expect(migrateToRenderLines(undefined, 1, 1130)).toBe(360); // full-res divisor -> the top mode
   });
 
   it('falls back rather than throwing on junk, so a corrupt blob cannot black the screen', () => {
@@ -113,8 +117,13 @@ describe('migrateToRenderLines', () => {
 describe('clampRenderLines', () => {
   it('snaps to a real mode rather than accepting an arbitrary number', () => {
     expect(clampRenderLines(251)).toBe(240);
-    expect(clampRenderLines(1)).toBe(144);
-    expect(clampRenderLines(99999)).toBe(720);
+    // ⭐ The floor and ceiling moved with the option list on 2026-09-07 (was 144 and 720).
+    expect(clampRenderLines(1)).toBe(240);
+    expect(clampRenderLines(99999)).toBe(360);
+    // A stored value from before the narrowing lands on the nearest surviving mode, not on default.
+    expect(clampRenderLines(480)).toBe(360);
+    expect(clampRenderLines(720)).toBe(360);
+    expect(clampRenderLines(144)).toBe(240);
     expect(RENDER_LINE_OPTIONS).toContain(clampRenderLines(NaN));
   });
 });

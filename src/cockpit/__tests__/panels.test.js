@@ -1438,8 +1438,12 @@ describe('all three panels — nothing overlaps and nothing leaves the glass', (
   // is exactly why the one that did not went unnoticed: a table that is right five times out of six
   // reads as derived. A column narrow is the SAFE direction — it would reject a row the real panel
   // has space for — but it means the guard has never run on the geometry that ships.
-  const UPPER = [['upper 240p', 52, 43], ['upper 480p', 103, 86], ['upper 720p', 155, 129]];
-  const LOWER = [['lower 240p', 55, 46], ['lower 480p', 110, 92], ['lower 720p', 166, 138]];
+  // ⭐ NARROWED 2026-09-07 with RENDER_LINE_OPTIONS (Max: only 240/288/360). Widths are
+  // `round(rows * 1.2)` off the 0.240 x 0.200 m faces, the same derivation the 52 above came from:
+  // 51*1.2 = 61.2, 64*1.2 = 76.8 -> 77, 55*1.2 = 66, 69*1.2 = 82.8 -> 83. The dropped rows were
+  // 480p (103x86 / 110x92) and 720p (155x129 / 166x138).
+  const UPPER = [['upper 240p', 52, 43], ['upper 288p', 61, 51], ['upper 360p', 77, 64]];
+  const LOWER = [['lower 240p', 55, 46], ['lower 288p', 66, 55], ['lower 360p', 83, 69]];
   const SHIPPED = [
     ...UPPER.map((p) => [...p, [[paintDrive, 'DRIVE']]]),
     ...LOWER.map((p) => [...p, [[paintTarget, 'TARGET'], [paintInfo, 'INFO']]]),
