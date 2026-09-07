@@ -4342,7 +4342,7 @@ export class NavComputer {
   _handleMouseMove(e) {
     const p = this._getCanvasPos(e);
     this._mouseX = p.x;
-    this._mouseY = p.y;
+    this._mouseY = p.y;  if (this.viewMode && !this._dragging && (this._viewDriverInst ||= makeViewModeDriver(this)).hover(p.x, p.y, this._canvas.width, this._canvas.height)) return;   // ⭐⭐ A MODE OWNS HOVER, AND THAT IS THE WHOLE OF ITS WIRING. `_handleClick` never reads a coordinate to drill — it reads `_hoveredTile`, `_hoveredLocalStar` and `_hoveredBody`, and every consequence after that (the zoom animation, the view-stack push, the drill sound, the system resolution) is already written. Writing those three fields from the design's own list geometry buys all of it, instead of duplicating ~150 lines of the most consequence-carrying code in this class.
 
     // Dragging
     if (this._dragging) {
@@ -4417,7 +4417,7 @@ export class NavComputer {
 
   _handleClick(e) {
     if (this._anim) return; // suppress clicks during drill animation
-    const p = this._getCanvasPos(e);
+    const p = this.viewMode ? (this._viewDriverInst ||= makeViewModeDriver(this)).remapClick(this._getCanvasPos(e), this._canvas.width, this._canvas.height) : this._getCanvasPos(e);   // ⭐ ONLY THE TAB STRIP MOVES: design 1 lays five equal cells from the left edge and design 2 spaces them by label width, while the test below divides the FULL width by five. The commit button needs no remap — render() publishes the design's own rectangle into `_commitButtonRect`, which is the field this handler already tests, so WARP and BURN cannot diverge the way AC-4 found them.
 
     // Check autopilot button click
     if (this._autopilotButtonRect) {
@@ -4439,7 +4439,7 @@ export class NavComputer {
     // reaches the body picker that owns those pixels.
     const tabH = navTabHeight(this._canvas.height);
     const tabY = this._canvas.height - tabH;
-    if (!this._bare && p.y >= tabY) {
+    if (!this._bare && p.y >= tabY && (!this.viewMode || this._modeTabIdx >= 0)) {   // ⛔ AND STAND DOWN UNDER A VIEW MODE UNLESS remapClick SAID THIS WAS A TAB. This strip is navTabHeight(h) tall — 32 rows of a 240-row buffer — and design 1 draws its full-width COMMIT row inside it, so `[ WARP ]` reached this test first and changed level instead of warping. Same defect as the bare-path one this block already documents, from the other direction.
       const tabW = this._canvas.width / LEVELS.length;
       const idx = Math.floor(p.x / tabW);
       if (idx >= 0 && idx < LEVELS.length) {

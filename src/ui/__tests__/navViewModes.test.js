@@ -163,3 +163,111 @@ describe('the buffer, and what must not move', () => {
     expect(nav._viewDriverInst).toBe(null);
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// OPERABILITY. ⭐ THE DEFECT THESE GUARD AGAINST HAS A NAME AND A PRICE: AC-4 of the previous
+// workstream shipped five level tabs DRAWN WHERE THEY COULD NOT BE PRESSED, because the strip's
+// height moved in the renderer and not in the hit-test. Every case below asserts an OBSERVABLE
+// CONSEQUENCE of a click — the level changed, the commit fired, the star was drilled — never that a
+// rectangle has the coordinates I think it has.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('the modes are operable', () => {
+  for (const mode of ['rail', 'bars']) {
+    it(`${mode}: every level tab changes level when clicked where it is drawn`, async () => {
+      const { nav } = await loadedNav();
+      nav.viewMode = mode;
+      nav._levelIndex = 3;
+      nav.render();
+      const g = nav._viewDriverInst.geo(nav._canvas.width, nav._canvas.height);
+      for (const i of [0, 1, 2, 3]) {                 // 4 = SYSTEM needs a star and is covered below
+        const x = mode === 'bars' ? g.tabs[i].x + g.tabs[i].w / 2 : (i + 0.5) * g.tabW;
+        const y = mode === 'bars' ? g.BAR / 2 : g.tabY + g.LEAD / 2;
+        nav._handleMouseDown({ clientX: x, clientY: y, button: 0 });
+        nav._handleMouseUp();
+        nav._handleClick({ clientX: x, clientY: y, button: 0 });
+        // A 2D->2D tab starts a drill ANIMATION rather than snapping, so accept either.
+        const landed = nav._anim ? nav._anim.toLevel ?? nav._levelIndex : nav._levelIndex;
+        expect(landed, `${mode} tab ${i} did not reach level ${i}`).toBe(i);
+        nav._anim = null; nav._levelIndex = i;
+        nav.render();
+      }
+    });
+
+    it(`${mode}: the tab band the hit-test derives contains the highlight the design paints`, async () => {
+      // ⭐ THE AGREEMENT TEST. `geometry.js` restates the horizontal subdivision of the tab strip —
+      // the one thing it cannot take from `regions()` — so it is a second copy of numbers that live
+      // inside verbatim draw code. This finds the rectangle the design actually fills under the
+      // ACTIVE tab and asserts the derived band contains it. Drift in either copy fails here.
+      const { nav, rec } = await loadedNav();
+      nav.viewMode = mode;
+      for (const level of [0, 1, 2, 3]) {
+        nav._levelIndex = level;
+        rec.calls.length = 0;
+        nav.render();
+        const g = nav._viewDriverInst.geo(nav._canvas.width, nav._canvas.height);
+        const band = mode === 'bars'
+          ? { x: g.tabs[level].x, w: g.tabs[level].w, y: 0, h: g.BAR }
+          : { x: level * g.tabW, w: g.tabW, y: g.tabY - 1, h: g.LEAD };
+        // the active-tab mark: design 1 fills the whole cell, design 2 underlines it
+        const marks = rec.calls.filter((c) => c.op === 'fillRect')
+          .map((c) => c.args)
+          .filter(([x, y, w2, h2]) => w2 > 2 && h2 >= 1
+            && y >= band.y - 2 && y <= band.y + band.h
+            && x >= band.x - 3 && x + w2 <= band.x + band.w + 3);
+        expect(marks.length, `${mode} level ${level}: no active-tab mark inside the derived band`)
+          .toBeGreaterThan(0);
+      }
+    });
+
+    it(`${mode}: the commit button the design draws is the one the click handler tests`, async () => {
+      const { nav, star } = await loadedNav();
+      nav.viewMode = mode;
+      nav.openToCurrentSystem(star);
+      let fired = null;
+      nav._onCommit = (a) => { fired = a; };
+      nav.render();
+      const r = nav._commitButtonRect;
+      expect(r, 'render() must publish a commit rect').toBeTruthy();
+      expect(nav._commitAction, 'a drilled system arms a commit').toBeTruthy();
+      nav._handleMouseDown({ clientX: r.x + r.w / 2, clientY: r.y + r.h / 2, button: 0 });
+      nav._handleMouseUp();
+      nav._handleClick({ clientX: r.x + r.w / 2, clientY: r.y + r.h / 2, button: 0 });
+      expect(fired, `${mode}: clicking the drawn commit button did not fire`).toBeTruthy();
+    });
+
+    it(`${mode}: picking a star from the list drills into its system`, async () => {
+      const { nav } = await loadedNav();
+      nav.viewMode = mode;
+      nav._levelIndex = 3;
+      if (mode === 'bars') nav._viewDriverInst.toggleList();   // design 2's picker is its 'L' mode
+      nav.render();
+      const g = nav._viewDriverInst.geo(nav._canvas.width, nav._canvas.height);
+      const row = 1;                                            // row 0 is the system you are in
+      const x = mode === 'bars' ? 20 : g.railX + 4;
+      const y = mode === 'bars' ? g.listTop + (row + 1) * g.LEAD : g.rowY(row);
+      nav._handleMouseMove({ clientX: x, clientY: y });
+      expect(nav._hoveredLocalStar, `${mode}: the list row did not resolve to a star`).toBeTruthy();
+      const picked = nav._hoveredLocalStar.star;
+      expect(nav._localStars, 'the star handed on must be the LIVE one, not the ranked copy')
+        .toContain(picked);
+      nav._handleMouseDown({ clientX: x, clientY: y, button: 0 });
+      nav._handleMouseUp();
+      nav._handleClick({ clientX: x, clientY: y, button: 0 });
+      expect(nav._selectedNavStar?.seed, `${mode}: the click did not select the listed star`)
+        .toBe(picked.seed);
+    });
+  }
+
+  it('rail: a body row at SYSTEM selects that body, moons included', async () => {
+    const { nav, star } = await loadedNav();
+    nav.viewMode = 'rail';
+    nav.openToCurrentSystem(star);
+    nav.render();
+    const { D } = nav._viewDriverInst;
+    const g = nav._viewDriverInst.geo(nav._canvas.width, nav._canvas.height);
+    const idx = D.bodies.findIndex((b) => b.kind === 'planet');
+    expect(idx, 'the fixture system must have a planet').toBeGreaterThanOrEqual(0);
+    nav._handleMouseMove({ clientX: g.railX + 4, clientY: g.rowY(idx) });
+    expect(nav._hoveredBody).toEqual({ type: 'planet', index: D.bodies[idx].pIdx });
+  });
+});

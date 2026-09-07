@@ -46,6 +46,8 @@
 import { resolveRenderBuffer } from '../../rendering/renderBuffer.js';
 import { makeViewState } from './state.js';
 import { makeDesigns } from './designs.js';
+import { railGeometry, barsGeometry, tabIndexAt } from './geometry.js';
+import { FACE, measurePixelText } from '../../rendering/PixelText.js';
 
 /**
  * The cycle the mode key walks. `null` first, so the default is today's nav and the first press
@@ -115,11 +117,121 @@ export function makeViewModeDriver(nav) {
     designs.resetRegions();
     if (design === 1) designs.drawDesign1(ctx, w, h);
     else designs.drawDesign2(ctx, w, h);
+    // ⭐ PUBLISH THE COMMIT RECTANGLE INTO THE FIELD THE SHIPPED HANDLER ALREADY TESTS. `_handleClick`
+    // fires `_onCommit(this._commitAction)` for a click inside `_commitButtonRect`; overwriting that
+    // rect with the design's own is the entire wiring, and it means WARP and BURN cannot diverge —
+    // which is the exact defect AC-4 found, as two independent copies of one button.
+    // ⛔ Taken from `regions()`, so it comes OUT of the paint rather than being restated here.
+    const r = designs.regions()[design === 1 ? 'commit' : 'botbar'];
+    if (r) {
+      const g2 = geo(w, h);
+      nav._commitButtonRect = design === 1
+        ? { x: r.x, y: r.y, w: r.w, h: r.h }
+        : { x: g2.chipX, y: g2.chipY, w: g2.chipW, h: g2.BAR };
+    }
     return true;
   }
 
+  /** The design's own layout for the frame just painted. Rebuilt per query — it is pure arithmetic. */
+  function geo(w, h) {
+    return nav.viewMode === 'bars'
+      ? barsGeometry(w, h, FACE, measurePixelText, designs.LEVELS)
+      : railGeometry(w, h, FACE);
+  }
+
+  /** Which list row is under y? `-1` for none. The rail (design 1) and the `L` list (design 2). */
+  function listRowAt(g2, x, y, bars) {
+    if (bars) {
+      if (!S.list || S.level === 4) return -1;
+      const i = Math.round((y - g2.listTop - g2.LEAD) / g2.LEAD);
+      return i >= 0 && i < g2.listRows ? i : -1;
+    }
+    if (x < g2.railX || x > g2.railX + g2.railW) return -1;
+    const i = Math.round((y - g2.rowY(0)) / g2.LEAD);
+    return i >= 0 && i < g2.listRows ? i : -1;
+  }
+
+  /**
+   * Resolve hover from the ACTIVE DESIGN'S geometry, into the three fields the SHIPPED click handler
+   * already reads.
+   *
+   * ⭐⭐ THIS IS THE WHOLE REASON THE MODES ARE OPERABLE FOR SO LITTLE CODE. `_handleClick` never
+   * looks at a coordinate for a drill: it reads `_hoveredTile` at the 2D levels, `_hoveredLocalStar`
+   * at PRISM and `_hoveredBody` at SYSTEM, and everything after that — the zoom animation, the view
+   * stack push, the drill sound, the system resolution — is already written and already correct.
+   * Writing those three fields buys all of it. ⛔ Reimplementing the drill instead would have been
+   * ~150 lines of the most consequence-carrying code in the class, duplicated.
+   *
+   * ⚠ THE MAP PANE IS DELIBERATELY NOT A PICKER YET, IN EITHER DESIGN. Each design projects its own
+   * map — design 1 into a square inset beside the rail, design 2 full-bleed with a cropped square —
+   * and inverting those here would be a THIRD copy of a projection I am not allowed to edit at its
+   * source. The list is a complete picker for every level, so the walk is whole without it; the map
+   * picker wants the projections lifted out of `designs.js` first, which is a separate change.
+   */
+  function hover(x, y, w, h) {
+    const bars = nav.viewMode === 'bars';
+    const g2 = geo(w, h);
+    const row = listRowAt(g2, x, y, bars);
+    if (row < 0) return false;
+    if (S.level === 0) {
+      const r = D.sectorRows[row];
+      if (!r) return false;
+      nav._hoveredTile = { sector: r.s };        // the shape `_handleClick`'s level-0 branch reads
+      return true;
+    }
+    if (S.level === 3) {
+      const s = D.starRows[row];
+      if (!s) return false;
+      // `_handleClick` drills `this._hoveredLocalStar.star`, and the star it wants is the one in
+      // `_localStars` — not the ranked COPY the adapter made. Match by seed.
+      const live = nav._localStars.find((t) => t.seed === s.seed) || s;
+      nav._hoveredLocalStar = { star: live, sx: x, sy: y };
+      return true;
+    }
+    if (S.level === 4) {
+      const b = D.bodies[row];
+      if (!b || b.pIdx == null) return false;
+      nav._hoveredBody = b.kind === 'moon' ? { type: 'moon', index: b.mIdx } : { type: 'planet', index: b.pIdx };
+      return true;
+    }
+    return false;   // levels 1-2 pick by tile, which is the map picker above
+  }
+
+  /**
+   * Translate a click in the design's chrome into the coordinate the SHIPPED handler expects.
+   *
+   * Only the TAB STRIP needs this. Design 1 lays five equal `tabW` cells from the left edge and
+   * design 2 spaces them by label width, while `_handleClick` divides the FULL WIDTH by five in a
+   * strip `navTabHeight(h)` tall — so the index has to be recomputed and re-expressed. The commit
+   * button does not need it: `render()` publishes the design's own rectangle straight into
+   * `_commitButtonRect`, which is the very field the handler tests.
+   *
+   * ⛔ AND IT ALSO PUBLISHES `_modeTabIdx`, WHICH IS NOT BOOKKEEPING — IT CLOSES A REAL DEFECT.
+   * The legacy strip is `navTabHeight(h)` tall: **32 rows of a 240-row buffer**, five live buttons
+   * across the bottom eighth of the screen. Design 1's COMMIT row sits at the very last row, inside
+   * it. So a click on `[ WARP ]` reached the tab test first and CHANGED LEVEL instead of warping —
+   * the same defect AC-4 found on the cockpit panel ("five INVISIBLE LIVE BUTTONS across the
+   * bottom"), arriving from the other direction. `-1` says "a mode is on and this was not a tab", and
+   * the tab test in `_handleClick` stands down.
+   *
+   * @returns {{x:number,y:number}} the point to hand `_handleClick`, unchanged if it is not a tab.
+   */
+  function remapClick(p, w, h) {
+    const bars = nav.viewMode === 'bars';
+    const g2 = geo(w, h);
+    nav._modeTabIdx = -1;
+    const inStrip = bars ? (p.y >= 0 && p.y < g2.BAR) : (p.y >= g2.tabY && p.y < g2.tabY + g2.LEAD);
+    if (!inStrip) return p;
+    const i = tabIndexAt(g2, p.x, bars);
+    if (i < 0) return p;
+    nav._modeTabIdx = i;
+    // The handler only asks `p.y >= h - navTabHeight(h)`, so the bottom row is inside the strip at
+    // every buffer without this file needing to know what navTabHeight returns.
+    return { x: (i + 0.5) * (w / 5), y: h - 1 };
+  }
+
   return {
-    S, D, render, bufferFor, applySurface,
+    S, D, render, bufferFor, applySurface, hover, remapClick, geo,
     regions: designs.regions,
     violations: () => violations.slice(),
     /** Design 2's list mode — its one answer to the comparison problem. */

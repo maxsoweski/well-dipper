@@ -132,13 +132,19 @@ export function makeViewState() {
       catch (e) { pname = (star.name || 'S') + ' ' + 'bcdefghijk'[i]; }
       rows.push({ kind: 'planet', name: pname, au: p.orbitRadiusAU, cls: displayClassOf(pd),
                   rE: pd.radiusEarth, T: pd.T_eq, hab: pd.habitability?.score ?? null,
-                  rings: !!pd.rings, moons: p.moons?.length || 0, pd });
+                  rings: !!pd.rings, moons: p.moons?.length || 0, pd,
+                  // ⭐ pIdx / mIdx are THIS ADAPTER'S ADDITION, not the lab's, and they are what lets a
+                  // rail row hand `_hoveredBody` the { type, index } shape the SHIPPED click handler
+                  // already understands. Without them the flat list's position would have to be
+                  // re-derived at the hit-test — a second mapping to keep in step with this one.
+                  pIdx: i });
       (p.moons || []).forEach((m, j) => {
         let mname = '';
         try { mname = generateMoonName(rng.child(`m${i}.${j}`), pname, j, p.moons.length); }
         catch (e) { mname = pname + ' ' + (j + 1); }
         rows.push({ kind: 'moon', name: mname, au: p.orbitRadiusAU, cls: m.type || 'moon',
-                    rE: m.radiusEarth, T: m.T_eq, hab: null, rings: false, moons: 0, parent: i });
+                    rE: m.radiusEarth, T: m.T_eq, hab: null, rings: false, moons: 0, parent: i,
+                    pIdx: i, mIdx: j });
       });
     });
     (sys.asteroidBelts || []).forEach((b, i) => {

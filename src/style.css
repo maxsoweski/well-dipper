@@ -1274,3 +1274,22 @@ body.hud-hidden #targeting-overlay {
   width: 100vw;
   height: 100vh;
 }
+
+/* ⛔ AND THE DOM SEARCH BOX STANDS DOWN, BECAUSE IT WAS SITTING ON THE CHROME.
+   `.nav-search-overlay` is a real 320px <input> at top:12px left:12px, injected by
+   NavComputer.js:663-670 and shown unconditionally by activate(). It is the ONE part of the nav that
+   was never drawn on the canvas — which is why it has never existed on the cockpit panel either —
+   and at 240p it is a full-resolution modern widget lying across exactly the rows both designs put
+   their chrome in: design 1's status line, design 2's whole tab strip. Measured on the live overlay,
+   it covered "GALAXY SECTOR".
+   ⚠ THE COST IS STATED, NOT HIDDEN: both designs' hint rows still advertise "/ SEARCH", and in a
+   view mode there is now nothing behind it. Searching by name is reachable in today's nav (V back to
+   CURRENT). Wiring `/` to a canvas-drawn search is its own piece of work — the field has to be DRAWN
+   to belong to these designs, and drawing it is not something to bolt onto a verbatim port. */
+.nav-computer-panel.nav-lowres .nav-search-overlay {
+  /* ⚠ `!important` IS LOAD-BEARING HERE AND IS NOT A SPECIFICITY SHRUG. `_showSearch()` writes
+     `style.display` INLINE, and an inline declaration outranks any selector in this file however
+     specific — measured live: the rule matched, the chain was right, and computed display was still
+     `block`. The alternative is a second JS writer racing the first one every paint. */
+  display: none !important;
+}
