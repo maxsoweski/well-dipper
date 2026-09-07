@@ -1,0 +1,1334 @@
+<!doctype html>
+<!--
+  NAV COMPUTER AT 240p — THREE DESIGNS, FIVE LEVELS, SEVEN LINE COUNTS
+  ==================================================================================================
+  URL:  http://localhost:5175/well-dipper/nav-240p-lab.html
+        (vite.config.js sets base '/well-dipper/' in dev — the bare root path 404s.)
+
+  ── WHY THIS PAGE EXISTS ───────────────────────────────────────────────────────────────────────
+
+  Max, 2026-09-06: "we need to begin by making these nav computer screens work in fullscreen first
+  (the N menu) then figure out how to represent that in the diegetic screens."
+
+  THE FULL-SCREEN NAV IS THE SOURCE. It is today a ~1560x860 DOM canvas drawing vector type over a
+  240-line world — roughly 3.6x the world's line count and 13x its pixel count. Three designs were
+  authored for what it should be at the world's own resolution. Max does not rule on prose, so all
+  three are drawn here, at 427x240, with the shipped face and the game's own data.
+
+  ── ⛔ WHAT IS REAL ON THIS PAGE AND WHAT IS NOT ────────────────────────────────────────────────
+
+  REAL — imported and called, not imitated:
+    · the face          src/rendering/PixelText.js  (drawPixelText / measurePixelText / FACE) — and
+                        `;` is PixelText's OWN key (PixelText.js:433-441), not a lab reimplementation
+    · the buffer        src/rendering/renderLines.js bufferForLines() — the same function that sizes
+                        the world render target, over the same RENDER_LINE_OPTIONS
+    · the galaxy        src/generation/GalacticMap.js, seed 'well-dipper-galaxy-1' (main.js:286)
+    · the sectors       src/generation/GalacticSectors.js — all 775, with their real names
+    · the density image src/rendering/GalaxyLuminosityRenderer.js — the CPU renderer the nav's own
+                        _renderDensityBg falls back to
+    · the prism stars   src/generation/HashGridStarfield.findStarsInPrism() — the same call, the same
+                        block, at the same 0.0015 kpc default radius
+    · the star names    src/generation/NameGenerator.generateSystemName() through an alea rng built
+                        exactly as NavComputer._makeRng does (NavComputer.js:315-327)
+    · the real stars    src/generation/RealStarCatalog.js — hyg-stars.json, fetched and merged on the
+                        same 2 pc rule NavComputer._queryYRange uses
+    · the system        src/generation/arrivalResolution.resolveArrivalSystem() — the exact call
+                        NavComputer.js:2458 makes, so planets, moons, belts, zones and rings are the
+                        ones a warp would deliver
+    · multiplicity      src/generation/multiplicityOracle.multiplicityForSeed()
+
+  DERIVED HERE, and said out loud because a lab that hides its own arithmetic is worthless:
+    · the per-tile star-count estimate is `density * DENSITY_TO_STARS_PER_PC3 * volume`, the same
+      arithmetic NavComputer._computeTileSize inverts and _estimateBlockStarCount performs. Those are
+      private methods; the two constants and the formula are reproduced below, cited.
+    · a VISITED flag does not exist anywhere in the pipeline. Design 1 wanted one. It draws blank.
+    · the density image above 448 texels is rendered at 448 and magnified with nearest-neighbour —
+      a LAB COMPUTE CAP (the CPU renderer is ~1.35 s at 427², ~12 s at 1280²), not a design property.
+      At 240p every design is under the cap and the image is exact.
+
+  ⚠ WHAT THIS PAGE IS NOT. It is not the nav computer. Nothing here is interactive the way the
+  instrument is — no hover, no drag, no click-to-drill. It answers the STATIC question these three
+  designs disagree about: at 427x240, with the real face and the real data, WHAT DOES EACH ONE LOOK
+  LIKE, and does it read? Whether the whole thing coheres in the ship is Max's eye in the game.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nav computer at 240p — three designs</title>
+<style>
+  :root { --ink:#EDE8DE; --dim:#8b8378; --rule:#2a2a28; --bg:#0b0b0c; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); overflow:hidden;
+         font:12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #stage { position:fixed; left:0; right:0; display:flex;
+           align-items:center; justify-content:center; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; background:#000;
+           display:block; }
+  #legend { position:fixed; left:0; right:0; bottom:0; padding:7px 12px;
+            background:rgba(8,8,9,0.88); border-top:1px solid var(--rule);
+            display:flex; gap:18px; flex-wrap:wrap; align-items:baseline;
+            font-size:11px; letter-spacing:.03em; }
+  #legend b { color:#fff; font-weight:600; }
+  #legend .k { color:#7fd8e8; }
+  #legend .sep { color:var(--rule); }
+  #legend .warn { color:#ffb03a; }
+  #legend .bad { color:#e8674f; }
+  #banner { position:fixed; top:0; left:0; right:0; padding:6px 12px; font-size:11.5px;
+            background:#4a1410; color:#ffd7cf; border-bottom:1px solid #7a2418; display:none; }
+  #banner.show { display:block; }
+  #title { position:fixed; top:0; left:0; right:0; padding:6px 12px; font-size:11.5px;
+           color:var(--dim); background:rgba(8,8,9,0.7); border-bottom:1px solid var(--rule); }
+  #title b { color:#fff; }
+  #title .g { color:#7fd8e8; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="title"></div>
+<div id="banner"></div>
+<div id="stage"><canvas id="glass"></canvas></div>
+<div id="legend"></div>
+
+<script type="module">
+import { drawPixelText, measurePixelText, FACE } from './src/rendering/PixelText.js';
+import { bufferForLines, RENDER_LINE_OPTIONS } from './src/rendering/renderLines.js';
+import { GalacticMap } from './src/generation/GalacticMap.js';
+import { GalacticSectors } from './src/generation/GalacticSectors.js';
+import { GalaxyLuminosityRenderer } from './src/rendering/GalaxyLuminosityRenderer.js';
+import { NavGalaxyRenderer } from './src/rendering/NavGalaxyRenderer.js';
+import * as THREE from 'three';
+import { HashGridStarfield } from './src/generation/HashGridStarfield.js';
+import { RealStarCatalog } from './src/generation/RealStarCatalog.js';
+import { generateSystemName, generatePlanetName, generateMoonName } from './src/generation/NameGenerator.js';
+import { resolveArrivalSystem } from './src/generation/arrivalResolution.js';
+import { multiplicityForSeed } from './src/generation/multiplicityOracle.js';
+import { displayClassOf } from './src/generation/worldClass.js';
+import alea from 'alea';
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// THE GUARD.  cockpit-panel-budget-lab.html's assertFits, generalised from "one row" to "any ink in
+// any named region".  It is the only thing standing between a design that fits and a design that
+// LOOKS like it fits because the canvas clipped the overflow for free.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+/** THE SABOTAGE STRING. `X` appends it to each design's longest single-line field and hands the
+ *  UNCLIPPED result to assertFits, so the guard is proved to fire on demand rather than asserted to
+ *  work. Every design has one, so the proof covers all three. */
+const SAB = '   SABOTAGE: THIS STRING IS DELIBERATELY LONGER THAN THE ROW IT IS DRAWN INTO AND THE GUARD MUST SAY SO';
+const _fired = new Set();
+let _violations = 0;
+/** Every region a design declares this frame, so a caller cannot invent one that is not on the glass. */
+let REGIONS = {};
+function region(name, x, y, w, h) { REGIONS[name] = { x, y, w, h }; return REGIONS[name]; }
+
+/**
+ * @param {string} what   what was being drawn (appears in the console error)
+ * @param {string} rname  the declared region it must stay inside
+ * @param {number} x @param {number} y @param {number} w @param {number} h  the ink's bounding box
+ */
+function assertFits(what, rname, x, y, w, h) {
+  const r = REGIONS[rname];
+  if (!r) { fire(`${what}: region ${JSON.stringify(rname)} was never declared this frame`); return false; }
+  const over = [];
+  if (x < r.x)                 over.push(`left by ${(r.x - x).toFixed(1)}`);
+  if (y < r.y)                 over.push(`top by ${(r.y - y).toFixed(1)}`);
+  if (x + w > r.x + r.w)       over.push(`right by ${(x + w - r.x - r.w).toFixed(1)}`);
+  if (y + h > r.y + r.h)       over.push(`bottom by ${(y + h - r.y - r.h).toFixed(1)}`);
+  if (!over.length) return true;
+  fire(`${what} overflows ${rname} — ${over.join(', ')} texel(s). ` +
+       `ink ${w.toFixed(1)}x${h.toFixed(1)} at (${x.toFixed(1)},${y.toFixed(1)}); ` +
+       `region ${r.w}x${r.h} at (${r.x},${r.y}).`);
+  return false;
+}
+/** Two blocks that each fit their region can still land on top of each other — which is exactly what
+ *  Design 1's status line does at 144p, and what assertFits alone cannot see. */
+function assertClear(what, rgn, leftEnd, rightStart) {
+  if (leftEnd <= rightStart) return true;
+  fire(`${what} collides inside ${rgn} — the left block ends at ${Math.round(leftEnd)} and the ` +
+       `right block starts at ${Math.round(rightStart)}, ${Math.round(leftEnd - rightStart)} texel(s) of overlap.`);
+  return false;
+}
+function fire(msg) {
+  _violations++;
+  const key = `${S.design}|${S.level}|${S.lines}|${FACE.name}|${msg}`;
+  if (_fired.has(key)) return;
+  _fired.add(key);
+  console.error(`NAV-240p OVERFLOW [D${S.design} ${LEVELS[S.level]} ${S.lines}p ${FACE.name}] — ${msg}`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+const LEVELS = ['GALAXY', 'SECTOR', 'REGION', 'PRISM', 'SYSTEM'];
+const S = {
+  design: 1,
+  level: 3,               // open on PRISM so the first frame shows the crowded level
+  lines: 240,
+  sabotage: false,
+  list: false,               // Design 2's 'L' list mode — its ONE answer to the comparison problem
+  legend: true,
+  buf: { width: 427, height: 240 },
+};
+
+// ── INKS.  Solid fills only.  Batch 1 established that at 240p there are exactly two representable
+// stroke weights and that alpha alone has never separated selected from tentative, so every "dim"
+// tone here is a literal darker ink or a 1-texel parity checker — never globalAlpha.
+const INK = {
+  BG:     '#04070c',
+  RULE:   '#1d3a4a',
+  DIM:    '#2f6b7a',
+  BODY:   '#7fd8e8',
+  KEY:    '#d8fbff',
+  YOU:    '#2ee6c0',
+  TARGET: '#ffb03a',
+  WARN:   '#e8674f',
+};
+/** BURN or WARP is not "which level am I on" — it is NavComputer._isCurrentSystem() (:1098-1105), a
+ *  0.1 pc identity test. Browsing a foreign system from SYSTEM still arms a WARP. */
+const isHere = () => S.level === 4 && D.sysStar && D.here && D.sysStar.seed === D.here.seed;
+const SPECTRAL = { O:'#9db0ff', B:'#abbfff', A:'#c9d6ff', F:'#f7f7ff', G:'#fff5ea',
+                   K:'#ffd1a1', M:'#ff9f70', D:'#d9e6ff' };
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// PRIMITIVES.  fillRect only.  There is no arc, no stroke, no dash and no roundRect in this file,
+// because a 1-px stroke at an integer coordinate straddles it and lands as a nine-screen-pixel grey
+// smear at 3.75x (PixelText.js:382-385).
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+function rect(g, x, y, w, h, ink) {
+  if (w <= 0 || h <= 0) return;
+  g.fillStyle = ink; g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+}
+function frame(g, x, y, w, h, ink, t = 1) {   // four fillRects, never strokeRect
+  rect(g, x, y, w, t, ink); rect(g, x, y + h - t, w, t, ink);
+  rect(g, x, y + t, t, h - 2 * t, ink); rect(g, x + w - t, y + t, t, h - 2 * t, ink);
+}
+function checker(g, x, y, w, h, ink, parity = 0) {   // the third tone, from two colours and no alpha
+  g.fillStyle = ink;
+  x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  for (let j = 0; j < h; j++) for (let i = (j + parity) & 1; i < w; i += 2) g.fillRect(x + i, y + j, 1, 1);
+}
+/** A sprite from a row-width table, centred on (cx,cy). The era's own vocabulary: no discs, tables. */
+function sprite(g, cx, cy, widths, ink) {
+  const h = widths.length, top = Math.round(cy) - ((h - 1) >> 1);
+  for (let r = 0; r < h; r++) {
+    const w = widths[r]; if (!w) continue;
+    rect(g, Math.round(cx) - ((w - 1) >> 1), top + r, w, 1, ink);
+  }
+}
+const SP = {
+  star7:  [3, 5, 7, 7, 7, 5, 3],
+  giant5: [3, 5, 5, 5, 3],
+  terr3:  [1, 3, 1],
+  moon3:  [1, 3, 1],
+  diam5:  [1, 3, 5, 3, 1],
+  plus3:  [1, 3, 1],
+};
+function plus(g, cx, cy, ink) {           // the real-catalog star: 5 texels of ink
+  rect(g, cx - 1, cy, 3, 1, ink); rect(g, cx, cy - 1, 1, 3, ink);
+}
+/** A dotted ellipse, plotted texel by texel. This is literally what a fifth-generation orrery was. */
+function dottedEllipse(g, cx, cy, rx, ry, ink, every = 2) {
+  const n = Math.max(24, Math.min(220, Math.round(2 * Math.PI * Math.max(rx, ry) / 2.2)));
+  g.fillStyle = ink;
+  for (let i = 0; i < n; i++) {
+    if (i % every) continue;
+    const t = (i / n) * Math.PI * 2;
+    g.fillRect(Math.round(cx + Math.cos(t) * rx), Math.round(cy + Math.sin(t) * ry), 1, 1);
+  }
+}
+
+// ── TYPE.  Every character on this page goes through the shipped face at unit 1 unless a design
+// says otherwise, and every draw is bounds-checked against its declared region.
+function T(g, s, x, y, opts = {}) {
+  const { color = INK.BODY, scale = 1, align = 'left', rgn = null, what = '' } = opts;
+  const str = String(s);
+  const w = measurePixelText(str, scale), h = FACE.h * scale;
+  const left = align === 'right' ? Math.round(x) - w : align === 'center' ? Math.round(x - w / 2) : Math.round(x);
+  if (rgn) assertFits(what || `"${str.slice(0, 22)}"`, rgn, left, Math.round(y), w, h);
+  drawPixelText(g, str, left, y, { color, scale, onMissing: 'tofu' });
+  return w;
+}
+/** Clip at the glass — navPixelType's __navFit, the mechanism that keeps a field OFF THE GLASS
+ *  without taking it OUT OF THE PIPELINE. Every producer upstream still returns the full string. */
+function fit(s, maxTexels, scale = 1) {
+  let str = String(s);
+  while (str.length && measurePixelText(str, scale) > maxTexels) str = str.slice(0, -1);
+  return str;
+}
+const pad = (s, n) => String(s).slice(0, n).padEnd(n, ' ');
+const rpad = (s, n) => String(s).slice(0, n).padStart(n, ' ');
+/** ONE label slot solver, shared by every design that puts names on a map — a 7-offset ladder over
+ *  the repo's own 6-texel pitch, and A LABEL THAT CANNOT FIND A SLOT IS NOT DRAWN. Shared on purpose:
+ *  if each design got its own placement code the comparison would be measuring my code, not theirs. */
+function placeLabel(taken, x, y, w, bounds) {
+  for (const dy of [0, -6, 6, -12, 12, -18, 18]) {
+    const yy = y + dy;
+    if (x + w + 2 > bounds.x + bounds.w || x < bounds.x) continue;
+    if (yy < bounds.y || yy + FACE.h + 2 > bounds.y + bounds.h) continue;
+    if (taken.some((t) => Math.abs(t.y - yy) < FACE.h + 1 && x - 2 < t.x + t.w && x + w + 2 > t.x)) continue;
+    taken.push({ x: x - 2, y: yy, w: w + 4 });
+    return yy;
+  }
+  return null;
+}
+
+/** A knockout plate under on-map type. Without it a label over a bright arm is invisible. */
+function plated(g, s, x, y, ink, rgn, what) {
+  const w = measurePixelText(s);
+  rect(g, x - 1, y - 1, w + 2, FACE.h + 2, INK.BG);
+  T(g, s, x, y, { color: ink, rgn, what });
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// REAL DATA.  Built once, on the game's own seed, at the game's own start position.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;   // NavComputer.js:69, verbatim
+const D = {
+  ready: false, note: [], fail: [],
+  gm: null, sectors: null, lum: null,
+  player: null, playerSector: null,
+  sectorRows: [], stars: [], starRows: [], sys: null, bodies: [], target: null, selStar: null,
+  lumCache: new Map(),
+};
+
+function buildData() {
+  D.gm = new GalacticMap('well-dipper-galaxy-1');            // main.js:286, same seed
+  D.sectors = new GalacticSectors(D.gm, 'well-dipper-galaxy-1');
+  D.lum = new GalaxyLuminosityRenderer(D.gm);
+  // ⭐ THE NAV'S PRIMARY MAP PATH IS THE GPU ONE (NavComputer._getOrRenderMap :1721-1723), and the CPU
+  // fallback at galaxy scale draws a smooth ringed disc with no arms — a fact about the FALLBACK, not
+  // about the galaxy. So this page builds the same GPU renderer the nav builds and falls back the
+  // same way. ⛔ render(cx, cz, extent) takes ONE extent: it is square by signature, which is why a
+  // full-bleed wide field (Design 2) has to render the square at the WIDE extent and crop.
+  try {
+    D.three = new THREE.WebGLRenderer({ antialias: false, alpha: false });
+    D.nav = new NavGalaxyRenderer(D.three, D.gm);
+    D.note.push('map: GPU NavGalaxyRenderer (512²)');
+  } catch (e) { D.nav = null; D.fail.push('NavGalaxyRenderer unavailable, using CPU fallback: ' + e.message); }
+  D.player = D.gm.getStartPosition();                        // main.js:287
+  D.playerSector = D.sectors.getSectorAt(D.player);
+  D.note.push(`galaxy seed well-dipper-galaxy-1 · ${D.sectors.getSectors().length} sectors`);
+
+  // ── SECTOR ROWS.  The estimated system count is NavComputer's own arithmetic
+  //    (_computeTileSize / _estimateBlockStarCount) at a new call site, not a new pipeline.
+  const secs = D.sectors.getSectors();
+  D.sectorRows = secs.map((s) => ({ s, n: estStars(s.centerX, s.centerZ, s.size) }))
+                     .sort((a, b) => b.n - a.n);
+  D.sectorById = new Map(secs.map((s) => [s.id, s]));
+
+  // ── PRISM.  The same call NavComputer._queryYRange makes, on the same block.
+  const half = 0.0052;                                        // the nav's own load-block half-width
+  const yHalf = 0.25;                                         // the nav expands to ±3 kpc in the
+  // background over ~4 s; ±250 pc is deep enough that the on-screen density at every zoom stop is
+  // the real one, and shallow enough that this page builds in well under a second.
+  const raw = HashGridStarfield.findStarsInPrism(D.gm, D.player, half, yHalf, 60000);
+  D.stars = raw.map((s) => {
+    let name = '';
+    try { name = generateSystemName(makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch (e) { name = ''; }
+    return { wx: s.worldX, wy: s.worldY, wz: s.worldZ, seed: s.seed, spectral: s.type,
+             dist: s.dist, name, isReal: false };
+  });
+  D.note.push(`${D.stars.length} hash-grid stars in the ${(half * 2000).toFixed(0)}×${(half * 2000).toFixed(0)}×${(yHalf * 2000).toFixed(0)} pc block`);
+  reindexStars();
+
+  // ── SYSTEM.  The exact call NavComputer.js:2458 makes.
+  pickSystem(0);
+}
+
+function makeRng(seed) {                                       // NavComputer.js:315-327, verbatim shape
+  const fn = alea(seed);
+  return {
+    float: () => fn(),
+    int: (a, b) => (b === undefined ? Math.floor(fn() * a) : a + Math.floor(fn() * (b - a + 1))),
+    range: (a, b) => a + fn() * (b - a),
+    pick: (arr) => arr[Math.floor(fn() * arr.length)],
+    bool: (p) => fn() < (p || 0.5), chance: (p) => fn() < p,
+    child: (label) => makeRng(seed + ':' + label),
+  };
+}
+
+/** density -> stars.  NavComputer._computeTileSize's identity, run forwards instead of inverted. */
+function estStars(x, z, sizeKpc) {
+  const R = Math.hypot(x, z), theta = Math.atan2(z, x || 1e-10);
+  const d = D.gm.potentialDerivedDensity(R, 0, theta).totalDensity;
+  const perPc3 = Math.max(0.001, d * DENSITY_TO_STARS_PER_PC3);
+  const volPc3 = (sizeKpc * 1000) ** 2 * 600;                  // a 600 pc-thick disc slab
+  return Math.round(perPc3 * volPc3);
+}
+
+function reindexStars() {
+  D.starRows = D.stars
+    .map((s) => ({ ...s, pc: s.dist * 1000, ly: s.dist * 3261.56 }))
+    .sort((a, b) => a.dist - b.dist);
+  D.here = D.starRows[0];                       // the system you are IN — nearest to the player
+  D.selStar = D.starRows.find((r) => r.isReal && r.dist > 1e-6) || D.starRows[1] || D.starRows[0];
+  D.target = D.selStar;
+  if (D.selStar) {
+    const m = multiplicityForSeed({ seed: D.selStar.seed, pos: { x: D.selStar.wx, y: D.selStar.wy, z: D.selStar.wz },
+                                    type: D.selStar.spectral, name: D.selStar.name }, { galacticMap: D.gm });
+    D.selStar.mult = m.count;
+  }
+}
+
+/** ⭐ WHICH SYSTEM THE SYSTEM LEVEL SHOWS. The nearest star can legitimately have ZERO planets
+ *  (Proxima Centauri does, on this seed), and an empty orrery answers nothing about a SYSTEM design.
+ *  So the lab walks the nearest stars and shows the nth one that actually has bodies — and `S` steps
+ *  to the next, so the sparse and the crowded case are both one keypress away. The systems are the
+ *  real ones; only WHICH of them is on screen is the lab's choice. */
+let sysPick = 0;
+function pickSystem(step) {
+  const cands = D.starRows.slice(0, 40).filter((r) => r.dist > 1e-9);
+  const withBodies = [];
+  for (const c of cands) {
+    if (withBodies.length >= 12) break;
+    buildSystem(c);
+    if (D.bodies.length >= 4) withBodies.push(c);
+  }
+  D.sysCands = withBodies.length ? withBodies : cands.slice(0, 1);
+  sysPick = ((sysPick + step) % D.sysCands.length + D.sysCands.length) % D.sysCands.length;
+  buildSystem(D.sysCands[sysPick]);
+}
+
+function buildSystem(star) {
+  if (!star) return;
+  try {
+    D.sys = resolveArrivalSystem({
+      galacticMap: D.gm, overlay: D.catalog?.overlay || null,
+      pos: { x: star.wx, y: star.wy, z: star.wz },
+      starType: star.spectral, seed: star.seed, displayName: star.name, hasNavStar: true,
+    }).systemData;
+  } catch (e) { D.fail.push('resolveArrivalSystem: ' + e.message); D.sys = null; return; }
+  // The star whose system is on screen IS the selected star and IS the commit destination — that is
+  // how the drill works (PRISM click -> SYSTEM -> WARP), and three different names for "where the
+  // button sends you" would be measuring my bookkeeping instead of the designs.
+  D.sysStar = star; D.selStar = star; D.target = star;
+  // A flat, AU-ordered body list: the thing every one of the three designs wants and the
+  // instrument has never had.
+  const rows = [];
+  const rng = makeRng(star.seed + ':names');
+  (D.sys.planets || []).forEach((p, i) => {
+    const pd = p.planetData;
+    let pname = ''; try { pname = generatePlanetName(rng.child('p' + i), star.name || 'STAR', i, D.sys.planets.length); } catch (e) { pname = (star.name || 'S') + ' ' + 'bcdefghijk'[i]; }
+    rows.push({ kind: 'planet', name: pname, au: p.orbitRadiusAU, cls: displayClassOf(pd),
+                rE: pd.radiusEarth, T: pd.T_eq, hab: pd.habitability?.score ?? null,
+                rings: !!pd.rings, moons: p.moons?.length || 0, pd });
+    (p.moons || []).forEach((m, j) => {
+      let mname = ''; try { mname = generateMoonName(rng.child(`m${i}.${j}`), pname, j, p.moons.length); } catch (e) { mname = pname + ' ' + (j + 1); }
+      rows.push({ kind: 'moon', name: mname, au: p.orbitRadiusAU, cls: m.type || 'moon',
+                  rE: m.radiusEarth, T: m.T_eq, hab: null, rings: false, moons: 0, parent: i });
+    });
+  });
+  (D.sys.asteroidBelts || []).forEach((b, i) => {
+    rows.push({ kind: 'belt', name: 'BELT ' + 'ABC'[i], au: b.centerRadiusAU, cls: 'belt',
+                rE: null, T: null, hab: null, rings: false, moons: 0, widthAU: b.widthAU });
+  });
+  D.bodies = rows;
+  D.selBody = rows.find((r) => r.kind === 'planet' && r.hab != null && r.hab > 0.5)
+           || rows.find((r) => r.kind === 'planet') || rows[0] || null;
+}
+
+/** The luminosity image, cached. Rendered SQUARE at `res` covering ±ext kpc — the renderer is square
+ *  by signature (GalaxyLuminosityRenderer.render(cx,cz,extent,resolution)) and nothing here pretends
+ *  otherwise: a design that wants a wide field renders the square at the WIDE extent and crops. */
+const LUM_CAP = 448;
+/** ⭐ THE NAV'S OWN OPTION BLOCK, copied verbatim from NavComputer._getOrRenderMap (:1738-1752).
+ *  Without it the CPU renderer draws a washed-out disc with no arms — which is a fact about the
+ *  DEFAULTS, not about the galaxy, and a lab that showed it would be lying about the picture.
+ *  ⚠ The nav's PRIMARY path is the GPU NavGalaxyRenderer (:1722); this is its CPU fallback, chosen
+ *  here because a standalone page has no WebGL renderer to hand it. Same model, same overrides. */
+function lumOptions(ext) {
+  const components = {};
+  if (ext < 10) { components.arms = { gain: 4.0, stretch: 400 }; components.disk = { gain: 3.0, stretch: 350 }; }
+  if (ext < 2)  { components.arms = { gain: 5.0, stretch: 500, gamma: 0.6 };
+                  components.disk = { gain: 4.0, stretch: 400 }; components.core = { gain: 0.2 }; }
+  return { dustStrength: ext > 10 ? 0.5 : ext > 2 ? 0.3 : 0.1,
+           noiseStrength: ext > 10 ? 0.4 : ext > 2 ? 0.6 : 0.8, components };
+}
+function lumImage(cx, cz, ext, res) {
+  if (D.nav) {                                     // GPU: synchronous, 512², cached inside the renderer
+    try { return D.nav.render(cx, cz, ext); }
+    catch (e) { D.fail.push('NavGalaxyRenderer.render: ' + e.message); D.nav = null; }
+  }
+  const capped = Math.min(res, LUM_CAP);
+  const key = `${cx.toFixed(4)}|${cz.toFixed(4)}|${ext.toFixed(5)}|${capped}`;
+  if (D.lumCache.has(key)) return D.lumCache.get(key);
+  D.lumCache.set(key, null);                       // placeholder: this frame draws a holding pattern
+  setTimeout(() => {
+    try { D.lumCache.set(key, D.lum.render(cx, cz, ext, capped, lumOptions(ext))); }
+    catch (e) { D.fail.push('luminosity: ' + e.message); D.lumCache.set(key, 'FAIL'); }
+    draw();
+  }, 0);
+  return null;
+}
+/** Blit a square luminosity image into a rect with NEAREST sampling and no smoothing.
+ *  `sq` is the destination SQUARE side in texels; the destination rect crops it. */
+function blitLum(g, img, dx, dy, dw, dh, sqSide) {
+  if (!img || img === 'FAIL') {
+    checker(g, dx, dy, dw, dh, INK.RULE);
+    T(g, img === 'FAIL' ? 'DENSITY FAILED' : 'COMPUTING DENSITY', dx + 4, dy + 4, { color: INK.DIM });
+    return;
+  }
+  g.imageSmoothingEnabled = false;                 // the nav sets this TRUE today, immediately before
+  const sx = (sqSide - dw) / 2, sy = (sqSide - dh) / 2;   // a 3.2x bilinear downsample (NavComputer.js:1709)
+  const k = img.width / sqSide;
+  g.drawImage(img, Math.max(0, sx * k), Math.max(0, sy * k),
+              Math.min(img.width, dw * k), Math.min(img.height, dh * k), dx, dy, dw, dh);
+}
+
+// ── The extents each level looks at, taken from NavComputer._setupViewStackForPlayer (:1200-1225).
+function levelView(level) {
+  const p = D.player, sec = D.playerSector;
+  if (level === 0) return { cx: 0, cz: 0, size: 44, n: 0 };
+  if (level === 1) return { cx: sec.centerX, cz: sec.centerZ, size: sec.size, n: 8 };
+  return { cx: p.x, cz: p.z, size: tileSize(p.x, p.z, 10000) * 16, n: 16 };
+}
+function tileSize(x, z, target) {                  // NavComputer._computeTileSize (:1596-1602)
+  const R = Math.hypot(x, z), theta = Math.atan2(z, x || 1e-10);
+  const d = D.gm.potentialDerivedDensity(R, 0, theta).totalDensity;
+  if (d < 1e-10) return 0.02;
+  const perPc3 = Math.max(0.001, d * DENSITY_TO_STARS_PER_PC3);
+  return Math.cbrt(target / perPc3) / 1000;
+}
+
+// ── PRISM PROJECTION.  A fixed top-down-ish view; the real camera is rotatable and that is not what
+//    this page is measuring. Zoom stops are the four Design 2 and Design 3 both asked for.
+const ZOOM_STOPS = [0.0015, 0.003, 0.006, 0.01034];   // kpc — default, and the wheel ceiling
+let zoomIdx = 0;
+function projectPrism(s, cx, cy, halfW, halfH, radius) {
+  const dx = (s.wx - D.player.x) / radius, dz = (s.wz - D.player.z) / radius;
+  const dy = (s.wy - D.player.y) / Math.max(radius, 1e-9);
+  const rx = 0.92, tilt = 0.42;                      // a shallow tilt so height reads as a gap
+  return { x: cx + dx * halfW * rx, y: cy + dz * halfH * tilt - dy * halfH * 0.55,
+           py: cy + dz * halfH * tilt, depth: dz };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// DESIGN 1 — THE 71x40.  A character-cell nav computer: a map pane and a persistent ranked rail.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+function drawDesign1(g, W, H) {
+  const CELL = FACE.advance, LEAD = FACE.h + 1;
+  const cols = Math.floor((W + 1) / CELL), rows = Math.floor(H / LEAD);
+  const cx = (c) => c * CELL, ry = (r) => r * LEAD;
+  const railC = Math.min(26, Math.max(10, Math.round(cols * 0.366)));
+  const mapC = cols - railC - 2;                      // -1 y-gauge, -1 rule
+  const railX = cx(cols - railC), railW = railC * CELL - 1;
+  const mapW = mapC * CELL, mapY = ry(1), mapH = ry(rows - 3) - ry(1);
+  const gaugeX = cx(mapC), ruleX = cx(mapC + 1) + 2;
+
+  region('status', 0, 0, W, FACE.h);
+  region('map', 0, mapY, mapW, mapH);
+  region('rail', railX, mapY, railW, mapH);
+  region('hint', 0, ry(rows - 3), W, FACE.h);
+  region('tabs', 0, ry(rows - 2), W, FACE.h);
+  region('commit', 0, ry(rows - 1), W, FACE.h);
+
+  rect(g, 0, 0, W, H, INK.BG);
+  rect(g, 0, ry(1) - 1, W, 1, INK.RULE);              // the rule lives in the LEADING texel: 0 rows
+  rect(g, 0, ry(rows - 3) - 1, W, 1, INK.RULE);
+  rect(g, ruleX, mapY, 1, mapH, INK.RULE);
+
+  // ── STATUS, row 0 ────────────────────────────────────────────────────────────────────────────
+  const sys = D.here?.name || 'UNKNOWN';
+  const identW = T(g, fit(sys.toUpperCase(), 14 * CELL), 1, 0, { color: INK.KEY, rgn: 'status', what: 'status ident' });
+  rect(g, 1 + 15 * CELL, 2, 1, 1, INK.RULE);
+  const secW = T(g, fit((D.playerSector?.name || '').toUpperCase(), 17 * CELL), 1 + 17 * CELL, 0,
+    { color: INK.DIM, rgn: 'status', what: 'status sector' });
+  const tgt = `TGT ${(D.target?.name || '—').toUpperCase()}  ${(D.target?.ly || 0).toFixed(1)} LY`;
+  const tgtW = measurePixelText(fit(tgt, 34 * CELL));
+  T(g, fit(tgt, 34 * CELL), W - 1, 0, { color: INK.TARGET, align: 'right', rgn: 'status', what: 'status target' });
+  assertClear('status ident/sector vs TGT', 'status',
+              Math.max(1 + identW, 1 + 17 * CELL + secW) + CELL, W - 1 - tgtW);
+
+  // ── THE MAP PANE ─────────────────────────────────────────────────────────────────────────────
+  if (S.level <= 2) d1TwoD(g, mapW, mapY, mapH);
+  else if (S.level === 3) d1Prism(g, mapW, mapY, mapH, gaugeX);
+  else d1Ladder(g, mapW, mapY, mapH);
+
+  // ── THE RAIL ─────────────────────────────────────────────────────────────────────────────────
+  d1Rail(g, railX, mapY, railW, railC, rows - 4);
+
+  // ── HINT ─────────────────────────────────────────────────────────────────────────────────────
+  const hints = ['CLICK A SECTOR OR A LIST ROW   [ ] SORT   / SEARCH   TAB LEVEL',
+                 'CLICK A TILE OR A LIST ROW   [ ] SORT   / SEARCH   TAB LEVEL',
+                 'CLICK A TILE OR A LIST ROW   [ ] SORT   / SEARCH   TAB LEVEL',
+                 'CLICK A STAR OR A LIST ROW   [ ] SORT   / SEARCH   WASD PAN',
+                 'SELECT A BODY   DRAG TO ROTATE   [ ] SORT   TAB LEVEL'];
+  const hintFull = hints[S.level] + (S.sabotage ? SAB : '');
+  T(g, fit(hintFull, W - 2), 1, ry(rows - 3), { color: INK.DIM, rgn: 'hint', what: 'hint line' });
+  // the guard must see the UNCLIPPED string, or it is not a guard — it is the clip
+  if (S.sabotage) assertFits('D1 hint line (unclipped)', 'hint', 1, ry(rows - 3), measurePixelText(hintFull), FACE.h);
+
+  // ── TABS + COUNTS, row rows-2 ────────────────────────────────────────────────────────────────
+  const tabW = Math.floor(Math.min(8, Math.floor(cols * 0.11)) * CELL);
+  LEVELS.forEach((name, i) => {
+    const x = i * tabW;
+    const lbl = fit(name, tabW - 2);
+    const lx = x + (tabW - measurePixelText(lbl)) / 2;
+    if (i === S.level) { rect(g, x, ry(rows - 2) - 1, tabW, LEAD, INK.YOU);
+                         T(g, lbl, lx, ry(rows - 2), { color: INK.BG, rgn: 'tabs', what: 'tab ' + name }); }
+    else T(g, lbl, lx, ry(rows - 2), { color: INK.DIM, rgn: 'tabs', what: 'tab ' + name });
+  });
+  const counts = [`${D.sectorRows.length} SECTORS`, '64 TILES', '256 TILES',
+                  `${D.stars.length} STARS`, `${D.bodies.length} BODIES`][S.level];
+  T(g, fit(counts, W - 5 * tabW - 2), W - 1, ry(rows - 2), { color: INK.DIM, align: 'right', rgn: 'tabs', what: 'level counts' });
+
+  // ── COMMIT, full width ───────────────────────────────────────────────────────────────────────
+  const cur = isHere();
+  const label = cur ? `BURN TO ${(D.selBody?.name || '—').toUpperCase()} · ${(D.selBody?.au ?? 0).toFixed(2)} AU · ENTER`
+                    : `WARP TO ${(D.target?.name || '—').toUpperCase()} · ${(D.target?.ly || 0).toFixed(1)} LY · ENTER`;
+  rect(g, 0, ry(rows - 1) - 1, W, LEAD, cur ? INK.YOU : INK.TARGET);
+  T(g, fit(label, W - 4), W / 2, ry(rows - 1), { color: INK.BG, align: 'center', rgn: 'commit', what: 'commit label' });
+}
+
+function d1TwoD(g, mapW, mapY, mapH) {
+  const v = levelView(S.level);
+  const sq = Math.min(mapW, mapH), ox = Math.round((mapW - sq) / 2);
+  blitLum(g, lumImage(v.cx, v.cz, v.size / 2, sq), ox, mapY, sq, sq, sq);
+  const n = S.level === 0 ? 8 : v.n;
+  for (let i = 0; i <= n; i++) {
+    rect(g, ox + Math.round(sq * i / n), mapY, 1, sq, INK.RULE);
+    rect(g, ox, mapY + Math.round(sq * i / n), sq, 1, INK.RULE);
+  }
+  const toX = (x) => ox + ((x - v.cx) / v.size + 0.5) * sq;
+  const toY = (z) => mapY + ((z - v.cz) / v.size + 0.5) * sq;
+  // YOU — a 1-texel frame plus a 3x3 block, no pulse
+  const px = toX(D.player.x), py = toY(D.player.z);
+  const cell = sq / n;
+  frame(g, Math.floor((px - ox) / cell) * cell + ox, Math.floor((py - mapY) / cell) * cell + mapY, cell, cell, INK.YOU);
+  rect(g, px - 1, py - 1, 3, 3, INK.YOU);
+  if (D.target) sprite(g, toX(D.target.wx), toY(D.target.wz), SP.diam5, INK.TARGET);
+  // the eight ranked tiles carry a 2-char id; at 16x16 the cell is 13 texels and only the listed
+  // tiles are tagged, which is the design saying so rather than the glyphs colliding
+  const ids = d1TileRows(v, n).slice(0, 8);
+  ids.forEach((t, i) => {
+    const tx = ox + t.i * cell + 2, ty = mapY + t.j * cell + 2;
+    if (cell < measurePixelText(t.id) + 3) return;
+    plated(g, t.id, tx, ty, INK.DIM, 'map', 'tile id ' + t.id);
+  });
+}
+
+const AZ = 'ABCDEFGHIJKLMNOP';
+function d1TileRows(v, n) {
+  const out = [];
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const x = v.cx + (i + 0.5 - n / 2) * (v.size / n);
+    const z = v.cz + (j + 0.5 - n / 2) * (v.size / n);
+    out.push({ i, j, id: AZ[i] + (j + 1), x, z, n: estStars(x, z, v.size / n) });
+  }
+  return out.sort((a, b) => b.n - a.n);
+}
+
+function d1Prism(g, mapW, mapY, mapH, gaugeX) {
+  const radius = ZOOM_STOPS[zoomIdx];
+  const cxp = mapW / 2, cyp = mapY + mapH / 2;
+  const shown = [];
+  for (const s of D.starRows) {
+    const p = projectPrism(s, cxp, cyp, mapW / 2, mapH / 2, radius);
+    if (p.x < 0 || p.x >= mapW || p.y < mapY || p.y >= mapY + mapH) continue;   // ⭐ THE BOUNDS CULL
+    shown.push({ s, p });                                                       // (there is none today)
+    if (shown.length >= 240) break;                                             // and the draw cap
+  }
+  for (const { s, p } of shown) {
+    rect(g, p.x, p.py, 1, 1, INK.RULE);                                          // the plane dot
+    if (s === D.selStar) { frame(g, p.x - 2, p.y - 2, 5, 5, INK.TARGET); continue; }
+    if (s.dist < 1e-6)   { frame(g, p.x - 2, p.y - 2, 5, 5, INK.YOU); continue; }
+    if (s.isReal) plus(g, p.x, p.y, INK.BODY);
+    else rect(g, p.x, p.y, 1, 1, INK.DIM);
+  }
+  // ⭐ EIGHT SINGLE-CHARACTER INDEX TAGS instead of 139 labels of which 100 are already faded
+  const top = D.starRows.slice(0, 9).filter((s) => s.dist > 1e-6).slice(0, 8);
+  top.forEach((s, i) => {
+    const p = projectPrism(s, cxp, cyp, mapW / 2, mapH / 2, radius);
+    if (p.x < 1 || p.x + 3 + FACE.w + 1 >= mapW || p.y < mapY + 7 || p.y >= mapY + mapH) return;
+    plated(g, String(i + 1), p.x + 3, p.y - 6, INK.TARGET, 'map', 'index tag ' + (i + 1));
+  });
+  // the Y-gauge: 6 texels carrying the whole 60x160 minimap
+  rect(g, gaugeX + 3, mapY + 2, 1, mapH - 4, INK.RULE);
+  rect(g, gaugeX + 1, mapY + mapH / 2, 3, 1, INK.YOU);
+  if (D.selStar) {
+    const dy = (D.selStar.wy - D.player.y) / 0.002;
+    rect(g, gaugeX, mapY + mapH / 2 - Math.max(-mapH / 2 + 2, Math.min(mapH / 2 - 2, dy * mapH / 2)), 5, 1, INK.TARGET);
+  }
+}
+
+function d1Ladder(g, mapW, mapY, mapH) {
+  // ⛔ THE ROTATABLE ORRERY IS NOT DRAWN. An ellipse at 240p is a 1-texel stroke straddling its own
+  // coordinate; this design's answer is a sqrt(AU) LADDER with zero curves. It is the design's own
+  // top risk and the thing Max is most likely to veto — which is why it is on the glass.
+  const axisY = Math.round(mapY + mapH * 0.62);
+  const x0 = 8, x1 = mapW - 10;
+  rect(g, x0, axisY, x1 - x0, 1, INK.RULE);
+  const auMax = Math.max(1e-3, ...D.bodies.filter((b) => b.kind !== 'moon').map((b) => b.au));
+  const px = (au) => Math.round(x0 + 4 + (x1 - x0 - 8) * Math.sqrt(Math.max(0, au) / auMax));
+  sprite(g, x0 + 4, axisY, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
+  const z = D.sys?.zones;
+  if (z) rect(g, px(z.hzInnerAU), axisY + 2, Math.max(1, px(z.hzOuterAU) - px(z.hzInnerAU)), 3, INK.YOU);
+  let lastX = -99, ranOff = 0;
+  // ⭐ THE SEPARATION PASS IS THE DESIGN'S OWN ("a left-to-right integer pass enforcing a minimum
+  // 8-texel separation"). On a 20-body system it walks the last bodies straight off the end of the
+  // axis. The guard says so in the console; these draw in WARN at the edge so the failure is VISIBLE
+  // rather than an invisible glyph outside the pane.
+  D.bodies.filter((b) => b.kind !== 'moon').forEach((b, i) => {
+    let x = px(b.au); if (x - lastX < 8) x = lastX + 8; lastX = x;
+    const off = x > x1 - 6;
+    if (off) { ranOff++; x = x1 - 6; }
+    const ink = off ? INK.WARN : (b === D.selBody ? INK.TARGET : INK.BODY);
+    if (b.kind === 'belt') { for (let k = -6; k <= 6; k += 2) rect(g, x + k, axisY, 1, 1, off ? INK.WARN : INK.DIM); }
+    else {
+      sprite(g, x, axisY, b.rE > 4 ? SP.giant5 : SP.terr3, ink);
+      if (b.rings) rect(g, x - 4, axisY, 9, 1, INK.DIM);
+      for (let m = 0; m < b.moons; m++) rect(g, x, axisY - 7 - m * 3, 1, 1, INK.DIM);
+      if (b === D.selBody) frame(g, x - 4, axisY - 4, 9, 9, INK.TARGET);
+    }
+    if (off) return;
+    const tag = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || '?';
+    T(g, tag, x - 2, axisY + 8, { color: b === D.selBody ? INK.KEY : INK.DIM, rgn: 'map', what: 'ladder tag ' + tag });
+  });
+  if (ranOff) {
+    T(g, `+${ranOff} OFF AXIS`, x1 - 4, axisY + 8, { color: INK.WARN, align: 'right', rgn: 'map', what: 'ladder overflow' });
+    fire(`SYSTEM ladder: ${ranOff} of ${D.bodies.filter((b) => b.kind !== 'moon').length} bodies ran past the ` +
+         `end of the axis under the design's own 8-texel minimum separation. Drawn in WARN at the edge.`);
+  }
+  rect(g, px(0) - 1, axisY - 1, 3, 3, INK.YOU);
+}
+
+function d1Rail(g, x, y, w, cols, rowCount) {
+  const LEAD = FACE.h + 1;
+  const hdr = ['SECTORS', 'TILES', 'TILES', 'STARS', 'BODIES'][S.level];
+  T(g, hdr, x, y, { color: INK.KEY, rgn: 'rail', what: 'rail header' });
+  const cnt = [String(D.sectorRows.length), '64', '256', `${D.starRows.filter(s=>s.isReal).length}/${fmtK(D.stars.length)}`,
+               String(D.bodies.length)][S.level];
+  T(g, cnt, x + w, y, { color: INK.DIM, align: 'right', rgn: 'rail', what: 'rail count' });
+  rect(g, x, y + LEAD - 1, w, 1, INK.RULE);
+
+  const listRows = Math.max(2, rowCount - 9);
+  const detail = [];
+  let lines = [];
+
+  if (S.level === 0) {
+    lines = D.sectorRows.slice(0, listRows).map((r, i) =>
+      ({ txt: `${pad(String(i + 1), 2)} ${pad(r.s.name.toUpperCase(), cols - 16)} ${rpad(fmtK(r.n), 6)}`,
+         bar: r.n / D.sectorRows[0].n, sel: r.s.id === D.playerSector?.id }));
+    const s = D.playerSector;
+    detail.push([s.name.toUpperCase(), INK.KEY],
+      [`CENTRE  ${s.centerX.toFixed(1)}, ${s.centerZ.toFixed(1)}`, INK.BODY],
+      [`SYSTEMS ${fmtK(estStars(s.centerX, s.centerZ, s.size))}`, INK.BODY],
+      [`SPAN    ${s.size.toFixed(2)} KPC`, INK.BODY], ['', INK.BODY],
+      [`YOU     ${fit(s.name.toUpperCase(), (cols - 8) * FACE.advance)}`, INK.YOU],
+      [`TARGET  ${fit((D.target?.name || '—').toUpperCase(), (cols - 8) * FACE.advance)}`, INK.TARGET]);
+  } else if (S.level === 1 || S.level === 2) {
+    const v = levelView(S.level);
+    const tiles = d1TileRows(v, v.n).slice(0, listRows);
+    const idW = S.level === 2 ? 3 : 2;
+    lines = tiles.map((t) => ({ txt: `${pad(t.id, idW)} ${pad('—', cols - idW - 13)} ${rpad(fmtK(t.n), 6)}`,
+                                bar: t.n / tiles[0].n, sel: false }));
+    const t = tiles[0];
+    detail.push([t.id, INK.KEY], [`CENTRE  ${t.x.toFixed(1)}, ${t.z.toFixed(1)}`, INK.BODY],
+      [`SYSTEMS ${fmtK(t.n)}`, INK.BODY], [`SPAN    ${(v.size / v.n).toFixed(3)} KPC`, INK.BODY],
+      ['', INK.BODY], [`YOU     ${d1PlayerTile(v)}`, INK.YOU], ['TARGET  —', INK.DIM]);
+  } else if (S.level === 3) {
+    lines = D.starRows.slice(0, listRows).map((s, i) => ({
+      txt: `${i < 8 && s.dist > 1e-6 ? i + 1 : '·'} ${pad(s.name.toUpperCase() || 'UNNAMED', cols - 13)} ` +
+           `${rpad(s.pc.toFixed(1), 5)} ${pad(s.spectral, 2)} ${s.mult > 1 ? s.mult : '·'}`,
+      bar: 0, sel: s === D.selStar }));
+    const s = D.selStar;
+    if (s) detail.push([fit(s.name.toUpperCase(), w), INK.KEY], [`${s.spectral}   ${s.isReal ? 'CATALOG' : 'PROCEDURAL'}`, INK.BODY],
+      [`DIST   ${s.pc.toFixed(2)} PC`, INK.BODY], [`       ${s.ly.toFixed(1)} LY`, INK.BODY],
+      [`PLANE  ${((s.wy - D.player.y) * 1000).toFixed(0)} PC`, INK.BODY],
+      [`COMPS  ${s.mult > 1 ? 'MULTIPLE (' + s.mult + ')' : 'SINGLE'}`, INK.BODY],
+      ['WARP ARMED', INK.TARGET]);
+  } else {
+    lines = D.bodies.slice(0, listRows).map((b, i) => ({
+      txt: `${'123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || '?'}${b.kind === 'moon' ? '-' : ' '}` +
+           `${pad((b.kind === 'moon' ? ' ' : '') + b.name.toUpperCase(), cols - 14)} ` +
+           `${rpad(b.au.toFixed(2), 5)} ${rpad(b.T ? Math.round(b.T) + 'K' : '—', 5)}`,
+      bar: 0, sel: b === D.selBody }));
+    const b = D.selBody;
+    if (b) detail.push([fit(b.name.toUpperCase(), w), INK.KEY], [b.cls.toUpperCase(), INK.BODY],
+      [`RADIUS ${b.rE ? b.rE.toFixed(2) + ' EARTH' : '—'}`, INK.BODY],
+      [`ORBIT  ${b.au.toFixed(2)} AU`, INK.BODY],
+      [`TEMP   ${b.T ? Math.round(b.T) + ' K' : '—'}`, INK.BODY],
+      [`HAB    ${b.hab != null ? b.hab.toFixed(2) : '—'}`, b.hab > 0.5 ? INK.YOU : INK.BODY],
+      [`MOONS  ${b.moons}${b.rings ? '   RINGED' : ''}`, INK.BODY]);
+  }
+
+  lines.forEach((L, i) => {
+    const yy = y + (i + 1) * LEAD;
+    if (L.sel) rect(g, x - 1, yy - 1, w + 2, LEAD, INK.RULE);
+    T(g, fit(L.txt, w), x, yy, { color: L.sel ? INK.KEY : INK.BODY, rgn: 'rail', what: 'rail row ' + i });
+    if (L.bar > 0) for (let k = 0; k < Math.round(4 * L.bar); k++) rect(g, x + w - 23 + k * 6, yy + 1, 4, 4, INK.BODY);   // c67-c70
+  });
+  const pagerY = y + (lines.length + 1) * LEAD;
+  T(g, fit(`  1-${lines.length} OF ${[D.sectorRows.length, 64, 256, D.starRows.length, D.bodies.length][S.level]}   [ ] PAGE`, w),
+    x, pagerY, { color: INK.DIM, rgn: 'rail', what: 'pager' });
+  rect(g, x, pagerY + LEAD - 1, w, 1, INK.RULE);
+  detail.forEach(([t, ink], i) => {
+    if (!t) return;
+    T(g, fit(t, w), x, pagerY + (i + 1) * LEAD, { color: ink, rgn: 'rail', what: 'detail ' + i });
+  });
+}
+function d1PlayerTile(v) {
+  const i = Math.floor(((D.player.x - v.cx) / v.size + 0.5) * v.n);
+  const j = Math.floor(((D.player.z - v.cz) / v.size + 0.5) * v.n);
+  return (AZ[Math.max(0, Math.min(v.n - 1, i))] || '?') + (Math.max(0, Math.min(v.n - 1, j)) + 1);
+}
+function fmtK(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+  return String(n);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// DESIGN 2 — TWO BARS AND A SKY.  The map owns the frame; two 8-row bars carry every word.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+function drawDesign2(g, W, H) {
+  const BAR = Math.max(7, FACE.h + 3);
+  const mapY = BAR, mapH = H - BAR * 2;
+  region('topbar', 0, 0, W, BAR);
+  region('map', 0, mapY, W, mapH);
+  region('botbar', 0, H - BAR, W, BAR);
+
+  rect(g, 0, 0, W, H, INK.BG);
+  if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
+  else if (S.level === 3) d2Prism(g, W, mapY, mapH);
+  else d2System(g, W, mapY, mapH);
+
+  // ── TOP BAR: tabs left, ONE locator right.  "Where am I" is answered here and nowhere else —
+  //    today it is answered five ways in three visual languages.
+  rect(g, 0, 0, W, BAR - 1, INK.BG); rect(g, 0, BAR - 1, W, 1, INK.RULE);
+  let tx = 4;
+  LEVELS.forEach((n, i) => {
+    const w = measurePixelText(n);
+    T(g, n, tx, 1, { color: i === S.level ? INK.KEY : INK.DIM, rgn: 'topbar', what: 'tab ' + n });
+    if (i === S.level) rect(g, tx - 2, BAR - 2, w + 4, 1, INK.YOU);
+    tx += w + 6;
+  });
+  const loc = `${(D.here?.name || '—').toUpperCase()} · ${(D.playerSector?.name || '').toUpperCase()}`;
+  const locW = measurePixelText(fit(loc, W - tx - 6));
+  T(g, fit(loc, W - tx - 6), W - 4, 1, { color: INK.BODY, align: 'right', rgn: 'topbar', what: 'locator' });
+  assertClear('tab strip vs locator', 'topbar', tx, W - 4 - locW);
+
+  // ── BOTTOM BAR: one 63-character status line, ' · '-joined so truncation eats the VERB first.
+  rect(g, 0, H - BAR, W, 1, INK.RULE); rect(g, 0, H - BAR + 1, W, BAR - 1, INK.BG);
+  const chipW = measurePixelText('[WARP]') + 6;
+  const clauses = d2Status();
+  const full = clauses.join(' · ') + (S.sabotage ? SAB : '');
+  const avail = W - 8 - chipW - 4;
+  if (avail < measurePixelText('PRISM')) fire('status line has no room left beside the commit chip');
+  T(g, fit(full, avail), 4, H - BAR + 2, { color: INK.BODY, rgn: 'botbar', what: 'status line' });
+  if (S.sabotage) assertFits('D2 status line (unclipped)', 'botbar', 4, H - BAR + 2, measurePixelText(full), FACE.h);
+  const armed = !!(isHere() ? D.selBody : D.target);
+  const chipX = W - chipW - 2;
+  if (armed) rect(g, chipX, H - BAR, chipW, BAR, INK.TARGET);
+  T(g, isHere() ? '[BURN]' : '[WARP]', chipX + 3, H - BAR + 2,
+    { color: armed ? INK.BG : INK.DIM, rgn: 'botbar', what: 'commit chip' });
+}
+function d2Status() {
+  if (S.level === 0) return ['GALAXY', (D.playerSector?.name || '').toUpperCase(),
+    `${fmtK(estStars(D.playerSector.centerX, D.playerSector.centerZ, D.playerSector.size))} SYSTEMS`, 'CLICK TO ENTER'];
+  if (S.level <= 2) return [LEVELS[S.level], (D.playerSector?.name || '').toUpperCase(),
+    `${d1TileRows(levelView(S.level), levelView(S.level).n)[0].n} SYSTEMS IN BEST TILE`, 'CLICK TO ENTER'];
+  if (S.level === 3) return S.list
+    ? ['PRISM LIST', `NEAREST ${D.starRows.length}`, 'L=MAP', 'ENTER TO WARP']
+    : ['PRISM', `VIEW ${(ZOOM_STOPS[zoomIdx] * 2000).toFixed(1)} PC ACROSS`, `${D.stars.length} STARS`,
+       'L=LIST', 'WASD PAN', 'R/F UP'];
+  const b = D.selBody;
+  return b ? [b.name.toUpperCase(), b.cls.toUpperCase(), `${b.au.toFixed(2)} AU`,
+              b.T ? `${Math.round(b.T)} K` : '—', `${b.moons} MOONS`, ...(b.rings ? ['RINGED'] : [])]
+           : ['SYSTEM', 'NO BODY SELECTED'];
+}
+function d2TwoD(g, W, mapY, mapH) {
+  const v = levelView(S.level);
+  // ⭐ FULL BLEED WITH SQUARE WORLD PIXELS.  NavGalaxyRenderer/GalaxyLuminosityRenderer are square by
+  // signature, so the honest way to get a wide field is to render the square at the WIDE extent and
+  // crop the middle band — no upstream change, and one world pixel stays one texel.
+  const extWide = v.size / 2;
+  blitLum(g, lumImage(v.cx, v.cz, extWide, W), 0, mapY, W, mapH, W);
+  const toX = (x) => ((x - v.cx) / v.size + 0.5) * W;
+  const toY = (z) => mapY + mapH / 2 + ((z - v.cz) / v.size) * W;
+
+  if (S.level === 0) {
+    for (const { s } of D.sectorRows) {
+      const x = toX(s.centerX), y = toY(s.centerZ);
+      if (x < 0 || x >= W || y < mapY || y >= mapY + mapH) continue;
+      rect(g, x, y, 1, 1, INK.DIM);
+    }
+    const px = toX(D.player.x), py = toY(D.player.z);
+    frame(g, px - 2, py - 2, 5, 5, INK.YOU);
+    for (const d of [[0, -4], [0, 4], [-4, 0], [4, 0]]) rect(g, px + d[0], py + d[1], d[0] ? 3 : 1, d[0] ? 1 : 3, INK.YOU);
+  } else {
+    // the drillable block is SQUARE in world space; the density bleeding past it is real map and is
+    // knocked back with a 50% parity checker rather than a translucency that cannot survive 240p
+    const blk = mapH, bx = Math.round((W - blk) / 2);
+    checker(g, 0, mapY, bx, mapH, INK.BG); checker(g, bx + blk, mapY, W - bx - blk, mapH, INK.BG);
+    const n = v.n, cell = blk / n;
+    for (let i = 0; i <= n; i++) {
+      if (cell >= 20) { rect(g, bx + Math.round(cell * i), mapY, 1, blk, INK.DIM); rect(g, bx, mapY + Math.round(cell * i), blk, 1, INK.DIM); }
+      else { for (let k = 0; k < blk; k += 2) { rect(g, bx + Math.round(cell * i), mapY + k, 1, 1, INK.DIM); rect(g, bx + k, mapY + Math.round(cell * i), 1, 1, INK.DIM); } }
+    }
+    // ⭐ THE PER-CELL DENSITY BAR — one fillRect, and the first per-tile information these levels
+    // have ever carried (today the only text is a kpc coordinate pair on hover)
+    const tiles = d1TileRows(v, n), max = tiles[0].n;
+    for (const t of tiles) {
+      const len = Math.round((cell - 4) * Math.min(1, t.n / max));
+      if (len > 0) rect(g, bx + t.i * cell + 2, mapY + (t.j + 1) * cell - 2, len, 1, INK.DIM);
+    }
+    const pi = Math.floor(((D.player.x - v.cx) / v.size + 0.5) * n);
+    const pj = Math.floor(((D.player.z - v.cz) / v.size + 0.5) * n);
+    checker(g, bx + pi * cell + 1, mapY + pj * cell + 1, cell - 2, cell - 2, INK.YOU);
+    frame(g, bx + pi * cell, mapY + pj * cell, cell, cell, INK.YOU);
+  }
+}
+function d2Prism(g, W, mapY, mapH) {
+  const radius = ZOOM_STOPS[zoomIdx], cxp = W / 2, cyp = mapY + mapH / 2;
+  if (S.list) return d2List(g, W, mapY, mapH);
+  const cap = Math.max(200, Math.round(W * mapH / 160));
+  let drawn = 0;
+  const onScreen = [];
+  for (const s of D.starRows) {
+    const p = projectPrism(s, cxp, cyp, W / 2, mapH / 2, radius);
+    if (p.x < -2 || p.x > W + 2 || p.y < mapY - 2 || p.y > mapY + mapH + 2) continue;
+    onScreen.push({ s, p });
+    if (++drawn >= cap) break;
+  }
+  for (const { s, p } of onScreen) {
+    rect(g, p.x, p.py, 1, 1, INK.RULE);                       // plane dot, not a dashed line
+    if (s.dist < 1e-6) { for (const d of [[-4,-4],[2,-4],[-4,2],[2,2]]) { rect(g, p.x+d[0], p.y+d[1], 3, 1, INK.YOU); rect(g, p.x+d[0], p.y+d[1], 1, 3, INK.YOU); } continue; }
+    if (s === D.selStar) { frame(g, p.x - 3, p.y - 3, 7, 7, INK.KEY); continue; }
+    if (s.isReal) { plus(g, p.x, p.y, SPECTRAL[s.spectral] || INK.BODY); if (s.mult > 1) { rect(g, p.x+2, p.y-2, 1, 1, INK.BODY); rect(g, p.x-2, p.y+2, 1, 1, INK.BODY); } }
+    else rect(g, p.x, p.y, 1, 1, SPECTRAL[s.spectral] || INK.DIM);
+  }
+  // ⭐ LABELS ARE CAPPED AND NEVER FADED. A label that cannot find a slot IS NOT DRAWN — today 100
+  // of 139 on-canvas labels at max zoom are drawn at 0.35 alpha, which at 240p reads as damage.
+  const capN = Math.max(4, Math.floor(mapH / 22));
+  const taken = [];
+  let placed = 0;
+  for (const { s, p } of onScreen) {
+    if (placed >= capN) break;
+    if (!s.name || !s.isReal) continue;
+    const txt = s.name.toUpperCase(), w = measurePixelText(txt);
+    const ly = placeLabel(taken, p.x + 3, p.y - 6, w, REGIONS.map);
+    if (ly == null) continue;                                  // not drawn — never faded
+    rect(g, p.x + 1, Math.min(p.y, ly + 2), 1, Math.abs(ly + 2 - p.y) + 1, INK.RULE);
+    plated(g, txt, p.x + 3, ly, INK.KEY, 'map', 'prism label ' + txt);
+    placed++;
+  }
+  // the minimap — drawn AS SPECIFIED, a 40x24 widget in the corner of a design whose premise is
+  // that there is no floating box anywhere. That contradiction is on the glass on purpose.
+  const mw = 24, mh = 24, mx = W - 44, my = mapY + mapH - mh - 5;
+  for (const d of [[0,0],[mw-3,0],[0,mh-3],[mw-3,mh-3]]) { rect(g, mx+d[0], my+d[1], 3, 1, INK.DIM); rect(g, mx+d[0], my+d[1], 1, 3, INK.DIM); }
+  rect(g, mx + mw / 2, my + mh / 2, 1, 1, INK.YOU);
+  rect(g, W - 17, my, 1, mh, INK.DIM);
+  rect(g, W - 19, my + mh / 2, 5, 1, INK.YOU);
+}
+/** DESIGN 2'S LIST MODE — 'L'. A 60% checker plate over the whole map plane (the starfield stays
+ *  faintly behind it) and rows of real terminal at the repo's 6-texel pitch. ⛔ IT REPLACES THE MAP:
+ *  that is the design, and it is the reason judge 2 rejected D2 as the base — a row cannot be
+ *  cross-referenced against a dot when the dots are gone. Drawn so that objection is LOOKED AT. */
+function d2List(g, W, mapY, mapH) {
+  const radius = ZOOM_STOPS[zoomIdx], cxp = W / 2, cyp = mapY + mapH / 2;
+  for (const s of D.starRows) {                      // the starfield, still there, knocked back
+    const p = projectPrism(s, cxp, cyp, W / 2, mapH / 2, radius);
+    if (p.x < 0 || p.x >= W || p.y < mapY || p.y >= mapY + mapH) continue;
+    rect(g, p.x, p.y, 1, 1, INK.RULE);
+  }
+  checker(g, 0, mapY, W, mapH, INK.BG);              // one 50% parity pass — no alpha anywhere, and
+                                                     // half the starfield survives, as the design says
+  const LEAD = FACE.h + 1, rows = Math.floor((mapH - 4) / LEAD) - 1;
+  const cols = [4, 22, 148, 166, 208, 250];
+  const hdr = ['N', 'NAME', 'SP', 'PC', 'PLANE', 'SYSTEM'];   // '#' is not in the face; tofu would lie
+  hdr.forEach((h, i) => cols[i] < W - 8 && T(g, h, cols[i], mapY + 4, { color: INK.DIM, rgn: 'map', what: 'list header ' + h }));
+  D.starRows.slice(0, rows).forEach((s, i) => {
+    const y = mapY + 4 + (i + 1) * LEAD;
+    const sel = s === D.selStar;
+    if (sel) rect(g, 2, y - 1, W - 4, LEAD, INK.KEY);
+    const ink = sel ? INK.BG : (s.isReal ? INK.BODY : INK.DIM);
+    const put = (c, str, maxw) => cols[c] < W - 10 &&
+      T(g, fit(str, Math.min(maxw, W - cols[c] - 6)), cols[c], y, { color: ink, rgn: 'map', what: 'list row ' + i });
+    put(0, String(i + 1), 16);
+    put(1, (s.name || 'UNNAMED').toUpperCase(), 119);
+    put(2, s.spectral, 11);
+    put(3, s.pc.toFixed(2), 35);
+    put(4, ((s.wy - D.player.y) * 1000).toFixed(0) + ' PC', 35);
+    put(5, s.isReal ? 'CATALOG' : 'PROCEDURAL', 173);
+  });
+}
+
+function d2System(g, W, mapY, mapH) {
+  const cxp = Math.round(W / 2), cyp = Math.round(mapY + mapH / 2);
+  const tagsTaken = [];
+  const auMax = Math.max(1e-3, ...D.bodies.filter((b) => b.kind !== 'moon').map((b) => b.au));
+  const maxR = Math.min(W / 2 - 8, mapH / 2 / 0.42 - 4);
+  const rOf = (au) => 8 + (maxR - 8) * Math.sqrt(Math.max(0, au) / auMax);
+  const TILT = 0.42;
+  for (const b of D.bodies) {
+    if (b.kind === 'moon') continue;
+    const r = rOf(b.au);
+    dottedEllipse(g, cxp, cyp, r, r * TILT, INK.RULE, b.kind === 'belt' ? 5 : 2);
+  }
+  sprite(g, cxp, cyp, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
+  D.bodies.filter((b) => b.kind !== 'moon').forEach((b, i) => {
+    const r = rOf(b.au), a = (i * 1.7 + 0.6);
+    const x = Math.round(cxp + Math.cos(a) * r), y = Math.round(cyp + Math.sin(a) * r * TILT);
+    if (b.kind === 'belt') { rect(g, x, y, 1, 1, INK.DIM); return; }
+    sprite(g, x, y, b.rE > 4 ? SP.giant5 : SP.terr3, INK.BODY);
+    if (b.rings) { rect(g, x - 3, y - 2, 7, 1, INK.DIM); rect(g, x - 3, y + 2, 7, 1, INK.DIM); }
+    if (b.hab > 0.5) for (const d of [[-2,0],[2,0],[0,-2],[0,2]]) rect(g, x + d[0], y + d[1], 1, 1, INK.TARGET);
+    if (b === D.selBody) frame(g, x - 4, y - 4, 9, 9, INK.KEY);
+    for (let m = 0; m < b.moons; m++) rect(g, x + 4 + m * 2, y - 4, 1, 1, INK.DIM);
+    const tag = roman(i + 1);
+    if (r > 24) {
+      const ly = placeLabel(tagsTaken, x + 4, y - 8, measurePixelText(tag), REGIONS.map);
+      if (ly != null) plated(g, tag, x + 4, ly, INK.DIM, 'map', 'body tag ' + tag);
+    }
+  });
+  sprite(g, cxp + 8, cyp, SP.diam5, INK.TARGET);
+  const far = (D.sys?.binarySeparationAU > 100) ? [`» ${(D.sysStar?.name || '').toUpperCase()} B ${Math.round(D.sys.binarySeparationAU)}AU`] : [];
+  if (far.length) T(g, fit(far.join('  '), W - 8), 4, mapY + 1, { color: INK.DIM, rgn: 'map', what: 'companion strip' });
+}
+function roman(n) { return ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI'][n - 1] || String(n); }
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// DESIGN 3 — EIGHT-BY-SEVEN.  One 8x7 slot board, instantiated at 53x34 texels per slot.
+// ⛔ Its premise derives the fullscreen FROM the 52x43 cockpit panel — the inverse of Max's ruling.
+//    It is drawn here anyway, because the ruling is his and so is the look.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+function drawDesign3(g, W, H) {
+  const OX = 1, OY = 1, SX = Math.floor((W - 2) / 8), SY = Math.floor((H - 2) / 7);
+  const sx = (c) => OX + c * SX, sy = (r) => OY + r * SY;
+  const hdrY = sy(0), midY = sy(1), midH = sy(6) - sy(1), footY = sy(6), footH = H - footY;
+  const lrX = sx(0), lrW = 2 * SX - 1;
+  const mapX = sx(2), mapW = 4 * SX, rrX = sx(6), rrW = W - rrX - 2;
+
+  region('header', OX, hdrY, W - 2, SY);
+  region('lrail', lrX, midY, lrW, midH);
+  region('map', mapX, midY, mapW, midH);
+  region('rrail', rrX, midY, rrW, midH);
+  region('footer', OX, footY, W - 2, footH - 1);
+
+  rect(g, 0, 0, W, H, INK.BG);
+  rect(g, 0, midY - 1, W, 1, INK.RULE);
+  rect(g, 0, footY - 1, W, 1, INK.RULE);
+  rect(g, mapX - 1, midY, 1, midH, INK.RULE);
+  rect(g, rrX - 1, midY, 1, midH, INK.RULE);
+
+  // HEADER — ident / search / stats
+  const LEAD = FACE.h + 1;
+  T(g, fit((D.here?.name || '—').toUpperCase(), 3 * SX - 4), sx(0), hdrY + 2, { color: INK.KEY, rgn: 'header', what: 'ident' });
+  T(g, fit(`X ${D.player.x.toFixed(1)} Y ${D.player.y.toFixed(2)} Z ${D.player.z.toFixed(1)} KPC`, 3 * SX - 4),
+    sx(0), hdrY + 2 + LEAD, { color: INK.BODY, rgn: 'header', what: 'galactic pos' });
+  T(g, fit((D.playerSector?.name || '').toUpperCase(), 3 * SX - 4), sx(0), hdrY + 2 + 2 * LEAD,
+    { color: INK.DIM, rgn: 'header', what: 'sector' });
+  T(g, 'AUTOPILOT OFF', sx(0), hdrY + 2 + 4 * LEAD, { color: INK.DIM, rgn: 'header', what: 'autopilot' });
+  T(g, 'SEARCH', sx(3), hdrY + 2, { color: INK.DIM, rgn: 'header', what: 'search label' });
+  T(g, '>', sx(3), hdrY + 2 + LEAD, { color: INK.KEY, rgn: 'header', what: 'search caret line' });
+  rect(g, sx(3) + FACE.advance, hdrY + 2 + LEAD, 5, 5, INK.KEY);
+  rect(g, sx(3), hdrY + 2 + 2 * LEAD + 2, 2 * SX - 4, 1, INK.RULE);
+  const stats = d3Stats();
+  assertClear('search field vs stats block', 'header', sx(3) + 2 * SX - 4, W - 3 - (3 * SX - 4));
+  stats.forEach((s, i) => T(g, fit(s, 3 * SX - 4), W - 3, hdrY + 2 + i * LEAD,
+    { color: i === 0 ? INK.BODY : INK.DIM, align: 'right', rgn: 'header', what: 'stat ' + i }));
+
+  // MAP
+  if (S.level <= 2) d3TwoD(g, mapX, midY, mapW, midH);
+  else if (S.level === 3) d3Prism(g, mapX, midY, mapW, midH);
+  else d3System(g, mapX, midY, mapW, midH);
+
+  // RAILS
+  d3Rail(g, 'lrail', lrX, midY, lrW, midH, true);
+  d3Rail(g, 'rrail', rrX, midY, rrW, midH, false);
+
+  // FOOTER — tabs, hint, commit
+  const tabH = Math.max(9, FACE.h + 4);
+  LEVELS.forEach((n, i) => {
+    const x = sx(i), w = SX - 1;
+    const lbl = fit(n, w - 4);
+    if (i === S.level) { rect(g, x, footY, w, tabH, INK.KEY);
+      T(g, lbl, x + (w - measurePixelText(lbl)) / 2, footY + 3, { color: INK.BG, rgn: 'footer', what: 'tab ' + n });
+      rect(g, x, footY + tabH, w, 1, INK.TARGET); }
+    else { T(g, lbl, x + (w - measurePixelText(lbl)) / 2, footY + 3, { color: INK.DIM, rgn: 'footer', what: 'tab ' + n });
+      rect(g, x, footY + tabH - 1, w, 1, INK.DIM); }
+  });
+  const hint = ['SELECT A SECTOR OR A RAIL ROW', 'SELECT A TILE OR A RAIL ROW', 'SELECT A TILE OR A RAIL ROW',
+                'SELECT A STAR · WASD PAN · R/F UP', 'SELECT A BODY · DRAG TO ROTATE'][S.level];
+  const hintFull = hint + (S.sabotage ? SAB : '');
+  T(g, fit(hintFull, 5 * SX - 6), sx(0), footY + tabH + 4, { color: INK.DIM, rgn: 'footer', what: 'hint' });
+  if (S.sabotage) assertFits('D3 hint line (unclipped)', 'footer', sx(0), footY + tabH + 4, measurePixelText(hintFull), FACE.h);
+  // COMMIT — the only unit-2 type in the design
+  const bx = sx(5), bw = W - bx - 3, bh = Math.max(14, FACE.h * 2 + 6);
+  const armed = isHere() ? !!D.selBody : !!D.target;
+  if (armed) rect(g, bx, footY, bw, bh, INK.TARGET); else frame(g, bx, footY, bw, bh, INK.DIM);
+  const clabel = isHere() ? '[ BURN ]' : '[ WARP ]';
+  const u2 = measurePixelText(clabel, 2) <= bw - 6 ? 2 : 1;
+  T(g, clabel, bx + bw / 2, footY + Math.round((bh - FACE.h * u2) / 2),
+    { color: armed ? INK.BG : INK.DIM, scale: u2, align: 'center', rgn: 'footer', what: 'commit label' });
+  const d1s = isHere() ? `${(D.selBody?.name || '—').toUpperCase()} - ${(D.selBody?.au ?? 0).toFixed(2)} AU`
+                       : `${(D.target?.name || '—').toUpperCase()} - ${(D.target?.pc ?? 0).toFixed(2)} PC`;
+  const d2s = isHere() ? `${(D.selBody?.cls || '').toUpperCase()} - ${D.selBody?.moons ?? 0} MOONS`
+                       : `${D.target?.spectral || '?'} - ${D.target?.isReal ? 'CATALOG' : 'PROCEDURAL'}`;
+  T(g, fit(d1s, bw), bx, footY + bh + 2, { color: INK.BODY, rgn: 'footer', what: 'dest 1' });
+  T(g, fit(d2s, bw), bx, footY + bh + 2 + LEAD, { color: INK.DIM, rgn: 'footer', what: 'dest 2' });
+}
+function d3Stats() {
+  if (S.level === 0) return [`${D.sectorRows.length} SECTORS`, `SCALE 44 KPC`, `${fmtK(D.sectorRows.reduce((a, r) => a + r.n, 0))} SYSTEMS`];
+  if (S.level <= 2) { const v = levelView(S.level); return [`${v.n * v.n} TILES`, `SCALE ${v.size.toFixed(2)} KPC`, `TILE ${(v.size / v.n).toFixed(3)} KPC`]; }
+  if (S.level === 3) return [`VIEW ${(ZOOM_STOPS[zoomIdx] * 2000).toFixed(1)} PC`, `LOADED ${D.stars.length}`,
+                             `REAL ${D.starRows.filter((s) => s.isReal).length}`];
+  return [`${D.sys?.star?.type || '?'} MAIN SEQ`, `${(D.sys?.planets || []).length} PLANETS`,
+          `${D.bodies.filter((b) => b.kind === 'moon').length} MOONS`];
+}
+function d3TwoD(g, x, y, w, h) {
+  const v = levelView(S.level);
+  const sq = Math.max(16, Math.floor(Math.min(w, h) / 16) * 16);
+  const ox = x + Math.round((w - sq) / 2), oy = y + Math.round((h - sq) / 2);
+  blitLum(g, lumImage(v.cx, v.cz, v.size / 2, sq), ox, oy, sq, sq, sq);
+  const n = S.level === 0 ? 8 : v.n, cell = sq / n;
+  for (let i = 0; i <= n; i++) { rect(g, ox + Math.round(cell * i), oy, 1, sq, INK.DIM); rect(g, ox, oy + Math.round(cell * i), sq, 1, INK.DIM); }
+  const pi = Math.max(0, Math.min(n - 1, Math.floor(((D.player.x - v.cx) / v.size + 0.5) * n)));
+  const pj = Math.max(0, Math.min(n - 1, Math.floor(((D.player.z - v.cz) / v.size + 0.5) * n)));
+  rect(g, ox + pi * cell + 1, oy + pj * cell + 1, cell - 1, cell - 1, INK.YOU);
+  frame(g, ox + pi * cell, oy + pj * cell, cell + 1, cell + 1, INK.KEY);
+  if (D.target) sprite(g, ox + ((D.target.wx - v.cx) / v.size + 0.5) * sq, oy + ((D.target.wz - v.cz) / v.size + 0.5) * sq, SP.diam5, INK.TARGET);
+}
+function d3Prism(g, x, y, w, h) {
+  const radius = ZOOM_STOPS[zoomIdx], cxp = x + w / 2, cyp = y + h / 2;
+  let glyphs = 0, dust = 0;
+  const shown = [];
+  for (const s of D.starRows) {
+    const p = projectPrism(s, cxp, cyp, w / 2, h / 2, radius);
+    if (p.x < x || p.x >= x + w - 4 || p.y < y || p.y >= y + h) continue;
+    if (glyphs < 240) { shown.push({ s, p }); glyphs++; }
+    else if (dust < 1200) { rect(g, p.x, p.y, 1, 1, INK.RULE); dust++; }   // ⭐ the dust layer
+  }
+  for (const { s, p } of shown) {
+    if (s.dist < 1e-6) { frame(g, p.x - 3, p.y - 3, 7, 7, INK.YOU); continue; }
+    if (s === D.selStar) { frame(g, p.x - 4, p.y - 4, 9, 9, INK.TARGET, 2); continue; }
+    if (s.isReal) plus(g, p.x, p.y, SPECTRAL[s.spectral] || INK.BODY);
+    else rect(g, p.x, p.y, 1, 1, INK.DIM);
+  }
+  let n = 0;
+  const taken = [];
+  for (const { s, p } of shown) {
+    if (n >= 8) break;
+    if (!s.isReal || !s.name) continue;
+    const t = s.name.toUpperCase(), tw = measurePixelText(t);
+    const ly = placeLabel(taken, p.x + 4, p.y - 8, tw, { x, y, w: w - 5, h });
+    if (ly == null) continue;
+    rect(g, p.x + 1, Math.min(p.y, ly + 2), 1, Math.abs(ly + 2 - p.y) + 1, INK.RULE);
+    plated(g, t, p.x + 4, ly, INK.KEY, 'map', 'prism label ' + t);
+    n++;
+  }
+  // 4-texel Y gauge with a tick every 100 pc
+  const gx = x + w - 4;
+  rect(g, gx, y + 2, 4, 1, INK.DIM);
+  for (let pc = -400; pc <= 400; pc += 100) {
+    const yy = y + h / 2 - (pc / 500) * (h / 2 - 4);
+    rect(g, gx, yy, 4, 1, INK.RULE);
+  }
+  rect(g, gx, y + h / 2, 4, 1, INK.YOU);
+  if (D.selStar) rect(g, gx, y + h / 2 - ((D.selStar.wy - D.player.y) * 1000 / 500) * (h / 2 - 4), 4, 1, INK.TARGET);
+}
+function d3System(g, x, y, w, h) {
+  const cxp = Math.round(x + w / 2), cyp = Math.round(y + h / 2);
+  const auMax = Math.max(1e-3, ...D.bodies.filter((b) => b.kind !== 'moon').map((b) => b.au));
+  const maxR = Math.min(w / 2 - 6, h / 2 / 0.42 - 4);
+  const rOf = (au) => 8 + (maxR - 8) * Math.sqrt(Math.max(0, au) / auMax);
+  for (const b of D.bodies) { if (b.kind === 'moon') continue;
+    const r = rOf(b.au); dottedEllipse(g, cxp, cyp, r, r * 0.42, INK.DIM, b.kind === 'belt' ? 3 : 2); }
+  sprite(g, cxp, cyp, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
+  D.bodies.filter((b) => b.kind !== 'moon').forEach((b, i) => {
+    const r = rOf(b.au), a = i * 1.7 + 0.6;
+    const bx = Math.round(cxp + Math.cos(a) * r), by = Math.round(cyp + Math.sin(a) * r * 0.42);
+    if (b.kind === 'belt') { rect(g, bx, by, 1, 1, INK.DIM); return; }
+    sprite(g, bx, by, b.rE > 4 ? SP.giant5 : SP.terr3, INK.BODY);
+    if (b.rings) rect(g, bx - 4, by, 9, 1, INK.DIM);
+    for (let m = 0; m < b.moons; m++) sprite(g, bx + 5 + m * 4, by - 5, SP.moon3, INK.DIM);
+    if (b === D.selBody) frame(g, bx - 5, by - 5, 11, 11, INK.TARGET, 2);
+  });
+  // the 5x5 SHIP CHEVRON replacing the drawn word 'SHIP'
+  const chev = [0b10000, 0b11000, 0b11100, 0b11000, 0b10000];
+  chev.forEach((m, r) => { for (let c = 0; c < 5; c++) if (m & (1 << (4 - c))) rect(g, cxp + 8 + c, cyp - 2 + r, 1, 1, INK.YOU); });
+}
+function d3Rail(g, rgn, x, y, w, h, left) {
+  const LEAD = FACE.h + 1, cols = Math.floor((w + 1) / FACE.advance);
+  const rowsN = Math.floor(h / LEAD) - 2;
+  const hdr = left ? ['SECTORS', 'SECTOR INDEX', 'TILE INDEX', 'NEAREST', 'BODIES'][S.level] : 'SELECTED';
+  T(g, fit(hdr, w), x, y + 1, { color: INK.DIM, rgn, what: rgn + ' header' });
+  rect(g, x, y + LEAD, w, 1, INK.RULE);
+  const lines = left ? d3Left(cols, rowsN) : d3Right(cols);
+  lines.slice(0, rowsN).forEach((L, i) => {
+    const yy = y + 2 + (i + 1) * LEAD;
+    if (L.sel) rect(g, x - 1, yy - 1, w + 2, LEAD, INK.KEY);
+    T(g, fit(L.t, w), x, yy, { color: L.sel ? INK.BG : (L.ink || INK.BODY), rgn, what: rgn + ' row ' + i });
+  });
+}
+function d3Left(cols, rowsN) {
+  if (S.level === 0) return D.sectorRows.slice(0, rowsN).map((r) => ({ t: `${pad(r.s.name.toUpperCase(), cols - 6)}${rpad(fmtK(r.n), 6)}`, sel: r.s.id === D.playerSector.id }));
+  if (S.level <= 2) { const v = levelView(S.level); return d1TileRows(v, v.n).slice(0, rowsN).map((t) => ({ t: `${pad(t.id, cols - 6)}${rpad(fmtK(t.n), 6)}`, sel: false })); }
+  if (S.level === 3) return D.starRows.slice(0, rowsN).map((s) => ({ t: `${pad(s.name.toUpperCase() || 'UNNAMED', cols - 7)}${rpad(s.pc.toFixed(1), 5)} ${s.spectral}`, sel: s === D.selStar }));
+  return D.bodies.slice(0, rowsN).map((b) => ({ t: `${b === D.selBody ? '>' : ' '} ${pad((b.kind === 'moon' ? '  ' : '') + b.name.toUpperCase(), cols - 5)}${pad(({ planet: 'PL', moon: 'MN', belt: 'BE' })[b.kind], 2)}`, sel: b === D.selBody }));
+}
+function d3Right(cols) {
+  if (S.level === 3 && D.selStar) { const s = D.selStar;
+    return [{ t: s.name.toUpperCase(), ink: INK.KEY }, { t: '' },
+      { t: `${s.spectral}  ${s.isReal ? 'CATALOG' : 'PROCGEN'}` },
+      { t: `DIST  ${s.pc.toFixed(2)} PC` }, { t: `      ${s.ly.toFixed(1)} LY` },
+      { t: `Y     ${((s.wy - D.player.y) * 1000).toFixed(0)} PC` },
+      { t: `COMPS ${s.mult || 1}` }, { t: '' }, { t: '[ENTER] WARP', ink: INK.TARGET }]; }
+  if (S.level === 4 && D.selBody) { const b = D.selBody;
+    return [{ t: b.name.toUpperCase(), ink: INK.KEY }, { t: '' }, { t: b.cls.toUpperCase() },
+      { t: `RADIUS ${b.rE ? b.rE.toFixed(2) : '—'} RE` }, { t: `ORBIT  ${b.au.toFixed(2)} AU` },
+      { t: `TEMP   ${b.T ? Math.round(b.T) : '—'} K` }, { t: `HAB    ${b.hab != null ? b.hab.toFixed(2) : '—'}` },
+      { t: `MOONS  ${b.moons}` }, ...(b.rings ? [{ t: 'RINGED' }] : []), { t: '' },
+      { t: isHere() ? '[ENTER] BURN' : '[ENTER] WARP', ink: INK.TARGET }]; }
+  const s = D.playerSector;
+  return [{ t: s.name.toUpperCase(), ink: INK.KEY }, { t: '' },
+    { t: `KPC  ${s.centerX.toFixed(1)} ${s.centerZ.toFixed(1)}` },
+    { t: `SIZE ${s.size.toFixed(2)} KPC` }, { t: `~ ${fmtK(estStars(s.centerX, s.centerZ, s.size))} SYS` },
+    { t: `DEPTH ${s.depth}` }];
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// FRAME
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('glass');
+const g = canvas.getContext('2d');
+
+let _lastStage = '';
+function draw() {
+  const { width: W, height: H } = bufferForLines(window.innerWidth, window.innerHeight, S.lines);
+  S.buf = { width: W, height: H };
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  // The stage is whatever the title bar, the banner and the legend leave — measured, not assumed,
+  // so the bottom row of every design is actually on screen. A clipped commit bar is a lie.
+  const topH = document.getElementById('title').offsetHeight
+             + (document.getElementById('banner').className ? document.getElementById('banner').offsetHeight : 0);
+  const botH = S.legend ? document.getElementById('legend').offsetHeight : 4;
+  const stageEl = document.getElementById('stage');
+  stageEl.style.top = topH + 'px'; stageEl.style.bottom = botH + 'px';
+  const availW = window.innerWidth, availH = Math.max(40, window.innerHeight - topH - botH);
+  const mag = Math.max(1, Math.floor(Math.min(availW / W, availH / H) * 100) / 100);
+  canvas.style.width = Math.floor(W * mag) + 'px';
+  canvas.style.height = Math.floor(H * mag) + 'px';
+
+  REGIONS = {}; _violations = 0;
+  g.imageSmoothingEnabled = false;
+  rect(g, 0, 0, W, H, INK.BG);
+  if (!D.ready) { T(g, 'LOADING REAL GALAXY DATA', 6, 6, { color: INK.DIM }); return; }
+  try {
+    if (S.design === 1) drawDesign1(g, W, H);
+    else if (S.design === 2) drawDesign2(g, W, H);
+    else drawDesign3(g, W, H);
+  } catch (e) { console.error('NAV-240p DRAW FAILED', e); T(g, 'DRAW FAILED — SEE CONSOLE', 6, 6, { color: INK.WARN }); }
+  paintChrome(mag);
+  const sig = document.getElementById('legend').offsetHeight + '|' +
+              document.getElementById('banner').offsetHeight + '|' + S.legend;
+  if (sig !== _lastStage) { _lastStage = sig; requestAnimationFrame(draw); }
+}
+
+function paintChrome(mag) {
+  const { width: W, height: H } = S.buf;
+  const cols = Math.floor((W + 1) / FACE.advance), rows = Math.floor(H / (FACE.h + 1));
+  const names = ['THE 71x40 — character-cell nav', 'TWO BARS AND A SKY — full-bleed map', 'EIGHT-BY-SEVEN — one board, two scales'];
+  document.getElementById('title').innerHTML =
+    `<b>DESIGN ${S.design}</b> · ${names[S.design - 1]} &nbsp;<span class="sep">|</span>&nbsp; ` +
+    `<b>${LEVELS[S.level]}</b> &nbsp;<span class="sep">|</span>&nbsp; ` +
+    `<span class="g">${S.lines}p · ${W}×${H} · ${cols}×${rows} cells · face ${FACE.name} · ×${mag.toFixed(2)}</span>` +
+    (S.sabotage ? ' &nbsp;<span style="color:#ffb03a">SABOTAGE ON — the guard should be firing</span>' : '');
+  const b = document.getElementById('banner');
+  const problems = [...D.fail];
+  // ⛔ SAY IT ON THE PAGE. The brief's rule and the right one: if a real source cannot be reached,
+  //    the page announces it rather than silently substituting invented data.
+  if (D.catalogSettled && !D.catalogOk)
+    problems.push('REAL STAR CATALOG NOT LOADED — the prism carries procedural names only ' +
+                  '(assets/data/hyg-stars.json did not reach this page). Every name you see is generated, not catalogued.');
+  if (problems.length) { b.className = 'show'; b.textContent = '⛔ ' + problems.join('  ·  '); }
+  else b.className = '';
+  document.getElementById('legend').className = S.legend ? '' : 'hidden';
+  document.body.classList.toggle('nolegend', !S.legend);
+  document.body.classList.toggle('banner', !!problems.length);
+  document.getElementById('legend').innerHTML =
+    `<span><span class="k">1 2 3</span> design</span>` +
+    `<span><span class="k">← →</span> level</span>` +
+    `<span><span class="k">R</span> line count (144/180/240/288/360/480/720)</span>` +
+    `<span><span class="k">Z</span> prism zoom (±${(ZOOM_STOPS[zoomIdx] * 1000).toFixed(2)} pc)</span>` +
+    `<span><span class="k">S</span> next system (${(D.sysStar?.name || '—').toUpperCase()}, ${D.bodies.length} bodies)</span>` +
+    `<span><span class="k">;</span> face — 5x5 &harr; 5x7, PixelText's own live A/B</span>` +
+    `<span><span class="k">L</span> Design 2's list mode${S.list ? ' (ON)' : ''}</span>` +
+    `<span><span class="k">X</span> sabotage the guard</span>` +
+    `<span><span class="k">H</span> hide this bar</span>` +
+    `<span class="sep">|</span>` +
+    `<span>${_violations ? `<span class="bad">${_violations} OVERFLOW(S) — see console</span>` : '<span style="color:#8fce9b">guard clean</span>'}</span>` +
+    `<span class="sep">|</span><span style="color:#8b8378">${D.note.join(' · ')}</span>`;
+}
+
+addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key;
+  if (k === '1' || k === '2' || k === '3') S.design = +k;
+  else if (k === 'ArrowRight') S.level = (S.level + 1) % 5;
+  else if (k === 'ArrowLeft') S.level = (S.level + 4) % 5;
+  else if (k === 'r' || k === 'R') S.lines = RENDER_LINE_OPTIONS[(RENDER_LINE_OPTIONS.indexOf(S.lines) + 1) % RENDER_LINE_OPTIONS.length];
+  else if (k === 'z' || k === 'Z') zoomIdx = (zoomIdx + 1) % ZOOM_STOPS.length;
+  else if (k === 'x' || k === 'X') { S.sabotage = !S.sabotage; if (S.sabotage) console.warn('NAV-240p SABOTAGE ON — an over-long hint/status string is now handed to assertFits UNCLIPPED. The guard must fire.'); }
+  else if (k === 'l' || k === 'L') { S.list = !S.list; S.design = 2; S.level = 3; }
+  else if (k === 'h' || k === 'H') S.legend = !S.legend;
+  else if (k === 's' || k === 'S') { sysPick = (sysPick + 1) % Math.max(1, (D.sysCands || [1]).length);
+                                     buildSystem(D.sysCands[sysPick]); S.level = 4; }
+  else if (k === ';') { requestAnimationFrame(draw); return; }   // PixelText owns the face swap
+  else return;
+  e.preventDefault();
+  draw();
+});
+addEventListener('resize', draw);
+
+// ── BOOT ─────────────────────────────────────────────────────────────────────────────────────────
+draw();
+setTimeout(async () => {
+  const t0 = performance.now();
+  try { buildData(); }
+  catch (e) {
+    D.fail.push('REAL DATA COULD NOT BE BUILT: ' + e.message + ' — nothing on this page is trustworthy.');
+    D.catalogSettled = true; draw(); console.error(e); return;
+  }
+  D.ready = true;
+  D.note.push(`built in ${Math.round(performance.now() - t0)} ms`);
+  draw();
+  // The catalog is a fetch; merge it in when it lands, exactly as _queryYRange does (2 pc rule).
+  try {
+    const cat = new RealStarCatalog();
+    await cat.load();
+    D.catalog = cat;
+    D.catalogOk = cat.loaded;
+    if (cat.loaded) {
+      const half = 0.0052;
+      const real = cat.findInVolume(D.player, half, 0.25);
+      let merged = 0, added = 0;
+      for (const rs of real) {
+        if (!rs.name || rs.name === '"') continue;
+        let best = -1, bd = 0.002;
+        for (let i = 0; i < D.stars.length; i++) {
+          const s = D.stars[i]; if (s.isReal) continue;
+          const d = Math.hypot(s.wx - rs.x, s.wy - rs.y, s.wz - rs.z);
+          if (d < bd) { bd = d; best = i; }
+        }
+        if (best >= 0) { D.stars[best].name = rs.name; D.stars[best].isReal = true; merged++; }
+        else {
+          D.stars.push({ wx: rs.x, wy: rs.y, wz: rs.z, seed: `real-${rs.name}`, spectral: (rs.spect || 'G')[0],
+                         dist: Math.hypot(rs.x - D.player.x, rs.y - D.player.y, rs.z - D.player.z),
+                         name: rs.name, isReal: true });
+          added++;
+        }
+      }
+      D.note.push(`${cat.count} catalog stars · ${merged} merged + ${added} added in block`);
+      reindexStars();
+      sysPick = 0; pickSystem(0);
+    }
+  } catch (e) { D.fail.push('RealStarCatalog: ' + e.message); }
+  D.catalogSettled = true;
+  draw();
+}, 30);
+</script>
+</body>
+</html>
