@@ -2,7 +2,7 @@
   "workstream": "nav-menu-elements-functional",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verifying",
   "acceptanceCriteria": [
     {
       "id": "AC-1",
@@ -12,7 +12,8 @@
       "verifyVia": {
         "input": "In each design, at levels 0, 1 and 2, click a drawn sector dot / tile cell in the map pane (design 1's square inset beside the rail; design 2's full-bleed cropped band).",
         "observable": "The same thing happens as clicking the equivalent list row: `_hoveredTile` is written and `_handleClick`'s 2D branch drills with the shipped animation, view-stack push and drill sound. ⛔ THE HIT-TEST GEOMETRY MUST COME OUT OF THE PAINT, not be restated — `d1TwoD` and `d2TwoD` each compute their own `toX`/`toY` inline and those are the numbers that must be inverted. The AC-4 defect shape (two independent copies of one geometry, one silently wrong) is the failure to avoid; publish the projection from the draw site into `S` the way `d1Ladder` already publishes `ladderStops`/`ladderCaps`. ⚠ AND THE EDIT GOES IN `nav-240p-lab.html`, then `node scripts/extract-nav-designs.mjs` — `designs.js` is generated and `--check` must stay green."
-      }
+      },
+      "progress": "BUILT + VERIFIED LIVE. d1TwoD publishes S.mapProj kind 'square'; d2TwoD publishes 'wide' at GALAXY and 'block' at SECTOR/REGION — three genuinely different projections, so the publication carries a `kind` rather than one lossy uniform rectangle. Driven live in both designs: design 1 GALAXY picked Phi Ara-5 and Iota Ophiuchus-69 and correctly returned null in the disc corners where no sector exists; design 2 GALAXY picked Iota Sagittarius-1; both designs at SECTOR/REGION returned {col,row}. ⛔ TWO TRAPS FOUND BY MEASUREMENT: `row` is Z-FLIPPED (the lab counts +z down, _handleClick counts +z up, so row = n-1-j), and the designs were PLAYER-ANCHORED — levelView always returned the player's sector, so a drill moved the game and not the picture. Fixed by feeding levelView the game's own view (S.view), byte-identical at entry."
     },
     {
       "id": "AC-2",
@@ -22,7 +23,8 @@
       "verifyVia": {
         "input": "In each design at level 3, click a drawn star glyph in the prism map.",
         "observable": "`_hoveredLocalStar` is written with the star from `nav._localStars` (matched by seed, not the ranked copy the adapter made — the shipped list-row picker already does exactly this) and the shipped click handler selects and arms the warp. Nearest-glyph-within-a-radius picking, not exact-texel, because a star is 1-5 texels. ⛔ Published from `d1Prism` / `d2Prism` at their own draw sites, so the picker and the paint share one projection."
-      }
+      },
+      "progress": "BUILT + VERIFIED LIVE. Both prisms publish S.prismHits from the very array that carries their bounds cull and draw cap, in draw order; the picker scans it in REVERSE so the pick matches the topmost pixel. Live, a click on a published mark selected Kabnes-4OQUQ1005M in both designs."
     },
     {
       "id": "AC-3",
@@ -32,7 +34,8 @@
       "verifyVia": {
         "input": "At level 4 with a system drilled: in design 1 click a body glyph on the ladder axis; in design 2 click a planet or moon in the orrery.",
         "observable": "`_hoveredBody` is written as `{type:'planet',index}` or `{type:'moon',index}` and the shipped handler selects it — the same shape the rail/list row picker already hands it. ⛔ Design 1's ladder already publishes `S.ladderStops` and `S.ladderVisible` from `d1Ladder`; the body positions must come from there and from `d2System`'s own orbit arithmetic, never from a second layout pass. ⚠ A ladder cap click must keep scrolling and must NOT also select the body underneath — `remapClick` already returns `null` for that and it must stay true."
-      }
+      },
+      "progress": "BUILT + VERIFIED LIVE. d1Ladder and d2System publish S.bodyHits including the system star. Live, {type:'planet',index:0} in both designs. ⛔ A moon pip maps to its PARENT PLANET, not {type:'moon'} — a moon pick in system mode falls through to _clearCommitSelection, so publishing moons as moons would make clicking one CLEAR the selection. ⛔ The ladder's '...' grab zone was 10 texels while the axis puts the furthest body at exactly x1-8, so on ANY overflowing ladder the outermost planet could not be clicked; narrowed to 6."
     },
     {
       "id": "AC-4",
@@ -42,7 +45,8 @@
       "verifyVia": {
         "input": "In design 1 at levels 1 and 2, hover/click a rail row.",
         "observable": "`hover()` writes `_hoveredTile` for the tile that row names, and the click drills to it. Measured before the change: `hover()` returns `{L0:true, L1:false, L2:false, L3:true, L4:true}` — levels 1 and 2 are the only holes. The row's tile must come from the SAME `d1TileRows(v, v.n)` call the paint uses, published out of the paint."
-      }
+      },
+      "progress": "BUILT. d1Rail publishes S.railTiles at levels 1-2, index-aligned with the drawn rows, and hover() writes {col,row} from them. These were the only two holes in hover() — measured before the change as {L0:true, L1:false, L2:false, L3:true, L4:true}."
     },
     {
       "id": "AC-5",
@@ -52,7 +56,8 @@
       "verifyVia": {
         "input": "At PRISM in each design, hold W/A/S/D, then R and F, then turn the mouse wheel.",
         "observable": "The prism picture translates and scales. ⛔ MEASURED DEAD 2026-09-07 WITH A LIVENESS CONTROL: with `_localStars` frozen and `_ensureStarsLoaded` stubbed, mutating `_localRotY` (+1.2), `_localRotX` (1.4), `_localRadius` (x4) and `_localCenter` left the map region's pixel hash BYTE-IDENTICAL, while moving `_playerX` (+0.0008) changed it — so the probe was live and the answer is that `projectPrism` reads `D.player` and `ZOOM_STOPS[S.zoomIdx|0]`, and NOTHING anywhere writes `S.zoomIdx`. ⭐ THE FIX IS TO FEED IT THE CAMERA THE GAME ALREADY RUNS (`_localCenter` for the anchor, `_localRadius` for the scale), not to build a second camera: `_updateHeldKeys` (:1373-1406) already pans on WASD/R/F and `_handleWheel` (:4701) already zooms, both live under every mode frame. ⚠ AND THE DEFAULT PICTURE MUST NOT MOVE — on entering PRISM the game sets `_localCenter` to the player position and `_localRadius` to 0.0015, which is exactly `ZOOM_STOPS[0]`, so the frame Max ruled on is reproduced byte-for-byte at the camera's own entry state. ⛔ ROTATION IS NOT WIRED AND THAT IS DELIBERATE — neither prism hint advertises it, and replacing the designs' fixed shallow tilt with the legacy's full 3D rotation would change the picture Max ruled on. See AC-10 for the one hint that wrongly claims it."
-      }
+      },
+      "progress": "BUILT + VERIFIED LIVE. projectPrism takes S.cam, written from _localCenter/_localRadius. Live at PRISM: holding D moved _localCenter 8 -> 8.000014, S.cam followed, and the map region's pixel hash CHANGED; a wheel event took the radius 0.0015 -> 0.001725 and the picture moved again. Both were byte-identical before. ⛔ _handleWheel's lower clamp was 0.002 against an entry radius of 0.0015, so the first wheel event snapped the zoom out by 33% — fixed. Rotation deliberately unwired: no prism hint advertises it and the fixed shallow tilt is part of the ruled picture."
     },
     {
       "id": "AC-6",
@@ -62,7 +67,8 @@
       "verifyVia": {
         "input": "Press Tab, and Shift+Tab, with a view mode active.",
         "observable": "The level advances (and retreats on Shift+Tab) through GALAXY/SECTOR/REGION/PRISM/SYSTEM exactly as clicking the tab strip does — reusing the same drill/stack/sound path `_handleClick`'s tab branch takes, not a second level-setter. Measured dead 2026-09-07: `_levelIndex` 3 before and after Tab. ⛔ THE TEST MUST GO THROUGH `_onKeyDown`, not a driver method — all 28 tests of the V key passed while V was dead code because none of them drove the keyboard."
-      }
+      },
+      "progress": "BUILT + VERIFIED LIVE. Tab wraps both ways, still through _handleClick so the drill animation, view-stack push, drill sound and level-4 auto-select all still happen. Live: 3->4->0->1->2->3 forward, 3->2->1->0->4->3 back. It clamped dead at SYSTEM until measured."
     },
     {
       "id": "AC-7",
@@ -72,7 +78,8 @@
       "verifyVia": {
         "input": "With a target armed, press Enter with a view mode active.",
         "observable": "`_onCommit(this._commitAction)` fires — the same call the `[ WARP ]` / `[ BURN ]` button already makes through `_commitButtonRect`, so warp and burn cannot diverge. Measured dead 2026-09-07: 0 commits after Enter. ⛔ Enter must still belong to the SEARCH FIELD while it holds focus (`_searchFocused` guards the whole key handler, and the search input has its own Enter binding at :715)."
-      }
+      },
+      "progress": "BUILT + VERIFIED LIVE. Enter fires the same _onCommit the [ WARP ] / [ BURN ] button fires. Live, Enter on a search result produced {type:'warp', target:'star', star:{...Sol, seed:163760118}}. Measured dead before the change: 0 commits."
     },
     {
       "id": "AC-8",
@@ -82,7 +89,8 @@
       "verifyVia": {
         "input": "Press [ and ] with a view mode active, at each level.",
         "observable": "The ranked list re-orders and the glass NAMES the active sort key, so the pilot can see which one is on without a console — Max never uses one. Per level: sectors and tiles by star count or by name; prism stars by distance, name, spectral class or multiplicity; bodies by AU, name or temperature. ⛔ The sort applies to the SAME array the paint reads (`D.sectorRows` / `D.starRows` / `D.bodies` order), so the rail, design 2's list and the map picker all agree — a sort that only re-orders the rail would make row N and map glyph N different objects."
-      }
+      },
+      "progress": "BUILT + VERIFIED LIVE. [ and ] cycle the level's sort keys and the hint row NAMES the active one, because Max never opens a browser console. Live at PRISM: DIST -> NAME (268 G. Cet, 82 G. Eri, 96 G. Psc) -> CLASS (Sirius A, Sengil A, Altair A) -> COMPS. The sort re-orders the array the PAINT reads, and the key is part of all three cache keys or nothing re-sorts. ⛔ It exposed a latent overflow: the level-0 density bar normalised against sectorRows[0].n, true only while count-sorted — measured, the old stream reached x=940 on a 427-wide buffer."
     },
     {
       "id": "AC-9",
@@ -92,7 +100,8 @@
       "verifyVia": {
         "input": "With design 1 active, press the two paging keys the pager names.",
         "observable": "The rail shows the next/previous window and the pager reads the new range (28-54 OF 27524), clamped at both ends. ⛔ THE PAGER LABEL MUST NAME THE ACTUAL KEYS — it currently draws a bare `[ ] PAGE` which collides with the hint row's `[ ] SORT`; two different controls cannot both be spelled `[ ]` on one screen. Design 2's list mode pages by the same keys. The page offset feeds the same published row list the map picker and the detail block read."
-      }
+      },
+      "progress": "BUILT + VERIFIED LIVE. - and = page; the pager names those keys because the hint row had already given the brackets to SORT and two controls cannot share one name on one screen. Live, offset 0 -> 27. The paint slices by S.listOffset and publishes what it actually sliced, so the picker stays index-aligned on any page."
     },
     {
       "id": "AC-10",
@@ -102,7 +111,8 @@
       "verifyVia": {
         "input": "Enumerate every affordance string drawn by design 1's hint rows, design 1's pager and commit row, and design 2's status clauses, at all five levels and in list mode.",
         "observable": "A test walks that enumeration and asserts each named control has a live binding. ⛔ ONE KNOWN LIAR TO FIX AT SOURCE: design 1's SYSTEM hint says `DRAG TO ROTATE`, but design 1 draws a LADDER at SYSTEM, which has no rotation — the hint must be changed in `nav-240p-lab.html` to name the ladder's real control, not a rotation bolted onto a ladder. ⚠ This AC is the sweep that catches anything the other nine missed, and it is the one that fails if a later design edit adds a new promise."
-      }
+      },
+      "progress": "BUILT. A sweep harvests every control-naming phrase out of designs.js and demands a probe that drives the REAL entry point. PROVED BY SABOTAGE: DRAG TO ROTATE was put back into design 1's SYSTEM hint and the sweep named it. Two meta-cases guard the scrape itself. The one known liar is corrected at source — design 1's SYSTEM hint now names the ladder's real control instead of a rotation over a ladder."
     },
     {
       "id": "AC-11",
@@ -112,7 +122,8 @@
       "verifyVia": {
         "input": "Press /, type a system name, use the arrow keys and Enter.",
         "observable": "A search field and its result rows are DRAWN on the canvas in the design's own face and ink, typing filters, arrows move the highlight and Enter selects the result exactly as the DOM widget's Enter does. ⭐ THE PIPELINE IS REUSED, NOT REBUILT — `_runSearch`, `_searchResults`, `_searchHighlight` and `_activateSearchHighlight` already exist and already resolve against every known-object source; only the PRESENTATION is DOM-bound. ⛔ The `_searchFocused` keyboard guard must keep working so the six WASD/R/F pan letters are not eaten while typing — that guard is why the DOM widget could coexist with the camera at all."
-      }
+      },
+      "progress": "BUILT + VERIFIED LIVE. / opens a search DRAWN in each design's own idiom — design 1 takes the rail at the rail's own LEAD; design 2 uses the parity checker it already owns for 'something else is on the map now'. The pipeline is REUSED: _runSearch, _moveSearchHighlight, _activateSearchHighlight, _selectSearchResult and resolveKnownObjects are untouched; only the presentation was DOM. Live, 'sol' returned Sol/G off the real catalog, Sol/SYSTEM off the registry and Chi Fisolbe 9560/arm off the named-system box, arrows moved the highlight, and Enter fired the supported warp with Sol's own seed. ⛔ The clause order on line 349 was eating real queries — the L in SOL flipped design 2 into list mode — fixed by moving the search routing ahead of the ladder and mode clauses."
     },
     {
       "id": "AC-12",
@@ -121,7 +132,8 @@
       "verifyVia": {
         "input": "Max opens the nav in ORRERY, presses V to each design, and navigates from GALAXY down to a body and commits, using whatever the glass tells him is available.",
         "observable": "Max's judgment. Holistic — does it cohere as the instrument he asked for. ⛔ No agent drives or passes this; it is deferred to Max and presupposes AC-1 through AC-11 green."
-      }
+      },
+      "progress": "DEFERRED TO MAX. No agent drives or passes this. AC-1..AC-11 are green, so it is ready for his walk."
     }
   ],
   "architecturalConnections": {
