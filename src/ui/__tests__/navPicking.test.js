@@ -32,7 +32,7 @@ import { makeDesigns } from '../navViewModes/designs.js';
 import { SORT_KEYS, makeRng, makeViewState, wrapTau,
          PRISM_DZ, PRISM_DY, SYSTEM_TILT } from '../navViewModes/state.js';
 import { generatePlanetName, generateMoonName, generateSystemName } from '../../generation/NameGenerator.js';
-import { projRect, worldAt } from '../navViewModes/picking.js';
+import { projRect, worldAt, pickLabel, pickBody, pickPrismStar } from '../navViewModes/picking.js';
 
 /** `ZOOM_STOPS[0]`, read off the design code rather than retyped — a pinned copy cannot go stale. */
 const ZOOM_STOPS = makeDesigns({ S: { design: 1, level: 3 }, D: {} }).ZOOM_STOPS;
@@ -1251,6 +1251,88 @@ describe('the adapter\'s rng is the shape the name generator actually calls', ()
       vi.resetModules();
     }
   }, 60000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// 10. ⛔⛔ A CLICK ON A LABEL SELECTS THE OBJECT THE LABEL NAMES — the live mis-selection.
+//     `plated()` knocks out a BG rect before drawing, so a label's texels are the label's by
+//     construction and nothing underneath is visible there to click. The mark lists did not know
+//     that: measured over 120 frames per case on the old placement, 4,854 labels were sitting on a
+//     mark they did not name — about 8 of Sol's ~11 drawn numerals, every frame — and a click there
+//     resolved to THAT mark. The placer now refuses those slots; this ordering is what makes the
+//     labels that remain correct rather than merely harmless.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('a label is picked before the mark underneath it', () => {
+  const REGION = { x: 0, y: 0, w: 427, h: 240 };
+  const navStub = { _localStars: [] };
+
+  it('⛔ a body tag over a FOREIGN planet selects the planet it NAMES, not the one beneath', () => {
+    const named   = { kind: 'planet', name: 'Named',   pIdx: 3, au: 9 };
+    const beneath = { kind: 'planet', name: 'Beneath', pIdx: 7, au: 1 };
+    const S = {
+      // ⚠ The mark's disc STRADDLES the plate's bottom edge on purpose: the overlap is where the
+      //    defect lives, and the part sticking out is what makes the control below possible.
+      //    plate = x 100..112, y 60..66;  mark = centre (104, 66) r 4, so y 62..70.
+      bodyHits:  [{ x: 104, y: 66, r: 4, ref: beneath, moon: -1, star: false }],
+      labelHits: [{ x: 100, y: 60, w: 13, h: 7, ref: named, kind: 'body' }],
+    };
+    expect(pickLabel(S, 104, 63).ref.name).toBe('Named');
+    expect(pickBody(navStub, S, 104, 63, REGION), 'inside the plate, the mark beneath still won')
+      .toEqual({ type: 'planet', index: 3 });
+
+    // CONTROL — the mark list is still live and IS what answers away from the plate. Without this,
+    // the test would pass just as well if `pickBody` had stopped reading `bodyHits` altogether.
+    expect(pickBody(navStub, S, 104, 69, REGION), 'the mark below the plate stopped resolving')
+      .toEqual({ type: 'planet', index: 7 });
+  });
+
+  it('⛔ a body tag NEVER resolves to one of its parent\'s moon pips', () => {
+    // The pips sit at `x + 4 + m*2` and the tag's own first slot starts at that same `x + 4`, so a
+    // tag adjacent to its parent is exactly where a pip lives. `moon: -1` is what keeps them apart.
+    const body = { kind: 'planet', name: 'Parent', pIdx: 2, au: 4 };
+    const S = {
+      bodyHits:  [{ x: 50, y: 40, r: 2, ref: body, moon: 1, star: false }],
+      labelHits: [{ x: 47, y: 37, w: 9, h: 7, ref: body, kind: 'body' }],
+    };
+    expect(pickBody(navStub, S, 50, 40, REGION), 'the tag resolved to a moon it does not name')
+      .toEqual({ type: 'planet', index: 2 });
+  });
+
+  it('⭐ the prism does the same, and only for label kinds that ARE stars', () => {
+    const named   = { seed: 111, name: 'Named star' };
+    const beneath = { seed: 222, name: 'Beneath star' };
+    const S = {
+      prismHits: [{ x: 200, y: 100, r: 3, ref: beneath }],
+      labelHits: [{ x: 196, y: 97, w: 20, h: 7, ref: named, kind: 'star' }],
+    };
+    expect(pickPrismStar(navStub, S, 200, 100, REGION).star.seed).toBe(111);
+
+    // ⛔ AND THE `kind` IS LOAD-BEARING, NOT DECORATION. A tile-ID plate carries a TILE in `ref`;
+    //    handing that to the prism picker would return a tile as if it were a star.
+    const T = { ...S, labelHits: [{ ...S.labelHits[0], ref: { i: 1, j: 2 }, kind: 'tile' }] };
+    expect(pickPrismStar(navStub, T, 200, 100, REGION).star.seed,
+      'a tile plate was consumed as a star').toBe(222);
+  });
+
+  it('⚠ containment, not nearest-distance — a plate has edges the pilot can see', () => {
+    const named = { kind: 'planet', name: 'Named', pIdx: 1, au: 2 };
+    const S = { bodyHits: [], labelHits: [{ x: 100, y: 60, w: 10, h: 7, ref: named, kind: 'body' }] };
+    expect(pickLabel(S, 100, 60), 'the top-left texel is inside the plate').not.toBe(null);
+    expect(pickLabel(S, 109, 66), 'the bottom-right texel is inside the plate').not.toBe(null);
+    expect(pickLabel(S, 110, 60), 'one texel past the right edge still hit').toBe(null);
+    expect(pickLabel(S, 100, 67), 'one texel past the bottom edge still hit').toBe(null);
+    expect(pickLabel(S, 98, 60), 'two texels short of the left edge still hit').toBe(null);
+  });
+
+  it('⛔ an empty or absent list is not a throw — a painter throw FREEZES the glass', () => {
+    // `PanelHost` catches a painter throw ONCE and then stops uploading, so the screen keeps showing
+    // the last good frame and looks alive. `labelHits` is undefined between makeViewState() and the
+    // first paint, which is exactly when an early pointer event can arrive.
+    expect(pickLabel({}, 10, 10)).toBe(null);
+    expect(pickLabel({ labelHits: [] }, 10, 10)).toBe(null);
+    expect(pickLabel({ labelHits: [null, { x: 0, y: 0, w: 5, h: 5 }] }, 1, 1),
+      'an entry with no ref is not an identity').toBe(null);
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════════

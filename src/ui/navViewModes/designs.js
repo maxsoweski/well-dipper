@@ -285,26 +285,101 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   }
   const pad = (s, n) => String(s).slice(0, n).padEnd(n, ' ');
   const rpad = (s, n) => String(s).slice(0, n).padStart(n, ' ');
-  /** ONE label slot solver, shared by every design that puts names on a map — a 7-offset ladder over
-   *  the repo's own 6-texel pitch, and A LABEL THAT CANNOT FIND A SLOT IS NOT DRAWN. Shared on purpose:
-   *  if each design got its own placement code the comparison would be measuring my code, not theirs. */
-  function placeLabel(taken, x, y, w, bounds) {
-    for (const dy of [0, -6, 6, -12, 12, -18, 18]) {
-      const yy = y + dy;
-      if (x + w + 2 > bounds.x + bounds.w || x < bounds.x) continue;
-      if (yy < bounds.y || yy + FACE.h + 2 > bounds.y + bounds.h) continue;
-      if (taken.some((t) => Math.abs(t.y - yy) < FACE.h + 1 && x - 2 < t.x + t.w && x + w + 2 > t.x)) continue;
-      taken.push({ x: x - 2, y: yy, w: w + 4 });
-      return yy;
+  /**
+   * ⭐⭐ ONE LABEL SLOT SOLVER, SHARED BY EVERY DESIGN THAT PUTS NAMES ON A MAP — AC-14.
+   *
+   * Shared on purpose: if each design got its own placement code the comparison would be measuring my
+   * code, not theirs. ⛔ AND IT STAYS A PLACEMENT SOLVER, NOT A TYPOGRAPHY ONE. No leader lines, no
+   * callouts, no second face, no alpha — the file's `fillRect`-only rule stands. A label either lands
+   * somewhere legible or it is not drawn.
+   *
+   * ── ⛔ WHAT IT USED TO BE, AND THE ONE THING IT COULD NOT SEE ──────────────────────────────────
+   *
+   * Seven VERTICAL offsets off one fixed side, tested against the already-placed labels and NOTHING
+   * ELSE. Two consequences, and the second is AC-14:
+   *
+   *  1. A cluster that is vertical cannot be solved by moving vertically. Real orbital angles cluster
+   *     (AC-13 put them on the glass), so the tags of four inner planets 13 texels apart chase each
+   *     other down a single column and the ones past the seventh slot are dropped.
+   *  2. ⛔⛔ IT WAS BLIND TO THE MARKS. `plated()` knocks out a BG rect before drawing, so those texels
+   *     visually belong to the label — while a click there resolves through `S.prismHits` /
+   *     `S.bodyHits` to whatever mark is UNDERNEATH. Measured over 120 frames per case before this
+   *     change: 819 labels-covering-a-foreign-mark at Sol's SYSTEM, 951/1010/1015 on three clustered
+   *     procedural systems, 284 on a dense prism field, 145 on design 1's index tags. Every one of
+   *     those is a texel that names one object and selects another.
+   *
+   * ── ⭐ WHAT IT IS NOW ──────────────────────────────────────────────────────────────────────────
+   *
+   * FOURTEEN candidates, not seven: the same 6-texel-pitch ladder on the RIGHT of the mark and then
+   * the same ladder on its LEFT. ⛔ RIGHT FIRST, AND THE FIRST CANDIDATE IS EXACTLY TODAY'S POSITION,
+   * so an uncrowded field is byte-identical and only a label that had nowhere to go moves.
+   *
+   * Each candidate is rejected against BOTH the placed labels AND the drawn marks. `self` is the mark
+   * this label names — a label may touch its own object, because that adjacency is what makes it read
+   * as belonging to it — and everything else is a foreign object the plate must not cover.
+   * ⚠ A MOON PIP IS NOT ITS PLANET, even though it carries the planet in `ref`. The pip strip lives at
+   *   the same `x + 4` the body tag starts from, so without this the tag's plate erased the very pips
+   *   it sits beside. `moon >= 0` marks are therefore foreign to their own parent's tag.
+   *
+   * ⛔ AND WHEN NOTHING FITS THE LABEL IS DROPPED, NOT OVERPRINTED. Two smeared glyphs read as neither;
+   * one legible glyph and one absent is strictly more information. ⚠ THE TRADE IS DELIBERATE AND IT
+   * COSTS NOTHING REACHABLE: the body keeps its entry in `S.bodyHits` / `S.prismHits`, so a dropped
+   * label leaves an object UNNAMED, never UNPICKABLE.
+   *
+   * @param {Array}  taken   labels already placed this frame — MUTATED
+   * @param {Array}  marks   the drawn marks, `[{x,y,r,ref,moon?}]`, as the paint published them
+   * @param {number} ax @param {number} ay   the MARK's own position — candidates are generated about it
+   * @param {number} gx @param {number} gy   this design's gap from the mark, right/up
+   * @param {number} w       the label's measured width
+   * @param {object} bounds  the rectangle the plate must stay inside
+   * @param {object} self    the object this label names, or null
+   * @returns {{x:number,y:number}|null}
+   */
+  function placeLabel(taken, marks, ax, ay, gx, gy, w, bounds, self) {
+    for (const side of [1, -1]) {
+      // ⭐ ROUNDED HERE, ONCE, BECAUSE THE GLASS IS. `plated()` lays its plate through `rect()` and its
+      // glyphs through `drawPixelText`, and BOTH round — so a candidate tested at `p.x + 3.4` is not
+      // the rectangle that gets drawn, and a half-texel near-miss becomes a real overlap on the glass.
+      // ⛔ IT MOVES NOTHING: `Math.round(a) - 1 === Math.round(a - 1)`, so the plate lands where it
+      //    always did, and `drawPixelText` already did `Math.round(y)` on its own line (`:399-400`).
+      //    It also means `S.labelHits` publishes integers, which is what a hit-test wants.
+      const x = Math.round(side > 0 ? ax + gx : ax - gx - w);
+      for (const dy of [0, -6, 6, -12, 12, -18, 18]) {
+        const y = Math.round(ay - gy + dy);
+        if (x + w + 2 > bounds.x + bounds.w || x < bounds.x) continue;
+        if (y < bounds.y || y + FACE.h + 2 > bounds.y + bounds.h) continue;
+        if (taken.some((t) => Math.abs(t.y - y) < FACE.h + 1 && x - 2 < t.x + t.w && x + w + 2 > t.x)) continue;
+        if (marks && marks.some((m) => foreignMarkUnder(m, self, x, y, w))) continue;
+        taken.push({ x: x - 2, y, w: w + 4 });
+        return { x, y };
+      }
     }
     return null;
   }
+  /** Does this mark belong to something else, and would the PLATE cover it? `plated()` lays
+   *  `(x-1, y-1, w+2, FACE.h+2)`, so that rect — not the glyph box — is what has to be clear. */
+  function foreignMarkUnder(m, self, x, y, w) {
+    if (!m || !Number.isFinite(m.x) || !Number.isFinite(m.y)) return false;
+    if (self && m.ref === self && !(m.moon >= 0)) return false;      // its own object, not its pips
+    const r = (Number.isFinite(m.r) && m.r > 0) ? m.r : 3;
+    // ⛔ THE MARK'S CENTRE IS ROUNDED, BECAUSE THE MARK IS. `projectPrism` publishes unrounded floats
+    //    and every primitive that draws them rounds, so a test against the raw float is a test against
+    //    a rectangle that is not on the glass — measured, it let a mark sit one texel inside a plate it
+    //    should have been refused. Plate texels are `x-1 .. x+w` by `y-1 .. y+FACE.h`, inclusive.
+    const mx = Math.round(m.x), my = Math.round(m.y);
+    if (mx + r < x - 1 || mx - r > x + w) return false;              // cheap horizontal cull first
+    return my + r >= y - 1 && my - r <= y + FACE.h;
+  }
 
-  /** A knockout plate under on-map type. Without it a label over a bright arm is invisible. */
+  /** A knockout plate under on-map type. Without it a label over a bright arm is invisible.
+   *  ⭐ IT RETURNS THE RECTANGLE IT DREW, which is what every `S.labelHits` entry is built from. A
+   *  caller that re-measured the string would be a SECOND copy of this geometry — the AC-4 defect
+   *  shape — and the copy that drifts is always the one nothing draws. */
   function plated(g, s, x, y, ink, rgn, what) {
     const w = measurePixelText(s);
     rect(g, x - 1, y - 1, w + 2, FACE.h + 2, INK.BG);
     T(g, s, x, y, { color: ink, rgn, what });
+    return { x, y, w, h: FACE.h };
   }
 
   function estStars(x, z, sizeKpc) {
@@ -455,6 +530,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   const SEARCH_HINT = 'TYPE A NAME   UP DOWN MOVE   ENTER WARP   ESC CLOSE';
 
   function drawDesign1(g, W, H) {
+    // ⭐ EVERY LABEL THIS FRAME DRAWS, CLEARED BEFORE IT DRAWS ANY (INTERFACE §6). Design 2 clears its
+    // whole published set at the head of its own paint for the same reason; a stale label rectangle
+    // makes a hit-test that should say "nothing there" quietly answer against the frame before it.
+    // ⛔ AN ASSIGNMENT, NOT A `||= []`: a design that draws no labels must publish an EMPTY array, and
+    //    a picker reading `undefined.length` inside `render()`'s tail freezes the glass.
+    S.labelHits = [];
     const CELL = FACE.advance, LEAD = FACE.h + 1;
     const cols = Math.floor((W + 1) / CELL), rows = Math.floor(H / LEAD);
     const cx = (c) => c * CELL, ry = (r) => r * LEAD;
@@ -689,7 +770,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       //   first, so it would ALSO punch a hole in the density behind it. Total rather than incidental:
       //   at this seed the eight densest tiles are all central and this has never fired.
       if (live && !live.has(t.j * n + t.i)) return;
-      plated(g, t.id, tx, ty, INK.DIM, 'map', 'tile id ' + t.id);
+      // ⚠ THE ONE UNAMBIGUOUS LABEL ON THE PAGE, AND IT NEEDS NO PLACER. A tile id is drawn INSIDE its
+      //   own cell, guarded by the `cell < measurePixelText + 3` test above, so it can neither collide
+      //   with another label nor sit on a mark it does not name. It is published all the same, because
+      //   a picker that has to special-case which labels are hit-testable is a second rule.
+      S.labelHits.push({ ...plated(g, t.id, tx, ty, INK.DIM, 'map', 'tile id ' + t.id), ref: t, kind: 'tile' });
     });
     // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5). Drawn LAST so it sits over the grid, the tile ids and the
     // YOU marker — a "you hit this one" that a rule can cross is not an acknowledgement.
@@ -784,11 +869,24 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // overlap at this radius resolve to the near one instead of to whichever was tested first.
     S.prismHits = shown.map(({ s, p }) => ({ x: p.x, y: p.y, r: 3, ref: s }));
     // ⭐ EIGHT SINGLE-CHARACTER INDEX TAGS instead of 139 labels of which 100 are already faded
+    // ⛔⛔ AND THIS IS THE SITE THAT NEVER CALLED THE PLACER AT ALL — a bare `p.x + 3, p.y - 6` over a
+    //    field of up to 240 marks. It is the only one of the four that could actually DESTROY a label:
+    //    measured over 120 frames before this change, 507 texels of one tag's glyphs erased by a later
+    //    tag's knockout plate, worst frame 50 — because `plated()` lays its BG rect first, so the tag
+    //    drawn second rubs out the one drawn first. The three sites that DID call the placer scored
+    //    zero on that same measurement; they were dropping labels, not smearing them.
+    // ⚠ THE MANUAL BOUNDS TEST IS GONE, NOT LOST: `placeLabel` makes the same test against the declared
+    //   region and then tries thirteen more slots, so a tag that used to be skipped for being 3 texels
+    //   from the right edge now goes on the star's left instead.
     const top = D.starRows.slice(0, 9).filter((s) => s.dist > 1e-6).slice(0, 8);
+    const tagTaken = [];
     top.forEach((s, i) => {
       const p = projectPrism(s, cxp, cyp, mapW / 2, mapH / 2);
-      if (p.x < 1 || p.x + 3 + FACE.w + 1 >= mapW || p.y < mapY + 7 || p.y >= mapY + mapH) return;
-      plated(g, String(i + 1), p.x + 3, p.y - 6, INK.TARGET, 'map', 'index tag ' + (i + 1));
+      const txt = String(i + 1);
+      const pos = placeLabel(tagTaken, S.prismHits, p.x, p.y, 3, 6, measurePixelText(txt), REGIONS.map, s);
+      if (!pos) return;
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.TARGET, 'map', 'index tag ' + txt),
+                         ref: s, kind: 'index' });
     });
     // the Y-gauge: 6 texels carrying the whole 60x160 minimap
     rect(g, gaugeX + 3, mapY + 2, 1, mapH - 4, INK.RULE);
@@ -1142,7 +1240,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // leaves the previous picture's marks live UNDERNEATH the new one and the pilot clicks a star
     // that is not there. Whichever painter runs below republishes what it actually draws, so this
     // costs exactly one frame of nothing and closes a whole class of stale-pick defect at the source.
-    S.mapProj = null; S.prismHits = null; S.bodyHits = null; S.listGeom = null;
+    S.mapProj = null; S.prismHits = null; S.bodyHits = null; S.listGeom = null; S.labelHits = [];
     if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
     else if (S.level === 3) d2Prism(g, W, mapY, mapH);
     else d2System(g, W, mapY, mapH);
@@ -1325,10 +1423,15 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (placed >= capN) break;
       if (!s.name || !s.isReal) continue;
       const txt = s.name.toUpperCase(), w = measurePixelText(txt);
-      const ly = placeLabel(taken, p.x + 3, p.y - 6, w, REGIONS.map);
-      if (ly == null) continue;                                  // not drawn — never faded
-      rect(g, p.x + 1, Math.min(p.y, ly + 2), 1, Math.abs(ly + 2 - p.y) + 1, INK.RULE);
-      plated(g, txt, p.x + 3, ly, INK.KEY, 'map', 'prism label ' + txt);
+      const pos = placeLabel(taken, S.prismHits, p.x, p.y, 3, 6, w, REGIONS.map, s);
+      if (!pos) continue;                                        // not drawn — never faded
+      // ⚠ THE 1-TEXEL TICK MIRRORS WITH THE LABEL. It is not a leader line and does not become one:
+      //   it is the same single texel column in the same 3-texel gap this design has always drawn,
+      //   on whichever side the name actually landed. Drawn on the star's left when the name is.
+      const tick = pos.x < p.x ? p.x - 1 : p.x + 1;
+      rect(g, tick, Math.min(p.y, pos.y + 2), 1, Math.abs(pos.y + 2 - p.y) + 1, INK.RULE);
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.KEY, 'map', 'prism label ' + txt),
+                         ref: s, kind: 'star' });
       placed++;
     }
     // the minimap — drawn AS SPECIFIED, a 40x24 widget in the corner of a design whose premise is
@@ -1430,7 +1533,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
 
   function d2System(g, W, mapY, mapH) {
     const cxp = Math.round(W / 2), cyp = Math.round(mapY + mapH / 2);
-    const tagsTaken = [];
+    const tagsTaken = [], tagQueue = [];
     const hits = [];
     const auMax = Math.max(1e-3, ...D.bodies.filter((b) => b.kind !== 'moon').map((b) => b.au));
     // ⭐ THE ORRERY'S OWN CAMERA. `TILT` was the literal 0.42 and is now a true sine — exactly, because
@@ -1532,12 +1635,22 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         for (let m = 0; m < b.moons; m++) { const mx = px + m * step; hits.push({ x: mx, y: my, r: 2, ref: b, moon: m, star: false }); rect(g, mx, my, 1, 1, INK.DIM); }
         assertMark('moon pips ' + b.name, 'map', Math.min(px, px + span * step / 2), my, span + 1, 1);
       }
-      const tag = roman(i + 1);
-      if (r > 24) {
-        const ly = placeLabel(tagsTaken, x + 4, y - 8, measurePixelText(tag), REGIONS.map);
-        if (ly != null) plated(g, tag, x + 4, ly, INK.DIM, 'map', 'body tag ' + tag);
-      }
+      // ⛔⛔ THE TAG IS QUEUED, NOT DRAWN — because a placer that can see the marks has to be run AFTER
+      //    the marks exist. Placing tag 3 inside this loop meant `hits` held bodies 1-3 and nothing
+      //    else, so every tag was mark-aware only about the bodies drawn BEFORE it and blind to every
+      //    one after — which is most of them, and the outer planets are exactly the ones a tag drifts
+      //    onto. ⚠ Tags therefore now paint OVER all bodies instead of interleaved with them. No mark
+      //    moves; a tag that a later planet used to overpaint is now legible, which is the point.
+      if (r > 24) tagQueue.push({ b, tag: roman(i + 1), x, y });
     });
+    // ⭐ THE TAGS, PLACED AGAINST THE FINISHED PICTURE (AC-14). `hits` is complete here — every body,
+    // every belt, every moon pip — so a tag can be refused a slot that covers any of them.
+    for (const q of tagQueue) {
+      const pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b);
+      if (!pos) continue;
+      S.labelHits.push({ ...plated(g, q.tag, pos.x, pos.y, INK.DIM, 'map', 'body tag ' + q.tag),
+                         ref: q.b, kind: 'body' });
+    }
     // ⚠ THE SHIP DIAMOND HAS NO WORLD POSITION AT ALL — a bare `cxp + 8` screen offset — so under
     //   rotation it is the ONE mark on this orrery that visibly refuses to move. Logged, not invented:
     //   giving it a position would be this page guessing where the ship is in the system, and there is

@@ -206,9 +206,43 @@ export function pickTile(S, x, y) {
  * class compares those by identity against `_localStars` (`handleEscape`'s binary stash, for one).
  * The shipped list-row picker already does exactly this; the map picker must not diverge from it.
  */
+/**
+ * ⭐⭐ A CLICK ON A LABEL BELONGS TO THE OBJECT THE LABEL NAMES, AND IT IS TESTED FIRST.
+ *
+ * ⛔ THIS IS A LIVE MIS-SELECTION FIX, NOT AN EXTRA AFFORDANCE. `plated()` knocks out a BG rect
+ * before drawing, so a label's texels are the label's by construction — nothing underneath is
+ * visible there to click. But the mark lists do not know that, so before this, a numeral sitting on
+ * a planet it did not name resolved to THAT planet. Measured over 120 frames per case on the old
+ * placement: **4,854 labels were sitting on a foreign mark**, about 8 of Sol's ~11 drawn numerals
+ * every frame. The placer now refuses those slots, so the count is 0 — and this ordering is what
+ * makes the remaining labels correct rather than merely harmless, because a label is still allowed
+ * to sit near its OWN mark, where the two answers agree.
+ *
+ * ⚠ RECT CONTAINMENT, NOT NEAREST-DISTANCE. `nearestHit` takes the closest candidate within a
+ * radius, which is right for a point-like mark and wrong for a plate: a click 2 texels outside a
+ * label is not a click on it, and a plate has real edges the pilot can see.
+ */
+export function pickLabel(S, x, y) {
+  const hits = S.labelHits;
+  if (!hits || !hits.length) return null;
+  // Last drawn wins: later plates paint over earlier ones, so the topmost is the one the pilot sees.
+  for (let i = hits.length - 1; i >= 0; i--) {
+    const h = hits[i];
+    if (!h || !h.ref) continue;
+    if (x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h) return h;
+  }
+  return null;
+}
+
 export function pickPrismStar(nav, S, x, y, mapRegion) {
   if (!inRegion(mapRegion, x, y)) return null;
-  const hp = nearestHit(S.prismHits, x, y);
+  // ⛔ THE LABEL FIRST — see `pickLabel`. Its plate has already erased whatever lies under it.
+  //    ⚠ BRANCH ON THE PUBLISHED `kind`, never on the shape of `ref`: guessing "it has a `seed`, so
+  //    it must be a star" is a second copy of the paint's own classification, and the AC-4 defect
+  //    shape. `index` is design 1's numbered tag, `star` is design 2's placed name.
+  const lab = pickLabel(S, x, y);
+  const hp = (lab && (lab.kind === 'index' || lab.kind === 'star'))
+    ? lab : nearestHit(S.prismHits, x, y);
   if (!hp || !hp.ref) return null;
   const live = (nav._localStars || []).find((t) => t && t.seed === hp.ref.seed) || hp.ref;
   return { star: live, sx: hp.x, sy: hp.y };
@@ -235,7 +269,14 @@ export function pickPrismStar(nav, S, x, y, mapRegion) {
  */
 export function pickBody(nav, S, x, y, mapRegion) {
   if (!inRegion(mapRegion, x, y)) return null;
-  const hp = nearestHit(S.bodyHits, x, y);
+  // ⛔ THE LABEL FIRST — see `pickLabel`. A numeral's plate has erased the mark beneath it, so the
+  //    pilot cannot be clicking that mark. ⚠ A body tag names the BODY, never one of its moon pips:
+  //    the pips sit at `x + 4 + m*2` and the tag's own slot starts at the same `x + 4`, so without
+  //    `moon: -1` a tag adjacent to its parent's pips would resolve to a moon it does not name.
+  //    ⚠ And branch on the published `kind`, not on the shape of `ref` — see `pickPrismStar`.
+  const lab = pickLabel(S, x, y);
+  const hp = (lab && lab.kind === 'body') ? { ...lab, moon: -1, star: false }
+                                          : nearestHit(S.bodyHits, x, y);
   if (!hp) return null;
   if (hp.star) return { type: 'star', index: 0 };
   return bodyIdentity(nav, hp.ref, hp.moon);

@@ -272,6 +272,12 @@ export function makeViewState() {
     mapProj: null,      // {design,level,kind,x0,y0,w,h,cx,cz,spanX,spanZ,n} — levels 0-2
     prismHits: [],      // [{x,y,r,ref}]                — level 3, in DRAW ORDER
     bodyHits: [],       // [{x,y,r,ref,moon,star}]      — level 4
+    /** ⭐ EVERY PLACED LABEL AT ITS FINAL DRAWN RECT, published by `plated()` itself so a caller
+     *  cannot re-measure the string and disagree with the plate. `[]` here rather than `null`
+     *  because the designs assign it at the head of their own paint, so it is only ever undefined
+     *  in the window between `makeViewState()` and the first paint — and a picker that runs in that
+     *  window would throw, which freezes the glass rather than missing a click. */
+    labelHits: [],      // [{x,y,w,h,ref,kind}]         — levels 3-4, tested BEFORE the mark lists
     railTiles: [],      // [{i,j,id,x,z,n}]             — design 1's rail rows at levels 1-2
     listGeom: null,     // {x,y,rows,lead,offset,total} — design 2's list
     tabRects: null,     // [{x,y,w,h}] x5               — the DESIGN's tab strip, not the legacy one
