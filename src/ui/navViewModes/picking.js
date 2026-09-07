@@ -267,6 +267,56 @@ export function pickPrismStar(nav, S, x, y, mapRegion) {
  * planet with no `planetData`, so the flat list's position and `_systemData.planets`' index diverge
  * the moment one is skipped — and sorting `D.bodies` (AC-8) breaks the correspondence outright.
  */
+/**
+ * ⭐ AC-2 — THE ORBIT RING UNDER THE POINTER, at level 4 in design 2.
+ *
+ * Max: *"anything on screen should be clickable."* A ring is the largest inert thing this orrery
+ * draws, and it names its body by construction — one ellipse per body, drawn from that body's own
+ * AU. So a click on the ring is a click on the body.
+ *
+ * ⛔ IT IS THE LAST CANDIDATE TESTED, NOT THE FIRST, AND THAT ORDERING IS THE WHOLE SAFETY OF IT.
+ * A ring passes within a texel or two of marks it does not name — every inner planet's mark sits
+ * inside every outer planet's ellipse, and at low tilt the rings crowd — so a ring that could beat
+ * a body mark or a label would turn a precise click into a wrong selection. It answers only where
+ * nothing better did.
+ *
+ * ⚠ THE GAP IS MEASURED IN TEXELS, ALONG THE RAY, NOT IN THE ELLIPSE'S NORMALISED UNITS. `n` is the
+ * point's radius in units of the ellipse, so `n = 1` is on it — but "0.1 of an ellipse away" is 20
+ * texels on the outer ring and 2 on the inner one, which would make the grab band grow with the
+ * orbit. Projecting the point onto the ray's crossing and measuring the leftover distance keeps the
+ * band a constant width on the glass, exact on both axes and conservative in between (it reads
+ * slightly long off-axis on an eccentric ring, so the band narrows there rather than widening —
+ * it never claims texels the pilot cannot see a ring in).
+ *
+ * ⛔ NEAREST RING WINS. At the sqrt(AU) spacing the outer rings crowd to within a few texels of each
+ * other, so a band that returned the FIRST match would answer with whichever body happened to be
+ * earlier in `D.bodies` — an order that `[` / `]` re-sorts.
+ *
+ * @param {object} S
+ * @param {number} x
+ * @param {number} y
+ * @param {number} [grab=3]  half-width of the grab band, in texels
+ * @returns {?{cx:number,cy:number,rx:number,ry:number,ref:object}}
+ */
+export function pickOrbitRing(S, x, y, grab = 3) {
+  const rings = S && S.orbitRings;
+  if (!Array.isArray(rings) || rings.length === 0) return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  let best = null, bestD = Infinity;
+  for (let k = rings.length - 1; k >= 0; k--) {
+    const r = rings[k];
+    if (!r || !(r.rx > 0) || !(r.ry > 0)) continue;
+    const dx = x - r.cx, dy = y - r.cy;
+    const n = Math.hypot(dx / r.rx, dy / r.ry);
+    // Dead centre is the star's own mark, which has already had its chance; there is no ray there.
+    if (!(n > 0) || !Number.isFinite(n)) continue;
+    const d = Math.abs(1 - 1 / n) * Math.hypot(dx, dy);
+    if (d > grab || d >= bestD) continue;
+    bestD = d; best = r;
+  }
+  return best;
+}
+
 export function pickBody(nav, S, x, y, mapRegion) {
   if (!inRegion(mapRegion, x, y)) return null;
   // ⛔ THE LABEL FIRST — see `pickLabel`. A numeral's plate has erased the mark beneath it, so the
@@ -277,7 +327,15 @@ export function pickBody(nav, S, x, y, mapRegion) {
   const lab = pickLabel(S, x, y);
   const hp = (lab && lab.kind === 'body') ? { ...lab, moon: -1, star: false }
                                           : nearestHit(S.bodyHits, x, y);
-  if (!hp) return null;
+  // ⭐ AC-2 — AND THE RING LAST OF ALL, only where no mark and no label answered. See `pickOrbitRing`.
+  //    ⚠ A BELT'S RING GOES THROUGH `bodyIdentity` LIKE ANY OTHER, which answers `null` for a belt —
+  //    the same "no identity, clear the selection" its centre mark already gives. That is the point
+  //    of routing it through the shared function rather than filtering belts out here: one place
+  //    decides what a belt means, and the ring cannot drift from the mark.
+  if (!hp) {
+    const ring = pickOrbitRing(S, x, y);
+    return ring ? bodyIdentity(nav, ring.ref, -1) : null;
+  }
   if (hp.star) return { type: 'star', index: 0 };
   return bodyIdentity(nav, hp.ref, hp.moon);
 }

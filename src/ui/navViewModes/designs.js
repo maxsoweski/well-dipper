@@ -1240,7 +1240,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // leaves the previous picture's marks live UNDERNEATH the new one and the pilot clicks a star
     // that is not there. Whichever painter runs below republishes what it actually draws, so this
     // costs exactly one frame of nothing and closes a whole class of stale-pick defect at the source.
-    S.mapProj = null; S.prismHits = null; S.bodyHits = null; S.listGeom = null; S.labelHits = [];
+    S.mapProj = null; S.prismHits = null; S.bodyHits = null; S.listGeom = null; S.labelHits = []; S.orbitRings = null;
     if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
     else if (S.level === 3) d2Prism(g, W, mapY, mapH);
     else d2System(g, W, mapY, mapH);
@@ -1559,10 +1559,23 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //   against the width term's 205.5, so `Math.min` still returns the width term, unchanged.
     const maxR = Math.min(W / 2 - 8, (mapH / 2 - 4) / Math.max(TILT, SYS_MIN_SIN));
     const rOf = (au) => 8 + (maxR - 8) * Math.sqrt(Math.max(0, au) / auMax);
+    // ⭐ AC-2 — THE ORBIT ELLIPSES ANSWER A CLICK, AND THE GEOMETRY COMES OUT OF THE PAINT.
+    // A ring is the ONE mark on this orrery that is large, unambiguous and completely inert: it is
+    // drawn per body, it names that body by construction, and until now clicking anywhere on it
+    // resolved to nothing. `rx`/`ry` are the SAME two expressions `dottedEllipse` was handed, so the
+    // band the pilot can grab cannot drift from the band that was drawn — restating `rOf(b.au)` and
+    // the tilt in the hit-test is the AC-4 defect exactly.
+    // ⚠ A BELT'S RING IS PUBLISHED TOO, and it is not an oversight: `bodyIdentity` answers "no
+    //   identity" for a belt, which CLEARS the selection rather than leaving a stale body armed —
+    //   the same answer its centre mark already gives. Omitting it would make a belt's ring fall
+    //   through to whatever concentric ring happened to be next, which is a wrong pick, not a
+    //   missing one.
+    S.orbitRings = [];
     for (const b of D.bodies) {
       if (b.kind === 'moon') continue;
       const r = rOf(b.au);
       dottedEllipse(g, cxp, cyp, r, r * TILT, INK.RULE, b.kind === 'belt' ? 5 : 2);
+      S.orbitRings.push({ cx: cxp, cy: cyp, rx: r, ry: r * TILT, ref: b });
       assertMark('orbit ring ' + b.name, 'map', cxp - r, cyp - r * TILT, 2 * r, 2 * r * TILT);
     }
     sprite(g, cxp, cyp, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');

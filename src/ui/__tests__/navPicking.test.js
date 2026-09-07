@@ -32,7 +32,7 @@ import { makeDesigns } from '../navViewModes/designs.js';
 import { SORT_KEYS, makeRng, makeViewState, wrapTau,
          PRISM_DZ, PRISM_DY, SYSTEM_TILT } from '../navViewModes/state.js';
 import { generatePlanetName, generateMoonName, generateSystemName } from '../../generation/NameGenerator.js';
-import { projRect, worldAt, pickLabel, pickBody, pickPrismStar } from '../navViewModes/picking.js';
+import { projRect, worldAt, pickLabel, pickBody, pickPrismStar, pickOrbitRing } from '../navViewModes/picking.js';
 
 /** `ZOOM_STOPS[0]`, read off the design code rather than retyped — a pinned copy cannot go stale. */
 const ZOOM_STOPS = makeDesigns({ S: { design: 1, level: 3 }, D: {} }).ZOOM_STOPS;
@@ -1017,6 +1017,107 @@ describe('the adapter resolves the selected body by identity, not by slot', () =
     nav.render();
     expect(nav._selectedBody).toEqual({ type: 'planet', planetIndex: 1 });
     expect(drv.D.selBody).toBe(b);
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// AC-2 — THE ORBIT RINGS ANSWER A CLICK.  Max: "anything on screen should be clickable."
+// ═══════════════════════════════════════════════════════
+describe("design 2's orbit ellipses are clickable", () => {
+  /**
+   * A texel ON the ring `r` that is clear of every OTHER candidate the frame published — no body
+   * mark within its own radius, no label plate containing it. Walked round the ring rather than
+   * computed, because the only point that proves anything is one where the ring is the sole
+   * remaining answer; anywhere else the mark or the label is supposed to win.
+   */
+  function lonelyPointOn(S, ring) {
+    for (let k = 0; k < 720; k++) {
+      const a = (k / 720) * Math.PI * 2;
+      const x = Math.round(ring.cx + Math.cos(a) * ring.rx);
+      const y = Math.round(ring.cy + Math.sin(a) * ring.ry);
+      const nearMark = (S.bodyHits || []).some((h) => Math.hypot(x - h.x, y - h.y) <= (h.r || 4) + 1);
+      const inPlate = (S.labelHits || []).some((h) => x >= h.x - 1 && x < h.x + h.w + 1
+                                                   && y >= h.y - 1 && y < h.y + h.h + 1);
+      if (!nearMark && !inPlate) return { x, y };
+    }
+    return null;
+  }
+
+  it('⭐⭐ A CLICK ON AN ORBIT RING SELECTS THE BODY THE RING BELONGS TO', async () => {
+    const { nav, drv } = await trappySystem('bars');
+    const ring = drv.S.orbitRings.find((r) => r.ref === middle(drv));
+    expect(ring, 'the orrery published no ring for the middle planet').toBeTruthy();
+    const p = lonelyPointOn(drv.S, ring);
+    expect(p, 'no texel on the ring is clear of every mark and plate').toBeTruthy();
+    // ⛔ THE POINT IS AN INPUT, NOT AN ASSERTION. Before this AC the same click resolved to nothing.
+    nav._selectedBody = null;
+    nav._handleMouseMove({ clientX: p.x, clientY: p.y });
+    clickAt(nav, p.x, p.y);
+    nav.render();
+    expect(nav._selectedBody, 'the ring did not answer the click').toEqual({ type: 'planet', planetIndex: 1 });
+    expect(drv.D.selBody, 'the frame is not drawn on the body the ring names').toBe(middle(drv));
+  });
+
+  it('⭐ EVERY DRAWN BODY MARK LIES ON ITS OWN RING — two publications that cannot disagree', async () => {
+    // The rings come out of `dottedEllipse`'s arguments and the marks out of the orbit arithmetic
+    // that placed them; nothing in the build forces the two to agree. If a ring were ever restated
+    // rather than published, this is the assertion that would catch it — the mark would sit off it.
+    const { drv } = await trappySystem('bars');
+    const planets = drv.S.bodyHits.filter((h) => h.ref && h.ref.kind === 'planet' && h.moon < 0);
+    expect(planets.length, 'no planet marks to check').toBeGreaterThan(0);
+    for (const h of planets) {
+      const ring = pickOrbitRing(drv.S, h.x, h.y);
+      expect(ring, `the mark for ${h.ref.name} is on no ring at all`).toBeTruthy();
+      expect(ring.ref, `${h.ref.name}'s mark resolved to another body's ring`).toBe(h.ref);
+    }
+  });
+
+  it("⛔ A MARK ALWAYS BEATS A RING, even one lying exactly on it", async () => {
+    // ⚠ BUILT, NOT FOUND — an inner planet's mark landing on an outer planet's ellipse is a real
+    // arrangement (every mark is inside every larger ring) but not one a given seed reliably puts
+    // under one texel. The fixture is the case the ordering exists for, and without the ordering
+    // the click would select `outer` — the body whose ring is under the pointer — instead of the
+    // planet whose mark the pilot can actually see there.
+    const inner = { kind: 'planet', name: 'INNER', pIdx: 7, au: 1 };
+    const outer = { kind: 'planet', name: 'OUTER', pIdx: 9, au: 30 };
+    const S = {
+      labelHits: [],
+      bodyHits: [{ x: 100, y: 60, r: 4, ref: inner, moon: -1, star: false }],
+      orbitRings: [{ cx: 100, cy: 100, rx: 40, ry: 40, ref: outer }],
+    };
+    const nav = { _systemMode: 'system', _selectedPlanetIdx: -1 };
+    // The point is on OUTER's ring (100, 60) and on INNER's mark at the same time.
+    expect(pickOrbitRing(S, 100, 60).ref, 'the fixture does not put the point on the ring').toBe(outer);
+    expect(pickBody(nav, S, 100, 60, null)).toEqual({ type: 'planet', index: 7 });
+    // and with the mark gone, the same click falls through to the ring — so the case above is a
+    // CHOICE between two live candidates, not a ring that was never consulted.
+    S.bodyHits = [];
+    expect(pickBody(nav, S, 100, 60, null)).toEqual({ type: 'planet', index: 9 });
+  });
+
+  it("⛔ A BELT'S RING CLEARS THE SELECTION, exactly as its centre mark does", async () => {
+    // A belt has no downstream identity in either build. Publishing its ring is what stops the click
+    // falling through to whichever concentric ring is next — a wrong pick rather than a missing one.
+    const { drv, nav } = await trappySystem('bars');
+    const beltRing = drv.S.orbitRings.find((r) => r.ref && r.ref.kind === 'belt');
+    expect(beltRing, 'the trappy system draws a belt; its ring must be published').toBeTruthy();
+    const p = lonelyPointOn(drv.S, beltRing);
+    expect(p).toBeTruthy();
+    expect(pickOrbitRing(drv.S, p.x, p.y).ref.kind, 'the belt ring is not the nearest one there').toBe('belt');
+    expect(pickBody(nav, drv.S, p.x, p.y, null), 'a belt answered with an identity').toBe(null);
+  });
+
+  it("⛔ DESIGN 1 PUBLISHES NO RINGS, and a design-2 ring does not outlive a switch to it", async () => {
+    // Design 1's SYSTEM is a ladder with no curves. The driver clears the field for both designs,
+    // which is what keeps a ring from being live under a picture that never drew one.
+    const { nav, drv } = await trappySystem('bars');
+    expect(drv.S.orbitRings?.length, 'design 2 must publish rings to begin with').toBeGreaterThan(0);
+    const ring = drv.S.orbitRings.find((r) => r.ref === middle(drv));
+    const p = lonelyPointOn(drv.S, ring);
+    nav.viewMode = 'rail';
+    nav.render();
+    expect(drv.S.orbitRings, 'a design-2 ring outlived the design that drew it').toBe(null);
+    expect(pickOrbitRing(drv.S, p.x, p.y), 'the ladder answered with a ring').toBe(null);
   });
 });
 

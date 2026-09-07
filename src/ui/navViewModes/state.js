@@ -278,6 +278,13 @@ export function makeViewState() {
      *  in the window between `makeViewState()` and the first paint — and a picker that runs in that
      *  window would throw, which freezes the glass rather than missing a click. */
     labelHits: [],      // [{x,y,w,h,ref,kind}]         — levels 3-4, tested BEFORE the mark lists
+    /** ⭐ AC-2 — DESIGN 2'S ORBIT ELLIPSES, AT THE RADII THEY WERE DRAWN AT. `[{cx,cy,rx,ry,ref}]`,
+     *  level 4, design 2 only. `null` — not `[]` — is the honest value everywhere else: design 1's
+     *  SYSTEM is a ladder with no curves, so it publishes NO rings rather than an empty set of them,
+     *  and both designs clear this at the head of their own paint so a ring cannot outlive the frame
+     *  that drew it. Tested LAST of the level-4 candidates: a ring is the weakest claim on the glass
+     *  and must never beat a body mark or a label sitting on top of it. */
+    orbitRings: null,   // [{cx,cy,rx,ry,ref}]          — level 4, design 2
     railTiles: [],      // [{i,j,id,x,z,n}]             — design 1's rail rows at levels 1-2
     listGeom: null,     // {x,y,rows,lead,offset,total} — design 2's list
     tabRects: null,     // [{x,y,w,h}] x5               — the DESIGN's tab strip, not the legacy one

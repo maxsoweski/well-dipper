@@ -160,6 +160,13 @@ export function makeViewModeDriver(nav) {
     S.mapProj = null; S.listGeom = null; S.tabRects = null; S.chipRect = null;
     S.searchGeom = null;
     S.prismHits = []; S.bodyHits = []; S.railTiles = [];
+    // ⭐ AC-2's ORBIT RINGS CLEAR HERE AND NOT IN DESIGN 1, because design 1 never draws one and a
+    // field only design 2 publishes needs an owner that runs for BOTH. Without it, one press of V at
+    // SYSTEM leaves design 2's rings live underneath design 1's ladder and a click on empty pane
+    // selects a planet that is not on the glass. `null`, not `[]`: "this design publishes no rings"
+    // is a different claim from "it published an empty set of them", and `pickOrbitRing` treats
+    // either as no candidates.
+    S.orbitRings = null;
     // ⛔ `S.pick` IS NOT IN THIS LIST AND MUST NOT BE. Everything above is published by the PAINT and
     // is one frame's worth by construction; `S.pick` is published by the CLICK and has to outlive
     // the frames between the click and the drill landing — which is the entire feature. Clearing it
