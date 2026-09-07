@@ -16,7 +16,7 @@ import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
 import alea from 'alea';
-import { simClockMs } from '../core/SimClock.js';  import { navTabHeight, navChromeReserve, navDrawH, navMapOriginY, navMapSize, navCommitButton, navTextInset } from './navLayout.js';  import { wrapPixelTypeCtx, navUnitCap } from './navPixelType.js';   // ⚠ appended to this line, not added as new lines: ~700 line-anchored citations ride this file
+import { simClockMs } from '../core/SimClock.js';  import { navTabHeight, navChromeReserve, navDrawH, navMapOriginY, navMapSize, navCommitButton, navTextInset } from './navLayout.js';  import { wrapPixelTypeCtx, navUnitCap } from './navPixelType.js';  import { prismMarkerMayShow } from './navPrismCull.js';   // ⚠ appended to this line, not added as new lines: ~700 line-anchored citations ride this file
 
 /**
  * NavComputer — 5-level interactive galaxy navigation.
@@ -2026,7 +2026,7 @@ export class NavComputer {
       starP: project(s.wx, s.wy, s.wz),
       planeP: project(s.wx, planeY, s.wz),
     }));
-    projected.sort((a, b) => b.starP.depth - a.starP.depth);
+    projected.sort((a, b) => b.starP.depth - a.starP.depth);  const onScreen = projected.filter((p) => prismMarkerMayShow(p.planeP, p.starP, w, drawH));   // ⭐ THE SCREEN-BOUNDS CULL, folded onto this line so the file's ~700 line-anchored citations do not move. `projected` stays WHOLE for `projByName` below — the co-membership tether must still reach an off-frame companion — and only the draw loop reads `onScreen`. The test is on the SEGMENT planeP→starP, not on starP, and culling the label push is what makes on-screen names stop fading: navPrismCull.js has the whole argument and the extent table.
 
     // Name -> screen point for every projected marker (AC2): the co-membership
     // tether draws between a marker and its co-member markers' points. Draw-only
@@ -2072,7 +2072,7 @@ export class NavComputer {
     this._localStarNames = new Set();
     for (const s of this._localStars) if (s.name) this._localStarNames.add(s.name);
 
-    for (const { star, starP, planeP } of projected) {
+    for (const { star, starP, planeP } of onScreen) {
       // Vertical reference line (subtle)
       ctx.setLineDash([2, 5]);
       ctx.strokeStyle = star.wy >= planeY ? 'rgba(100, 200, 150, 0.12)' : 'rgba(200, 100, 100, 0.12)';
