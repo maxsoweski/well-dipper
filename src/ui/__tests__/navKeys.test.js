@@ -29,8 +29,9 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { makeHeadlessNav } from './helpers/headlessNav.mjs';
+import { makeHeadlessNav, clickAt, tabCentre } from './helpers/headlessNav.mjs';
 import { makeViewModeDriver } from '../navViewModes/index.js';
+import { simClockMs, _setSimClockMs } from '../../core/SimClock.js';
 
 /** The driver surface the KEYS clauses call, per INTERFACE.md §3. */
 const DRIVER_KEYS = ['tabLevel', 'commit', 'cycleSort', 'page', 'searchOpen', 'searchActive', 'searchKey'];
@@ -387,4 +388,345 @@ describe('⛔ the fold budget — the structural condition every clause above de
     }
     expect(out.includes('//'), 'a // here would silently kill every clause after it').toBe(false);
   });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────
+// nav-screens-close-pass — AC-3, the rotation re-seed, AC-7's ladder drag and AC-6's zoom-out.
+//
+// ⛔⛔ EVERY CASE BELOW DRIVES A REAL ENTRY POINT — `nav._onKeyDown`, `nav._handleMouseDown` /
+// `_handleMouseMove`, or a dispatched click through `clickAt` — for the reason this file's header
+// gives. The `V` key shipped dead because all 28 view-mode tests set state directly. Ask of every
+// green case here: what input in its sample could make it fail?
+// ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The designs' own gains, restated ONCE and only as the two numbers the lab actually writes.
+ *
+ * ⭐ `projectPrism` scales dz by 0.42 and dy by 0.55; `hypot` of those is not 1, so the picture
+ * factors as an elevation-only rotation times an anisotropic scale. Every assertion below therefore
+ * checks the ROUND TRIP — `K·sin(rotX) === 0.42`, `K·cos(rotX) === 0.55` — rather than comparing the
+ * angle to a pasted 0.6521714117570698. A pasted angle would pass against a copy of itself; this
+ * fails the moment the seed stops reproducing the picture the lab draws.
+ */
+const D_DZ = 0.42, D_DY = 0.55, D_K = Math.hypot(D_DZ, D_DY);
+
+/** A current 3-planet system whose FIRST planet carries moons — the shape that armed the freeze. */
+async function moonySystem(mode = 'rail') {
+  const h = await loadedNav({ mode, level: 4 });
+  h.nav._systemStar = { wx: 8, wy: 0, wz: 0, seed: 5150, spectral: 'G', name: 'Moony' };
+  h.nav._systemData = {
+    star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
+    planets: [
+      { orbitRadiusAU: 1.0, planetData: { radiusEarth: 1, T_eq: 280, habitability: { score: 0.8 }, rings: false },
+        moons: [{ type: 'rock', radiusEarth: 0.2, T_eq: 250, orbitRadiusAU: 0.01 }] },
+      { orbitRadiusAU: 8, planetData: { radiusEarth: 3, T_eq: 120, habitability: { score: 0 }, rings: false }, moons: [] },
+      { orbitRadiusAU: 30, planetData: { radiusEarth: 9, T_eq: 60, habitability: { score: 0 }, rings: true }, moons: [] },
+    ],
+  };
+  h.nav._levelIndex = 4;
+  h.nav.render();
+  h.drv = h.nav._viewDriverInst;
+  return h;
+}
+
+/** More bodies than the ladder can hold, so `S.ladderMax` is real and a pan has somewhere to go. */
+async function crowdedLadder(mode = 'rail', n = 40) {
+  const h = await loadedNav({ mode, level: 4 });
+  h.nav._systemStar = { wx: 8, wy: 0, wz: 0, seed: 4242, spectral: 'G', name: 'Crowded' };
+  h.nav._systemData = {
+    star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
+    planets: Array.from({ length: n }, (_, i) => ({
+      orbitRadiusAU: 0.2 + i * 0.9, moons: [],
+      planetData: { radiusEarth: 1 + (i % 5), T_eq: 250, habitability: { score: 0.1 }, rings: false },
+    })),
+  };
+  h.nav._levelIndex = 4;
+  h.nav.render();
+  h.drv = h.nav._viewDriverInst;
+  return h;
+}
+
+/** The mark the PAINT published for planet `pIdx` itself — never one of its moon pips. */
+const planetMark = (drv, pIdx) =>
+  drv.S.bodyHits.find((x) => x.moon < 0 && x.ref && x.ref.kind === 'planet' && x.ref.pIdx === pIdx);
+
+/** Press the button and move — the two real handlers the canvas listeners call, in order. */
+function dragBy(nav, x0, y0, dx, dy = 0) {
+  nav._handleMouseDown({ clientX: x0, clientY: y0, button: 0 });
+  nav._handleMouseMove({ clientX: x0 + dx, clientY: y0 + dy });
+}
+
+describe('AC-3 — the second selection, and it is the MODE that is pinned', () => {
+  it('⛔ a planet WITH MOONS no longer arms an invisible mode change, and the next planet still selects', async () => {
+    // Measured live, both designs: clicking a moon-bearing planet set `_systemMode = 'planet'`, after
+    // which `:4512-4523` wrote `{ planetIndex: this._selectedPlanetIdx }` — the planet already
+    // selected — for every later click. Three clicks on three different planets all read
+    // `planetIndex: 3`. On the old code the last expectation here reads 0.
+    const { nav, drv } = await moonySystem('rail');
+    const withMoons = planetMark(drv, 0), other = planetMark(drv, 2);
+    expect(withMoons && other, 'the fixture published no pickable planets').toBeTruthy();
+    expect(nav._systemData.planets[0].moons, 'the fixture must arm the trap').toHaveLength(1);
+
+    nav._handleMouseMove({ clientX: withMoons.x, clientY: withMoons.y });
+    expect(nav._hoveredBody, 'the hover was already correct in the measurement').toEqual({ type: 'planet', index: 0 });
+    clickAt(nav, withMoons.x, withMoons.y);
+    expect(nav._systemMode, 'a mode with no picture in either design must never be entered').toBe('system');
+    expect(nav._selectedBody).toEqual({ type: 'planet', planetIndex: 0 });
+
+    nav._handleMouseMove({ clientX: other.x, clientY: other.y });
+    expect(nav._hoveredBody).toEqual({ type: 'planet', index: 2 });
+    clickAt(nav, other.x, other.y);
+    expect(nav._selectedBody, 'the second selection was frozen at the first').toEqual({ type: 'planet', planetIndex: 2 });
+  });
+
+  it('works in design 2 as well — the freeze was reproduced in both', async () => {
+    const { nav, drv } = await moonySystem('bars');
+    const a = planetMark(drv, 0), b = planetMark(drv, 1);
+    nav._handleMouseMove({ clientX: a.x, clientY: a.y });
+    clickAt(nav, a.x, a.y);
+    nav._handleMouseMove({ clientX: b.x, clientY: b.y });
+    clickAt(nav, b.x, b.y);
+    expect(nav._systemMode).toBe('system');
+    expect(nav._selectedBody).toEqual({ type: 'planet', planetIndex: 1 });
+  });
+
+  it('⛔ THE CONTROL — with no mode, the LEGACY drill into planet detail is untouched', async () => {
+    // `_renderPlanetDetail` draws ONE planet, so there `_hoveredBody.index` and `_selectedPlanetIdx`
+    // always agree and the 'planet' branch is correct. Legacy must stay byte-identical, which is why
+    // the fix pins the mode instead of rewriting that branch.
+    const { nav, drv } = await moonySystem('rail');
+    const withMoons = planetMark(drv, 0);
+    nav._handleMouseMove({ clientX: withMoons.x, clientY: withMoons.y });
+    nav.viewMode = null;
+    clickAt(nav, withMoons.x, withMoons.y);
+    expect(nav._systemMode, 'today\'s nav lost its planet-detail drill').toBe('planet');
+    expect(nav._selectedPlanetIdx).toBe(0);
+  });
+});
+
+describe('AC-11 — the camera is re-seeded onto the design\'s own default', () => {
+  it('⭐ V puts the game\'s rotation where the design was drawing, THROUGH THE KEYDOWN PATH', async () => {
+    const { nav } = await loadedNav({ mode: null, level: 3 });
+    nav.viewMode = null;
+    nav._localRotX = 0.5; nav._localRotY = 0.3; nav._systemRotX = 0.5; nav._systemRotY = 0.9;
+
+    press(nav, 'KeyV');
+    expect(nav.viewMode).toBe('rail');
+    // The round trip, not a pasted angle: this is the picture `projectPrism` draws.
+    expect(D_K * Math.sin(nav._localRotX), 'the prism\'s dz gain').toBeCloseTo(D_DZ, 12);
+    expect(D_K * Math.cos(nav._localRotX), 'the prism\'s dy gain').toBeCloseTo(D_DY, 12);
+    expect(nav._localRotY, 'the designs draw the prism at rotY 0').toBe(0);
+    // `d2System`'s TILT is a true sine and round-trips exactly, so this one is an equality.
+    expect(Math.sin(nav._systemRotX), 'the orrery\'s tilt').toBe(0.42);
+    expect(nav._systemRotY).toBe(0);
+  });
+
+  it('⛔ THE CONTROL — cycling back to today\'s nav re-seeds NOTHING', async () => {
+    // The seed is guarded on `this.viewMode`. Without that guard the third press would overwrite
+    // these two sentinels with the designs' angles, and "viewMode === null is today's nav byte for
+    // byte" would stop being true.
+    const { nav } = await loadedNav({ mode: null, level: 3 });
+    nav.viewMode = null;
+    press(nav, 'KeyV');                       // -> rail
+    press(nav, 'KeyV');                       // -> bars
+    nav._localRotX = 1.234; nav._systemRotX = 1.111; nav._localRotY = 0.777;
+    press(nav, 'KeyV');                       // -> today's nav
+    expect(nav.viewMode).toBe(null);
+    expect(nav._localRotX).toBe(1.234);
+    expect(nav._systemRotX).toBe(1.111);
+    expect(nav._localRotY).toBe(0.777);
+  });
+
+  it('⛔ AND THE COCKPIT PANEL IS STILL OUT — the gate is _viewModesEnabled', async () => {
+    const { nav } = await makeHeadlessNav({ width: 52, height: 43 });
+    nav._localRotX = 0.5; nav._localRotY = 0.3;
+    press(nav, 'KeyV');
+    expect(nav.viewMode, 'a panel instance is never activated').toBe(null);
+    expect(nav._localRotX).toBe(0.5);
+    expect(nav._localRotY).toBe(0.3);
+  });
+
+  it('⭐ activate() seeds too — opening the overlay on a STORED mode is the other entry', async () => {
+    // `loadViewMode()` can hand `activate()` a mode chosen in a previous session, so the first frame
+    // the pilot sees is drawn from whatever rotation the constructor left. That frame is the one Max
+    // ruled on.
+    const { nav } = await makeHeadlessNav({ width: 427, height: 240 });
+    const prev = globalThis.localStorage;
+    globalThis.localStorage = { getItem: () => 'bars', setItem() {}, removeItem() {} };
+    try {
+      nav._localRotX = 0.5; nav._localRotY = 0.3;
+      nav.activate();
+      expect(nav.viewMode, 'the stored mode did not load').toBe('bars');
+      expect(D_K * Math.sin(nav._localRotX)).toBeCloseTo(D_DZ, 12);
+      expect(nav._localRotY).toBe(0);
+      expect(Math.sin(nav._systemRotX)).toBe(0.42);
+    } finally { globalThis.localStorage = prev; }
+  });
+
+  it('⭐ the REGION→PRISM drill settles on the design\'s angle, not on 0.5', async () => {
+    // `:4685-4686` starts the prism top-down and tweens 600 ms to a literal 0.5. With the designs
+    // reading the game's rotation, that lands the prism ~8° off the frame the lab draws and leaves it
+    // there — a settle that ends in the wrong place is worse than no settle.
+    const { nav } = await loadedNav({ mode: 'rail', level: 2 });
+    nav._levelIndex = 2;
+    nav._localRotY = 0.3;
+    nav._hoveredTile = { col: 3, row: 4 };
+    clickAt(nav, 200, 100);
+    expect(nav._tiltAnim, 'the level-2 tile drill did not fire').toBeTruthy();
+    expect(D_K * Math.sin(nav._tiltAnim.to)).toBeCloseTo(D_DZ, 12);
+    expect(nav._localRotY, 'the designs draw the prism at rotY 0').toBe(0);
+  });
+
+  it('⛔ THE CONTROL — with no mode the same drill still tweens to the literal 0.5 and leaves rotY alone', async () => {
+    const { nav } = await loadedNav({ mode: null, level: 2 });
+    nav.viewMode = null;
+    nav._levelIndex = 2;
+    nav._localRotY = 0.3;
+    nav._hoveredTile = { col: 3, row: 4 };
+    clickAt(nav, 200, 100);
+    expect(nav._tiltAnim.to).toBe(0.5);
+    expect(nav._localRotY).toBe(0.3);
+  });
+});
+
+describe('AC-7 — at SYSTEM in design 1 the drag PANS THE LADDER', () => {
+  it('⭐ a pull left moves `S.ladderScroll` by the pixels dragged, THROUGH THE REAL HANDLERS', async () => {
+    const { nav, drv } = await crowdedLadder('rail');
+    expect(drv.S.ladderMax, 'the fixture must overflow or a pan means nothing').toBeGreaterThan(60);
+    drv.S.ladderScroll = 0;
+    dragBy(nav, 200, 120, -37);
+    expect(drv.S.ladderScroll).toBe(37);
+  });
+
+  it('⛔ IT IS CONTINUOUS, NOT SNAPPED — the value is the gesture, not the nearest stop', async () => {
+    // `d1Ladder` subtracts `ladderScroll` raw and only clamps and rounds it, and minimum neighbour
+    // separation is 8 texels against a window of 150+, so a continuous offset cannot open an empty
+    // window. `,` / `.` keep snapping through `scrollLadder`; the drag must not.
+    const { nav, drv } = await crowdedLadder('rail');
+    drv.S.ladderScroll = 0;
+    dragBy(nav, 200, 120, -3);
+    expect(drv.S.ladderScroll, 'a 3-texel pull moved to a stop instead of moving 3 texels').toBe(3);
+    expect(drv.S.ladderStops, 'no stop sits at 3, so a snapping control could not produce it').not.toContain(3);
+    dragBy(nav, 200, 120, -5);
+    expect(drv.S.ladderScroll, 'the next gesture must start from where the last one left it').toBe(8);
+  });
+
+  it('the pan is clamped to the window the paint published, at both ends', async () => {
+    const { nav, drv } = await crowdedLadder('rail');
+    drv.S.ladderScroll = 0;
+    dragBy(nav, 200, 120, 500);
+    expect(drv.S.ladderScroll, 'dragged past the left edge').toBe(0);
+    drv.S.ladderScroll = 0;
+    dragBy(nav, 200, 120, -100000);
+    expect(drv.S.ladderScroll, 'dragged past the right edge').toBe(drv.S.ladderMax);
+  });
+
+  it('⛔ THE CONTROL — design 2 draws an ORRERY at SYSTEM, so its drag still turns it', async () => {
+    const { nav, drv } = await crowdedLadder('bars');
+    const scroll = drv.S.ladderScroll, rotY = nav._systemRotY;
+    dragBy(nav, 200, 120, -37, 10);
+    expect(drv.S.ladderScroll, 'design 2 has no ladder to pan').toBe(scroll);
+    expect(nav._systemRotY, 'the orrery stopped rotating').toBeCloseTo(rotY - 37 * 0.008, 12);
+  });
+
+  it('⛔ THE CONTROL — with no mode the drag is today\'s orbit, untouched', async () => {
+    const { nav, drv } = await crowdedLadder('rail');
+    const scroll = drv.S.ladderScroll;
+    nav.viewMode = null;
+    const rotY = nav._systemRotY;
+    dragBy(nav, 200, 120, -37, 10);
+    expect(drv.S.ladderScroll).toBe(scroll);
+    expect(nav._systemRotY).toBeCloseTo(rotY - 37 * 0.008, 12);
+  });
+
+  it('⛔ THE CONTROL — at PRISM the same mode still rotates the prism; only level 4 pans', async () => {
+    const { nav } = await loadedNav({ mode: 'rail', level: 3 });
+    const drv = nav._viewDriverInst;
+    const scroll = drv.S.ladderScroll, rotY = nav._localRotY;
+    dragBy(nav, 200, 120, -37, 10);
+    expect(nav._localRotY, 'the prism drag is not contended and must be left alone').toBeCloseTo(rotY - 37 * 0.008, 12);
+    expect(drv.S.ladderScroll).toBe(scroll);
+  });
+
+  it('⛔ a pan still bails out of the click, so it cannot also select a body', async () => {
+    // `_handleClick`'s `dx*dx + dy*dy > 25` test (:4496) reads `_dragStartX/Y`, which `_handleMouseUp`
+    // never resets — so it still sees the gesture's start point. Jitter under 5 px stays a click.
+    const { nav, drv } = await crowdedLadder('rail');
+    const sel = nav._selectedBody;
+    dragBy(nav, 200, 120, -37);
+    nav._handleMouseUp();
+    nav._handleClick({ clientX: 163, clientY: 120, button: 0 });
+    expect(nav._selectedBody, 'the pan committed a selection on release').toBe(sel);
+  });
+});
+
+describe('AC-6 — tabbing OUT of PRISM/SYSTEM eases the 2D frame open instead of snapping', () => {
+  it('⭐ Shift+Tab out of PRISM moves the level on the same press AND arms a zoom-out', async () => {
+    const { nav } = await loadedNav({ mode: 'rail', level: 3 });
+    press(nav, 'Tab', { shiftKey: true });
+    expect(nav._levelIndex, 'the level must still move synchronously').toBe(2);
+    expect(nav._viewEase, 'the transition still snapped').toBeTruthy();
+    expect(nav._viewEase.fromSize, 'a zoom-OUT opens from a tighter frame').toBeLessThan(nav._viewEase.toSize);
+  });
+
+  it('⭐ AND IT REALLY ANIMATES — the frame walks open and the ease clears itself', async () => {
+    const { nav } = await loadedNav({ mode: 'rail', level: 3 });
+    const t0 = simClockMs();
+    press(nav, 'Tab', { shiftKey: true });
+    const target = nav._viewEase.toSize;
+    try {
+      _setSimClockMs(t0 + 1);   nav.render();
+      const early = nav._viewSize;
+      _setSimClockMs(t0 + 175); nav.render();
+      const mid = nav._viewSize;
+      expect(early, 'the frame did not open').toBeLessThan(mid);
+      expect(mid, 'it arrived before the animation did').toBeLessThan(target);
+      _setSimClockMs(t0 + 400); nav.render();
+      expect(nav._viewSize).toBe(target);
+      expect(nav._viewEase, 'a completed ease must clear itself or it re-runs every frame').toBe(null);
+    } finally { _setSimClockMs(t0); }
+  }, 30000);   // three full 2D frames: the ease moves `_viewSize` every frame, which invalidates the
+               // density cache every frame — the same cost the shipped `_anim` drill already pays.
+
+  it('⛔ THE WHOLE REASON IT IS NOT `_anim` — three presses with no frame still walk three levels', async () => {
+    // `_handleClick` returns early on `_anim` (:4419), so an ease carried on that field would have
+    // eaten the second and third press. This is navSearch.test.js:438-448's shape, and it is the case
+    // that made a separate field non-negotiable.
+    const { nav } = await loadedNav({ mode: 'rail', level: 3 });
+    press(nav, 'Tab', { shiftKey: true });
+    press(nav, 'Tab', { shiftKey: true });
+    press(nav, 'Tab', { shiftKey: true });
+    expect(nav._levelIndex, 'the ease swallowed a keypress').toBe(0);
+  });
+
+  it('⛔ a real drill animation wins — the ease yields rather than racing it', async () => {
+    const { nav } = await loadedNav({ mode: 'rail', level: 3 });
+    press(nav, 'Tab', { shiftKey: true });
+    expect(nav._viewEase).toBeTruthy();
+    nav._anim = { startTime: simClockMs(), duration: 350, fromCenter: { x: 8, z: 0 }, fromSize: 4,
+                  toCenter: { x: 8, z: 0 }, toSize: 8, toLevel: 2 };
+    nav.render();
+    expect(nav._viewEase, 'two writers on _viewCenter/_viewSize is a fight, not an animation').toBe(null);
+  });
+
+  it('⛔ THE CONTROL — with no mode the tab still jumps, with no animation it never had', async () => {
+    const { nav } = await loadedNav({ mode: 'rail', level: 3 });
+    nav.viewMode = null;
+    const t = tabCentre(nav, 2);
+    clickAt(nav, t.x, t.y);
+    expect(nav._levelIndex).toBe(2);
+    expect(nav._viewEase, 'today\'s nav gained an animation it never had').toBe(null);
+  });
+
+  it('⛔ AND A 2D-TO-2D TAB IS UNCHANGED — that one already animated, through `_anim`', async () => {
+    const { nav } = await loadedNav({ mode: 'rail', level: 1 });
+    nav.setPlayerPosition({ x: 8, y: 0, z: 0 });
+    nav._levelIndex = 1;
+    nav.render();
+    press(nav, 'Tab');
+    expect(nav._anim, 'the shipped 2D drill animation was displaced').toBeTruthy();
+    expect(nav._anim.toLevel).toBe(2);
+    expect(nav._viewEase, 'the ease is for the transitions that had none').toBe(null);
+  }, 30000);   // `setPlayerPosition` regenerates the sector tree and the first level-1 frame builds a
+               // density field; both are the fixture, not the assertion.
 });

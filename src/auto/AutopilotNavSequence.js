@@ -327,6 +327,12 @@ export class AutopilotNavSequence {
         from: Math.PI / 2,
         to: 0.5,
       };
+      // ⛔ AND UNDER A VIEW MODE THAT 0.5 IS THE WRONG ANGLE. The two 240p designs read the game's
+      // own rotation now, and they were drawn at atan2(0.42, 0.55) = 0.652, so a settle to 0.5
+      // leaves the prism ~8 degrees off the frame Max ruled on for the rest of the drill.
+      // `_seedViewModeCam` owns that number and retargets an in-flight `_tiltAnim`; with no mode
+      // active it returns before touching anything, so the legacy autopilot drill is unchanged.
+      this._nav._seedViewModeCam?.();
 
       const localSize = regionSize * 0.8;
       this._nav._startDrillAnim(
@@ -353,6 +359,7 @@ export class AutopilotNavSequence {
     this._nav._localGridCell = 0.001;
     this._nav._localRotX = 0.5;
     this._nav._localRotY = 0;
+    this._nav._seedViewModeCam?.();   // same reason as the tilt above: no-op without a view mode
     this._nav._localStars = [];
     this._nav._resetPrismLoad();
 
