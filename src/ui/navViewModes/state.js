@@ -398,7 +398,18 @@ export function makeViewState() {
                   // ⚠ `|| 0` RATHER THAN `?? 0` IS DELIBERATE AND LOSSLESS HERE: an angle of exactly
                   // 0 and an absent angle are the same ray, and `Number(undefined)` is NaN, which
                   // would put `cos`/`sin` of NaN into the draw code.
-                  ang: Number(p.orbitAngle) || 0,
+                  // ⭐⭐ AND IT READS THE LIVE ORBIT FIRST, BECAUSE `p.orbitAngle` IS FROZEN AT
+                  // GENERATION. `main.js:7875` COPIES the angle as a number into the scene entry, and
+                  // from then on the sim advances only the copy (`:11358`,
+                  // `entry.orbitAngle += entry.orbitSpeed * celestialDt`). The nav is handed
+                  // `system._systemData`, the raw generation data (`:7950`), so reading `p.orbitAngle`
+                  // alone draws every planet WHERE IT STARTED and never moves it. `_live` is the scene
+                  // entry, folded onto `main.js:7878`. Max, 2026-09-07: *"I want the nav screen to
+                  // reflect the actual orientation of the planets in the game."*
+                  // ⚠ `??` NOT `||` ON THE LIVE READ: an orbit genuinely passes through exactly 0, and
+                  // `||` would fall back to the frozen angle every time a planet crossed it — a mark
+                  // that jumps once per revolution. The outer `|| 0` still catches NaN/undefined.
+                  ang: Number(p._live?.orbitAngle ?? p.orbitAngle) || 0,
                   // ⭐ pIdx / mIdx are THIS ADAPTER'S ADDITION, not the lab's, and they are what lets a
                   // rail row hand `_hoveredBody` the { type, index } shape the SHIPPED click handler
                   // already understands. Without them the flat list's position would have to be
@@ -422,7 +433,7 @@ export function makeViewState() {
                     // exactly where the moon is: on its planet.
                     // ⚠ AND THE ORRERY'S MOON PIPS ARE SCREEN-SPACE BADGES BY DESIGN (INTERFACE §1),
                     // so the moon's own phase has no draw site to go to even if it were wanted.
-                    ang: Number(p.orbitAngle) || 0,
+                    ang: Number(p._live?.orbitAngle ?? p.orbitAngle) || 0,   // the parent's LIVE angle — see the planet row above
                     pIdx: i, mIdx: j });
       });
     });
@@ -561,6 +572,24 @@ export function makeViewState() {
       cache.bodiesBase = buildBodies(D.sys, D.sysStar);
       S.ladderScroll = 0;   // ⛔ a NEW system starts at the left of its own ladder; inheriting the
                             // last one's offset opens Proxima scrolled past its only planet
+    }
+    // ⭐⭐ THE ANGLES REFRESH EVERY FRAME, AND WITHOUT THIS THE LIVE READ ABOVE IS DEAD LETTER.
+    // `buildBodies` runs ONCE PER SYSTEM (the gate right above), because generating ~39 names is not
+    // cheap — so an `ang` captured in it is frozen for as long as the system is on screen, and the
+    // orrery would draw a still frame no matter how correct the value was at the moment it was taken.
+    // That is the same shape as the defect this workstream opened with: a value that is right once and
+    // then silently stops tracking. Names stay cached; only the angle is re-read.
+    // ⛔ `cache.bodiesBase` rows are the SAME OBJECTS `D.bodies` holds — `D.bodies` is a `slice()`, a
+    // shallow copy of the array and not of the rows — so writing here is what the paint reads. Do not
+    // "fix" that by deep-copying; the sharing is load-bearing.
+    // ⚠ A BELT CORRECTLY HAS NO `pIdx` AND IS SKIPPED: a belt is a full ring, not a body at a phase.
+    if (cache.bodiesBase && D.sys?.planets) {
+      const ps = D.sys.planets;
+      for (const r of cache.bodiesBase) {
+        if (r.pIdx == null) continue;
+        const p = ps[r.pIdx];
+        if (p) r.ang = Number(p._live?.orbitAngle ?? p.orbitAngle) || 0;
+      }
     }
     if (cache.bodiesBase && cache.bodySortId !== bodyKey.id) {
       cache.bodySortId = bodyKey.id;

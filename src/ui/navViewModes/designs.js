@@ -543,14 +543,132 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     T(g, fit(label, W - 4), W / 2, ry(rows - 1), { color: INK.BG, align: 'center', rgn: 'commit', what: 'commit label' });
   }
 
+  /**
+   * ⭐⭐ THE REACHABLE GALAXY, MEASURED OFF `getSectorAt` INSTEAD OF ASSUMED — AC-1's FIRST HALF.
+   *
+   * Max: *"I like removing the negative space; the chunky cells of design1 today are good but there are
+   * too many cells that are not selectable, so the solution is simply to remove the negative/
+   * non-selectable space and redraw the cells from there."* So the GALAXY square stops being the
+   * nominal 44 kpc disc and becomes the bounding box of the ground a click can actually land on.
+   *
+   * ⛔ AND THE AUTHORITY IS THE PICKER'S OWN. `D.sectors` is the very object `picking.js:pickSector`
+   * calls (`state.js:491` assigns `nav._sectors` to it), so the picture cannot disagree with the
+   * picker — which is the entire risk in this AC, and the reason this is a MEASUREMENT rather than a
+   * radius of my own. `getSectorAt`'s only `null` path is `R > GalacticMap.GALAXY_RADIUS * 1.2`
+   * (`GalacticSectors.js:44-46`); inside that it always answers, by bounds containment or by the
+   * nearest-centre fallback for the pruned outer cells. So the reachable set is a disc about the
+   * origin, and bisecting outward along 32 rays finds its edge to floating-point precision. On the
+   * shipped seed that lands on **18.000 kpc exactly**, against a nominal view of 44 — which is where
+   * the wasted space came from: 47.5% of the drawn square resolved to nothing.
+   *
+   * ⚠ IT CAN ONLY TIGHTEN, NEVER LOOSEN (`Math.min` at the call site). A footprint wider than the
+   *   nominal view would mean ZOOMING OUT — showing less galaxy per texel to reveal ground that is
+   *   already off the glass — which is a different change and not the one he asked for.
+   * ⚠ MEMOISED ON THE AUTHORITY'S IDENTITY. ~1,400 probes, once, for the life of the `GalacticSectors`
+   *   instance; the galaxy is generated from a fixed seed and its edge cannot move under us.
+   * ⛔ NULL WHEN THERE IS NO AUTHORITY — `state.js:325` defaults `D.sectors` to `null`, so for a frame
+   *   it can simply be absent. The caller then draws today's picture unchanged. Degrading to a guess
+   *   would be this page inventing a galaxy edge; degrading to nothing would blank the map.
+   */
+  let _fitOwner = null, _fitR = null;
+  function reachableRadius() {
+    const sec = D.sectors;
+    if (!sec || typeof sec.getSectorAt !== 'function') return null;
+    if (_fitOwner === sec) return _fitR;
+    const at = (x, z) => { try { return !!sec.getSectorAt({ x, z }); } catch (e) { return false; } };
+    let R = 0;
+    for (let k = 0; k < 32; k++) {
+      const th = Math.PI * k / 16, cx = Math.cos(th), cz = Math.sin(th);
+      let lo = 0, hi = 1;
+      while (hi < 4096 && at(cx * hi, cz * hi)) { lo = hi; hi *= 2; }
+      for (let s = 0; s < 24; s++) { const m = (lo + hi) / 2; if (at(cx * m, cz * m)) lo = m; else hi = m; }
+      if (lo > R) R = lo;
+    }
+    _fitOwner = sec; _fitR = R > 0 ? R : null;
+    return _fitR;
+  }
+
+  /**
+   * ⭐ THE GALAXY VIEW, RE-FITTED TO THAT FOOTPRINT — and it is DESIGN 1's, not `levelView`'s.
+   *
+   * ⛔ `levelView` IS SHARED BY ALL THREE DESIGNS AND MUST NOT MOVE. Design 2's GALAXY renders the
+   * square at the WIDE extent and crops a band out of the middle, so shrinking the extent there would
+   * NARROW that band from ±11.54 kpc to ±9.4 and push more of its 20 already-off-glass sectors further
+   * off. Design 2's failure is the opposite one and is not in this pass; this re-fit is applied where
+   * the square is actually drawn.
+   * ⚠ LEVELS 1-2 ARE RETURNED UNTOUCHED — the same object, not a copy. Their picker is `pickTile`,
+   *   which answers for every cell inside the picture; there is no unreachable ground down there to
+   *   remove, and a sector question asked of a tile grid would be a category error.
+   */
+  function d1GalaxyView(level) {
+    const v = levelView(level);
+    const R = level === 0 ? reachableRadius() : null;
+    return R ? { cx: v.cx, cz: v.cz, size: Math.min(v.size, 2 * R), n: v.n } : v;
+  }
+
+  /**
+   * ⭐⭐ AND THEN THE CELLS THAT STILL HOLD NOTHING ARE NOT DRAWN — AC-1's SECOND HALF.
+   *
+   * ⛔ A SQUARE GRID OVER A DISC ALWAYS HAS DEAD CORNERS, so the re-fit alone cannot finish the job:
+   * at 36 kpc across, 8x8, the corner cells still reach R = 22.3 where nothing resolves. Removing them
+   * is the rest of *"remove the non-selectable space"*.
+   *
+   * ⭐ THE TEST IS THE CELL'S CENTRE, THROUGH `getSectorAt` — because the centre is where a pilot aims,
+   * and because "every cell you can see, you can click" is the promise the grid makes. MEASURED on the
+   * re-fitted square: 52 of 64 cells resolve at their centre, and **94.2% of the ground those 52 cells
+   * cover resolves to a sector**, against 52.5% of the square today.
+   * ⚠ THE ONE THING THIS COSTS, MEASURED RATHER THAN ARGUED. Eight boundary cells are centre-dead but
+   *   hold a live sliver in the corner nearest the galaxy — each **16.0% live, 2.55% of all live ground
+   *   on the square** — and they are no longer advertised. That is the direction that could have traded
+   *   one defect for a worse one, so it was checked at the level that matters: sampling the whole square
+   *   at 1200x1200 and bucketing every answer by cell, **774 sectors are reachable inside a DRAWN cell
+   *   and ZERO are reachable only through an undrawn one.** No sector lost its affordance.
+   * ⚠ AND THE RE-FIT IS WHAT MADE THE CENTRE TEST SAFE. On the 44 kpc square it would have blanked 32
+   *   cells, 20 of them with live ground — the failure `MEASUREMENTS.md` §7's ring is really measuring.
+   *   Re-fit first, then cull: the disputed band drops from 20 cells to 8.
+   *
+   * ⛔ MEMOISED ON THE FRAME'S OWN EXTENT, so a change of view can never serve a stale answer, and the
+   * GALAXY extent is derived once — 64 probes for the life of the page, not per frame.
+   */
+  let _liveCellsKey = null, _liveCellsOwner = null, _liveCells = null;
+  function liveGridCells(level, v, n) {
+    const sec = D.sectors;
+    if (level !== 0 || !sec || typeof sec.getSectorAt !== 'function' || !(n > 0)) return null;
+    const key = `${v.cx}|${v.cz}|${v.size}|${n}`;
+    if (_liveCellsKey === key && _liveCellsOwner === sec) return _liveCells;
+    const set = new Set(), k = v.size / n;
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      let hit = true;                                    // a throwing authority draws, never blanks
+      try { hit = sec.getSectorAt({ x: v.cx + (i + 0.5 - n / 2) * k, z: v.cz + (j + 0.5 - n / 2) * k }); }
+      catch (e) { hit = true; }
+      if (hit) set.add(j * n + i);
+    }
+    _liveCellsKey = key; _liveCellsOwner = sec; _liveCells = set;
+    return set;
+  }
+
   function d1TwoD(g, mapW, mapY, mapH) {
-    const v = levelView(S.level);
+    const v = d1GalaxyView(S.level);
     const sq = Math.min(mapW, mapH), ox = Math.round((mapW - sq) / 2);
     blitLum(g, lumImage(v.cx, v.cz, v.size / 2, sq), ox, mapY, sq, sq, sq);
     const n = S.level === 0 ? 8 : v.n;
-    for (let i = 0; i <= n; i++) {
-      rect(g, ox + Math.round(sq * i / n), mapY, 1, sq, INK.RULE);
-      rect(g, ox, mapY + Math.round(sq * i / n), sq, 1, INK.RULE);
+    // ⭐ THE GRID IS LAID DOWN ONE CELL AT A TIME, so a cell holding no clickable ground simply is not
+    // drawn. ⛔ The two forms below are the SAME TEXELS when nothing is culled: a cell's four edges are
+    // sub-segments of the same `ox + round(sq*i/n)` rules, and the union over `j` of `[Y_j, Y_{j+1})`
+    // is exactly the full-height line the fallback draws. So the fallback is not a second layout — it
+    // is the same one, spelled in fewer calls for the levels that have nothing to remove.
+    // ⚠ `n` IS STILL 8 AND THE SQUARE IS STILL `sq` TEXELS, so the cell is still 27 texels across —
+    //   *"the chunky cells of design1 today are good"*. The re-fit changed how much GALAXY a cell
+    //   covers (5.5 kpc → 4.5), never how big it is on the glass.
+    const live = liveGridCells(S.level, v, n);
+    const gx = (i) => ox + Math.round(sq * i / n), gy = (j) => mapY + Math.round(sq * j / n);
+    if (!live) {
+      for (let i = 0; i <= n; i++) { rect(g, gx(i), mapY, 1, sq, INK.RULE); rect(g, ox, gy(i), sq, 1, INK.RULE); }
+    } else for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      if (!live.has(j * n + i)) continue;
+      const x0 = gx(i), x1 = gx(i + 1), y0 = gy(j), y1 = gy(j + 1);
+      rect(g, x0, y0, 1, y1 - y0, INK.RULE); rect(g, x1, y0, 1, y1 - y0, INK.RULE);
+      rect(g, x0, y0, x1 - x0, 1, INK.RULE); rect(g, x0, y1, x1 - x0, 1, INK.RULE);
     }
     const toX = (x) => ox + ((x - v.cx) / v.size + 0.5) * sq;
     const toY = (z) => mapY + ((z - v.cz) / v.size + 0.5) * sq;
@@ -566,6 +684,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     ids.forEach((t, i) => {
       const tx = ox + t.i * cell + 2, ty = mapY + t.j * cell + 2;
       if (cell < measurePixelText(t.id) + 3) return;
+      // ⛔ AND NEVER A PLATE ON A CELL THAT IS NOT DRAWN. A named tile with no cell around it is the
+      //   same promise the culled cells were removed for making, and `plated()` knocks out a BG rect
+      //   first, so it would ALSO punch a hole in the density behind it. Total rather than incidental:
+      //   at this seed the eight densest tiles are all central and this has never fired.
+      if (live && !live.has(t.j * n + t.i)) return;
       plated(g, t.id, tx, ty, INK.DIM, 'map', 'tile id ' + t.id);
     });
     // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5). Drawn LAST so it sits over the grid, the tile ids and the
@@ -822,12 +945,22 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       lines = D.sectorRows.slice(off, off + listRows).map((r, i) =>
         ({ txt: `${pad(String(off + i + 1), 2)} ${pad(r.s.name.toUpperCase(), cols - 16)} ${rpad(fmtK(r.n), 6)}`,
            bar: r.n / secMax, sel: r.s.id === D.playerSector?.id }));
+      // ⛔⛔ `D.playerSector` IS NULLABLE, AND DEREFERENCING IT RAW HERE WAS A FREEZE, NOT A BLANK ROW.
+      //    `state.js:495` falls back to `getSectorAt(D.player)`, which answers `null` for any player
+      //    past `GALAXY_RADIUS * 1.2` — and `D.ready` (`state.js:594`) gates only on `gm && player`, so
+      //    a painter runs with it null. `PanelHost` catches a painter throw ONCE and then stops
+      //    uploading: the glass keeps showing the last good frame and LOOKS ALIVE, which is the worst
+      //    failure mode this surface has. ⚠ AND THE TELL WAS ON THE LINE ABOVE — the row list already
+      //    writes `D.playerSector?.id`, and then this line forgot.
+      // ⚠ EM-DASHES, NEVER A FABRICATED SECTOR. A placeholder `{ centerX: 0, size: 0 }` would put four
+      //   plausible numbers on the glass for a sector that does not exist, which is exactly the
+      //   swallowed failure this file is written against. "—" says the instrument does not know.
       const s = D.playerSector;
-      detail.push([s.name.toUpperCase(), INK.KEY],
-        [`CENTRE  ${s.centerX.toFixed(1)}, ${s.centerZ.toFixed(1)}`, INK.BODY],
-        [`SYSTEMS ${fmtK(estStars(s.centerX, s.centerZ, s.size))}`, INK.BODY],
-        [`SPAN    ${s.size.toFixed(2)} KPC`, INK.BODY], ['', INK.BODY],
-        [`YOU     ${fit(s.name.toUpperCase(), (cols - 8) * FACE.advance)}`, INK.YOU],
+      detail.push([s ? s.name.toUpperCase() : 'UNKNOWN SECTOR', INK.KEY],
+        [`CENTRE  ${s ? `${s.centerX.toFixed(1)}, ${s.centerZ.toFixed(1)}` : '—'}`, INK.BODY],
+        [`SYSTEMS ${s ? fmtK(estStars(s.centerX, s.centerZ, s.size)) : '—'}`, INK.BODY],
+        [`SPAN    ${s ? `${s.size.toFixed(2)} KPC` : '—'}`, INK.BODY], ['', INK.BODY],
+        [`YOU     ${fit(s ? s.name.toUpperCase() : 'UNKNOWN', (cols - 8) * FACE.advance)}`, INK.YOU],
         [`TARGET  ${fit((D.target?.name || '—').toUpperCase(), (cols - 8) * FACE.advance)}`, INK.TARGET]);
     } else if (S.level === 1 || S.level === 2) {
       const v = levelView(S.level);
@@ -1069,8 +1202,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // design 2 says anything, so a field with no legend would be a field with no keys.
     if (S.search.open) return ['SEARCH', `${(S.search.rows || []).length} MATCHES`,
                                'UP DOWN MOVE', 'ENTER WARP', 'ESC CLOSE'];
-    if (S.level === 0) return ['GALAXY', (D.playerSector?.name || '').toUpperCase(),
-      `${fmtK(estStars(D.playerSector.centerX, D.playerSector.centerZ, D.playerSector.size))} SYSTEMS`, 'CLICK TO ENTER'];
+    // ⛔ SAME NULLABLE FIELD, SAME TELL, SAME LINE: the name is optional-chained and the three numbers
+    //    beside it are not. See `d1Rail`'s block for why a null here freezes the glass rather than
+    //    blanking a row.
+    const ps = D.playerSector;
+    if (S.level === 0) return ['GALAXY', (ps?.name || '').toUpperCase(),
+      `${ps ? fmtK(estStars(ps.centerX, ps.centerZ, ps.size)) : '—'} SYSTEMS`, 'CLICK TO ENTER'];
     if (S.level <= 2) return [LEVELS[S.level], (D.playerSector?.name || '').toUpperCase(),
       `${rankMax(d1TileRows(levelView(S.level), levelView(S.level).n))} SYSTEMS IN BEST TILE`, 'CLICK TO ENTER'];
     if (S.level === 3) return S.list
@@ -1308,7 +1445,16 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    width term wins, 205.5 < 262.7) right up until the tilt could change — at rotX = π/2 the
     //    minor axis IS the radius, 205.5 texels against a 112-texel half-pane: 93.5 texels of ink per
     //    side, through the topbar and off the canvas, and (until `assertMark` above) counted nowhere.
-    const maxR = Math.min(W / 2 - 8, mapH / 2 / Math.max(TILT, SYS_MIN_SIN) - 4);
+    // ⛔⛔ AND THE ALLOWANCE GOES INSIDE THE DIVIDE, WHICH IS THE HALF THE FIRST FIX MISSED. Written as
+    //    `mapH/2/sin - 4` the budget yields `r·sin ≤ mapH/2 - 4·sin`: the 4-texel margin for the mark
+    //    drawn AROUND the ring SHRINKS WITH THE TILT, and when the WIDTH term wins the vertical term is
+    //    not applied at all. Measured over a 2,880-frame sweep of both designs at every level: one
+    //    firing, `body mark <ringed planet> overflows map — bottom by 1.0 texel(s)`, a ringed giant's
+    //    bars at `y + 2` on a body already at the pane's edge. Dividing the WHOLE budget bounds
+    //    `r·sin ≤ mapH/2 - 4` whichever term wins.
+    // ⚠ IT CANNOT MOVE THE PICTURE MAX RULED ON. At the default tilt this computes 108/0.42 = 257.14
+    //   against the width term's 205.5, so `Math.min` still returns the width term, unchanged.
+    const maxR = Math.min(W / 2 - 8, (mapH / 2 - 4) / Math.max(TILT, SYS_MIN_SIN));
     const rOf = (au) => 8 + (maxR - 8) * Math.sqrt(Math.max(0, au) / auMax);
     for (const b of D.bodies) {
       if (b.kind === 'moon') continue;
@@ -1346,14 +1492,46 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (b.hab > 0.5) { l = Math.min(l, x - 2); rr = Math.max(rr, x + 2); t = Math.min(t, y - 2); bb = Math.max(bb, y + 2); }
       if (b === D.selBody) { l = x - 4; t = Math.min(t, y - 4); rr = Math.max(rr, x + 4); bb = Math.max(bb, y + 4); }
       assertMark('body mark ' + b.name, 'map', l, t, rr - l + 1, bb - t + 1);
-      // The second and last folded publication, for the same reason as the ladder's: `mx`/`my` are
-      // the one evaluation of `x + 4 + m * 2` and `y - 4`, and `rect()` gets exactly those values.
-      for (let m = 0; m < b.moons; m++) { const mx = x + 4 + m * 2, my = y - 4; hits.push({ x: mx, y: my, r: 2, ref: b, moon: m, star: false }); rect(g, mx, my, 1, 1, INK.DIM); }
-      // ⚠ THE PIP STRIP IS A SCREEN-SPACE BADGE and stays one — it does not turn with the orrery, by
-      //   design. It still gets a box, because it is the ONE mark here whose length is data-driven: a
-      //   moon-rich planet on the outermost orbit runs its pips off the right edge of the pane, and
-      //   until now the canvas swallowed them.
-      if (b.moons) assertMark('moon pips ' + b.name, 'map', x + 4, y - 4, (b.moons - 1) * 2 + 1, 1);
+      // ⭐⭐ THE PIP STRIP GOES ON WHICHEVER SIDE OF THE BODY HAS ROOM — AC-15, AND THE MARK GUARD
+      //   ABOVE IS THE ONLY THING THAT COULD HAVE FOUND IT. `rect` was unguarded until this pass, so a
+      //   moon-rich planet on an outer orbit near `cos(a) ≈ 1` ran its pips off the right edge and the
+      //   canvas CLIPPED them for free: zero firings at the default tilt — which is exactly why no
+      //   suite was red — and 30 across a rotation sweep.
+      // ⚠ IT STAYS A SCREEN-SPACE BADGE. What changes is which side it STARTS from, never its shape:
+      //   the strip is a COUNT, and tilting it into the orbit plane would make it read as four more
+      //   bodies in orbit. Right is the side it has always used and the side it keeps whenever it
+      //   fits, so the picture Max ruled on is reproduced by the ordinary case never taking a new
+      //   branch — and `m = 0` stays the pip nearest its planet on both sides, so a pip's index still
+      //   means the same thing to `S.bodyHits` as it did.
+      // ⛔⛔ AND THE STRIP DROPS BELOW THE BODY WHEN THERE IS NO ROOM ABOVE, WHICH THE FIX'S OWN SWEEP
+      //   FOUND. The right-edge overflow is only the half that was measured first: `maxR` budgets the
+      //   pane for the RING, `min(W/2 - 8, mapH/2/sin(rotX) - 4)`, and when the WIDTH term wins the
+      //   vertical term is not applied at all — so at `rotX ≈ 0.5` a body can legitimately sit within
+      //   2 texels of the pane's top edge and the badge, 4 texels above it, is outside. Measured over
+      //   the same 1200-frame sweep: 11 firings, "top by 1-2 texel(s)". Same defect, same answer —
+      //   put the badge on the side that has room.
+      // ⛔ WITH ROOM ON NEITHER SIDE THE STRIP IS CLAMPED ONTO THE GLASS AND `fire()` SAYS SO. That
+      //   needs a pane narrower than `8 + 2·moons` or shorter than 9 texels, which design 2's
+      //   full-bleed map cannot be — but a badge silently drawn over its own planet is the same
+      //   swallowed failure this AC exists to end, so the branch reports through the guard's own
+      //   channel rather than looking deliberate.
+      // The folded publication, for the same reason as the ladder's: `mx`/`my` are the ONE evaluation
+      // of the pip's position, and `rect()`, `hits` and `assertMark` all get exactly those values.
+      if (b.moons > 0) {
+        const rgn = REGIONS.map, span = (b.moons - 1) * 2;
+        const lLim = rgn ? rgn.x : -Infinity, rLim = rgn ? rgn.x + rgn.w - 1 : Infinity;
+        const tLim = rgn ? rgn.y : -Infinity, bLim = rgn ? rgn.y + rgn.h - 1 : Infinity;
+        let px = x + 4, step = 2, my = y - 4, tight = false;
+        if (px + span > rLim) {
+          if (x - 4 - span >= lLim) { px = x - 4; step = -2; }
+          else { px = Math.max(lLim, rLim - span); tight = true; }
+        }
+        if (my < tLim) { if (y + 4 <= bLim) my = y + 4; else { my = tLim; tight = true; } }
+        if (tight) fire(`moon pips ${b.name}: ${b.moons} pips need ${span + 1}x1 texels and fit on no side of the ` +
+                        `body at (${x},${y}) inside map [${lLim}..${rLim}]x[${tLim}..${bLim}] — clamped onto its own planet.`);
+        for (let m = 0; m < b.moons; m++) { const mx = px + m * step; hits.push({ x: mx, y: my, r: 2, ref: b, moon: m, star: false }); rect(g, mx, my, 1, 1, INK.DIM); }
+        assertMark('moon pips ' + b.name, 'map', Math.min(px, px + span * step / 2), my, span + 1, 1);
+      }
       const tag = roman(i + 1);
       if (r > 24) {
         const ly = placeLabel(tagsTaken, x + 4, y - 8, measurePixelText(tag), REGIONS.map);

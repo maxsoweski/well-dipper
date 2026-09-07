@@ -1304,6 +1304,61 @@ describe('every planet row carries its orbital angle', () => {
     expect(belt.ang).toBe(undefined);
   }, 30000);
 
+  it('⭐⭐ THE ORRERY TRACKS THE PLANET AS IT ORBITS — the live angle, not the generation one', async () => {
+    // ⛔ THE DEFECT THIS PINS IS A VALUE THAT IS RIGHT ONCE AND THEN SILENTLY STOPS TRACKING, which
+    // is the same shape the whole workstream opened with. `main.js:7875` COPIES `orbitAngle` into the
+    // scene entry as a NUMBER, and from then on the sim advances only the copy (`:11358`). The nav is
+    // handed `system._systemData`, the raw generation data, so reading `p.orbitAngle` draws every
+    // planet WHERE IT STARTED, forever. `_live` is the back-reference folded onto `main.js:7878`.
+    // ⛔ AND `buildBodies` RUNS ONCE PER SYSTEM — generating ~39 names is not cheap — so reading the
+    // live value inside it is not enough on its own; the row has to be re-read every frame. Both
+    // halves are required and this test fails if either is removed.
+    // Max, 2026-09-07: *"I want the nav screen to reflect the actual orientation of the planets."*
+    const { nav, drv } = await loadedNav();
+    const live = { orbitAngle: 1.0 };                     // stands in for the scene entry
+    nav._systemStar = { wx: 8, wy: 0, wz: 0, seed: 4242, spectral: 'G', name: 'Tracking' };
+    nav._systemData = {
+      star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
+      planets: [
+        { orbitRadiusAU: 1, orbitAngle: 0.25, _live: live, moons: [{ type: 'rock', radiusEarth: 0.2, T_eq: 250 }],
+          planetData: { radiusEarth: 1, T_eq: 280, habitability: { score: 0.8 }, rings: false } },
+        { orbitRadiusAU: 5, orbitAngle: 2.5, moons: [],   // ⚠ NO `_live` — must fall back, not break
+          planetData: { radiusEarth: 3, T_eq: 120, habitability: { score: 0 }, rings: false } },
+      ],
+    };
+    nav._levelIndex = 4;
+    nav.render();
+    const planet = () => drv.D.bodies.find((b) => b.kind === 'planet' && b.au === 1);
+    const moon = () => drv.D.bodies.find((b) => b.kind === 'moon');
+    const frozen = () => drv.D.bodies.find((b) => b.kind === 'planet' && b.au === 5);
+
+    // ⭐ THE LIVE VALUE WINS OVER THE GENERATION ONE, which is the whole point.
+    expect(planet().ang, 'the row read the frozen generation angle instead of the live orbit').toBe(1.0);
+    expect(frozen().ang, 'a planet with no scene entry must still draw at its generation angle').toBe(2.5);
+
+    // ⭐⭐ NOW MOVE THE PLANET, THE WAY THE SIM MOVES IT, AND RENDER AGAIN. This is the assertion the
+    // cache defeats: same system object, so `buildBodies` does NOT re-run.
+    const sysRefBefore = nav._systemData;
+    live.orbitAngle = 2.0;
+    nav.render();
+    expect(nav._systemData, 'the fixture changed system — the cache was never exercised').toBe(sysRefBefore);
+    expect(planet().ang, 'the orrery froze: the row did not follow the planet as it orbited').toBe(2.0);
+    expect(moon().ang, 'the moon came off its planet — it must carry the parent\'s LIVE angle').toBe(2.0);
+    expect(frozen().ang, 'the fallback row drifted, so something is writing angles it should not').toBe(2.5);
+
+    // ⛔ AN ANGLE OF EXACTLY 0 IS A REAL HEADING, NOT AN ABSENT ONE. `||` here instead of `??` would
+    // snap the mark back to the generation angle once per revolution, as the planet crossed zero —
+    // a body that jumps, periodically, for no reason the pilot can see.
+    live.orbitAngle = 0;
+    nav.render();
+    expect(planet().ang, 'crossing zero fell back to the generation angle').toBe(0);
+
+    // CONTROL — the probe is live: a value the row should NOT be reading does not move it.
+    nav._systemData.planets[0].orbitAngle = 5.9;
+    nav.render();
+    expect(planet().ang, 'the row is reading the generation angle after all').toBe(0);
+  }, 30000);
+
   it('⛔⛔ SORTING `D.bodies` MOVES NO BODY\'S ANGLE — the sort-key teleport', async () => {
     // ⚠ THE INPUT IS THE KEYPRESS. `[` and `]` are bound through `_onKeyDown` (:349) and the whole
     // defect is that the SORT is what moved the planets, so a test that re-sorted the array itself

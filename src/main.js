@@ -7875,7 +7875,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
       orbitAngle: entry.orbitAngle,
       orbitSpeed: entry.orbitSpeed,
       planetMassEarth: _planetMass,
-    });
+    });  entry._live = planets[planets.length - 1];   /* ⭐ THE NAV’S ONLY HANDLE ON WHERE A PLANET ACTUALLY IS. `orbitAngle` above is COPIED as a number, and from here on the sim advances only the copy (`:11358`), so `systemData.planets[i].orbitAngle` is frozen at generation forever. The nav computer is handed `system._systemData` — the raw generation data (`:7950`) — so without this back-reference its orrery draws where every planet STARTED, not where it is. Max, 2026-09-07: *"I want the nav screen to reflect the actual orientation of the planets in the game."* ⚠ One assignment, no new line: `main.js` is line-frozen at 15161 and a `//` here would comment out nothing but would still break the next fold. */
   }
 
   // ── Create asteroid belts (scene-unit positions) ──
