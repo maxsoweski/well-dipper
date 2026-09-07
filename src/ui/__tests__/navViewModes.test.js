@@ -23,6 +23,28 @@ async function loadedNav({ width = 427, height = 240 } = {}) {
   return h;
 }
 
+
+/**
+ * A system with more bodies than the ladder can hold. ⛔ BUILT, NOT FOUND: whichever star the
+ * fixture happens to load varies with the seed and the load order, and a scroll test against a
+ * four-planet system asserts nothing — the ladder never overflows, so it never scrolls.
+ */
+async function crowdedLadder(n = 40) {
+  const h = await loadedNav();
+  h.nav.viewMode = 'rail';
+  h.nav._systemStar = { wx: 8, wy: 0, wz: 0, seed: 4242, spectral: 'G', name: 'Crowded' };
+  h.nav._systemData = {
+    star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
+    planets: Array.from({ length: n }, (_, i) => ({
+      orbitRadiusAU: 0.2 + i * 0.9, moons: [],
+      planetData: { radiusEarth: 1 + (i % 5), T_eq: 250, habitability: { score: 0.1 }, rings: false },
+    })),
+  };
+  h.nav._levelIndex = 4;
+  h.nav.render();
+  return h;
+}
+
 describe('the mode cycle', () => {
   it('starts at today\'s nav and returns to it', () => {
     expect(NAV_VIEW_MODES[0]).toBe(null);
@@ -282,26 +304,6 @@ describe('the modes are operable', () => {
 // not drawn before and is drawn after, or counts tags.
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 describe('the SYSTEM ladder scrolls', () => {
-  /**
-   * A system with more bodies than the ladder can hold. ⛔ BUILT, NOT FOUND: whichever star the
-   * fixture happens to load varies with the seed and the load order, and a scroll test against a
-   * four-planet system asserts nothing — the ladder never overflows, so it never scrolls.
-   */
-  async function crowdedLadder(n = 40) {
-    const h = await loadedNav();
-    h.nav.viewMode = 'rail';
-    h.nav._systemStar = { wx: 8, wy: 0, wz: 0, seed: 4242, spectral: 'G', name: 'Crowded' };
-    h.nav._systemData = {
-      star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
-      planets: Array.from({ length: n }, (_, i) => ({
-        orbitRadiusAU: 0.2 + i * 0.9, moons: [],
-        planetData: { radiusEarth: 1 + (i % 5), T_eq: 250, habitability: { score: 0.1 }, rings: false },
-      })),
-    };
-    h.nav._levelIndex = 4;
-    h.nav.render();
-    return h;
-  }
   /** The window `d1Ladder` published this frame: [firstVisibleIndex, lastVisibleIndex]. */
   const windowOf = (nav) => nav._viewDriverInst.S.ladderVisible;
 
@@ -399,5 +401,76 @@ describe('the SYSTEM ladder scrolls', () => {
     nav.render();
     // ⛔ inheriting the previous system's offset opens a one-planet system scrolled past its planet
     expect(S.ladderScroll).toBe(0);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// ⛔⛔ THE KEYBOARD, DRIVEN THROUGH THE REAL HANDLER — THE COVERAGE GAP THAT LET A DEAD MODE KEY SHIP.
+//
+// On 2026-09-07 `V` did nothing in the running game and Max found it: "I'm still seeing the old
+// menus". The cause was not logic. `NavComputer.js` keeps its line count fixed so its ~700
+// line-anchored citations stay valid, so new statements are FOLDED onto existing lines — and the V
+// clause had been folded in AFTER a `//` note about the ladder keys, which commented out every
+// statement following it on that line. The handler was there, parsed, unreachable.
+//
+// ⭐ AND EVERY TEST ABOVE PASSED, because every one of them sets `nav.viewMode` directly or calls a
+// driver method. Not one drove the keyboard, so the suite was structurally incapable of seeing it.
+// These cases exist to make that impossible again: they go through `_onKeyDown`, the same entry the
+// document listener calls, and assert the observable each key is supposed to produce.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('the keys reach the handler', () => {
+  const press = (nav, code) => nav._onKeyDown({ code, preventDefault() {}, stopPropagation() {} });
+
+  it('⛔ V CYCLES THE MODE THROUGH THE REAL KEYDOWN PATH', async () => {
+    const { nav } = await loadedNav();
+    nav._viewModesEnabled = true;
+    nav.viewMode = null;
+    press(nav, 'KeyV'); expect(nav.viewMode, 'first V').toBe('rail');
+    press(nav, 'KeyV'); expect(nav.viewMode, 'second V').toBe('bars');
+    press(nav, 'KeyV'); expect(nav.viewMode, 'third V returns to today\'s nav').toBe(null);
+  });
+
+  it('L toggles design 2\'s list, and only in design 2', async () => {
+    const { nav } = await loadedNav();
+    nav._viewModesEnabled = true;
+    nav.viewMode = 'bars';
+    nav.render();
+    const before = nav._viewDriverInst.S.list;
+    press(nav, 'KeyL');
+    expect(nav._viewDriverInst.S.list, 'L in design 2').toBe(!before);
+    nav.viewMode = 'rail';
+    const railBefore = nav._viewDriverInst.S.list;
+    press(nav, 'KeyL');
+    expect(nav._viewDriverInst.S.list, 'L must not toggle a list design 1 does not have').toBe(railBefore);
+  });
+
+  it(', and . walk the ladder through the real keydown path', async () => {
+    const { nav } = await crowdedLadder();
+    nav._viewModesEnabled = true;
+    const { S } = nav._viewDriverInst;
+    expect(S.ladderScroll).toBe(0);
+    press(nav, 'Period'); nav.render();
+    expect(S.ladderScroll, '. steps right').toBeGreaterThan(0);
+    press(nav, 'Comma'); nav.render();
+    expect(S.ladderScroll, ', steps back').toBe(0);
+  });
+
+  it('⛔ none of the mode keys fire while the search field has focus', async () => {
+    // The guard this file's handler opens with — the six pan letters must not be eaten out of the
+    // text field, and neither must V.
+    const { nav } = await loadedNav();
+    nav._viewModesEnabled = true;
+    nav.viewMode = null;
+    nav._searchFocused = true;
+    press(nav, 'KeyV');
+    expect(nav.viewMode, 'V typed into the search box must stay text').toBe(null);
+    nav._searchFocused = false;
+  });
+
+  it('⛔ AND NONE OF THEM FIRE ON THE COCKPIT PANEL, whatever is pressed there', async () => {
+    const { nav } = await makeHeadlessNav({ width: 52, height: 43 });
+    expect(nav._viewModesEnabled).toBe(false);
+    for (const code of ['KeyV', 'KeyL', 'Comma', 'Period']) press(nav, code);
+    expect(nav.viewMode).toBe(null);
   });
 });
