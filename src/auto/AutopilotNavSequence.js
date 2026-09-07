@@ -15,7 +15,7 @@
  */
 
 import { simClockMs } from '../core/SimClock.js';
-import { simRandom } from '../core/SimRandom.js';
+import { simRandom } from '../core/SimRandom.js';  import { navDrawH } from '../ui/navLayout.js';   // ⚠ appended, not a new line — this file is line-cited
 
 // ── Navigation styles with weights ──
 // Higher weight = more likely to be picked. Weighted random, not rotation.
@@ -617,7 +617,16 @@ export class AutopilotNavSequence {
     if (!canvas) return;
     const w = canvas.width;
     const h = canvas.height;
-    const drawH = h - 50; // tab bar height
+    // ⛔ DERIVED FROM THE LIVE CANVAS. This runs on WHICHEVER NavComputer is live, and in HELM that
+    // is the 52x43 cockpit panel (`main.js:5119` re-binds `liveNavComputer()` every tour). The
+    // literal 50 made `drawH = -7` there: the projection inverted, every destination in the galaxy
+    // collapsed into a ~6px band clipped off the TOP of the panel, and the performed cursor sat
+    // there, identically, every tour. `navDrawH` returns `h - 50` at every overlay-sized canvas.
+    // ⚠ KNOWN, PRE-EXISTING, AND DELIBERATELY NOT FIXED HERE: this helper's `min(w, drawH) * 0.85`
+    // has NEVER agreed with `_render2DLevel`'s `min(w, h) - 80` / `oy = 10`, so the crosshair has
+    // always landed ~20-25px off the tile it points at on the overlay. Converging them is the right
+    // fix and it MOVES THE OVERLAY'S PIXELS, which this step's contract forbids. Logged, not done.
+    const drawH = navDrawH(h); // tab bar height
     const size = Math.min(w, drawH) * 0.85;
     const ox = (w - size) / 2;
     const oy = (drawH - size) / 2;
@@ -633,7 +642,7 @@ export class AutopilotNavSequence {
     if (!canvas) return;
     const w = canvas.width;
     const h = canvas.height;
-    const drawH = h - 50;
+    const drawH = navDrawH(h); // see `_setCursorAtGalactic` above for why this is derived
     const size = Math.min(w, drawH) * 0.85;
     const ox = (w - size) / 2;
     const oy = (drawH - size) / 2;

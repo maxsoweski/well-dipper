@@ -224,6 +224,32 @@ export function makeNavPainter(source, { isZoomed = () => false } = {}) {
       // ends up as a texture on an in-world panel across a dark cabin, where ink
       // tuned for the bright DOM overlay disappears.
       nav.dimSurface = true;
+      // ⭐ THE TYPE DRIVER — AC-4. Without it NavComputer draws 7-16px VECTOR type into a 52x43
+      // canvas: a single 11px line is a quarter of the panel's height, and Max's screenshot of the
+      // panel after AC-1 landed is a smear of overlapping giant type.
+      //
+      // ⛔ `screen.type` IS `PhosphorScreen.typeScale(height)` — the SAME grid DRIVE, INFO and
+      // TARGET are laid out on, read off the live screen rather than recomputed. NAV does not get
+      // a scale of its own; that is the whole reason the grid exists. `unit` is the integer grid
+      // step (1 at 240p, 2 at 480p, 3 at 720p), and NavComputer maps it onto the ONE glyph set in
+      // `PixelText` — body at `unit`, display at `2 * unit`. No second face, no second scale.
+      //
+      // ⛔ WRITTEN EVERY PAINT, BUT NOT AGAINST A SECOND HOST — CORRECTED 2026-09-08. This comment
+      // said "the same instance main.js also wires as the full-screen overlay", inherited from the
+      // `chromeless` prose above it, and main.js says the opposite AT THE SITE: `makeNav` builds
+      // the cockpit's nav ("⚠ THE SECOND NavComputer — the one that draws on the glass") and
+      // `_initNavComputer` builds `_domNavComputer` separately. The driver therefore cannot reach
+      // the overlay at all. What the per-paint write IS for: the panel is rebuilt at a new buffer
+      // height under us, `screen` comes back with a new `unit`, and re-stating is what makes the
+      // driver track a resolution change with no listener.
+      // ⚠ `null` RATHER THAN A THROW when the screen is a stand-in without a type grid — the same
+      // rule the `if (nav)` above states for a source without a nav computer. A screen that cannot
+      // hand over a unit gets the default path, which is what it would have drawn anyway; a throw
+      // here would go into PanelHost's catch and freeze the glass on its last good frame. It is
+      // ASSIGNED, not skipped, so a driver installed by a previous screen cannot be stranded on the
+      // instance after the panel is rebuilt.
+      const unit = screen.type ? screen.type.unit : NaN;
+      nav.pixelType = Number.isFinite(unit) && unit >= 1 ? { unit } : null;
     }
 
     // The panel may have been rebuilt at a new buffer height under us. The source

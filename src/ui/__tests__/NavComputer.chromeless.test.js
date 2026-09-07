@@ -100,6 +100,10 @@ import { dirname, join } from 'node:path';
 import { NavComputer, navChromelessForLevel } from '../NavComputer.js';
 import { makeNavPainter } from '../../cockpit/panels/NavPanel.js';
 import * as NavPanelModule from '../../cockpit/panels/NavPanel.js';
+import {
+  navDrawH, navTabHeight, navMapInset, navCommitButton,
+  NAV_TAB_H_MAX, NAV_RESERVE_MAX, NAV_MAP_INSET_MAX,
+} from '../navLayout.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const NAV_PATH = join(HERE, '..', 'NavComputer.js');
@@ -480,8 +484,17 @@ for (const name of EARLY_RETURN_METHODS) {
  */
 const DEFAULT_PATH_CLAIMS = [
   {
-    what: 'the chrome reserve keeps its 50 px on the default path',
-    re: /const\s+drawH\s*=\s*this\._bare\s*\?\s*h\s*:\s*h\s*-\s*50\s*;/,
+    // ⭐ RE-DERIVED 2026-09-08 (AC-4), NOT LOOSENED. The literal `h - 50` collapsed to -7 on the
+    // 52x43 cockpit NAV panel — an inverted projection at every level — so the reserve is now
+    // `navDrawH(h)`, which RETURNS `h - 50` for every canvas at or above 160 rows and therefore for
+    // every canvas the overlay has ever had. The pin moves with it in two halves: this one still
+    // fixes the SPELLING on the default arm (so a plant cannot drop the ternary), and the
+    // arithmetic half — that `navDrawH` really is `h - 50` at overlay sizes — is asserted as a
+    // VALUE, against the imported function, in "the derived chrome reserve still reads h - 50"
+    // below. A source scan alone could never have checked that, which is why the value pin is new
+    // rather than a replacement.
+    what: 'the chrome reserve is taken through navDrawH on the default path',
+    re: /const\s+drawH\s*=\s*this\._bare\s*\?\s*h\s*:\s*navDrawH\s*\(\s*h\s*\)\s*;/,
   },
   {
     what: 'the fill factor keeps its literal 0.85 on the default path',
@@ -756,6 +769,59 @@ describe('NavComputer.chromeless.test.js — this file does not disable itself',
     for (const fine of ['it(', 'describe(', 'test(', 'RE.test(', 'expect(x).toBe(', 'audit(fails)']) {
       expect(DISABLED_RE.test(fine), fine).toBe(false);
     }
+  });
+});
+
+/**
+ * ⭐ THE ARITHMETIC HALF OF THE DEFAULT-PATH PIN — added 2026-09-08 with AC-4.
+ *
+ * The chrome geometry stopped being literals and became functions of the canvas, because on the
+ * 52x43 cockpit panel every one of those literals was wrong by more than its own value. The
+ * byte-equality contract did not change: the DOM overlay must still draw the same pixels. What
+ * changed is what enforces it — a SATURATION THRESHOLD inside `navLayout.js` rather than a constant
+ * in `NavComputer.js`.
+ *
+ * ⚠ SO THIS IS A STRICTLY STRONGER CHECK THAN THE SOURCE SCAN IT SUPPLEMENTS. The scan can only see
+ * that the default arm is spelled `navDrawH(h)`; it cannot see what that returns. These assert the
+ * VALUE, at the sizes the overlay actually has — the DOM canvas is `calc(100vw - 40px)` by
+ * `calc(100vh - 40px)`, so roughly 1880x1040 on a 1080p display, and the whole existing test corpus
+ * drives 614x512, 800x600 and 400x300. Every one of them is above the 160-row threshold, which is
+ * the fact the contract rests on.
+ */
+describe('the derived chrome geometry still reads as its old literals at every overlay size', () => {
+  // 160 is the threshold; the rest are the sizes this repo actually drives.
+  const OVERLAY_HEIGHTS = [160, 300, 512, 600, 800, 1040, 2160];
+
+  it('navDrawH is h - 50 at every overlay-sized canvas', () => {
+    for (const h of OVERLAY_HEIGHTS) {
+      expect(navDrawH(h), `navDrawH(${h}) must reproduce the old \`h - 50\``).toBe(h - NAV_RESERVE_MAX);
+    }
+  });
+
+  it('the tab strip is still 32 rows at every overlay-sized canvas', () => {
+    for (const h of OVERLAY_HEIGHTS) expect(navTabHeight(h)).toBe(NAV_TAB_H_MAX);
+  });
+
+  it('the 2D map inset is still 80 at every overlay-sized canvas', () => {
+    for (const h of OVERLAY_HEIGHTS) expect(navMapInset(h)).toBe(NAV_MAP_INSET_MAX);
+  });
+
+  it('the commit button is still 180x28 at drawH - 52 at every overlay-sized canvas', () => {
+    for (const h of OVERLAY_HEIGHTS) {
+      const drawH = navDrawH(h);
+      const b = navCommitButton(1880, drawH, h);
+      expect([b.w, b.h, b.y, b.x, b.labelDy]).toEqual([180, 28, drawH - 52, (1880 - 180) / 2, 19]);
+    }
+  });
+
+  it('and it does NOT return them on a cockpit panel — the control that proves this is live', () => {
+    // ⛔ THE OTHER HALF OF EVERY ASSERTION ABOVE. A function that returned the old literal at EVERY
+    // size would pass all four of them and would be exactly the dead-code path AC-4 is trying not
+    // to ship. This is the same argument as the sabotage probe run in the browser, in CI form.
+    expect(navDrawH(43)).not.toBe(43 - NAV_RESERVE_MAX);
+    expect(navDrawH(43)).toBeGreaterThan(0);
+    expect(navTabHeight(43)).toBe(8);
+    expect(navMapInset(43)).toBeLessThan(43);
   });
 });
 

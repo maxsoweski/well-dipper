@@ -16,7 +16,7 @@ import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
 import alea from 'alea';
-import { simClockMs } from '../core/SimClock.js';
+import { simClockMs } from '../core/SimClock.js';  import { navTabHeight, navChromeReserve, navDrawH, navMapOriginY, navMapSize, navCommitButton, navTextInset } from './navLayout.js';  import { wrapPixelTypeCtx, navUnitCap } from './navPixelType.js';   // ⚠ appended to this line, not added as new lines: ~700 line-anchored citations ride this file
 
 /**
  * NavComputer — 5-level interactive galaxy navigation.
@@ -45,6 +45,21 @@ const MAX_PAN_STEP_MS = 100;
 
 const LEVELS = ['galaxy', 'sector', 'region', 'prism', 'system'];
 const LEVEL_NAMES = ['GALAXY', 'SECTOR', 'REGION', 'PRISM', 'SYSTEM'];
+/**
+ * ⭐ THE TAB STRIP'S PANEL LABELS — five DISTINCT characters, and that is the whole requirement.
+ *
+ * A tab cell is `w / 5` wide, so on the shipped panel buffers it is 10.4 / 20.6 / 31.0 texels
+ * against a face that advances `6 * unit` — ONE GLYPH FITS, at every resolution. Letting the
+ * generic clip pick the prefix gave `G S R P S`: SECTOR and SYSTEM both rendered as a bare `S`, and
+ * a pilot reaching for SYSTEM landed in SECTOR — which clears `_localStars` and throws away the
+ * prism drill he was in the middle of. Nothing on the panel told him which S was which.
+ *
+ * ⛔ SYSTEM TAKES `Y`, NOT `S`, because SECTOR owns `S` at the level above it — the four tabs that
+ * can keep their initial keep it. This is a LOOKUP, not a solver: five fixed literals, so the
+ * abbreviation is chosen once rather than derived per frame. `LEVEL_NAMES` stays the producer and
+ * the overlay still draws the whole word; drop the driver and every letter comes back.
+ */
+const LEVEL_TAB_CHARS = ['G', 'S', 'R', 'P', 'Y'];
 const GRID_N = 8; // tiles per axis (sector uses 8, region uses 16)
 
 // Bridge potentialDerivedDensity() units → actual stars/pc³ the hash grid renders.
@@ -215,6 +230,29 @@ export class NavComputer {
     // the invisible orbits. Brightness is its own axis — a host on a dim surface
     // says so, whatever chrome it wants.
     this.dimSurface = false;
+
+    // ⭐ THE TYPE DRIVER — the panel-vs-overlay axis, and it is its OWN axis, exactly like
+    // `dimSurface` above and for the same reason that comment records. It is NOT `_bare` and
+    // must never be folded into it: `_bare` is `chromeless && level === 'system'`, and
+    // `NavPanel.js:222` writes `chromeless = false` on EVERY paint under Max's 2026-08-01
+    // ruling — so on the panel instance `_bare` is permanently FALSE at every level, and a
+    // type change keyed off it would be a no-op that looks like a wiring failure.
+    //
+    // `null` is today's `fillText` path, byte-for-byte: `render()` hands the raw context down
+    // and `navPixelType.js` is never entered. A host that wants bitmap type at panel
+    // resolution installs `{ unit }` here — the integer grid step from `PhosphorScreen.typeScale`
+    // — every paint, the way `dimSurface` is re-stated.
+    //
+    // ⛔ AND NOT BECAUSE ONE INSTANCE SERVES BOTH SURFACES — IT DOES NOT. That is what this comment
+    // said until 2026-09-08, inherited from `NavPanel`'s older `chromeless` prose, and `main.js`
+    // says the opposite at the site: `makeNav` builds the cockpit's nav ("⚠ THE SECOND
+    // NavComputer") and `_initNavComputer` builds `_domNavComputer` separately, with
+    // `openNavComputer()` routing to one or the other. Nothing writes `pixelType` on the DOM
+    // instance and nothing has to clear it — the discriminator cannot cross instances at all. The
+    // per-paint write is for a rebuilt PhosphorScreen: the panel comes back at a new buffer height
+    // with a new `unit`, and re-stating is what makes the driver track a resolution change with no
+    // listener.
+    this.pixelType = null;
 
     // Fraction of the panel the orrery fills once the 50 px chrome reserve is
     // reclaimed. Consulted ONLY on the bare path — the default path keeps its
@@ -387,6 +425,119 @@ export class NavComputer {
    */
   get _systemFill() {
     return Number.isFinite(this.systemFillFactor) ? this.systemFillFactor : 0.95;
+  }
+
+  /**
+   * The type driver, defended against the public field it reads — same idiom as `_systemFill`.
+   *
+   * A junk write here would not throw; it would make every glyph scale NaN, and `fillRect(NaN, …)`
+   * draws nothing at all. A blank nav panel with a clean console is the failure this getter exists
+   * to make unrepresentable, and it is the same failure `_systemFill` documents.
+   */
+  get _type() {
+    const t = this.pixelType;
+    return t && Number.isFinite(t.unit) && t.unit >= 1 ? t : null;
+  }
+
+  /**
+   * ⭐ IS THIS INSTANCE DRAWING AT PANEL RESOLUTION? — and therefore dropping the corner chrome.
+   *
+   * Identical to "a type driver is installed", and deliberately so. The driver is installed by
+   * exactly one host (`NavPanel`), so this IS the panel-vs-overlay discriminator; giving the
+   * question a second, independently-settable flag is how two discriminators for one distinction
+   * drift apart. Naming it separately from `_type` is a readability choice, not a second axis.
+   *
+   * What it withdraws — and every one of these comes off the GLASS, not out of the pipeline; drop
+   * the driver and all of it returns unchanged:
+   *   · the four fixed-baseline HUD chrome blocks (`CURRENT SYSTEM`, the system name, the sector
+   *     name, the five-line PRISM stats block) — their baselines run to row 106 on a 43-row panel;
+   *   · the AUTOPILOT toggle, a 140x24 box on a 52-wide panel;
+   *   · the PRISM minimap, a fixed 60x160 widget anchored at `(w - 80, h - 220)` = (-28, -177);
+   *   · the far-companion chips, anchored at `top: 40`;
+   *   · the one-line footer hints, 51-character sentences against an 8-character line;
+   *   · the second and third lines of the system / component / planet headers.
+   * The map, the tabs, the selection ring, the body picker and the COMMIT button all stay — those
+   * are AC-4's walk.
+   */
+  get _compact() {
+    return this._type !== null;
+  }
+
+  /**
+   * Clip a string to a texel budget — a LAYOUT decision, taken at the glass.
+   *
+   * ⛔ WITH NO DRIVER THIS RETURNS THE STRING UNTOUCHED, so every caller is byte-identical on the
+   * overlay. And Max, 2026-09-08: *"don't get rid of any code that allows you to display what we
+   * want to display."* Nothing upstream is shortened here — no formatter loses a clause, no row
+   * leaves a table. The producer still produces the whole string; this instance draws what it has
+   * room for, this frame.
+   *
+   * ⛔ THE NO-DRIVER TEST IS `this._compact`, NOT A PROPERTY READ OFF `ctx` — CORRECTED 2026-09-08.
+   * These three helpers first asked the CONTEXT whether a driver was installed (`const f =
+   * ctx.__navFit; return f ? … : str`). That is a duck-type, and it is wrong on exactly the
+   * instrument this class is verified with: `helpers/headlessNav.mjs`'s recording context answers
+   * EVERY unknown key with a catch-all function, so `ctx.__navFit` was truthy on the DEFAULT path
+   * and returned `undefined` — measured, the five level-tab labels came out of a no-driver render
+   * as the literal string "undefined". The class already knows the answer (`_type !== null`, set
+   * before `_drawCtx()` runs) and cannot be spoofed by a stand-in context. Ask the class.
+   * @private
+   */
+  _fit(ctx, str, maxPx) {
+    return this._compact ? ctx.__navFit(str, maxPx) : str;
+  }
+
+  /**
+   * Pull a text baseline back onto the glass — the vertical twin of `_fit`, and a no-op with no
+   * driver for the same reason. Only the driver knows the glyph's cap height, so only the driver
+   * can say which baselines fit; the class asks rather than assuming a face. See `_fit` for why the
+   * no-driver test is `this._compact` and never a property read off `ctx`.
+   * @private
+   */
+  _ony(ctx, y) {
+    return this._compact ? ctx.__navClampY(y) : y;
+  }
+
+  /**
+   * The glyph cap height this instance is drawing at, in canvas rows — `null` with no driver.
+   *
+   * The one number a layout has to have when the face is a bitmap: `placeLabels` stacks boxes, and
+   * a box whose height is the overlay's 10px literal while the glyphs are `5 * unit` texels tall
+   * places two labels on top of each other and reports them as clear.
+   * @private
+   */
+  _capH(ctx) {
+    return this._compact ? ctx.__navCap : null;
+  }
+
+  /**
+   * The baseline of a view's FIRST line — `fallback` (today's literal) with no driver, and the top
+   * grid row with one.
+   *
+   * ⚠ THIS ONE WAS FOUND BY THE OVERLAP GUARD, not by arithmetic. Three views put their title on
+   * baseline 24, which was near the top of a 1040-row overlay and is the MIDDLE of a 30-row
+   * drawable area — where it overprinted the `[ WARP ]` button by 11 texels. A title that collides
+   * with the control the pilot has to press is worse than no title. Same no-driver test as `_fit`,
+   * and for the same reason — this one survived the duck-type only by accident, because
+   * `Number.isFinite(aCatchAllFunction)` is false.
+   * @private
+   */
+  _topY(ctx, fallback) {
+    return this._compact ? ctx.__navTop : fallback;
+  }
+
+  /**
+   * The left margin of a header line, in canvas pixels — the old literal `16`.
+   *
+   * ⛔ ONLY THE Y ANCHOR WAS DERIVED AT FIRST. On a 52-texel panel a 16px indent is 31% of the
+   * glass and costs the one surviving header string two of its eight characters, so the system name
+   * read as `Barnar` with a black bar to its left. `navTextInset` saturates to 16 well below every
+   * canvas the overlay or the test corpus has, so this is byte-identical there.
+   * @private
+   */
+  _leftX(w) {
+    // A non-finite width answers with the old literal, which is what `_drawSystemHeader` gets when
+    // it is exercised on a bare prototype with no canvas at all (systemIdentity.test.js).
+    return navTextInset(w);
   }
 
   /**
@@ -789,11 +940,18 @@ export class NavComputer {
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'left';
-    ctx.fillText(title, 16, 24);
+    // ⛔ BOTH ANCHORS DERIVED, NOT JUST THE Y. `_leftX` saturates to the old 16 at every canvas the
+    // overlay or the test corpus has; on a 52-texel panel it is 4, which is the difference between
+    // eight characters of the system name and six.
+    ctx.fillText(title, this._leftX(this._canvas?.width), this._topY(ctx, 24));
 
     // Optional component annotation — routes the system identity, keeping the
     // title itself un-overloaded. Only known systems ever draw it; when present
     // the type line drops to make room (procgen never shifts).
+    // ⛔ THE SECOND AND THIRD LINES COME OFF THE GLASS AT PANEL RESOLUTION. Their baselines are 38,
+    // 42 and 54 — all below a 30-row drawable area — so on the panel the header is the TITLE alone.
+    // `deriveSystemAnnotation` still runs and still returns what it returns; nothing upstream moves.
+    if (this._compact) return;
     const annotation = deriveSystemAnnotation(sys, markerName);
     let typeLineY = 42;
     if (annotation) {
@@ -836,6 +994,10 @@ export class NavComputer {
     // resets above is deliberate: it also unpublishes `_farChipRects`, so the
     // panel cannot carry invisible hit regions for chips it never drew.
     if (this._bare) return;
+    // ⛔ AND OFF THE GLASS AT PANEL RESOLUTION, for the same reason and by the same route: the chip
+    // stack is anchored at `top: 40`, below a 43-row panel entirely. Bailing here (after the two
+    // resets above) also unpublishes `_farChipRects`, so the panel carries no invisible hit region.
+    if (this._compact) return;
     const fars = this._systemData?.farCompanions;
     if (!Array.isArray(fars) || fars.length === 0) return;
 
@@ -1120,9 +1282,43 @@ export class NavComputer {
     return true;
   }
 
+  /**
+   * The context the whole draw tree is handed.
+   *
+   * ⛔ WITH NO DRIVER THIS IS THE RAW CONTEXT — the same object `render()` has always used, with no
+   * wrapper, no branch and no cost. That is what makes the ORRERY overlay byte-identical by
+   * CONSTRUCTION rather than by inspection: the alternative code does not run, it is not reached.
+   *
+   * ⚠ THE LABEL-WIDTH CACHE IS INVALIDATED HERE AND IT HAS TO BE. `_measureLabel` caches by name
+   * with the comment "font is constant", and feeds `placeLabels` — the PRISM anti-overlap solver.
+   * The moment type is per-instance AND the unit tracks the resolution setting, a cached width from
+   * the previous unit mis-places every label with no error anywhere.
+   *
+   * ⚠ THE HOST'S UNIT IS AN UPPER REQUEST, NOT THE ANSWER. `navUnitCap` clips it to what the
+   * SATURATED chrome can hold — the chrome stops growing at 160 rows and `typeScale`'s unit does
+   * not, so above ~172 rows the face would outgrow the 32-row tab strip and the 28-row commit
+   * button and draw its labels above them. Never binds at 43, 86 or 129 rows.
+   * @private
+   */
+  _drawCtx() {
+    const t = this._type;
+    if (!t) {
+      if (this._typeCtx) { this._typeCtx = null; this._typeUnit = 0; this._labelWidthCache = null; }
+      return this._ctx;
+    }
+    const unit = Math.max(1, Math.min(
+      Math.floor(t.unit), navUnitCap(this._canvas.width, this._canvas.height)));
+    if (!this._typeCtx || this._typeUnit !== unit) {
+      this._typeCtx = wrapPixelTypeCtx(this._ctx, { unit });
+      this._typeUnit = unit;
+      this._labelWidthCache = null;
+    }
+    return this._typeCtx;
+  }
+
   render() {
     this._resizeCanvas();
-    const ctx = this._ctx;
+    const ctx = this._drawCtx();
     const w = this._canvas.width;
     const h = this._canvas.height;
 
@@ -1414,9 +1610,15 @@ export class NavComputer {
     const cz = this._viewCenter.z;
     const viewSize = this._viewSize;
     const ext = viewSize / 2;
-    const drawSize = Math.min(w, h) - 80; // leave room for tabs
+    // ⛔ DERIVED, NOT `- 80`. At 52x43 the literal gave -37: a negative extent, an inverted
+    // projection and `tileW < 0`, so GALAXY / SECTOR / REGION — three of AC-4's five tabs — drew a
+    // collapsed smear and could not be clicked. `navMapSize` and `navMapOriginY` both return the
+    // old numbers at every canvas the overlay has. The two hit-test copies below call the same
+    // functions; `_hoveredTile` is written by one of them and read by the click drill, so a
+    // renderer that moves alone is a map you can see and cannot click.
+    const drawSize = navMapSize(w, h); // leave room for tabs
     const ox = (w - drawSize) / 2;
-    const oy = 10;
+    const oy = navMapOriginY(h);
     const scale = drawSize / viewSize;
 
     // Density background (cached at 128px, scaled up)
@@ -1670,7 +1872,8 @@ export class NavComputer {
     const cy = this._localCenter.y;
     const cz = this._localCenter.z;
     const rad = this._localRadius;
-    const drawH = h - 50; // leave room for tabs
+    const drawH = navDrawH(h); // leave room for tabs — DERIVED; `h - 50` was -7 at 43 rows, and
+    // this is the ONE reserve with no `_bare` ternary, so the panel took it at every level.
 
     // On-demand loading: query stars for the visible Y range + margin.
     // Expands automatically as the user scrolls with R/F.
@@ -2137,9 +2340,17 @@ export class NavComputer {
     if (!queue || queue.length === 0) return;
 
     const FONT = '10px "DotGothic16", monospace';
-    const FONT_SIZE = 10;
-    const LINE_H = 12;
     ctx.font = FONT;
+    // ⛔ THE SOLVER'S LATTICE IS THE FACE'S, NOT A LITERAL — CORRECTED 2026-09-08. `FONT_SIZE = 10`
+    // and `LINE_H = 12` are the VECTOR face's metrics. With a driver installed the glyphs are
+    // `5 * unit` texels tall, so from unit 3 up — the shipped 720p panel — the solver believed two
+    // stacked labels cleared each other while they overprinted by three rows. Widths were always
+    // honest (`_measureLabel` routes through the driver); only the vertical was stale. The ratio
+    // 12/10 is preserved exactly, so with no driver both are the old literals and the overlay's
+    // placement does not move by a pixel.
+    const cap = this._capH(ctx);
+    const FONT_SIZE = cap || 10;
+    const LINE_H = Math.round(FONT_SIZE * 1.2);
 
     // Home AABBs (top-left) derived from each label's text baseline; width via
     // cached measureText. Priority: tier dominates, nearer wins within a tier.
@@ -2226,7 +2437,7 @@ export class NavComputer {
     // Chrome-less draws neither, so keeping the reserve would leave a dead strip
     // and shrink the orrery for nothing — on a 614x512 panel the picture is only
     // 77% of the height. Reclaiming it is the whole of what "expanded" means.
-    const drawH = this._bare ? h : h - 50;
+    const drawH = this._bare ? h : navDrawH(h);
 
     // Generate system data on first render
     if (!this._systemData && this._systemStar) {
@@ -2430,7 +2641,7 @@ export class NavComputer {
       // rather than the whole label block is the pattern used at every site in
       // this file: canvas state assignments emit no pixels, so leaving them
       // outside the guard keeps the flag-off diff to zero re-indented lines.
-      if (!this._bare) ctx.fillText(belt.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT', labelP.x, labelP.y - 6);
+      if (!this._bare && !this._compact) ctx.fillText(belt.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT', labelP.x, labelP.y - 6);
     }
 
     // ── Orbit circles (wireframe) ──
@@ -2612,7 +2823,14 @@ export class NavComputer {
       ctx.font = '9px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
-      if (!this._bare) ctx.fillText(this._planetDisplayName(i, systemName), sp.x, sp.y + baseR + 12);
+      // ⛔ THE IN-SCENE BODY LABELS COME OFF THE GLASS AT PANEL RESOLUTION, and this is the one
+      // suppression that was found by a test rather than by arithmetic. Seven planet names are
+      // seven strings anchored to seven discs inside a 43-row orrery: measured, they overprinted
+      // each other on 116 texels at 240p and still on 5 at 720p. Overlapping glyphs do not read as
+      // either name — they read as the smear Max photographed. The discs, the orbits, the
+      // habitable-zone ring, the selection ring and the COMMIT button all stay, which is AC-4's
+      // whole walk; the name arrives when a body is picked. `_planetDisplayName` is untouched.
+      if (!this._bare && !this._compact) ctx.fillText(this._planetDisplayName(i, systemName), sp.x, sp.y + baseR + 12);
 
       // Hover detection
       const mdx = this._mouseX - sp.x, mdy = this._mouseY - sp.y;
@@ -2735,7 +2953,7 @@ export class NavComputer {
         ctx.font = '7px "DotGothic16", monospace';
         ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
         ctx.textAlign = 'center';
-        if (!this._bare) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        if (!this._bare && !this._compact) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
         ctx.textAlign = 'left';
 
         // ── Trajectory line from ship to hovered/selected body ──
@@ -2841,8 +3059,14 @@ export class NavComputer {
       // Draw commit button — click commits the pending action
       const btnText = isCurrent ? '[ BURN ]' : '[ WARP ]';
       const btnColor = isCurrent ? '#00ff80' : 'rgba(100, 180, 255, 0.9)';
-      const btnW = 180, btnH = 28;
-      const btnX = (w - btnW) / 2, btnY = drawH - 52;
+      // ⭐ ONE FUNCTION, TWO CALLERS. `btnW = 180, btnH = 28, btnY = drawH - 52` used to be written
+      // out HERE and again in `_renderPlanetDetail`, both publishing into the SAME
+      // `_commitButtonRect` that one hit-test reads — so fixing WARP and missing BURN was a click
+      // that commits from a rectangle nobody can see. `navCommitButton` returns the old numbers at
+      // every overlay-sized canvas.
+      const btn = navCommitButton(w, drawH, h);
+      const btnW = btn.w, btnH = btn.h;
+      const btnX = btn.x, btnY = btn.y;
       ctx.fillStyle = isCurrent ? 'rgba(0, 255, 128, 0.1)' : 'rgba(100, 180, 255, 0.1)';
       ctx.fillRect(btnX, btnY, btnW, btnH);
       ctx.strokeStyle = btnColor;
@@ -2851,22 +3075,24 @@ export class NavComputer {
       ctx.font = '12px "DotGothic16", monospace';
       ctx.fillStyle = btnColor;
       ctx.textAlign = 'center';
-      ctx.fillText(btnText, w / 2, btnY + 19);
+      ctx.fillText(btnText, w / 2, btnY + btn.labelDy);
       this._commitButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
 
-      // Hint below button
+      // Hint below button. ⛔ OFF THE GLASS AT PANEL RESOLUTION, NOT OUT OF THE PIPELINE: a
+      // 36-character sentence is 215 texels against a 52-texel panel. The string is untouched and
+      // returns the instant the driver is dropped.
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fillText('DRAG TO ROTATE · TABS TO CHANGE VIEW', w / 2, drawH - 8);
+      if (!this._compact) ctx.fillText('DRAG TO ROTATE · TABS TO CHANGE VIEW', w / 2, drawH - 8);
     } else {
       this._commitButtonRect = null;
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.textAlign = 'center';
       if (isCurrent) {
-        if (!this._bare) ctx.fillText('SELECT BODY TO NAVIGATE · DRAG TO ROTATE · TABS TO CHANGE VIEW', w / 2, drawH - 8);
+        if (!this._bare && !this._compact) ctx.fillText('SELECT BODY TO NAVIGATE · DRAG TO ROTATE · TABS TO CHANGE VIEW', w / 2, drawH - 8);
       } else {
-        if (!this._bare) ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · TABS TO CHANGE VIEW', w / 2, drawH - 8);
+        if (!this._bare && !this._compact) ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · TABS TO CHANGE VIEW', w / 2, drawH - 8);
       }
     }
     ctx.textAlign = 'left';
@@ -2886,7 +3112,7 @@ export class NavComputer {
     // `level` getter says 'system' for all three modes), so it is on the bare
     // path too — and its chrome is already suppressed below. Keeping the 50 px
     // would leave the orrery shrunk above a dead strip that draws nothing.
-    const drawH = this._bare ? h : h - 50;
+    const drawH = this._bare ? h : navDrawH(h);
     const view = deriveComponentView(
       this._systemData, this._selectedComponentIdx, this._systemStar?.name);
     this._componentView = view;
@@ -2913,15 +3139,16 @@ export class NavComputer {
     ctx.textAlign = 'center';
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(160, 210, 255, 0.95)';
-    if (!this._bare) ctx.fillText(view.title, w / 2, 24);
+    if (!this._bare) ctx.fillText(view.title, w / 2, this._topY(ctx, 24));
     if (view.annotation) {
       ctx.font = '9px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(120, 180, 255, 0.75)';
-      if (!this._bare) ctx.fillText(view.annotation, w / 2, 38);
+      if (!this._bare && !this._compact) ctx.fillText(view.annotation, w / 2, 38);
     }
     ctx.font = '9px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(150, 175, 215, 0.6)';
-    if (!this._bare) ctx.fillText(view.breadcrumb, w / 2, 50);
+    // Baselines 38 and 50 are below a 30-row drawable area; the title at 24 is the one that fits.
+    if (!this._bare && !this._compact) ctx.fillText(view.breadcrumb, w / 2, 50);
 
     // ── SYSTEM-scale orrery over the payload (the _renderSystem projection) ──
     const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
@@ -3004,7 +3231,12 @@ export class NavComputer {
       // rects are the AC6 non-overlap handle and describe label boxes. Publishing
       // boxes for labels that were never drawn would report a layout that isn't
       // on the glass.
-      if (!this._bare) {
+      // ⛔ WHICH IS WHY `_compact` GATES THE WHOLE BLOCK, NOT JUST THE `fillText` — CORRECTED
+      // 2026-09-08. The compact test went around the draw alone at first, so the cockpit panel
+      // published a clean, well-spaced rect for every component-detail label it had NOT drawn, and
+      // the AC6 live zero-overlap assertion read off `window._navComputer._labelRects` agreed with
+      // a layout that was not on the glass — in exactly the situation it exists to catch.
+      if (!this._bare && !this._compact) {
         ctx.fillText(label, sp.x, labelY);
         const labelW = ctx.measureText(label).width;
         this._labelRects.push({ x: sp.x - labelW / 2, y: labelY - 8, w: labelW, h: 10, name: label });
@@ -3024,7 +3256,7 @@ export class NavComputer {
     // Reclaimed for the same reason as `_renderComponentDetail`: `_systemMode`
     // rides inside level 'system', so this sub-view is on the bare path and its
     // 50 px reserve holds a BURN button and a hint that the bare path never draws.
-    const drawH = this._bare ? h : h - 50;
+    const drawH = this._bare ? h : navDrawH(h);
     const sys = this._systemData;
     const planets = sys.planets || [];
     const idx = this._selectedPlanetIdx;
@@ -3127,7 +3359,7 @@ export class NavComputer {
       ctx.textAlign = 'center';
       // Same reasoning as _renderComponentDetail's header: `_systemMode` rides
       // inside level 'system', so `_bare` can be true in here.
-      if (!this._bare) ctx.fillText(moon.type || 'moon', moonP.x, moonP.y + moonR + 10);
+      if (!this._bare && !this._compact) ctx.fillText(moon.type || 'moon', moonP.x, moonP.y + moonR + 10);
 
       // Moon hover
       const mdx = this._mouseX - moonP.x, mdy = this._mouseY - moonP.y;
@@ -3183,7 +3415,7 @@ export class NavComputer {
         ctx.font = '7px "DotGothic16", monospace';
         ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
         ctx.textAlign = 'center';
-        if (!this._bare) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        if (!this._bare && !this._compact) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
         ctx.textAlign = 'left';
 
         // Trajectory line to hovered/selected moon
@@ -3239,13 +3471,13 @@ export class NavComputer {
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'left';
-    if (!this._bare) ctx.fillText(this._planetDisplayName(idx, systemName), 16, 24);
+    if (!this._bare) ctx.fillText(this._planetDisplayName(idx, systemName), this._leftX(w), this._topY(ctx, 24));
     ctx.font = '11px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
-    if (!this._bare) ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
+    if (!this._bare && !this._compact) ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
     if (pd.T_eq) {
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      if (!this._bare) ctx.fillText(`${Math.round(pd.T_eq)} K${pd.habitability > 0.3 ? ' · Habitable' : ''}`, 16, 58);
+      if (!this._bare && !this._compact) ctx.fillText(`${Math.round(pd.T_eq)} K${pd.habitability > 0.3 ? ' · Habitable' : ''}`, 16, 58);
     }
 
     // ── Selection ring on selected moon ──
@@ -3274,8 +3506,9 @@ export class NavComputer {
     // at a button nobody can see.
     if (isCurrent && this._selectedBody && this._commitAction && !this._bare) {
       const btnText = '[ BURN ]';
-      const btnW = 180, btnH = 28;
-      const btnX = (w - btnW) / 2, btnY = drawH - 52;
+      const btn = navCommitButton(w, drawH, h);
+      const btnW = btn.w, btnH = btn.h;
+      const btnX = btn.x, btnY = btn.y;
       ctx.fillStyle = 'rgba(0, 255, 128, 0.1)';
       ctx.fillRect(btnX, btnY, btnW, btnH);
       ctx.strokeStyle = '#00ff80';
@@ -3284,20 +3517,20 @@ export class NavComputer {
       ctx.font = '12px "DotGothic16", monospace';
       ctx.fillStyle = '#00ff80';
       ctx.textAlign = 'center';
-      ctx.fillText(btnText, w / 2, btnY + 19);
+      ctx.fillText(btnText, w / 2, btnY + btn.labelDy);
       this._commitButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
 
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fillText('CLICK EMPTY SPACE TO GO BACK', w / 2, drawH - 8);
+      if (!this._compact) ctx.fillText('CLICK EMPTY SPACE TO GO BACK', w / 2, drawH - 8);
     } else {
       this._commitButtonRect = null;
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.textAlign = 'center';
       if (isCurrent) {
-        if (!this._bare) ctx.fillText('SELECT MOON TO NAVIGATE · CLICK EMPTY SPACE TO GO BACK', w / 2, drawH - 8);
+        if (!this._bare && !this._compact) ctx.fillText('SELECT MOON TO NAVIGATE · CLICK EMPTY SPACE TO GO BACK', w / 2, drawH - 8);
       } else {
-        if (!this._bare) ctx.fillText('VIEW ONLY · CLICK TO GO BACK', w / 2, drawH - 8);
+        if (!this._bare && !this._compact) ctx.fillText('VIEW ONLY · CLICK TO GO BACK', w / 2, drawH - 8);
       }
     }
     ctx.textAlign = 'left';
@@ -3306,6 +3539,12 @@ export class NavComputer {
   _renderPrismMinimap(ctx, w, h) {
     // Guard: skip minimap when no stars are loaded
     if (this._localStars.length === 0) return;
+    // ⛔ AND OFF THE GLASS AT PANEL RESOLUTION. This whole widget is fixed pixels — `xzSize = 60`,
+    // `ySize = 160`, anchored at `(w - 80, h - 220)` — which on a 52x43 panel is a 60x160 box at
+    // (-28, -177). It had no `_bare` guard of any kind and drew unconditionally from `_renderLocal`
+    // at PRISM, the panel's DEFAULT open level. The method stays whole and callable; only this
+    // instance declines to draw it.
+    if (this._compact) return;
 
     const cubeHalf = this._localCubeSize || 0.01;
     const blockCenter = this._viewStack[2]?.center || this._localCenter;
@@ -3755,7 +3994,11 @@ export class NavComputer {
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = '#00ff80';
       ctx.textAlign = 'center';
-      ctx.fillText(this._externalTarget.name, x, y - s - 4);
+      // ⭐ KEPT, NOT DROPPED — this is the one string on a 2D level that says WHERE YOU ARE AIMED,
+      // and the marker can sit at the top edge, where `y - s - 4` puts its cap row off the glass
+      // (measured: 11 texels above row 0 at 52x43). `_ony` pulls the baseline back to the first row
+      // that fits; with no driver it returns the argument and the overlay does not move.
+      ctx.fillText(this._externalTarget.name, x, this._ony(ctx, y - s - 4));
       ctx.textAlign = 'left';
     }
   }
@@ -3806,6 +4049,11 @@ export class NavComputer {
   }
 
   _drawTooltip(ctx, sx, sy, title, lines) {
+    // ⛔ OFF THE GLASS AT PANEL RESOLUTION. The box is sized from a CHARACTER COUNT times an assumed
+    // 8.5px advance and is 18 rows a line — three lines is 68 rows on a 43-row panel, i.e. the whole
+    // screen goes behind a hover box. The tooltip is a pointer affordance for a full-screen overlay;
+    // the panel's hover already shows the selection ring. Method untouched and still callable.
+    if (this._compact) return;
     const maxLen = Math.max(title.length, ...lines.map(l => l.length));
     const boxW = maxLen * 8.5 + 24;
     const boxH = (lines.length + 1) * 18 + 14;
@@ -3912,7 +4160,12 @@ export class NavComputer {
     // `_handleClick` is withdrawn on the same test — drawing nothing here while
     // leaving that live is five invisible buttons.
     if (this._bare) return;
-    const tabH = 32;
+    // ⭐ ONE OF THREE SITES THAT MOVE TOGETHER — this renderer, the autopilot button's placement in
+    // `_renderHUD`, and the CLICK HIT-TEST in `_handleClick`. They were three literal 32s; shrink
+    // one and the tabs are drawn where they cannot be pressed. `navTabHeight` returns 32 at every
+    // canvas the overlay has and 8 on the 43-row panel, which is where AC-4's "a click 8 rows above
+    // the bottom edge changes level" lands.
+    const tabH = navTabHeight(h);
     const tabY = h - tabH;
     const tabW = w / LEVELS.length;
 
@@ -3933,7 +4186,13 @@ export class NavComputer {
       ctx.font = '11px "DotGothic16", monospace';
       ctx.fillStyle = active ? '#fff' : 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
-      ctx.fillText(LEVEL_NAMES[i], x + tabW / 2, tabY + 20);
+      // ⭐ AN ABBREVIATION TABLE ON THE PANEL, NOT A CLIP. Only one glyph fits a `w / 5` cell at
+      // every shipped buffer, and clipping 'SECTOR' and 'SYSTEM' both produced a bare `S` — see
+      // `LEVEL_TAB_CHARS`. `_fit` still runs as the belt-and-braces width guard (a 5x7 face or a
+      // narrower panel would clip the single letter rather than let it spill into its neighbour).
+      // With no driver both are no-ops and the overlay draws the whole word at the whole width.
+      const label = this._compact ? LEVEL_TAB_CHARS[i] : LEVEL_NAMES[i];
+      ctx.fillText(this._fit(ctx, label, tabW - 2), x + tabW / 2, tabY + Math.round(tabH * 20 / 32));
     }
     ctx.textAlign = 'left';
   }
@@ -3949,7 +4208,10 @@ export class NavComputer {
     // true AT SYSTEM, so the added test cannot change a pixel. Kept anyway: it
     // makes the block declare its own chrome-lessness, so moving the level policy
     // (say, to bare the PRISM view) does not silently reprint this name.
-    if (this._currentSystemName && this._levelIndex !== 4 && !this._bare) {
+    // ⛔ `!this._compact` ON ALL FOUR HUD CHROME BLOCKS. Their baselines are 24, 44, 60 and 42-106,
+    // against a 43-row panel — the last block alone is five lines that all land below the glass.
+    // Nothing upstream changes: drop the driver and every one of them draws exactly as it does now.
+    if (this._currentSystemName && this._levelIndex !== 4 && !this._bare && !this._compact) {
       ctx.fillStyle = '#00ff80';
       ctx.fillText('CURRENT SYSTEM', 16, 24);
       ctx.font = '16px "DotGothic16", monospace';
@@ -3959,7 +4221,7 @@ export class NavComputer {
 
     // Sector name — already suppressed at SYSTEM; `_bare` test added for the same
     // reason as above, and equally unable to change a pixel today.
-    if (this._currentSector && this._levelIndex !== 4 && !this._bare) {
+    if (this._currentSector && this._levelIndex !== 4 && !this._bare && !this._compact) {
       ctx.font = '11px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
       ctx.fillText(this._currentSector.name, 16, 60);
@@ -3969,8 +4231,11 @@ export class NavComputer {
     // suppressed — it sits in a bare block with no level test, so it draws over
     // the SYSTEM orrery today. Guarding it also stops `_autopilotButtonRect`
     // being published, which would otherwise leave an invisible live toggle.
-    if (!this._bare) {
-      const tabH = 32;
+    // The AUTOPILOT toggle is a 140x24 box on a 52-wide panel — there is no room for it at all, and
+    // the `else` branch below is what unpublishes `_autopilotButtonRect` so no invisible live toggle
+    // is left behind. Same shape as the `_bare` withdrawal it joins.
+    if (!this._bare && !this._compact) {
+      const tabH = navTabHeight(h);
       const btnText = this._autopilotActive ? '▶ AUTOPILOT ON' : '▷ AUTOPILOT OFF';
       const btnColor = this._autopilotActive ? '#00ff80' : 'rgba(255,255,255,0.35)';
       const btnW = 140, btnH = 24;
@@ -3995,11 +4260,11 @@ export class NavComputer {
     ctx.font = '12px "DotGothic16", monospace';
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    if (!this._bare) ctx.fillText(LEVEL_NAMES[this._levelIndex], w - 16, 24);
+    if (!this._bare && !this._compact) ctx.fillText(LEVEL_NAMES[this._levelIndex], w - 16, 24);
 
     // Prism stats block — already gated to level 3, where `_bare` is false by
     // construction; test kept for symmetry with the two HUD blocks above.
-    if (this._levelIndex === 3 && this._localStars.length > 0 && !this._bare) {
+    if (this._levelIndex === 3 && this._localStars.length > 0 && !this._bare && !this._compact) {
       const est = this._estimatedBlockStars;
       const estLabel = est != null ? `~${est.toLocaleString()} SYSTEMS IN BLOCK` : '';
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
@@ -4096,7 +4361,7 @@ export class NavComputer {
       } else {
         // 2D: pan
         if (this._panStartCenter) {
-          const drawSize = Math.min(this._canvas.width, this._canvas.height) - 80;
+          const drawSize = navMapSize(this._canvas.width, this._canvas.height);
           const scale = this._viewSize / drawSize;
           const dx = (p.x - this._dragStartX) * scale;
           const dy = (p.y - this._dragStartY) * scale;
@@ -4110,9 +4375,9 @@ export class NavComputer {
 
     // Hover detection for 2D levels
     if (this._levelIndex > 0 && this._levelIndex <= 2) {
-      const drawSize = Math.min(this._canvas.width, this._canvas.height) - 80;
+      const drawSize = navMapSize(this._canvas.width, this._canvas.height);
       const ox = (this._canvas.width - drawSize) / 2;
-      const oy = 10;
+      const oy = navMapOriginY(this._canvas.height);
       const gn = gridNForLevel(this._levelIndex);
       const tileW = drawSize / gn;
       const col = Math.floor((p.x - ox) / tileW);
@@ -4172,7 +4437,7 @@ export class NavComputer {
     // not pushed); this one is geometry rather than a rect, which is how it got
     // missed. Falling through instead of returning is deliberate — the click now
     // reaches the body picker that owns those pixels.
-    const tabH = 32;
+    const tabH = navTabHeight(this._canvas.height);
     const tabY = this._canvas.height - tabH;
     if (!this._bare && p.y >= tabY) {
       const tabW = this._canvas.width / LEVELS.length;

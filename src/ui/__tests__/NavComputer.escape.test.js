@@ -197,8 +197,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import {
-  makeHeadlessNav, fakeStar, clickAt, hoverAt, findHoverPoint, tabCentre, TAB_H,
+  makeHeadlessNav, fakeStar, clickAt, hoverAt, findHoverPoint, tabCentre, TAB_H, navTabHeight,
 } from './helpers/headlessNav.mjs';
+import { navDrawH, NAV_TAB_H_MAX } from '../navLayout.js';
+/** `makeHeadlessNav`'s default canvas — the size every positional assertion in this file reads. */
+const HEADLESS_H = 512;
 import { collectDrawSites, collectStringLiterals, localImportPaths } from './helpers/drawnText.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -892,14 +895,26 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
     // the bottom of this file. If NavComputer moves the footer up a row, every
     // positional assertion above starts reading an empty line and reporting
     // "this state drew no footer" as agreement with an empty expectation.
+    // ⭐ RE-DERIVED 2026-09-08 (AC-4). The reserve is no longer the literal `h - 50`: on the 52x43
+    // cockpit NAV panel that was -7, an inverted projection at every level, so it is now
+    // `navDrawH(h)` — a function that RETURNS `h - 50` for every canvas at or above 160 rows.
+    // The pin therefore splits, and both halves are needed:
+    //   · the SPELLING half, below, still refuses a literal or an unrelated expression, so nothing
+    //     can move the reserve behind this file's back;
+    //   · the VALUE half asserts what the function returns AT THIS FILE'S OWN CANVAS SIZE, which is
+    //     what every positional assertion above actually depends on. That half could not be written
+    //     at all while the constant was a literal in another file's source — it is new coverage,
+    //     not a weakened version of the old check.
     const src = navSrc();
     const decls = [...src.matchAll(/const\s+drawH\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
     expect(decls.length, 'no `const drawH` in NavComputer.js — the pin has stopped working')
       .toBeGreaterThan(0);
     for (const d of decls) {
-      expect(d, `NavComputer computes drawH as \`${d}\`; this file assumes h - ${DRAW_H_INSET}`)
-        .toMatch(new RegExp(`(^|\\s)h - ${DRAW_H_INSET}$`));
+      expect(d, `NavComputer computes drawH as \`${d}\`; this file assumes it routes through navDrawH`)
+        .toMatch(/(^|\s)navDrawH\(h\)$/);
     }
+    expect(navDrawH(HEADLESS_H), `navDrawH(${HEADLESS_H}) must still be h - ${DRAW_H_INSET} — every ` +
+      'footer assertion in this file reads that row').toBe(HEADLESS_H - DRAW_H_INSET);
     expect(footerSites().length, `no draw site at \`${FOOTER_BASE}\` - ${FOOTER_UP} — the footer moved`)
       .toBeGreaterThanOrEqual(5);
   });
@@ -1140,13 +1155,28 @@ describe('the headless harness itself — so nothing above is vacuous', () => {
     // `tabH` in more than one place, and a scan that stops at the first one is
     // satisfied by a stale sibling while the live value has moved. Planting a
     // change in one of them left this green until it counted them all.
+    // ⭐ RE-DERIVED 2026-09-08 (AC-4). All three `tabH` sites — this renderer, the autopilot
+    // button's placement and the click hit-test — now read `navTabHeight(...)`, because a literal 32
+    // made the strip 74% of a 43-row cockpit panel. The scan still counts EVERY declaration for the
+    // reason its own comment gives (a stale sibling satisfied a first-match scan once), but it now
+    // demands the FUNCTION rather than a number, and the number is checked against the function.
     const src = readFileSync(join(REPO, 'src', 'ui', 'NavComputer.js'), 'utf8');
-    const declared = [...src.matchAll(/const\s+tabH\s*=\s*(\d+)\s*;/g)].map((m) => Number(m[1]));
+    const declared = [...src.matchAll(/const\s+tabH\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
     expect(declared.length, 'no `const tabH` in NavComputer.js — the scan has stopped working')
       .toBeGreaterThan(0);
     for (const v of declared) {
-      expect(v, `NavComputer declares a ${v}px tab strip; this file clicks as if it were ${TAB_H}px`)
-        .toBe(TAB_H);
+      expect(v, `NavComputer declares its tab strip as \`${v}\`; this file clicks through navTabHeight`)
+        .toMatch(/^navTabHeight\(/);
     }
+    // ⛔ AGAINST THE NAMED CONSTANT, NOT AGAINST `TAB_H` — CORRECTED 2026-09-08. `TAB_H` is now
+    // DEFINED as `navTabHeight(512)` in the harness, so `expect(navTabHeight(512)).toBe(TAB_H)` was
+    // `navTabHeight(512) === navTabHeight(512)`: true for any implementation, sabotaged ones
+    // included. Both sides moved together and every `tabCentre` click still landed, because the
+    // harness derives its click point from the same function. `NAV_TAB_H_MAX` is an independent
+    // side — it is the number the DOM overlay has always drawn.
+    expect(navTabHeight(HEADLESS_H), 'the harness clicks a strip navTabHeight does not agree with')
+      .toBe(NAV_TAB_H_MAX);
+    expect(TAB_H, 'the harness stopped deriving its click point from the production function')
+      .toBe(navTabHeight(HEADLESS_H));
   });
 });

@@ -1490,6 +1490,121 @@ describe('all three panels — nothing overlaps and nothing leaves the glass', (
     });
   }
 
+  /**
+   * ⭐ NAV, ON THE SAME PROPERTY, MEASURED A DIFFERENT WAY — added 2026-09-08 with AC-4.
+   *
+   * The three data panels above draw through `PhosphorScreen.text`, so their strings arrive at the
+   * context as `fillText` and the extractor above can build a box per string. NAV draws NOTHING
+   * through PhosphorScreen: `paintNav` is `screen.clear()` and one `putImageData` of a whole
+   * NavComputer frame (`NavPanel.js:162`, `:265`). Adding NAV as a row of `SHIPPED` therefore
+   * returns zero boxes and trips the non-vacuity assert first — the table is not the seam.
+   *
+   * ⛔ AND `decodePixelText` IS NOT THE SEAM EITHER, WHICH IS WHY THIS ASSERTS ON TEXELS. Tried
+   * first and rejected on evidence: the decoder groups columns that sit within two advances of each
+   * other into ONE run, and NAV's five level-tab labels are one advance apart at 240p — so the five
+   * single letters came back as one unreadable run and every tab silently left the census. It also
+   * reads any lone square `fillRect` as `·`, which on a nav frame is furniture.
+   *
+   * So the property is asserted where it is exact, one level below the string: EVERY TEXEL
+   * `drawPixelText` emits is a `fillRect(x, y, scale, scale)`, so
+   *   · nothing leaves the glass  ⇔  no glyph texel lies outside the buffer, and
+   *   · no two strings share a texel  ⇔  no (x, y) is filled twice at one scale.
+   * `drawPixelText` never emits the same texel twice within one string, so a repeat IS two strings
+   * overprinting. That is stronger than a bounding box, not weaker: two boxes can overlap without a
+   * single lit pixel colliding, and two strings can smear inside boxes that do not overlap at all.
+   *
+   * ⚠ BOTH HALVES FAILED WHEN FIRST RUN, which is the only reason to believe them. Off-glass: the
+   * warp-target marker's name at 11 texels above row 0 on all three 2D levels at 240p. Overlap: the
+   * seven SYSTEM planet names on 116 texels at 240p, 43 at 480p and 5 at 720p, plus the system
+   * title over the `[ WARP ]` button on 11 more. Every one of those is a real defect on the glass.
+   */
+  describe('NAV — nothing overlaps and nothing leaves the glass, measured in texels', () => {
+    // NAV is `Screen_UL`: the UPPER pair only, at the three shipped resolutions this file already
+    // tables. Same numbers as `UPPER` above, restated here so this block reads on its own.
+    const NAV_SIZES = [['upper 240p', 52, 43], ['upper 480p', 103, 86], ['upper 720p', 155, 129]];
+    const LEVELS = ['galaxy', 'sector', 'region', 'prism', 'system'];
+
+    /**
+     * Every texel `drawPixelText` could have emitted.
+     * ⛔ ONE SCALE. This accepted `2 * unit` as well while the driver carried a display tier; that
+     * tier was unreachable on the panel and came out on 2026-09-08, so the second arm was never
+     * exercised and would now admit an ordinary 2x2 `fillRect` as if it were a glyph.
+     */
+    const glyphTexels = (calls, unit) => calls
+      .filter((c) => c.op === 'fillRect')
+      .map((c) => ({ x: c.args[0], y: c.args[1], s: c.args[2], h: c.args[3] }))
+      .filter((r) => r.s === r.h && r.s === unit);
+
+    for (const [name, W, H] of NAV_SIZES) {
+      it(`keeps NAV inside a ${name} buffer at every level, with no two strings on one texel`, async () => {
+        const { makeHeadlessNav, fakeStar } = await import('../../ui/__tests__/helpers/headlessNav.mjs');
+        const unit = new PhosphorScreen(makeRecordingCtx(), { width: W, height: H }).type.unit;
+        const { nav, rec } = await makeHeadlessNav({ width: W, height: H });
+        // The driver NavPanel installs, read off the same grid the panel reads it off.
+        nav.pixelType = { unit };
+        nav.openToCurrentSystem(fakeStar());
+
+        for (let level = 0; level < LEVELS.length; level++) {
+          nav._levelIndex = level;
+          rec.calls.length = 0;
+          nav.render();
+          const texels = glyphTexels(rec.calls, unit);
+
+          // ⚠ NON-VACUITY FIRST, per level. A nav computer that drew no type at all would satisfy
+          // both assertions below, and at 43 rows "drew nothing" is a plausible failure.
+          expect(texels.length, `NAV drew no type at all at ${LEVELS[level]} on a ${name} panel`)
+            .toBeGreaterThan(0);
+
+          for (const t of texels) {
+            expect(t.x >= 0 && t.y >= 0 && t.x + t.s <= W && t.y + t.s <= H,
+              `NAV put a glyph texel at (${t.x}, ${t.y}) size ${t.s} at ${LEVELS[level]}, outside a `
+              + `${W}x${H} panel. Type that runs off the glass is not clipped by anything — it `
+              + 'simply is not there, and the panel reads as a shorter word.').toBe(true);
+          }
+
+          const seen = new Set();
+          for (const t of texels) {
+            const key = `${t.x},${t.y},${t.s}`;
+            expect(seen.has(key),
+              `NAV filled the texel at (${t.x}, ${t.y}) twice at ${LEVELS[level]} on a ${name} `
+              + 'panel. drawPixelText never repeats a texel inside one string, so a repeat is two '
+              + 'strings overprinting — which does not read as either of them.').toBe(false);
+            seen.add(key);
+          }
+        }
+      });
+    }
+
+    it('and the driver is what does it — with no driver NAV still draws vector type', async () => {
+      // ⛔ THE CONTROL. Every assertion above would also pass on a NavComputer whose type driver was
+      // never reached, because a dead path emits no bitmap texels and no bitmap texels collide.
+      // This is the CI half of the sabotage probe: with `pixelType` left null the SAME frame must
+      // reach `fillText` instead, which is the ORRERY overlay's path and the thing AC-4 must not
+      // move. If this ever goes quiet, the tests above have stopped measuring the panel.
+      const { makeHeadlessNav, fakeStar } = await import('../../ui/__tests__/helpers/headlessNav.mjs');
+      const { nav, rec } = await makeHeadlessNav({ width: 52, height: 43 });
+      nav.openToCurrentSystem(fakeStar());
+      nav._levelIndex = 0;
+      rec.calls.length = 0;
+      rec.text.length = 0;
+      nav.render();
+      expect(rec.text.length, 'the default path stopped drawing vector text').toBeGreaterThan(0);
+      expect(glyphTexels(rec.calls, 1).length, 'the default path drew bitmap texels').toBe(0);
+      // ⛔ AND IT DRAWS THE REAL STRINGS. `_fit` / `_ony` / `_topY` used to decide whether a driver
+      // was installed by READING A PROPERTY OFF `ctx` — a duck-type this very harness answers with
+      // a catch-all function, so on the default path `_fit` returned `undefined` and the five level
+      // tabs came out as the literal string "undefined". No assertion caught it, because the
+      // control above only counts strings. Now they ask `this._compact`, and this asks the strings.
+      const drawn = rec.text.map((t) => t.text);
+      expect(drawn, 'a no-driver render emitted the literal string "undefined"')
+        .not.toContain('undefined');
+      for (const t of rec.text) {
+        expect(Number.isFinite(t.y), `the default path drew "${t.text}" at y = ${t.y}`).toBe(true);
+      }
+      expect(drawn, 'the overlay path stopped drawing whole level names').toContain('GALAXY');
+    });
+  });
+
   it('fits every panel inside the row budget the kit reports', () => {
     // The kit answers `lines` and `colsAt`; a painter that ignores either walks off the glass at
     // some resolution and not at others, which is the hardest kind of layout bug to reproduce.

@@ -151,11 +151,23 @@ export function clickAt(nav, x, y, { button = 0 } = {}) {
   nav._handleClick({ clientX: x, clientY: y, button });
 }
 
-/** The five level tabs live in a strip `tabH` tall across the bottom. */
-export const TAB_H = 32;
+/**
+ * The five level tabs live in a strip `tabH` tall across the bottom.
+ *
+ * ⭐ RE-DERIVED 2026-09-08 (AC-4), NOT LOOSENED. `TAB_H` was the literal 32, duplicated from
+ * NavComputer with nothing but `escape.test.js`'s source scan holding the two together. The class's
+ * tab strip is now `navTabHeight(h)` — still 32 on every canvas this harness builds, and 8 on the
+ * 52x43 cockpit panel, where a 32-row strip was 74% of the screen. Importing the production
+ * function is strictly better than pinning a copy of it: the copy CANNOT go stale.
+ */
+export { navTabHeight } from '../../navLayout.js';
+import { navTabHeight as _tabH } from '../../navLayout.js';
+/** What the strip measures on this harness's default 614x512 canvas. Kept for existing callers. */
+export const TAB_H = _tabH(512);
 export function tabCentre(nav, index, levels = 5) {
   const w = nav._canvas.width / levels;
-  return { x: w * (index + 0.5), y: nav._canvas.height - TAB_H / 2 };
+  const tabH = _tabH(nav._canvas.height);
+  return { x: w * (index + 0.5), y: nav._canvas.height - tabH / 2 };
 }
 
 /**
@@ -193,7 +205,7 @@ export function hoverAt(nav, x, y) {
  * frame has resolved the hover, so the caller can click immediately.
  */
 export function findHoverPoint(nav, pred, { step = 8, inset = 16 } = {}) {
-  const bottom = nav._canvas.height - TAB_H - inset; // never sweep the tab strip
+  const bottom = nav._canvas.height - _tabH(nav._canvas.height) - inset; // never sweep the tab strip
   for (let y = inset; y < bottom; y += step) {
     for (let x = inset; x < nav._canvas.width - inset; x += step) {
       const hb = hoverAt(nav, x, y);

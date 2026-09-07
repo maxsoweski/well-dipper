@@ -156,6 +156,15 @@ const FACES = Object.freeze({
   '\u00b0': [0b01110, 0b01010, 0b01110, 0b00000, 0b00000],
   '\u00b7': [0b00000, 0b00000, 0b00100, 0b00000, 0b00000],
   '\u2295': [0b01110, 0b10101, 0b11111, 0b10101, 0b01110],
+  // ⭐ `~` — COVERAGE, and the reason is not the one first written here. `NavComputer`'s PRISM HUD
+  // emits `~1,234 SYSTEMS IN BLOCK`, so any surface that routes that string through `drawPixelText`
+  // needs the codepoint. The cockpit NAV panel is NOT that surface today — the whole stats block is
+  // withdrawn under `_compact` — and `navPixelType`'s driver passes `onMissing:'tofu'`, so a
+  // missing glyph there draws a box rather than throwing. The first version of this comment claimed
+  // both ("a black nav panel under onMissing:'throw'") and neither was true as shipped. Keep the
+  // glyph: it closes the ONE gap the module header's coverage gate found between what nav and the
+  // cockpit emit and what the faces carry.
+  '~': [0b00000, 0b00000, 0b01100, 0b10011, 0b00000],
   // ── ⭐ LOWERCASE (Max, 2026-09-07: *"I'd prefer to be able to use lowercase too"*) ────────
   // ⛔ NO TRUE DESCENDERS ON THE 5-ROW FACE. Five rows have nothing below the baseline, so g, j,
   // p, q and y sit ON it. That is what small bitmap faces have always done, and the alternative —
@@ -266,6 +275,7 @@ const FACES = Object.freeze({
   '\u00b0': [0b01110, 0b01010, 0b01110, 0b00000, 0b00000, 0b00000, 0b00000],
   '\u00b7': [0b00000, 0b00000, 0b00000, 0b00100, 0b00000, 0b00000, 0b00000],
   '\u2295': [0b00000, 0b01110, 0b10101, 0b11111, 0b10101, 0b01110, 0b00000],
+  '~': [0b00000, 0b00000, 0b00000, 0b01100, 0b10011, 0b00000, 0b00000],
   // ── ⭐ LOWERCASE (Max, 2026-09-07: *"I'd prefer to be able to use lowercase too"*) ────────
   // ⛔ NO TRUE DESCENDERS ON THE 5-ROW FACE. Five rows have nothing below the baseline, so g, j,
   // p, q and y sit ON it. That is what small bitmap faces have always done, and the alternative —
