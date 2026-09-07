@@ -214,12 +214,34 @@ export function makeViewModeDriver(nav) {
    * bottom"), arriving from the other direction. `-1` says "a mode is on and this was not a tab", and
    * the tab test in `_handleClick` stands down.
    *
-   * @returns {{x:number,y:number}} the point to hand `_handleClick`, unchanged if it is not a tab.
+   * @returns {?{x:number,y:number}} the point to hand `_handleClick`; unchanged if it is not a tab,
+   *   and `null` when the mode CONSUMED the click (a ladder "..." cap) and the handler must stand down.
    */
+  /**
+   * Step the SYSTEM ladder one body left or right.
+   *
+   * ⛔ THE STOPS COME FROM THE PAINT (`S.ladderStops`, written by `d1Ladder`), NOT FROM A SECOND
+   * LAYOUT PASS HERE. Recomputing the separation arithmetic in the control is the AC-4 defect shape
+   * — two copies of one geometry, one of them silently wrong — and it would land as a window that
+   * scrolls to a position with no body in it.
+   */
+  function scrollLadder(dir) {
+    const stops = S.ladderStops || [], cur = S.ladderScroll || 0, max = S.ladderMax || 0;
+    const next = dir > 0 ? stops.find((v) => v > cur) : [...stops].reverse().find((v) => v < cur);
+    S.ladderScroll = Math.max(0, Math.min(max, next == null ? (dir > 0 ? max : 0) : next));
+  }
+
   function remapClick(p, w, h) {
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
     nav._modeTabIdx = -1;
+    // ── the ladder's two "..." end caps, at SYSTEM in design 1 ────────────────────────────────
+    const caps = S.ladderCaps;
+    if (!bars && S.level === 4 && caps && (S.ladderMax || 0) > 0
+        && p.y >= caps.axisY - 6 && p.y <= caps.axisY + 6) {
+      if ((S.ladderScroll || 0) > 0 && p.x <= caps.x0 + 10) { scrollLadder(-1); return null; }
+      if ((S.ladderScroll || 0) < S.ladderMax && p.x >= caps.x1 - 10) { scrollLadder(1); return null; }
+    }
     const inStrip = bars ? (p.y >= 0 && p.y < g2.BAR) : (p.y >= g2.tabY && p.y < g2.tabY + g2.LEAD);
     if (!inStrip) return p;
     const i = tabIndexAt(g2, p.x, bars);
@@ -231,7 +253,7 @@ export function makeViewModeDriver(nav) {
   }
 
   return {
-    S, D, render, bufferFor, applySurface, hover, remapClick, geo,
+    S, D, render, bufferFor, applySurface, hover, remapClick, geo, scrollLadder,
     regions: designs.regions,
     violations: () => violations.slice(),
     /** Design 2's list mode — its one answer to the comparison problem. */

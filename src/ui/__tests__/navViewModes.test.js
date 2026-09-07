@@ -271,3 +271,133 @@ describe('the modes are operable', () => {
     expect(nav._hoveredBody).toEqual({ type: 'planet', index: D.bodies[idx].pIdx });
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// THE SCROLLABLE SYSTEM LADDER. Max, 2026-09-07, ruling on the "+3 OFF AXIS" pile-up:
+// *"Let's make it scrollable; rather than 'off axis' have the line end in a '...' that we can scroll
+// toward horizontally, revealing the other bodies in that direction."*
+//
+// ⭐ THE ASSERTION THAT MATTERS IS "REVEALING". A test that only checks the scroll VALUE moves would
+// pass on a ladder that scrolls a window over nothing. Each case below either names a body that was
+// not drawn before and is drawn after, or counts tags.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('the SYSTEM ladder scrolls', () => {
+  /**
+   * A system with more bodies than the ladder can hold. ⛔ BUILT, NOT FOUND: whichever star the
+   * fixture happens to load varies with the seed and the load order, and a scroll test against a
+   * four-planet system asserts nothing — the ladder never overflows, so it never scrolls.
+   */
+  async function crowdedLadder(n = 40) {
+    const h = await loadedNav();
+    h.nav.viewMode = 'rail';
+    h.nav._systemStar = { wx: 8, wy: 0, wz: 0, seed: 4242, spectral: 'G', name: 'Crowded' };
+    h.nav._systemData = {
+      star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
+      planets: Array.from({ length: n }, (_, i) => ({
+        orbitRadiusAU: 0.2 + i * 0.9, moons: [],
+        planetData: { radiusEarth: 1 + (i % 5), T_eq: 250, habitability: { score: 0.1 }, rings: false },
+      })),
+    };
+    h.nav._levelIndex = 4;
+    h.nav.render();
+    return h;
+  }
+  /** The window `d1Ladder` published this frame: [firstVisibleIndex, lastVisibleIndex]. */
+  const windowOf = (nav) => nav._viewDriverInst.S.ladderVisible;
+
+  it('⛔ NO BODY IS PILED UP AT THE END ANY MORE — the guard that used to fire is gone', async () => {
+    const { nav } = await crowdedLadder();
+    const msgs = nav._viewDriverInst.violations().map((v) => v.msg);
+    expect(msgs.filter((m) => /OFF AXIS|ran past the end/.test(m)),
+      'the overflow the ruling removed').toHaveLength(0);
+  });
+
+  it('⭐ SCROLLING RIGHT REVEALS BODIES THAT WERE NOT ON THE GLASS BEFORE', async () => {
+    const { nav } = await crowdedLadder();
+    const { S } = nav._viewDriverInst;
+    expect(S.ladderMax, 'a 40-planet ladder must need far more axis than the pane has').toBeGreaterThan(0);
+    const before = windowOf(nav).slice();
+    for (let i = 0; i < 60 && S.ladderScroll < S.ladderMax; i++) { nav._viewDriverInst.scrollLadder(1); nav.render(); }
+    const after = windowOf(nav);
+    expect(after[1], 'the far end shows a later body than the near end did').toBeGreaterThan(before[1]);
+    expect(after[0], 'and the window really moved, rather than just growing').toBeGreaterThan(before[0]);
+  });
+
+  it('clamps at both ends and comes back to where it started', async () => {
+    const { nav } = await crowdedLadder();
+    const { S } = nav._viewDriverInst;
+    for (let i = 0; i < 80; i++) { nav._viewDriverInst.scrollLadder(1); nav.render(); }
+    expect(S.ladderScroll).toBe(S.ladderMax);
+    for (let i = 0; i < 80; i++) { nav._viewDriverInst.scrollLadder(-1); nav.render(); }
+    expect(S.ladderScroll).toBe(0);
+  });
+
+  it('⭐ EVERY BODY IS REACHABLE — the ruling was "revealing", not "hiding instead of piling up"', async () => {
+    const { nav } = await crowdedLadder();
+    const { S, D } = nav._viewDriverInst;
+    const laddered = D.bodies.filter((b) => b.kind !== 'moon').length;
+    const seen = new Set();
+    for (let i = 0; i < 80; i++) {
+      const [f, l] = windowOf(nav);
+      for (let k = f; k <= l; k++) seen.add(k);
+      if (S.ladderScroll >= S.ladderMax) break;
+      nav._viewDriverInst.scrollLadder(1);
+      nav.render();
+    }
+    expect(seen.size, `only ${seen.size} of ${laddered} laddered bodies could ever be brought on screen`)
+      .toBe(laddered);
+  });
+
+  it('⭐ THE "..." IS ON THE GLASS, AND ONLY AT AN END THAT HAS SOMETHING BEYOND IT', async () => {
+    // Max asked for the LINE TO END IN "...", so the mark itself is the deliverable, not the scroll
+    // state behind it. `d1Ladder` draws it as three 1x1 texels ON the axis row at the end that
+    // continues — so this counts them at each end, at the y the paint published.
+    const { nav, rec } = await crowdedLadder();
+    const { S } = nav._viewDriverInst;
+    const dotsAt = (side) => {
+      const c = S.ladderCaps;
+      rec.calls.length = 0;
+      nav.render();
+      const xs = side === 'left' ? [c.x0, c.x0 + 2, c.x0 + 4] : [c.x1 - 5, c.x1 - 3, c.x1 - 1];
+      return rec.calls.filter((k) => k.op === 'fillRect')
+        .filter((k) => { const [x, y, w, h] = k.args; return w === 1 && h === 1 && y === c.axisY && xs.includes(x); }).length;
+    };
+    expect(S.ladderMax, 'the fixture must overflow or the caps mean nothing').toBeGreaterThan(0);
+    expect(S.ladderScroll).toBe(0);
+    expect(dotsAt('right'), 'at the near end the line must continue to the right').toBe(3);
+    expect(dotsAt('left'), 'and must NOT advertise a left it does not have').toBe(0);
+
+    for (let i = 0; i < 80 && S.ladderScroll < S.ladderMax; i++) { nav._viewDriverInst.scrollLadder(1); nav.render(); }
+    expect(dotsAt('left'), 'at the far end the line continues to the left').toBe(3);
+    expect(dotsAt('right'), 'and no longer to the right').toBe(0);
+    expect(windowOf(nav)[1], 'the far end shows the last body').toBe(
+      nav._viewDriverInst.D.bodies.filter((x) => x.kind !== 'moon').length - 1);
+  });
+
+  it('a click on the right "..." scrolls, and does NOT also fall through to the body picker', async () => {
+    const { nav } = await crowdedLadder();
+    const { S } = nav._viewDriverInst;
+    const caps = S.ladderCaps;
+    expect(caps, 'd1Ladder must publish where it drew its caps').toBeTruthy();
+    const before = S.ladderScroll;
+    const selBefore = nav._selectedBody;
+    const x = caps.x1 - 2, y = caps.axisY;
+    nav._handleMouseDown({ clientX: x, clientY: y, button: 0 });
+    nav._handleMouseUp();
+    nav._handleClick({ clientX: x, clientY: y, button: 0 });
+    expect(S.ladderScroll, 'the cap click did not scroll').toBeGreaterThan(before);
+    expect(nav._selectedBody, 'the cap click also reached the picker underneath').toBe(selBefore);
+  });
+
+  it('a new system opens at the left of its own ladder', async () => {
+    const { nav } = await crowdedLadder();
+    const { S } = nav._viewDriverInst;
+    for (let i = 0; i < 10; i++) { nav._viewDriverInst.scrollLadder(1); nav.render(); }
+    expect(S.ladderScroll).toBeGreaterThan(0);
+    nav._systemStar = { wx: 8, wy: 0, wz: 0, seed: 99, spectral: 'M', name: 'Elsewhere' };
+    nav._systemData = { planets: [], asteroidBelts: [] };
+    nav.render();
+    // ⛔ inheriting the previous system's offset opens a one-planet system scrolled past its planet
+    expect(S.ladderScroll).toBe(0);
+  });
+});

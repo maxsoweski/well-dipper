@@ -93,6 +93,11 @@ export function makeViewState() {
     list: false,      // design 2's 'L' mode
     sabotage: false,  // the guard's own proof lever — never true in shipped code
     zoomIdx: 0,
+    // ⭐ Design 1's SYSTEM ladder pans horizontally (Max, 2026-09-07: "have the line end in a
+    // '...' that we can scroll toward"). `ladderScroll` is the only field the CONTROL writes;
+    // `ladderStops` / `ladderMax` / `ladderCaps` are written BY d1Ladder each paint and read by
+    // the control, so the window and the thing that moves it share one arithmetic.
+    ladderScroll: 0, ladderStops: [], ladderMax: 0, ladderCaps: null, ladderVisible: [-1, -1],
     buf: { width: 427, height: 240 },
   };
   const D = {
@@ -130,7 +135,12 @@ export function makeViewState() {
       let pname = '';
       try { pname = generatePlanetName(rng.child('p' + i), star.name || 'STAR', i, planets.length); }
       catch (e) { pname = (star.name || 'S') + ' ' + 'bcdefghijk'[i]; }
-      rows.push({ kind: 'planet', name: pname, au: p.orbitRadiusAU, cls: displayClassOf(pd),
+      // ⛔ NEITHER FIELD MAY BE UNDEFINED. Both designs call `.toUpperCase()` on `name` and `cls`
+      // unguarded — `d1Rail`'s detail block does it twice on one line — and `displayClassOf` returns
+      // undefined for planet data it does not recognise, which is reachable from any generator
+      // change upstream. A throw here is not a blank field: `PanelHost` catches a painter throw ONCE
+      // and then stops uploading, so the glass freezes on the last good frame and looks alive.
+      rows.push({ kind: 'planet', name: pname || '—', au: Number(p.orbitRadiusAU) || 0, cls: displayClassOf(pd) || 'unknown',
                   rE: pd.radiusEarth, T: pd.T_eq, hab: pd.habitability?.score ?? null,
                   rings: !!pd.rings, moons: p.moons?.length || 0, pd,
                   // ⭐ pIdx / mIdx are THIS ADAPTER'S ADDITION, not the lab's, and they are what lets a
@@ -142,13 +152,13 @@ export function makeViewState() {
         let mname = '';
         try { mname = generateMoonName(rng.child(`m${i}.${j}`), pname, j, p.moons.length); }
         catch (e) { mname = pname + ' ' + (j + 1); }
-        rows.push({ kind: 'moon', name: mname, au: p.orbitRadiusAU, cls: m.type || 'moon',
+        rows.push({ kind: 'moon', name: mname || '—', au: Number(p.orbitRadiusAU) || 0, cls: m.type || 'moon',
                     rE: m.radiusEarth, T: m.T_eq, hab: null, rings: false, moons: 0, parent: i,
                     pIdx: i, mIdx: j });
       });
     });
     (sys.asteroidBelts || []).forEach((b, i) => {
-      rows.push({ kind: 'belt', name: 'BELT ' + 'ABC'[i], au: b.centerRadiusAU, cls: 'belt',
+      rows.push({ kind: 'belt', name: 'BELT ' + ('ABC'[i] || (i + 1)), au: Number(b.centerRadiusAU) || 0, cls: 'belt',
                   rE: null, T: null, hab: null, rings: false, moons: 0, widthAU: b.widthAU });
     });
     return rows;
@@ -220,6 +230,8 @@ export function makeViewState() {
     if (cache.sysRef !== D.sys) {
       cache.sysRef = D.sys;
       D.bodies = buildBodies(D.sys, D.sysStar);
+      S.ladderScroll = 0;   // ⛔ a NEW system starts at the left of its own ladder; inheriting the
+                            // last one's offset opens Proxima scrolled past its only planet
     }
     const pick = nav._selectedBody;
     D.selBody = (pick && pick.type === 'planet' && D.bodies[pick.index]) ? D.bodies[pick.index]

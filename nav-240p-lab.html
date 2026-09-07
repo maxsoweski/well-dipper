@@ -167,6 +167,7 @@ const S = {
   sabotage: false,
   list: false,               // Design 2's 'L' list mode — its ONE answer to the comparison problem
   legend: true,
+  ladderScroll: 0,        // design 1's SYSTEM ladder pans horizontally (Max, 2026-09-07)
   buf: { width: 427, height: 240 },
 };
 
@@ -653,43 +654,93 @@ function d1Prism(g, mapW, mapY, mapH, gaugeX) {
 
 function d1Ladder(g, mapW, mapY, mapH) {
   // ⛔ THE ROTATABLE ORRERY IS NOT DRAWN. An ellipse at 240p is a 1-texel stroke straddling its own
-  // coordinate; this design's answer is a sqrt(AU) LADDER with zero curves. It is the design's own
-  // top risk and the thing Max is most likely to veto — which is why it is on the glass.
+  // coordinate; this design's answer is a sqrt(AU) LADDER with zero curves.
+  //
+  // ⭐⭐ IT SCROLLS. Max, 2026-09-07, ruling on the "+3 OFF AXIS" pile-up this had before:
+  // *"Let's make it scrollable; rather than 'off axis' have the line end in a '...' that we can
+  // scroll toward horizontally, revealing the other bodies in that direction."*
+  //
+  // ── WHAT CHANGED, AND WHY IT IS A VIRTUAL AXIS RATHER THAN A SMALLER SCALE ────────────────────
+  //
+  // The obvious fix — shrink the AU scale until everything fits — is the one that cannot work, and
+  // the separation pass is the reason. Its job is to keep 8 texels between neighbours so they are
+  // distinguishable at all; on Sol, fifteen laddered bodies need 120 texels of separation alone,
+  // against a 240p pane that has about 230. Any scale that fits them all puts them back on top of
+  // each other, which is the problem the pass exists to solve.
+  //
+  // So the pass now runs UNBOUNDED and produces however much axis the system actually needs, and the
+  // pane is a WINDOW onto it. Bodies keep their true sqrt(AU) position wherever they fit and are
+  // pushed right only where they would collide — exactly as before. Nothing is dropped, nothing is
+  // piled up, and nothing is drawn in WARN, because running past the end is no longer a failure.
+  //
+  // ⚠ THE HABITABLE-ZONE BAND STAYS ON TRUE AU while bodies drift right of it under separation.
+  // That mismatch is inherited, not introduced — it is what the pass has always done — and it is
+  // more visible now that you can scroll along the axis. Logged, not fixed here.
   const axisY = Math.round(mapY + mapH * 0.62);
   const x0 = 8, x1 = mapW - 10;
+  const winW = x1 - x0 - 8;
   rect(g, x0, axisY, x1 - x0, 1, INK.RULE);
-  const auMax = Math.max(1e-3, ...D.bodies.filter((b) => b.kind !== 'moon').map((b) => b.au));
-  const px = (au) => Math.round(x0 + 4 + (x1 - x0 - 8) * Math.sqrt(Math.max(0, au) / auMax));
-  sprite(g, x0 + 4, axisY, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
+  const shown = D.bodies.filter((b) => b.kind !== 'moon');
+  const auMax = Math.max(1e-3, ...shown.map((b) => b.au), 1e-3);
+
+  // ── THE VIRTUAL AXIS ─────────────────────────────────────────────────────────────────────────
+  const vpx = (au) => Math.round(4 + (winW - 8) * Math.sqrt(Math.max(0, au) / auMax));
+  const vx = [];
+  let lastV = -99;
+  for (const b of shown) { let v = vpx(b.au); if (v - lastV < 8) v = lastV + 8; lastV = v; vx.push(v); }
+  const vMax = (vx.length ? vx[vx.length - 1] : 0) + 8;
+  const maxScroll = Math.max(0, vMax - winW);
+  const scroll = Math.max(0, Math.min(maxScroll, Math.round(S.ladderScroll || 0)));
+  // ⭐ PUBLISHED FOR THE SCROLL CONTROL, so the thing that moves the window and the thing that draws
+  // it cannot disagree about where the stops are. Same principle as `region()`: it comes OUT of the
+  // paint. ⛔ A second copy of this arithmetic in the hit-test is the AC-4 defect exactly.
+  S.ladderStops = vx; S.ladderMax = maxScroll; S.ladderScroll = scroll;
+  S.ladderCaps = { axisY, x0, x1 };   // where the two "..." marks are, so the thing you CLICK is
+                                      // placed by the thing that DREW them and cannot drift from it
+
+  const sx = (v) => x0 + 4 + v - scroll;
+  const vis = (x) => x >= x0 && x <= x1;
+
+  // the star sits at virtual 0 and scrolls off with everything else
+  if (vis(sx(0))) sprite(g, sx(0), axisY, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
   const z = D.sys?.zones;
-  if (z) rect(g, px(z.hzInnerAU), axisY + 2, Math.max(1, px(z.hzOuterAU) - px(z.hzInnerAU)), 3, INK.YOU);
-  let lastX = -99, ranOff = 0;
-  // ⭐ THE SEPARATION PASS IS THE DESIGN'S OWN ("a left-to-right integer pass enforcing a minimum
-  // 8-texel separation"). On a 20-body system it walks the last bodies straight off the end of the
-  // axis. The guard says so in the console; these draw in WARN at the edge so the failure is VISIBLE
-  // rather than an invisible glyph outside the pane.
-  D.bodies.filter((b) => b.kind !== 'moon').forEach((b, i) => {
-    let x = px(b.au); if (x - lastX < 8) x = lastX + 8; lastX = x;
-    const off = x > x1 - 6;
-    if (off) { ranOff++; x = x1 - 6; }
-    const ink = off ? INK.WARN : (b === D.selBody ? INK.TARGET : INK.BODY);
-    if (b.kind === 'belt') { for (let k = -6; k <= 6; k += 2) rect(g, x + k, axisY, 1, 1, off ? INK.WARN : INK.DIM); }
+  if (z) {
+    const a2 = Math.max(x0, sx(vpx(z.hzInnerAU))), b2 = Math.min(x1, sx(vpx(z.hzOuterAU)));
+    if (b2 > a2) rect(g, a2, axisY + 2, Math.max(1, b2 - a2), 3, INK.YOU);
+  }
+
+  shown.forEach((b, i) => {
+    const x = sx(vx[i]);
+    if (!vis(x)) return;
+    const ink = b === D.selBody ? INK.TARGET : INK.BODY;
+    if (b.kind === 'belt') { for (let k = -6; k <= 6; k += 2) { if (vis(x + k)) rect(g, x + k, axisY, 1, 1, INK.DIM); } }
     else {
       sprite(g, x, axisY, b.rE > 4 ? SP.giant5 : SP.terr3, ink);
-      if (b.rings) rect(g, x - 4, axisY, 9, 1, INK.DIM);
+      if (b.rings) rect(g, Math.max(x0, x - 4), axisY, Math.min(9, x1 - x + 4), 1, INK.DIM);
       for (let m = 0; m < b.moons; m++) rect(g, x, axisY - 7 - m * 3, 1, 1, INK.DIM);
       if (b === D.selBody) frame(g, x - 4, axisY - 4, 9, 9, INK.TARGET);
     }
-    if (off) return;
     const tag = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || '?';
     T(g, tag, x - 2, axisY + 8, { color: b === D.selBody ? INK.KEY : INK.DIM, rgn: 'map', what: 'ladder tag ' + tag });
   });
-  if (ranOff) {
-    T(g, `+${ranOff} OFF AXIS`, x1 - 4, axisY + 8, { color: INK.WARN, align: 'right', rgn: 'map', what: 'ladder overflow' });
-    fire(`SYSTEM ladder: ${ranOff} of ${D.bodies.filter((b) => b.kind !== 'moon').length} bodies ran past the ` +
-         `end of the axis under the design's own 8-texel minimum separation. Drawn in WARN at the edge.`);
+
+  // ── ⭐ THE LINE ENDS IN "..." WHERE THERE IS MORE, AND ONLY WHERE THERE IS ────────────────────
+  // Three texels on the axis row, in KEY so they read as an affordance rather than as more rule.
+  // Absent at an end with nothing beyond it, so the mark always MEANS something.
+  if (scroll > 0)         for (let k = 0; k < 3; k++) rect(g, x0 + k * 2, axisY, 1, 1, INK.KEY);
+  if (scroll < maxScroll) for (let k = 0; k < 3; k++) rect(g, x1 - 5 + k * 2, axisY, 1, 1, INK.KEY);
+  const first = vx.findIndex((v) => sx(v) >= x0);
+  const lastI = vx.reduce((acc, v, i2) => (sx(v) <= x1 ? i2 : acc), -1);
+  // ⭐ WHICH BODIES ARE ACTUALLY ON THE GLASS, published by the code that put them there. It is what
+  // the "N-M OF K" readout below prints, and it is the only honest way to ASSERT that scrolling
+  // reveals anything: the tags are drawn by `drawPixelText`, which emits fillRects, so a test that
+  // scrapes the context for text finds nothing and passes vacuously whatever the ladder does.
+  S.ladderVisible = [first, lastI];
+  if (maxScroll > 0) {
+    T(g, `${first + 1}-${lastI + 1} OF ${shown.length}`, x1 - 4, axisY + 16,
+      { color: INK.DIM, align: 'right', rgn: 'map', what: 'ladder window' });
   }
-  rect(g, px(0) - 1, axisY - 1, 3, 3, INK.YOU);
+  if (vis(sx(0))) rect(g, sx(0) - 1, axisY - 1, 3, 3, INK.YOU);
 }
 
 function d1Rail(g, x, y, w, cols, rowCount) {
@@ -1276,6 +1327,9 @@ addEventListener('keydown', (e) => {
   else if (k === 'h' || k === 'H') S.legend = !S.legend;
   else if (k === 's' || k === 'S') { sysPick = (sysPick + 1) % Math.max(1, (D.sysCands || [1]).length);
                                      buildSystem(D.sysCands[sysPick]); S.level = 4; }
+  else if (k === ',' || k === '.') { const st = S.ladderStops || []; const cur = S.ladderScroll || 0;
+    const next = k === '.' ? st.find((v) => v > cur) : [...st].reverse().find((v) => v < cur);
+    S.ladderScroll = next == null ? (k === '.' ? (S.ladderMax || 0) : 0) : next; }
   else if (k === ';') { requestAnimationFrame(draw); return; }   // PixelText owns the face swap
   else return;
   e.preventDefault();

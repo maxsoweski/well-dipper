@@ -346,7 +346,7 @@ export class NavComputer {
       // search field. This capture-phase handler runs BEFORE the input's own
       // listeners, so without this guard the six pan/zoom letters would be
       // preventDefaulted out of the text field.
-      if (this._searchFocused) return;  if (this._viewModesEnabled && (e.code === 'KeyV' || (e.code === 'KeyL' && this.viewMode === 'bars'))) { if (e.code === 'KeyV') { this.viewMode = nextViewMode(this.viewMode); saveViewMode(this.viewMode); this._resizeCanvas(); } else { (this._viewDriverInst ||= makeViewModeDriver(this)).toggleList(); } e.preventDefault(); e.stopPropagation(); return; }   // ⭐ V cycles CURRENT -> RAIL -> BARS; L is design 2's list mode, its own key in the lab. ⛔ Max never uses the browser console, so every A/B he runs has to be a keypress.
+      if (this._searchFocused) return;  if (this._viewModesEnabled && this.viewMode === 'rail' && (e.code === 'Comma' || e.code === 'Period')) { (this._viewDriverInst ||= makeViewModeDriver(this)).scrollLadder(e.code === 'Period' ? 1 : -1); e.preventDefault(); e.stopPropagation(); return; }   // ⭐ the ladder pans by KEY as well as by clicking its "...", because Max judges by keypress and a 3-texel mark is a small target. Same two keys as the lab.  if (this._viewModesEnabled && (e.code === 'KeyV' || (e.code === 'KeyL' && this.viewMode === 'bars'))) { if (e.code === 'KeyV') { this.viewMode = nextViewMode(this.viewMode); saveViewMode(this.viewMode); this._resizeCanvas(); } else { (this._viewDriverInst ||= makeViewModeDriver(this)).toggleList(); } e.preventDefault(); e.stopPropagation(); return; }   // ⭐ V cycles CURRENT -> RAIL -> BARS; L is design 2's list mode, its own key in the lab. ⛔ Max never uses the browser console, so every A/B he runs has to be a keypress.
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF'].includes(e.code)) {
         this._heldKeys.add(e.code);
         e.preventDefault();
@@ -4417,7 +4417,7 @@ export class NavComputer {
 
   _handleClick(e) {
     if (this._anim) return; // suppress clicks during drill animation
-    const p = this.viewMode ? (this._viewDriverInst ||= makeViewModeDriver(this)).remapClick(this._getCanvasPos(e), this._canvas.width, this._canvas.height) : this._getCanvasPos(e);   // ⭐ ONLY THE TAB STRIP MOVES: design 1 lays five equal cells from the left edge and design 2 spaces them by label width, while the test below divides the FULL width by five. The commit button needs no remap — render() publishes the design's own rectangle into `_commitButtonRect`, which is the field this handler already tests, so WARP and BURN cannot diverge the way AC-4 found them.
+    const p = this.viewMode ? (this._viewDriverInst ||= makeViewModeDriver(this)).remapClick(this._getCanvasPos(e), this._canvas.width, this._canvas.height) : this._getCanvasPos(e);  if (!p) return;   // ⭐ `null` MEANS THE MODE ATE IT — a click on the SYSTEM ladder's "..." scrolls the ladder and must not also fall through to the body picker underneath. ⭐ ONLY THE TAB STRIP MOVES: design 1 lays five equal cells from the left edge and design 2 spaces them by label width, while the test below divides the FULL width by five. The commit button needs no remap — render() publishes the design's own rectangle into `_commitButtonRect`, which is the field this handler already tests, so WARP and BURN cannot diverge the way AC-4 found them.
 
     // Check autopilot button click
     if (this._autopilotButtonRect) {
