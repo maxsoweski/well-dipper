@@ -100,6 +100,28 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
          `right block starts at ${Math.round(rightStart)}, ${Math.round(leftEnd - rightStart)} texel(s) of overlap.`);
     return false;
   }
+  /**
+   * ⭐⭐ THE MARK GUARD — `assertFits` FOR INK THAT IS NOT TYPE.
+   *
+   * ⛔ `assertFits` IS REACHED ONLY THROUGH `T()`, AND THEREFORE ONLY THROUGH `plated()`. Every other
+   * mark on the glass — `rect`, `sprite`, `dottedEllipse`, `frame`, `checker` — has always been
+   * unguarded, so a mark that walks off its pane is CLIPPED BY THE CANVAS FOR FREE and the violation
+   * counter stays at zero. That was invisible while every mark's position was a fixed literal. It
+   * stops being invisible the moment a camera angle is an input: at `rotX = π/2` the orrery's minor
+   * axis becomes its major one and the outer ring overshoots the map pane by ~93 texels per side,
+   * straight through the topbar and off the canvas, WITHOUT FIRING ANYTHING.
+   *
+   * ⛔ IT IS CALLED PER SHAPE, NEVER PER TEXEL. `dottedEllipse` plots up to 220 texels and `checker`
+   * plots w*h of them; a guard inside those loops would be the most expensive thing on the page. So
+   * the caller hands over the shape's BOUNDING BOX once — which is also the only box that means
+   * anything, since a partially-clipped ring is exactly as broken as a fully-clipped one.
+   *
+   * ⚠ IT ROUNDS THE WAY `rect()` ROUNDS. The marks are drawn at `Math.round`ed coordinates, so a box
+   * measured off the raw floats would report half-texel overflows the glass never had.
+   */
+  function assertMark(what, rname, x, y, w, h) {
+    return assertFits(what, rname, Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  }
   function fire(msg) {
     _violations++;
     const key = `${S.design}|${S.level}|${S.lines}|${FACE.name}|${msg}`;
@@ -110,6 +132,39 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   }
 
   const LEVELS = ['GALAXY', 'SECTOR', 'REGION', 'PRISM', 'SYSTEM'];
+
+  // ── ⭐⭐ THE TWO CAMERAS' DEFAULT ANGLES — DERIVED FROM THE PICTURE, NEVER THE PICTURE FROM THEM ──
+  //
+  // `projectPrism` and `d2System` each used to carry a FIXED tilt spelled as a bare literal, and those
+  // literals ARE the picture Max ruled on. So they stay the source of truth and the ANGLE is what gets
+  // computed. Reversing that — storing the angle and recovering the gains — moves the picture:
+  //
+  // ⛔ THE PRISM'S ROUND TRIP IS NOT BIT-IDENTICAL. Its two gains are not a rotation matrix;
+  //    `hypot(0.42, 0.55) = 0.692… ≠ 1`, so the picture factors as an elevation-only rotation TIMES an
+  //    anisotropic scale K. Recovering the gains from the angle gives `K*sin(ROTX0)` =
+  //    0.42000000000000004 and `K*cos(ROTX0)` = 0.5500000000000002 — each 1-2 ULP off. Every texel
+  //    consumer rounds, so nothing visible would move; but the same raw floats feed the bounds culls
+  //    and go UNROUNDED into `S.prismHits`, where the picker measures distance to the cursor. So
+  //    `projectPrism` keeps an explicit default path spelled with the literals themselves, and the
+  //    trigonometry runs only once the pilot has actually turned the camera.
+  // ⭐ THE ORRERY'S ROUND TRIP *IS* EXACT — `Math.sin(Math.asin(0.42)) === 0.42` — because 0.42 there
+  //    is a true sine and not half of an anisotropic pair. `d2System` therefore just reads the angle.
+  //
+  // ⛔ TWO PAIRS, NOT ONE. The game keeps `_localRot*` and `_systemRot*` distinct and clamps them
+  //    differently; folding them into one field would make a prism drag turn the orrery.
+  const PRISM_TILT0 = 0.42;                                   // the prism's default z-gain …
+  const PRISM_RISE0 = 0.55;                                   // … and its default y-gain
+  const PRISM_K = Math.hypot(PRISM_TILT0, PRISM_RISE0);       // 0.6920260110718384
+  const PRISM_ROTX0 = Math.atan2(PRISM_TILT0, PRISM_RISE0);   // 0.6521714117570698 rad = 37.3667°
+  const PRISM_ROTY0 = 0;
+  const SYS_TILT0 = 0.42;                                     // the orrery's default minor-axis gain
+  const SYS_ROTX0 = Math.asin(SYS_TILT0);                     // 0.43344532006988595 rad = 24.8346°
+  const SYS_ROTY0 = 0;
+  /** ⛔ THE ORRERY'S RADIUS BUDGET DIVIDES BY THE MINOR-AXIS GAIN, so a top-down orrery (rotX → 0)
+   *  divides by zero and a nearly-flat one divides by a hair. This floor is what leaves the WIDTH term
+   *  winning the `Math.min` instead of handing it an Infinity. */
+  const SYS_MIN_SIN = 1e-3;
+
 
   // ── INKS.  Solid fills only.  Batch 1 established that at 240p there are exactly two representable
   // stroke weights and that alpha alone has never separated selected from tentative, so every "dim"
@@ -166,14 +221,47 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   function plus(g, cx, cy, ink) {           // the real-catalog star: 5 texels of ink
     rect(g, cx - 1, cy, 3, 1, ink); rect(g, cx, cy - 1, 1, 3, ink);
   }
-  /** A dotted ellipse, plotted texel by texel. This is literally what a fifth-generation orrery was. */
+  /**
+   * A dotted ellipse, plotted texel by texel. This is literally what a fifth-generation orrery was.
+   *
+   * ⭐⭐ THE DOTS ARE SPACED ALONG THE PERIMETER, NOT ALONG THE ANGLE, AND THAT IS THE WHOLE FIX.
+   *
+   * ⛔ Both halves of the old line were tied to `rx` alone: the sample COUNT came off
+   * `max(rx, ry)` — effectively `rx`, since the tilt only ever shrinks `ry` — and the samples were
+   * then laid down at equal steps in `t`. On a circle those two facts are the same fact. On a
+   * FLATTENED ellipse they come apart: equal steps in `t` cover `hypot(rx·sin t, ry·cos t)` texels of
+   * arc, which at `ry/rx = 0.1` is ten times further at the ring's left and right ends than along its
+   * top and bottom. The dots therefore bunch into two dashes at the ends and thin to nothing across
+   * the middle — the "1-texel stroke straddling its own coordinate" failure this file exists to
+   * avoid, appearing ONLY under rotation and only once `rotX` became an input.
+   *
+   * So: RAMANUJAN'S SECOND APPROXIMATION gives the real perimeter (error < 1e-5 at every eccentricity
+   * this page can produce), that fixes the count at the same ~2.2-texel sample pitch the circle had,
+   * and a single arc-length walk places each sample at a constant distance from the last. A ring that
+   * flattens now loses dots rather than redistributing them, which is what "flatter" should look like.
+   *
+   * ⛔ STILL `fillRect` ONLY — no arc, no stroke, no dash, no ellipse(). See the PRIMITIVES banner.
+   */
   function dottedEllipse(g, cx, cy, rx, ry, ink, every = 2) {
-    const n = Math.max(24, Math.min(220, Math.round(2 * Math.PI * Math.max(rx, ry) / 2.2)));
+    const a = Math.abs(rx), b = Math.abs(ry);
+    const s = a + b;
+    const hh = s > 0 ? ((a - b) * (a - b)) / (s * s) : 0;
+    const per = Math.PI * s * (1 + (3 * hh) / (10 + Math.sqrt(Math.max(0, 4 - 3 * hh))));
+    const n = Math.max(24, Math.min(220, Math.round(per / 2.2)));
     g.fillStyle = ink;
-    for (let i = 0; i < n; i++) {
-      if (i % every) continue;
-      const t = (i / n) * Math.PI * 2;
-      g.fillRect(Math.round(cx + Math.cos(t) * rx), Math.round(cy + Math.sin(t) * ry), 1, 1);
+    // The walk. `M` fine steps integrate |d/dt (a cos t, b sin t)| = hypot(a sin t, b cos t); a dot is
+    // dropped each time the accumulated arc passes the next multiple of the sample pitch. 4 fine steps
+    // per sample keeps the placement error under a third of a texel, which the round() eats anyway.
+    const pitch = per / n;
+    const M = Math.max(256, n * 4), dt = (Math.PI * 2) / M;
+    let acc = 0, next = 0, i = 0;
+    for (let m = 0; m < M && i < n; m++) {
+      const t = m * dt, ct = Math.cos(t), st = Math.sin(t);
+      if (acc >= next) {
+        if (!(i % every)) g.fillRect(Math.round(cx + ct * rx), Math.round(cy + st * ry), 1, 1);
+        i++; next += pitch;
+      }
+      acc += Math.hypot(a * st, b * ct) * dt;
     }
   }
 
@@ -295,8 +383,8 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     return Math.cbrt(target / perPc3) / 1000;
   }
 
-  // ── PRISM PROJECTION.  A fixed top-down-ish view; the real camera is rotatable and that is not what
-  //    this page is measuring. Zoom stops are the four Design 2 and Design 3 both asked for.
+  // ── PRISM PROJECTION.  A top-down-ish view whose ANGLE now arrives with the frame, defaulting to
+  //    the fixed shallow tilt these designs were drawn at. Zoom stops: the four D2 and D3 both asked for.
   const ZOOM_STOPS = [0.0015, 0.003, 0.006, 0.01034];   // kpc — default, and the wheel ceiling
   // This page's own cycle index for the Z key; it writes S.cam.radius and nothing else reads it.
   // ⛔ IT MUST STAY ON ITS OWN LINE INSIDE THE EXTRACTED SPAN — the extractor's departure 3 asserts
@@ -306,17 +394,57 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    * in kpc. This used to anchor to `D.player` and scale by `ZOOM_STOPS[S.zoomIdx | 0]`, which is why moving
    * the game's camera left the prism BYTE-IDENTICAL while moving the ship changed it: nothing the
    * pilot could touch was an input to the picture, and `WASD PAN` / `R/F UP` were printed anyway.
-   * ⛔ ROTATION IS STILL NOT AN INPUT, DELIBERATELY. Neither prism hint advertises it, and swapping
-   * this fixed shallow tilt for the legacy camera's full 3D rotation would change the picture Max
-   * ruled on. The one hint that DID claim rotation was over the ladder, and it is corrected below.
+   * ⭐⭐ AND ROTATION IS NOW AN INPUT TOO. Measured with a liveness control, the pilot's drag was
+   * already turning `_localRotX` / `_localRotY` while this function stayed BYTE-IDENTICAL — one hop
+   * missing on a pipe that already existed. `S.cam.rotY` is the azimuth and `S.cam.rotX` the
+   * elevation, both in radians.
+   *
+   * ⛔ THE AZIMUTH IS APPLIED TO (dx, dz) BEFORE THE GAINS, NOT AFTER. `rx = 0.92` is a HORIZONTAL
+   * GAIN and the tilt is a vertical one; they are not equal, so a rotation composed after them is not
+   * a rotation at all — it SHEARS the field, and a spinning prism would slide its stars sideways past
+   * each other instead of turning them. Rotate in world-ish space, then scale to the pane.
+   *
+   * ⛔ AND THE DEFAULT PICTURE IS SPELLED WITH THE LITERALS, ON ITS OWN PATH. See PRISM_ROTX0's block:
+   * `K*sin(ROTX0)` is 0.42000000000000004, one ULP off 0.42, and `S.prismHits` publishes these
+   * coordinates UNROUNDED for the picker to measure against. An explicit early return is the only way
+   * bit-identity at the default is PROVABLE rather than probable, so that is what this is.
    */
   function projectPrism(s, cx, cy, halfW, halfH) {
     const cam = S.cam, r = Math.max(cam.radius, 1e-9);
     const dx = (s.wx - cam.x) / r, dz = (s.wz - cam.z) / r;
     const dy = (s.wy - cam.y) / r;
-    const rx = 0.92, tilt = 0.42;                      // a shallow tilt so height reads as a gap
-    return { x: cx + dx * halfW * rx, y: cy + dz * halfH * tilt - dy * halfH * 0.55,
-             py: cy + dz * halfH * tilt, depth: dz };
+    const rx = 0.92;                                   // the horizontal gain — rotation does not touch it
+    const rotX = cam.rotX === undefined ? PRISM_ROTX0 : cam.rotX;
+    const rotY = cam.rotY === undefined ? PRISM_ROTY0 : cam.rotY;
+    if (rotX === PRISM_ROTX0 && rotY === PRISM_ROTY0) {   // ⛔ THE PICTURE MAX RULED ON, UNTOUCHED
+      return { x: cx + dx * halfW * rx, y: cy + dz * halfH * PRISM_TILT0 - dy * halfH * PRISM_RISE0,
+               py: cy + dz * halfH * PRISM_TILT0, depth: dz };
+    }
+    const ca = Math.cos(rotY), sa = Math.sin(rotY);
+    const ax = dx * ca - dz * sa, az = dx * sa + dz * ca;   // azimuth FIRST, in the isotropic plane
+    const tilt = PRISM_K * Math.sin(rotX), rise = PRISM_K * Math.cos(rotX);
+    return { x: cx + ax * halfW * rx, y: cy + az * halfH * tilt - dy * halfH * rise,
+             py: cy + az * halfH * tilt, depth: az };
+  }
+
+  /**
+   * ⭐ THE COMMITTED CLICK, FOR THE FRAME BEFORE THE ZOOM TAKES IT AWAY (INTERFACE §5).
+   *
+   * `S.pick = { level, i, j, tMs } | null` — the driver writes it on a committed map click and clears
+   * it when the drill lands. Measured live, the designs' map ALREADY zooms on a drill; what was
+   * missing was the acknowledgement, so a click read as "nothing happened" for the first ~100 ms.
+   *
+   * ⛔ `i`/`j` ARE THE DESIGN'S OWN GRID COORDINATES. The game's `row` counts +z upward and `j` counts
+   * it downward (`row = n - 1 - j`); handing one through as the other frames the mirrored tile, which
+   * looks like the highlight simply being wrong rather than like a flipped axis.
+   * ⚠ Returns null on a missing field, a stale level or a non-finite index — a painter that throws
+   *   freezes the glass, and the host catches exactly once before it stops uploading frames at all.
+   */
+  function pickCell(level) {
+    const p = S.pick;
+    if (!p || p.level !== level) return null;
+    if (!Number.isFinite(p.i) || !Number.isFinite(p.j)) return null;
+    return { i: Math.round(p.i), j: Math.round(p.j) };
   }
 
   // DESIGN 1 — THE 71x40.  A character-cell nav computer: a map pane and a persistent ranked rail.
@@ -440,6 +568,10 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (cell < measurePixelText(t.id) + 3) return;
       plated(g, t.id, tx, ty, INK.DIM, 'map', 'tile id ' + t.id);
     });
+    // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5). Drawn LAST so it sits over the grid, the tile ids and the
+    // YOU marker — a "you hit this one" that a rule can cross is not an acknowledgement.
+    const pk = pickCell(S.level);
+    if (pk) frame(g, ox + pk.i * cell, mapY + pk.j * cell, cell, cell, INK.KEY);
     // ⭐ THE PICK GEOMETRY, PUBLISHED BY THE CODE THAT DREW IT — the same principle as `region()` and
     // as `S.ladderStops` below. A hit-test that restates `ox` / `sq` / `n` is a SECOND COPY of this
     // layout, and two copies of one geometry with one silently wrong is the whole AC-4 defect shape.
@@ -976,6 +1108,20 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       //   CONSTRUCTION. `clip` is the band that was actually painted; outside it a click is a miss.
       S.mapProj = { design: 2, level: S.level, kind: 'wide', ox: W / 2, oy: mapY + mapH / 2,
                     kpc: v.size / W, cx: v.cx, cz: v.cz, clip: { x: 0, y: mapY, w: W, h: mapH } };
+      // ⭐ THE CLICK-HIGHLIGHT AT GALAXY (INTERFACE §5), AND THE ONE PLACE IT NEEDS A WORD OF DEFENCE.
+      // ⛔ This branch draws NO cell grid — it is a full-bleed density field with sector dots on it —
+      //    so there is no drawn rectangle to reuse and `kind: 'wide'` publishes no `n`. What IS
+      //    unambiguous is the WORLD cell: GALAXY is the whole 44 kpc disc in both designs and the
+      //    galaxy grid is 8x8 over it (`d1TwoD`'s `S.level === 0 ? 8`). So the cell's world bounds go
+      //    through THIS design's own `toX`/`toY` and nothing about design 1's picture comes with them.
+      // ⚠ It can land outside the painted band — the wide field is ±(mapH/2)·kpc and about half the
+      //   disc is off the glass BY CONSTRUCTION — so it is deliberately NOT `assertMark`ed: that is
+      //   the projection's documented crop, not a mark that escaped its pane.
+      const pk0 = pickCell(S.level);
+      if (pk0) {
+        const gn = 8, gc = W / gn;
+        frame(g, pk0.i * gc, mapY + mapH / 2 + (pk0.j / gn - 0.5) * W, gc, gc, INK.KEY);
+      }
     } else {
       // the drillable block is SQUARE in world space; the density bleeding past it is real map and is
       // knocked back with a 50% parity checker rather than a translucency that cannot survive 240p
@@ -997,6 +1143,10 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       const pj = Math.floor(((D.player.z - v.cz) / v.size + 0.5) * n);
       checker(g, bx + pi * cell + 1, mapY + pj * cell + 1, cell - 2, cell - 2, INK.YOU);
       frame(g, bx + pi * cell, mapY + pj * cell, cell, cell, INK.YOU);
+      // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5), on the block's OWN cell — over the YOU frame, because a
+      // drill onto the tile you are already in must still read as a drill.
+      const pk = pickCell(S.level);
+      if (pk) frame(g, bx + pk.i * cell, mapY + pk.j * cell, cell, cell, INK.KEY);
       // ⛔ THE BLOCK, AND NOT `toX`/`toY`. This branch never calls them: it lays a `blk`-wide square
       //    at `bx` for the same `v.size` kpc that the density behind it spends the full `W` on. A
       //    picker built on the wide projection therefore drills a tile roughly TWICE the size the
@@ -1146,18 +1296,39 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const tagsTaken = [];
     const hits = [];
     const auMax = Math.max(1e-3, ...D.bodies.filter((b) => b.kind !== 'moon').map((b) => b.au));
-    const maxR = Math.min(W / 2 - 8, mapH / 2 / 0.42 - 4);
+    // ⭐ THE ORRERY'S OWN CAMERA. `TILT` was the literal 0.42 and is now a true sine — exactly, because
+    // `Math.sin(Math.asin(0.42)) === 0.42` — so at the default angle every texel below is unmoved.
+    const sc = S.sysCam || {};
+    const sysRotX = sc.rotX === undefined ? SYS_ROTX0 : sc.rotX;
+    const sysRotY = sc.rotY === undefined ? SYS_ROTY0 : sc.rotY;
+    const TILT = Math.sin(sysRotX);
+    // ⛔⛔ THE SECOND HARD-CODED 0.42 WAS A LATENT PANE OVERFLOW, AND ROTATION IS WHAT ARMS IT.
+    //    This is the radius BUDGET: the widest ring must fit the pane in BOTH axes, so the vertical
+    //    term has to divide by the ring's actual minor-axis gain. Frozen at 0.42 it was inert (the
+    //    width term wins, 205.5 < 262.7) right up until the tilt could change — at rotX = π/2 the
+    //    minor axis IS the radius, 205.5 texels against a 112-texel half-pane: 93.5 texels of ink per
+    //    side, through the topbar and off the canvas, and (until `assertMark` above) counted nowhere.
+    const maxR = Math.min(W / 2 - 8, mapH / 2 / Math.max(TILT, SYS_MIN_SIN) - 4);
     const rOf = (au) => 8 + (maxR - 8) * Math.sqrt(Math.max(0, au) / auMax);
-    const TILT = 0.42;
     for (const b of D.bodies) {
       if (b.kind === 'moon') continue;
       const r = rOf(b.au);
       dottedEllipse(g, cxp, cyp, r, r * TILT, INK.RULE, b.kind === 'belt' ? 5 : 2);
+      assertMark('orbit ring ' + b.name, 'map', cxp - r, cyp - r * TILT, 2 * r, 2 * r * TILT);
     }
     sprite(g, cxp, cyp, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
     hits.push({ x: cxp, y: cyp, r: 4, ref: null, moon: -1, star: true });
     D.bodies.filter((b) => b.kind !== 'moon').forEach((b, i) => {
-      const r = rOf(b.au), a = (i * 1.7 + 0.6);
+      // ⭐⭐ THE PLANET'S REAL ORBITAL ANGLE, AND FIXING IT CLOSES A LIVE DEFECT.
+      //    This was `i * 1.7 + 0.6` — the DRAW-LOOP INDEX, dressed as an angle. `D.bodies` is
+      //    re-sorted by `[` / `]` (AU / NAME / TEMP), so pressing the sort key at SYSTEM teleported
+      //    every planet around its ring: the ranking key was silently also the geometry.
+      //    ⭐ The angle was never missing, only dropped. `StarSystemGenerator` draws `orbitAngle` per
+      //    planet and the LEGACY orrery already reads it (`NavComputer.js:2756`, `p.orbitAngle || 0`);
+      //    the body-list builder just never copied it across. `b.ang` is that number, on both sides of
+      //    the seam. ⚠ A BELT KEEPS NO ANGLE — it is a full ring, and 0 is the honest value there.
+      const a = (Number(b.ang) || 0) + sysRotY;
+      const r = rOf(b.au);
       const x = Math.round(cxp + Math.cos(a) * r), y = Math.round(cyp + Math.sin(a) * r * TILT);
       if (b.kind === 'belt') { hits.push({ x, y, r: 3, ref: b, moon: -1, star: false }); rect(g, x, y, 1, 1, INK.DIM); return; }
       hits.push({ x, y, r: 4, ref: b, moon: -1, star: false });
@@ -1165,21 +1336,43 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (b.rings) { rect(g, x - 3, y - 2, 7, 1, INK.DIM); rect(g, x - 3, y + 2, 7, 1, INK.DIM); }
       if (b.hab > 0.5) for (const d of [[-2,0],[2,0],[0,-2],[0,2]]) rect(g, x + d[0], y + d[1], 1, 1, INK.TARGET);
       if (b === D.selBody) frame(g, x - 4, y - 4, 9, 9, INK.KEY);
+      // ⭐ THE MARK GUARD, ONE CALL PER BODY (see `assertMark`) — the union of what the four branches
+      // ABOVE actually drew, off the same `x`/`y` they drew it from, never a worst-case box. A fixed
+      // 9x9 would report the selection frame on bodies that never draw one, which is the guard crying
+      // wolf; and the wolf here is real, so it has to be believable.
+      const g0 = b.rE > 4 ? 2 : 1;                                     // giant5 vs terr3, half-extent
+      let l = x - g0, t = y - g0, rr = x + g0, bb = y + g0;
+      if (b.rings)     { l = Math.min(l, x - 3); rr = Math.max(rr, x + 3); t = Math.min(t, y - 2); bb = Math.max(bb, y + 2); }
+      if (b.hab > 0.5) { l = Math.min(l, x - 2); rr = Math.max(rr, x + 2); t = Math.min(t, y - 2); bb = Math.max(bb, y + 2); }
+      if (b === D.selBody) { l = x - 4; t = Math.min(t, y - 4); rr = Math.max(rr, x + 4); bb = Math.max(bb, y + 4); }
+      assertMark('body mark ' + b.name, 'map', l, t, rr - l + 1, bb - t + 1);
       // The second and last folded publication, for the same reason as the ladder's: `mx`/`my` are
       // the one evaluation of `x + 4 + m * 2` and `y - 4`, and `rect()` gets exactly those values.
       for (let m = 0; m < b.moons; m++) { const mx = x + 4 + m * 2, my = y - 4; hits.push({ x: mx, y: my, r: 2, ref: b, moon: m, star: false }); rect(g, mx, my, 1, 1, INK.DIM); }
+      // ⚠ THE PIP STRIP IS A SCREEN-SPACE BADGE and stays one — it does not turn with the orrery, by
+      //   design. It still gets a box, because it is the ONE mark here whose length is data-driven: a
+      //   moon-rich planet on the outermost orbit runs its pips off the right edge of the pane, and
+      //   until now the canvas swallowed them.
+      if (b.moons) assertMark('moon pips ' + b.name, 'map', x + 4, y - 4, (b.moons - 1) * 2 + 1, 1);
       const tag = roman(i + 1);
       if (r > 24) {
         const ly = placeLabel(tagsTaken, x + 4, y - 8, measurePixelText(tag), REGIONS.map);
         if (ly != null) plated(g, tag, x + 4, ly, INK.DIM, 'map', 'body tag ' + tag);
       }
     });
+    // ⚠ THE SHIP DIAMOND HAS NO WORLD POSITION AT ALL — a bare `cxp + 8` screen offset — so under
+    //   rotation it is the ONE mark on this orrery that visibly refuses to move. Logged, not invented:
+    //   giving it a position would be this page guessing where the ship is in the system, and there is
+    //   no such number in the pipeline to guess from.
+    // ⚠ The ring bars, the moon pips and the habitability cross above are SCREEN-SPACE BADGES and stay
+    //   that way, as do the selection frames. That is the low-fi idiom, not a mark that failed to turn.
     sprite(g, cxp + 8, cyp, SP.diam5, INK.TARGET);
     const far = (D.sys?.binarySeparationAU > 100) ? [`» ${(D.sysStar?.name || '').toUpperCase()} B ${Math.round(D.sys.binarySeparationAU)}AU`] : [];
     if (far.length) T(g, fit(far.join('  '), W - 8), 4, mapY + 1, { color: INK.DIM, rgn: 'map', what: 'companion strip' });
-    // ⭐ THE ORRERY'S BODY MARKS, OUT OF THE ORBIT ARITHMETIC THAT PLACED THEM. The angle `i*1.7+0.6`
-    // is arbitrary and unrepeatable outside this loop — nothing else in the build could reconstruct
-    // where a planet was actually drawn, which is precisely why this has to come out of the paint.
+    // ⭐ THE ORRERY'S BODY MARKS, OUT OF THE ORBIT ARITHMETIC THAT PLACED THEM. Even now that the
+    // angle is the planet's REAL `orbitAngle`, the drawn position also carries `rOf`, `TILT`, the
+    // azimuth offset and two roundings — so nothing else in the build could reconstruct where a
+    // planet actually landed, which is precisely why this has to come out of the paint.
     // ⚠ A MOON PIP CARRIES ITS PARENT IN `ref` AND ITS PIP INDEX IN `moon`. Downstream a moon pick is
     //   only consumed in planet detail; in the mode this orrery is drawn in it falls through and
     //   CLEARS the selection, so the parent is the live walk and `{type:'moon'}` is a dead click.
