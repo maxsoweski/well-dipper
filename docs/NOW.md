@@ -6,6 +6,16 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (HANDOFF) — ▶ **NEXT SESSION: MAX'S SCREEN-BY-SCREEN FEEDBACK ON THE TWO NAV MENUS.** All pushed, `3ec0e2a`. ⭐ Max, after walking both: *"overall, very good, but we need to look at each screen closely."* Seven items — wasted grid space at GALAXY, everything on screen clickable, a second selection refused at SYSTEM, **3D rotation for the prism** (*"the previous system was more functional in that sense"*) **and for the orrery**, drag-grabbable indicators instead of a key, and the lost zoom animation between screens.
+>
+> ▶ **READ `docs/FEATURES/handoff-2026-09-07-nav-screens-close-pass.md` FIRST.** ⭐ **THE THROUGH-LINE IS ONE SENTENCE: the previous nav did these things and the new designs lost them** — every capability he names already exists and already runs in the LEGACY renderer underneath every mode frame. It is a wiring session, not a building one.
+>
+> ⭐⭐ **ITEMS 4 AND 7 ARE ONE JOB AND ARE MUCH SMALLER THAN THEY LOOK.** The drag-rotate handlers are ALREADY LIVE under both modes and already writing `_localRotX/_localRotY` and `_systemRotX/_systemRotY` — `_handleMouseMove`'s mode early-return is written `!this._dragging` on purpose. The designs simply do not read them, and `S.cam` is already the pipe. ⛔ **This overturns AC-5's deliberate non-goal** ("rotation is not wired... it would change the picture Max ruled on") — he has ruled the other way, so wire it. ⛔ Keep the low-fi look: he asked for it by name.
+>
+> ⭐ **AND THE ZOOM ANIMATION MAY ALREADY BE BACK — CHECK BEFORE SCOPING IT.** Wiring `levelView` to `S.view` had a side effect nobody scoped: `S.view` follows `_viewCenter`/`_viewSize`, which `_updateAnim` interpolates. Measured on a real drill, `S.view.size` walks **44 → 42.65 → 36.03 → 24.96 → 13.80 → 6.98 → 5.50**. What is certainly still missing is the **highlight before the zoom**.
+>
+> ⛔⛔ **THREE BROWSER TRAPS COST TIME LAST SESSION AND ARE WRITTEN DOWN:** `window._navComputer` is whichever instance was CONSTRUCTED last and was sometimes the 52x43 cockpit panel; CDP's synthetic click does not reliably land on the splash mode cards (click them through the DOM); and **the sim clock does not advance in a background tab, so the drill animation never completes and `_handleClick`'s `if (this._anim) return;` eats every later click** — which looks exactly like the second-selection bug and is not it.
+
 > ## ▶ 2026-09-07 (latest) — **EVERY ELEMENT IN BOTH NEW NAV MENUS IS NOW FUNCTIONAL. AC-1..AC-11 GREEN AND VERIFIED LIVE; ▶ ONLY MAX'S WALK IS LEFT.** `5181a16`, lane A, **unpushed**.
 >
 > ▶ **HOW TO SEE IT: ORRERY → `N` → `V`.** Then: click anywhere on the map at any level, hold `WASD` / `R` `F`, turn the wheel, press `Tab`, `[` `]`, `-` `=`, `/`, `Enter`. Everything the glass names now does what it says.
