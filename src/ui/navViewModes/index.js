@@ -49,6 +49,7 @@ import { makeDesigns } from './designs.js';
 import { railGeometry, barsGeometry, tabIndexAt } from './geometry.js';
 import { pickSector, pickTile, pickPrismStar, pickBody, bodyIdentity,
          usableProj, gridNFallback, tileOf, HOVER_FIELD } from './picking.js';
+import { makeSearch } from './search.js';
 import { FACE, measurePixelText } from '../../rendering/PixelText.js';
 
 /**
@@ -88,6 +89,10 @@ export function makeViewModeDriver(nav) {
    * source, with the canvas as a fallback for a key pressed before the first frame.
    */
   let lastW = 0, lastH = 0;
+  /** ⛔ ONE PER INSTANCE, over the SAME `S` the designs captured — see the "mutate, never replace"
+   *  note in `state.js`. It owns no state of its own: the query lives on `S.search` and the results
+   *  and the cursor live on the instrument, exactly where `_activateSearchHighlight` reads them. */
+  const search = makeSearch(nav, S);
   const designs = makeDesigns({
     S, D,
     onViolation: (line, detail) => {
@@ -108,6 +113,15 @@ export function makeViewModeDriver(nav) {
    * itself — and in the low-res modes the panel is full-bleed anyway, so the two converge.
    */
   function bufferFor(rect, canvasEl) {
+    // ⛔⛔ MEASURED 2026-09-08: THIS IS NEVER REACHED ON THE WAY OUT OF A MODE, WHICH IS A DEFECT
+    //    AND NOT THIS FILE'S TO FIX. `_resizeCanvas` (:613) reads
+    //    `this.viewMode ? drv.bufferFor(...) : rect`, so cycling `V` back to CURRENT calls nothing
+    //    here — and `applySurface` below is the ONLY caller of the class toggle, so `nav-lowres`
+    //    NEVER COMES OFF: today's nav keeps the full-bleed panel, the pixelated upscale, and
+    //    `style.css:1289`, which hides the DOM search overlay outright. That last one matters here:
+    //    style.css says of the hidden widget "Searching by name is reachable in today's nav (V back
+    //    to CURRENT)", and as shipped it is not. The fix is one statement folded onto :613 BEFORE
+    //    its trailing `//` comment (a poisoned fold target — see the note on :349).
     applySurface(canvasEl, !!nav.viewMode);
     const world = resolveRenderBuffer(
       typeof window !== 'undefined' ? window.innerWidth : rect.width,
@@ -129,6 +143,7 @@ export function makeViewModeDriver(nav) {
    */
   function resetPicks() {
     S.mapProj = null; S.listGeom = null; S.tabRects = null; S.chipRect = null;
+    S.searchGeom = null;
     S.prismHits = []; S.bodyHits = []; S.railTiles = [];
   }
 
@@ -144,6 +159,11 @@ export function makeViewModeDriver(nav) {
     designs.resetViolations();
     designs.resetRegions();
     resetPicks();
+    // ⭐ THE FIELD'S ROWS ARE RE-READ OFF THE INSTRUMENT EVERY FRAME IT IS OPEN, not only when a key
+    // moves them. `_searchResults` / `_searchHighlight` are ordinary NavComputer state and anything
+    // else may write them — `activate()` calls `_showSearch()`, which resets both — so mirroring on
+    // keystrokes alone would let the drawn list and the list `Enter` acts on drift apart silently.
+    if (S.search.open) search.mirror();
     if (design === 1) designs.drawDesign1(ctx, w, h);
     else designs.drawDesign2(ctx, w, h);
     // ⭐ PUBLISH THE COMMIT RECTANGLE INTO THE FIELD THE SHIPPED HANDLER ALREADY TESTS. `_handleClick`
@@ -318,6 +338,12 @@ export function makeViewModeDriver(nav) {
    */
   function resolveHover(x, y, w, h) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    // ⛔ WHILE THE DRAWN FIELD IS OPEN THE LEVEL'S HOVER FIELD IS NULL, NOT STALE. The field covers
+    //    the rail in design 1 and the whole map in design 2, and `remapClick` consumes every click
+    //    that lands on it — so a live `_hoveredTile` underneath would be a target the pilot can
+    //    neither see nor reach, sitting armed for the moment the field closes. Same reasoning as the
+    //    "a miss writes null" rule below, one layer up.
+    if (S.search.open) { nav[HOVER_FIELD[S.level] || '_hoveredTile'] = null; return false; }
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
     const row = listRowAt(g2, x, y, bars);
@@ -360,6 +386,12 @@ export function makeViewModeDriver(nav) {
    * scrolls to a position with no body in it.
    */
   function scrollLadder(dir) {
+    // ⛔ AND WHILE THE DRAWN FIELD IS OPEN, `,` AND `.` ARE TEXT. See `searchOpen`'s note: the
+    //    ladder clause is folded onto `NavComputer.js:349` AHEAD of the search-routing clause, so it
+    //    reaches these two keys first and would eat them — a period typed into a search box would
+    //    scroll a ladder the pilot cannot see. The clause hands them here, so here is where they can
+    //    still be recovered, and this is the recovery.
+    if (S.search.open) { search.key({ code: dir > 0 ? 'Period' : 'Comma', key: dir > 0 ? '.' : ',' }); return; }
     const stops = S.ladderStops || [], cur = S.ladderScroll || 0, max = S.ladderMax || 0;
     const next = dir > 0 ? stops.find((v) => v > cur) : [...stops].reverse().find((v) => v < cur);
     S.ladderScroll = Math.max(0, Math.min(max, next == null ? (dir > 0 ? max : 0) : next));
@@ -410,7 +442,13 @@ export function makeViewModeDriver(nav) {
    */
   function tabLevel(dir) {
     const cur = nav._levelIndex | 0;
-    const idx = Math.max(0, Math.min(4, cur + (dir > 0 ? 1 : -1)));
+    // ⭐ AND IT WRAPS, BECAUSE A CLAMPED TAB IS A DEAD KEY ON ONE OF THE FIVE LEVELS. Measured live
+    // on the running game after phase 1: pressing Tab from GALAXY walked 3 -> 4 and then STOPPED,
+    // `[3, 4, 4, 4]`, while design 1's hint row goes on saying `TAB LEVEL` at SYSTEM. A hint that
+    // names a key which does nothing where it is printed is exactly the class of lie AC-10 sweeps
+    // for. Five levels in a ring: forward off SYSTEM lands on GALAXY, back off GALAXY lands on
+    // SYSTEM, and the drill path is unchanged — see the two ⛔ notes below.
+    const idx = dir > 0 ? (cur + 1) % 5 : (cur + 4) % 5;
     if (idx === cur) return;
     const w = lastW || nav._canvas?.width || 0, h = lastH || nav._canvas?.height || 0;
     if (!(w > 0 && h > 0)) return;
@@ -515,41 +553,67 @@ export function makeViewModeDriver(nav) {
   }
 
   /**
-   * `/` — the DRAWN search (AC-11). ⚠ A DELIBERATE STUB, and it says so.
+   * `/` — THE DRAWN SEARCH (AC-11). The state and the routing; the DRAWING is in the lab, and the
+   * pipeline is `NavComputer`'s own — see `search.js`, which is where all three of those meet.
    *
-   * The field's presentation is a later piece of work; what has to exist NOW is the state, so the
-   * key is not a promise the glass makes and nothing answers. Typing accumulates, Escape and Enter
-   * both close, and every other key is CONSUMED while the field is open — which is the point of
-   * `searchActive()` in the key table: the six WASD/R/F pan letters must go into the field rather
-   * than move the camera.
+   * ⭐ NOTHING HERE RESOLVES A NAME. `search.run()` types the query into `nav._runSearch`, which
+   * calls `resolveKnownObjects` over the real catalog and its dedup aliases, the KnownSystems
+   * registry and ITS alias sets, the named-systems box and the structures; `Enter` reaches
+   * `nav._activateSearchHighlight()`, which arms the warp through the SAME supported `_onCommit`
+   * contract the COMMIT button uses. The DOM presentation was the only part that had to go.
    *
    * ⛔ IT DOES NOT SET `nav._searchFocused`, AGAINST INTERFACE §3's PARENTHETICAL, AND THE SHIPPED
    * HANDLER IS WHY. `_onKeyDown` opens with `if (this._searchFocused) return;` (:349) — the guard
    * that keeps the DOM input's letters out of the pan handler — and every view-mode clause, INCLUDING
    * the `searchKey` one, is folded onto that same line AFTER it. Setting the flag would therefore
-   * make the drawn field unreachable by the keyboard the instant it opened, Escape included. The
-   * stated GOAL is met anyway and by a shorter route: `searchKey` consumes the pan letters itself, so
-   * they never reach `_heldKeys`.
+   * make the drawn field unreachable by the keyboard the instant it opened, Escape included, and the
+   * pilot would be locked inside it. The stated GOAL is met anyway and by a shorter route:
+   * `searchKey` consumes the pan letters itself, so they never reach `_heldKeys`.
+   *
+   * ── ⛔⛔ THREE KEYS REACH THE FIELD SECOND-HAND, AND ONE DOES NOT REACH IT AT ALL — MEASURED ───
+   *
+   * `NavComputer.js:349` is a single frozen line and the clauses on it run in written order:
+   *
+   *     `_searchFocused` guard · `,` / `.` ladder · `V` / `L` mode · **searchKey** · Tab · Enter ·
+   *     `[` `]` · `-` `=` · `/`
+   *
+   * So the ladder clause and the mode clause both see a keystroke BEFORE the drawn field does. That
+   * is not theoretical: typing `alph` produced `aph` and flipped design 2 into list mode, because
+   * `L` is design 2's list toggle. `SOL`, `ALPHA`, `POLARIS` and `VOLANS` all carry an `L`.
+   *
+   * ⭐ THREE OF THE FOUR ARE RECOVERABLE FROM HERE, BECAUSE THOSE CLAUSES CALL DRIVER METHODS THIS
+   * FILE OWNS: `scrollLadder` and `toggleList` type their key into the field instead of acting, so
+   * `,` `.` and `L` all arrive intact. ⛔ `V` CANNOT BE: its clause sets `this.viewMode` inline,
+   * calls `nextViewMode` / `saveViewMode` (which have no canvas) and then `_resizeCanvas` (which
+   * skips this driver entirely when the mode is null), so nothing this owner controls ever sees it.
+   * What it does instead is measured and pinned in `navSearch.test.js`: the query SURVIVES the
+   * design switch, and on CURRENT the field eats nothing because every clause is gated on
+   * `this.viewMode`. ⚠ THE REAL FIX IS ONE REORDER ON LINE 349 — move the searchKey clause ahead of
+   * the ladder and mode clauses. It changes no line count and it is not this owner's file.
    */
-  function searchOpen() { S.search.open = true; return true; }
-  function searchActive() { return !!S.search.open; }
-  function searchKey(e) {
-    if (!S.search.open) return false;
-    const code = e && e.code;
-    if (code === 'Escape' || code === 'Enter' || code === 'NumpadEnter') {
-      S.search.open = false; S.search.text = '';
-      return true;
-    }
-    if (code === 'Backspace') { S.search.text = S.search.text.slice(0, -1); return true; }
-    const k = e && typeof e.key === 'string' ? e.key : '';
-    if (k.length === 1) S.search.text = (S.search.text + k).slice(0, 40);
-    return true;   // the drawn field owns the keyboard while it is open
-  }
+  function searchOpen() { return search.open(); }
+  function searchActive() { return search.active(); }
+  function searchKey(e) { return search.key(e); }
 
   function remapClick(p, w, h) {
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
     nav._modeTabIdx = -1;
+    // ── ⭐ THE DRAWN SEARCH TAKES THE CLICK FIRST, AND IT TAKES ALL OF THEM ────────────────────
+    // The DOM widget bound `mousedown` on every result row — deliberately, so the selection fired
+    // before the input's blur could tear the list down — and losing the ability to click a result
+    // would be a plain regression from the thing this replaces. `S.searchGeom` is the grid the PAINT
+    // published, so design 1's rail rows and design 2's full-width rows are picked by one arithmetic.
+    // ⛔ AND A CLICK THAT MISSES THE ROWS CLOSES THE FIELD RATHER THAN FALLING THROUGH. Falling
+    //    through would drill the map underneath a field that is drawn over it — in design 2 the rows
+    //    ARE the map — which is the "invisible live button" defect this workstream has now found
+    //    three times. Closing is also what the DOM widget did, by blur.
+    if (S.search.open) {
+      const row = search.rowAt(p.x, p.y);
+      if (row >= 0) search.activate(search.resultIndexOf(row));
+      else search.close();
+      return null;
+    }
     // ── the ladder's two "..." end caps, at SYSTEM in design 1 ────────────────────────────────
     // ⛔ THE ZONE IS THE MARK PLUS A TEXEL, AND IT USED TO BE FOUR TEXELS WIDER THAN THAT — WHICH
     // ATE THE LAST BODY ON THE AXIS. `d1Ladder` draws the caps as three 1x1 texels at `x1-5, x1-3,
@@ -581,8 +645,20 @@ export function makeViewModeDriver(nav) {
     tabLevel, commit, cycleSort, page, searchOpen, searchActive, searchKey,
     regions: designs.regions,
     violations: () => violations.slice(),
-    /** Design 2's list mode — its one answer to the comparison problem. */
-    toggleList: () => { S.list = !S.list; },
+    /**
+     * Design 2's list mode — its one answer to the comparison problem.
+     *
+     * ⛔ AND WHILE THE DRAWN FIELD IS OPEN, `L` IS A LETTER. Same defect and same recovery as
+     * `scrollLadder`'s, and this one is the expensive half of it: the `KeyL` clause is folded onto
+     * `NavComputer.js:349` AHEAD of the search-routing clause, so typing SOL, ALPHA, POLARIS or
+     * VOLANS into the field flipped design 2 into list mode and dropped the letter. Measured: the
+     * query `alph` came out as `aph` with the map replaced by a star table. The clause routes `L`
+     * to this method, so this method can put it where it belongs. See `searchOpen`.
+     */
+    toggleList: () => {
+      if (S.search.open) { search.key({ code: 'KeyL', key: 'l' }); return; }
+      S.list = !S.list;
+    },
   };
 }
 

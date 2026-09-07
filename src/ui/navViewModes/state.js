@@ -206,9 +206,15 @@ export function makeViewState() {
      *  active sort key that is not on the glass is not an affordance, it is a secret. */
     sortIdx: 0, sortLabel: '', listOffset: 0,
 
-    /** The DRAWN search (AC-11). Minimal today: the field's own presentation is later work, but the
-     *  state has to exist now so a design can read it without a `?.` on every access. */
-    search: { open: false, text: '' },
+    /** ⭐ THE DRAWN SEARCH (AC-11), AND ALL FOUR FIELDS ARE DECLARED HERE FOR THE REASON THE BLOCK
+     *  ABOVE GIVES: a design reads every one of them unguarded, and a field that arrives `undefined`
+     *  is not a blank row, it is a painter throw — which `PanelHost` catches ONCE before it stops
+     *  uploading and leaves the glass frozen on the last good frame, looking alive.
+     *  ⛔ `rows` IS PLAIN DATA, NOT `_searchResults`. The driver mirrors the instrument's own results
+     *  into `{ name, kind }` pairs (see `search.js`), so the designs never touch the resolver's
+     *  shape — which is what lets the lab, which has no resolver, draw the identical field. */
+    search: { open: false, text: '', highlight: -1, rows: [] },
+    searchGeom: null,   // {design,top,lead,rows,x0,x1,offset,total} — d1Search / d2Search
   };
   const D = {
     ready: false, note: [], fail: [],

@@ -758,11 +758,15 @@ describe('TAB changes level THROUGH the shipped click handler', () => {
     }
   });
 
-  it('clamps at both ends of the five levels', async () => {
+  it('⭐ WRAPS AT BOTH ENDS — a key the glass names must never be dead where it is drawn', async () => {
+    // Superseded a `toBe(0)` clamp on 2026-09-07. Measured on the running game, `Tab` from PRISM gave
+    // [3, 4, 4, 4]: at SYSTEM it was a dead key, while design 1's hint row says `TAB LEVEL` at three
+    // of the five levels. A control that is advertised and inert at one level is the whole defect
+    // class this workstream exists to close, so the cycle wraps rather than stopping.
     const { nav, drv } = await loadedNav();
     nav._levelIndex = 0; nav.render();
     drv.tabLevel(-1);
-    expect(nav._levelIndex).toBe(0);
+    expect(nav._levelIndex, 'backwards from GALAXY wraps to SYSTEM').toBe(4);
   });
 });
 
@@ -999,7 +1003,11 @@ describe('what none of this may break', () => {
       expect(drv.S, `S.${k} has no default`).toHaveProperty(k);
       expect(drv.S[k], `S.${k} is undefined`).not.toBe(undefined);
     }
-    expect(drv.S.search).toEqual({ open: false, text: '' });
+    // ⚠ The shape grew when AC-11 landed the DRAWN field: the highlight and the resolved rows are
+    // read by the paint, so they live on `S` beside the query. Asserted as a whole object on purpose
+    // — a missing default is what freezes the glass, because PanelHost catches a painter throw ONCE
+    // and then keeps uploading the last good frame, which looks alive.
+    expect(drv.S.search).toEqual({ open: false, text: '', highlight: -1, rows: [] });
   });
 
   it('⛔ last frame\'s candidates die with last frame\'s picture', async () => {
