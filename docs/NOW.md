@@ -6,6 +6,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (part 2) — **AC-16 IS GREEN, LIVE, WITH A MUTATION CONTROL: THE ORRERY TRACKS THE PLANETS AS THEY ORBIT.** Lane A.
+>
+> ⭐ **MAX'S BAR — *"I want the nav screen to reflect the actual orientation of the planets in the game"* — IS MET, AND IT IS MEASURED OFF THE RUNNING GAME, NOT OFF A TEST.** With the game's own time lever (`celestialTimeMultiplier` at 200000, so the SIM advances the angle and nothing is hand-written into it), the innermost planet's live angle ran 0.30006 → 1.29620 rad over six seconds and the design's drawn angle equalled it to five decimal places at every one of seven samples, while the frozen generation angle sat at 0.3 the whole time. **30 of the 42 published marks physically moved on the glass**; the star's and the belts' correctly did not.
+>
+> ⭐⭐ **AND THE CONTROL IS THE PART THAT MAKES IT EVIDENCE.** Deleting the `_live` back-reference at runtime froze the drawn angle at 0.3 while the sim ran on to 1.74 — the exact frozen-snapshot defect the AC names — and restoring it resumed exact tracking. So the marks are driven by the scene entry and by nothing else.
+>
+> ⛔ **THE PREVIOUS SESSION'S BLOCKER WAS THE BOOT STATE, NOT THE FIX, AND THAT IS WORTH SAYING PLAINLY.** The live check could not run last time because `spawnSystem` had never run. It still hasn't on that path: **clicking ORRERY on the splash and letting the intro play to the end leaves the pilot with no system at all** — 36 s after the click `window._systemData` was still undefined and `_lab.systemInfo()` returned `{name:'', planetCount:0}`. The walk that works is a real spawn (`_lab.enterSol()` → `_debugEnterKnownSystem` → `spawnSystem` → the same `_applyNavArrival` a warp arrival uses), which is also **Max's own D-hold route**.
+>
+> ⚠ **A QUESTION FOR MAX FALLS OUT OF THAT, AND IT IS HIS TO RULE ON, NOT MINE TO PATCH.** With no system spawned, `_currentSystemData` is null and the SYSTEM screen draws **a system the nav generated for itself** — the same preview a browsed foreign star shows. That is arguably right (there are no in-game planets to reflect), but it means "the actual orientation" is only ever true for the system you are actually in, and nobody has decided that out loud.
+>
+> ⚠ **RESIDUAL, NOT GLOSSED:** the warp-arrival path was not flown live. It shares the one call site measured here and is pinned by `mainNavWiring.test.js`, but no live warp was driven.
+>
+> ▶ **STILL OPEN, in the order I'd take it:** AC-2 (everything clickable — seven published rectangles remain, `S.labelHits` is the worked example), AC-9 (the prism's y-gauge, which is `S.yGaugeRect` and therefore the same unit), AC-5's GALAXY half, AC-6's inbound half, design 2's GALAXY crop of 20 of 775 sectors. AC-1's picture still awaits Max's eyes; AC-12 is his walk and no agent closes it.
+
 > ## ▶ 2026-09-07 (HANDOFF) — ▶ **NEXT SESSION: `docs/FEATURES/handoff-2026-09-07-nav-close-pass-part2.md`.** All pushed, `543b709`, verified by `git ls-remote`. ⭐ **AC-16's LIVE CONFIRMATION IS THE PICKUP** — the orrery must track a planet as it ORBITS, the code is in and mutation-proved, and the live check **could not be run at all** because `spawnSystem` had never run in the ORRERY boot state, so the SYSTEM screen was drawing a system the nav generated for itself. Get into a spawned system first. ⛔ Do NOT mark it green on the headless proof.
 >
 > Then AC-2 (everything clickable — fully inventoried, `S.labelHits` is the worked example), AC-5's GALAXY half, AC-9, AC-6's inbound half.
