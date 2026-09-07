@@ -31,9 +31,9 @@
 </head>
 <body>
 <header>
-  <h1>Nav close pass — the two pictures that need your eye</h1>
+  <h1>Nav close pass — three pictures that need your eye</h1>
   <p>Each pair flips in place, because a difference you can flip is a difference you can actually see.
-     Click either button, or press <kbd>1</kbd> / <kbd>2</kbd> on the first and <kbd>3</kbd> / <kbd>4</kbd> on the second.</p>
+     Click either button, or press <kbd>1</kbd><kbd>2</kbd>, <kbd>3</kbd><kbd>4</kbd> or <kbd>5</kbd><kbd>6</kbd>.</p>
 </header>
 
 <section>
@@ -51,8 +51,8 @@
   <p class="verdict"><b>A looks better. B is correct.</b> A's even spacing was fake — it was the planet's
      slot in a list, which is why pressing <kbd>[</kbd> or <kbd>]</kbd> used to scatter them.
      <b>The cost of B is real:</b> genuine orbits cluster, so the inner planets bunch to the right of
-     the star and the numerals <b>II III IV VI VII</b> overlap where A kept them apart. I'm treating
-     unreadable numerals as a defect and fixing the label placer unless you say otherwise.</p>
+     the star and their numerals crowd where A kept them apart. That cost is now paid — see pair 3,
+     which is also where I correct what I told you the problem was.</p>
 </section>
 
 <section>
@@ -74,6 +74,31 @@
      can come in further.</p>
 </section>
 
+
+<section>
+  <h2>3 · The numerals — the fix, and a correction</h2>
+  <p class="sub">B again, then B with the label placer fixed. Same system, same selection, same frame.</p>
+  <div class="stage" id="s3">
+    <img id="a3" class="on" src="shots/orrery-B-real-orbit-angles.png" alt="Orrery before the label fix">
+    <img id="b3" src="shots/orrery-C-labels-fixed.png" alt="Orrery after the label fix">
+  </div>
+  <div class="bar">
+    <button id="btnA3" class="on">Before</button>
+    <button id="btnB3">After</button>
+    <span class="hint">or press <kbd>5</kbd> / <kbd>6</kbd></span>
+  </div>
+  <p class="verdict"><b>I told you the numerals were overlapping each other. They weren't.</b>
+     Measured over 120 frames on Sol and on three deliberately clustered systems, label-on-label
+     damage was <b>zero</b> — the old placer already dropped a label rather than smear it. What you
+     were seeing is that <b>the numerals were sitting on the planets</b>: about 8 of Sol's 11 numerals
+     covered a body mark every frame, and because a numeral paints an opaque plate under itself, it
+     was <em>erasing the dot it sat on</em>. From your seat that reads as overprinting — they were
+     overprinting the orrery, not each other.
+     <br><br>That also made it a <b>mis-selection bug</b>: clicking a numeral selected whatever mark
+     its plate had hidden. Both are now zero, and the placer draws <b>more</b> labels than before
+     (7,155 vs 6,909), because it can now place to the left of a mark as well as above and below.</p>
+</section>
+
 <script>
   function pair(imgA, imgB, btnA, btnB, keyA, keyB) {
     const A = document.getElementById(imgA), B = document.getElementById(imgB);
@@ -88,7 +113,8 @@
   }
   const p1 = pair('a1','b1','btnA1','btnB1','1','2');
   const p2 = pair('a2','b2','btnA2','btnB2','3','4');
-  addEventListener('keydown', (e) => { p1(e.key); p2(e.key); });
+  const p3 = pair('a3','b3','btnA3','btnB3','5','6');
+  addEventListener('keydown', (e) => { p1(e.key); p2(e.key); p3(e.key); });
 </script>
 </body>
 </html>
