@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nav close pass — review</title>
+<style>
+  :root { --ink:#cfe6ef; --dim:#6f8a94; --key:#5ef2c0; --bg:#05080a; --panel:#0b1114; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.5 ui-monospace,"Cascadia Mono",Consolas,monospace; }
+  header { padding:18px 24px 6px; }
+  h1 { font-size:16px; letter-spacing:.14em; text-transform:uppercase; margin:0 0 4px; }
+  header p { margin:0; color:var(--dim); max-width:78ch; }
+  section { padding:18px 24px 34px; border-top:1px solid #16232a; margin-top:18px; }
+  h2 { font-size:14px; letter-spacing:.12em; text-transform:uppercase; margin:0 0 2px; }
+  .sub { color:var(--dim); margin:0 0 14px; max-width:88ch; }
+  .stage { position:relative; background:#000; border:1px solid #16232a; line-height:0; }
+  .stage img { width:100%; display:none; }
+  .stage img.on { display:block; }
+  .bar { display:flex; align-items:center; gap:10px; margin:10px 0 0; flex-wrap:wrap; }
+  button { font:inherit; letter-spacing:.08em; text-transform:uppercase;
+           background:transparent; color:var(--dim); border:1px solid #22323a;
+           padding:6px 14px; cursor:pointer; }
+  button.on { color:var(--bg); background:var(--key); border-color:var(--key); }
+  .hint { color:var(--dim); }
+  kbd { border:1px solid #22323a; padding:1px 6px; color:var(--ink); }
+  .verdict { margin:12px 0 0; padding:10px 14px; border-left:2px solid var(--key);
+             color:var(--dim); max-width:88ch; }
+  .verdict b { color:var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Nav close pass — the two pictures that need your eye</h1>
+  <p>Each pair flips in place, because a difference you can flip is a difference you can actually see.
+     Click either button, or press <kbd>1</kbd> / <kbd>2</kbd> on the first and <kbd>3</kbd> / <kbd>4</kbd> on the second.</p>
+</header>
+
+<section>
+  <h2>1 · The orbits view — you ruled for B</h2>
+  <p class="sub">A placed each planet by its position in a list. B places it at its real orbital angle.</p>
+  <div class="stage" id="s1">
+    <img id="a1" class="on" src="shots/orrery-A-old-index-angles.png" alt="Orrery, old list-index placement">
+    <img id="b1" src="shots/orrery-B-real-orbit-angles.png" alt="Orrery, real orbital angles">
+  </div>
+  <div class="bar">
+    <button id="btnA1" class="on">A · list position</button>
+    <button id="btnB1">B · real orbit</button>
+    <span class="hint">same system, same selection, taken back to back</span>
+  </div>
+  <p class="verdict"><b>A looks better. B is correct.</b> A's even spacing was fake — it was the planet's
+     slot in a list, which is why pressing <kbd>[</kbd> or <kbd>]</kbd> used to scatter them.
+     <b>The cost of B is real:</b> genuine orbits cluster, so the inner planets bunch to the right of
+     the star and the numerals <b>II III IV VI VII</b> overlap where A kept them apart. I'm treating
+     unreadable numerals as a defect and fixing the label placer unless you say otherwise.</p>
+</section>
+
+<section>
+  <h2>2 · The galaxy screen — your ruling, built</h2>
+  <p class="sub">"Remove the negative/non-selectable space and redraw the cells from there."</p>
+  <div class="stage" id="s2">
+    <img id="a2" class="on" src="shots/galaxy-design1-today.png" alt="Galaxy grid before the re-fit">
+    <img id="b2" src="shots/galaxy-design1-refitted.png" alt="Galaxy grid re-fitted to the reachable galaxy">
+  </div>
+  <div class="bar">
+    <button id="btnA2" class="on">Before</button>
+    <button id="btnB2">After</button>
+    <span class="hint">cell size unchanged — 27 texels either way</span>
+  </div>
+  <p class="verdict"><b>32 of the 64 cells used to lead nowhere. Now none do</b>, and no sector became
+     unreachable. The chunk you asked to keep is untouched — same 27-texel cell, same 8×8 lattice; only
+     the map's extent moved, 44 → 36 kpc, measured by asking the picker itself where it stops answering.
+     <b>Worth your judgement:</b> whether the outer cells still read as too empty. If they do, the extent
+     can come in further.</p>
+</section>
+
+<script>
+  function pair(imgA, imgB, btnA, btnB, keyA, keyB) {
+    const A = document.getElementById(imgA), B = document.getElementById(imgB);
+    const bA = document.getElementById(btnA), bB = document.getElementById(btnB);
+    const show = (first) => {
+      A.classList.toggle('on', first);  B.classList.toggle('on', !first);
+      bA.classList.toggle('on', first); bB.classList.toggle('on', !first);
+    };
+    bA.onclick = () => show(true);
+    bB.onclick = () => show(false);
+    return (k) => { if (k === keyA) show(true); if (k === keyB) show(false); };
+  }
+  const p1 = pair('a1','b1','btnA1','btnB1','1','2');
+  const p2 = pair('a2','b2','btnA2','btnB2','3','4');
+  addEventListener('keydown', (e) => { p1(e.key); p2(e.key); });
+</script>
+</body>
+</html>
