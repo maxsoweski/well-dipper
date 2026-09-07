@@ -179,3 +179,45 @@ galaxy is; the grid keeps being drawn over the black anyway.
 grid over ground that is 47% nothing — an **affordance** lie, since `pickSector` already returns
 `null` there correctly. Design 2 draws an honest picture that is **missing 20 real sectors** — a
 correctness gap, small in count only because 73% of all sectors sit inside R < 4 kpc.
+
+## 8. ⛔ A CORRECTION TO §7, AND IT IS MY NUMBER THAT WAS INCOMPLETE
+
+§7 says design 1 has **"32 dead cells — exactly half"** and calls them *"a complete RING"*. That is a
+**CELL-CENTRE** measurement, and sampling the cells properly (42×42 points each) says something
+different:
+
+| | |
+|---|---|
+| cells whose CENTRE resolves to nothing | 32 |
+| cells with **no live texel anywhere in them** | **12** |
+| cells that are centre-dead but hold live ground **in the corner nearest the galaxy** | **20** |
+
+⭐ **SO THE CENTRE TEST WOULD HAVE HIDDEN CLICKABLE GROUND IN 20 CELLS ON THE OLD 44 kpc SQUARE.**
+It is only safe *because* the view was re-fitted first: on the 36 kpc square the 8 remaining disputed
+boundary cells are each ~16% live and together **2.55% of all live ground**, and — the check that
+actually decides it — **zero sectors are reachable only through a culled cell.**
+
+⚠ **AND §7's "furthest sector R = 21.21 kpc" IS NOT REACHABLE AT ANY EXTENT.** `Alpha Ophiuchus-28`
+(centre 15.00, 15.00) sits past `getSectorAt`'s own `R > GALAXY_RADIUS * 1.2 = 18` cutoff
+(`GalacticSectors.js:44-46`) and is never returned for any point in the square, before or after this
+change. That is the **775 vs 774** gap, and it is a `GalacticSectors` fact, not a projection one.
+
+⭐ **THE LESSON, AND IT IS THE ONE THIS FILE KEEPS RE-LEARNING:** a summary statistic sampled at one
+point per cell reads as a fact about the cell. The ring was real; "half the map is dead" was the
+right alarm and the wrong shape. The re-fit is what made the cheap test honest.
+
+### What the re-fit actually did
+
+| | before | after |
+|---|---|---|
+| drawn extent at GALAXY (design 1 only) | 44 kpc | **36 kpc** (`min(44, 2·Rf)`, `Rf = 18.000` measured by bisecting 32 rays through `getSectorAt` itself) |
+| cells drawn | 64 | **52** — the four 3-cell corners culled |
+| cell size | 27 texels | **27 texels — unchanged.** `sq` is still 216 and `n` is still 8, so the chunk Max asked for by name is untouched; only kpc-per-cell moved, 5.5 → 4.5 |
+| drawn cells resolving to nothing | 32 | **0** |
+| dead ground inside the drawn square | 47.5% | **21.5%** |
+| of the ground the drawn cells cover, live | 52.5% | **94.2%** |
+| sectors lost | — | **0** |
+
+⛔ `levelView` itself is untouched. Design 2 renders the square at the WIDE extent and crops, so
+shrinking it there would have narrowed its band from ±11.54 to ±9.4 kpc and made its own
+(out-of-scope) defect worse.
