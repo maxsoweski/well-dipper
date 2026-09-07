@@ -134,6 +134,16 @@
       "live": true
     },
     {
+      "id": "AC-15",
+      "statement": "FOUND BY THE NEW MARK GUARD, and nothing else could have seen it: design 2's moon pips are a SCREEN-SPACE strip drawn at `x + 4 + m*2, y - 4` (d2System:1416), so a moon-rich planet sitting on an outer orbit near cos(a) ~ 1 runs the strip off the right edge of the map. It was silently CLIPPED before, because rect/sprite/dottedEllipse were unguarded \u2014 assertFits is reached only through T() and therefore plated(). Zero firings at the default tilt, which is exactly why no suite is red today; 30 firings across a 1200-frame rotation sweep. The pips are correct as a screen-space badge and must stay one \u2014 the fix is to place the strip on whichever side of the body has room, not to tilt it into an ellipse.",
+      "verifyVia": {
+        "input": "Sweep the orrery through its full rotation range on a system with a moon-rich outer planet (the lab's own Q/E and arrow keys drive it).",
+        "observable": "assertMark reports zero overflows at every angle, and the moon pips stay on the glass rather than being clipped at the pane edge."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
       "id": "AC-12",
       "statement": "Max walks both nav menus again, screen by screen, and each one holds up close.",
       "verifyVia": {
@@ -162,7 +172,7 @@
       "wc -l src/ui/NavComputer.js == 4711 and wc -l src/main.js == 15161.",
       "node scripts/extract-nav-designs.mjs --check exits 0 \u2014 designs.js matches the lab.",
       "viewMode === null is today's nav, byte for byte.",
-      "Suites at baseline: tests/ 20 failed across the same 8 files (agent-camera-api, driver-pack-giantdeck, gas-body-lab-material, lab-shader-perframe-seam, moon-condition-contract, moon-rng-stream-identity, port-condition-contract, relief-octave-lod-ramp); src/cockpit 698 passed; src/ui 480 passed. \u26a0 navViewModes.test.js's 'rail: every level tab changes level when clicked where it is drawn' failed once under a full src/ui run and passed 3/3 in isolation \u2014 cross-test pollution, pre-existing, not caused here.",
+      "Suites at baseline: tests/ 20 failed across the same 8 files (agent-camera-api, driver-pack-giantdeck, gas-body-lab-material, lab-shader-perframe-seam, moon-condition-contract, moon-rng-stream-identity, port-condition-contract, relief-octave-lod-ramp); src/cockpit 698 passed; src/ui 520 passed (baseline moved 480 -> 520 when the three build agents landed 40 new tests). \u26a0 navViewModes.test.js's 'rail: every level tab changes level when clicked where it is drawn' failed once under a full src/ui run and passed 3/3 in isolation \u2014 cross-test pollution, pre-existing, not caused here.",
       "AC-1..AC-11 of the closed nav-menu-elements-functional workstream: the map is a picker at all five levels in both designs; Tab / Enter / [ ] / - = / / stay bound; the prism follows the camera on WASD/R/F and the wheel; the drawn search reuses the whole existing search pipeline.",
       "Hover resolves at the TAIL of the driver's render() \u2014 the legacy painters rewrite all three hover fields every frame from _mouseX/_mouseY against LEGACY geometry, so any new pointer state must be written there too or the legacy pass wins.",
       "The legacy renderer keeps running underneath every mode frame ON PURPOSE \u2014 it is also the lazy loader (_renderLocal -> _ensureStarsLoaded; _renderSystem resolves _systemData).",
