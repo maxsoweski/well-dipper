@@ -1,0 +1,174 @@
+{
+  "workstream": "nav-screens-close-pass",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "statement": "\"on the galaxy screen there are many sectors in the grid that are not accessible, so there's wasted space\" \u2014 at GALAXY, every part of the pane that looks clickable is clickable, and the galaxy that exists is on the glass. Design 1 wastes it one way (an 8x8 grid over a 216-texel square whose corners reach R~31 kpc, where no sector exists \u2014 the furthest of the 775 sits at R=21.2 kpc) and design 2 wastes it the opposite way (projection kind 'wide' crops the disc to a +/-11.33 kpc band, so about half of it is off-glass). BLOCKED ON MAX: which answer, decided on a rendered A/B, not on prose.",
+      "verifyVia": {
+        "input": "At GALAXY in each design, click at a sample of points across the whole map pane, including its extreme corners and its vertical edges.",
+        "observable": "Every click inside the drawn map region resolves to a real sector, or lands on ground that is drawn as visibly outside the galaxy. No click inside a drawn grid cell returns null. In design 2 the disc's full vertical extent is reachable."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-2",
+      "statement": "\"anything on screen should be clickable\" \u2014 nothing is drawn in either design that does not answer a click. Today the rail's detail block, the status line, the y-gauge, design 2's minimap, the density bars, the HZ band, the orbit ellipses, the tile-ID plates, the prism's index tags and the placed labels are all inert.",
+      "verifyVia": {
+        "input": "In both designs, at every level, click each drawn element that is not already pickable.",
+        "observable": "Each one either performs its own action (selects the object it names, scrolls to it, or drills) or is a readout deliberately and visibly marked as non-interactive. A published-geometry entry on S exists for every newly pickable element \u2014 the geometry comes out of the paint, never restated in the hit-test."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-3",
+      "statement": "\"selecting one thing should not prevent a second selection, as is currently the case on the system screen\" \u2014 at SYSTEM, clicking a body and then a different body moves the selection to the second one, in both designs. MEASURED ROOT CAUSE: selecting a planet that has moons sets _systemMode='planet', and NavComputer.js:4512-4522's 'planet' branch then writes { planetIndex: this._selectedPlanetIdx } \u2014 the already-selected planet \u2014 instead of this._hoveredBody.index. The legacy planet-detail view draws only the selected planet so the two agreed; the designs keep drawing all 15 bodies and keep publishing them all as pickable, so the selection sticks forever.",
+      "verifyVia": {
+        "input": "At SYSTEM in each design, click body A, then body B, then body C \u2014 including at least one body that has moons, since that is what arms the bug.",
+        "observable": "nav._selectedBody follows each click. Measured today in design 2: three clicks on Sol b, Sol g and Sol b left _selectedBody frozen at planetIndex 3 every time."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-4",
+      "statement": "\"it's important to be able to rotate it in 3D. The previous system for the prism view was more functional in that sense\" \u2014 dragging on the PRISM screen turns the star column in 3D, in both designs, WITHOUT losing the low-fi look Max asked for by name. The rotation applies to the existing texel-quantised marks; it is not a switch back to the legacy renderer's arcs and strokes. MEASURED: _handleMouseMove already writes _localRotX/_localRotY on drag and the designs are blind to them \u2014 with a live control (moving _localCenter.z moved every published prism mark), changing _localRotX/_localRotY moved none.",
+      "verifyVia": {
+        "input": "At PRISM in each design, press and drag across the map pane.",
+        "observable": "The star column turns with the drag: the published S.prismHits coordinates move as _localRotX/_localRotY change, and the marks stay texel-quantised (no anti-aliased arcs or sub-texel strokes appear)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-5",
+      "statement": "\"clicking on a cell from the grid should highlight it, then zoom into it, resulting in the next screen (galaxy > sector > region)\" \u2014 the clicked cell lights up FIRST, then the map flies into it. MEASURED: the zoom half is already live \u2014 a real GALAXY drill walks S.view.size 44 -> 43.98 -> 43.88 -> 43.63 -> 43.16 -> 42.46 -> 40.23 -> ... -> 0.5 and lands at SECTOR. What does not exist is any click-highlight state at all.",
+      "verifyVia": {
+        "input": "At GALAXY in each design, click a grid cell and watch the frames between the click and the arrival at SECTOR.",
+        "observable": "The clicked cell is drawn highlighted before the view starts moving, and the highlight is visible for the first frames of the zoom."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-6",
+      "statement": "\"We have also lost much of the animation between screens\" \u2014 the transitions that still SNAP animate too. MEASURED: _handleClick's tab-strip branch (NavComputer.js:4450) only calls _startDrillAnim when `idx <= 2 && this._levelIndex <= 2`; every transition touching PRISM (3) or SYSTEM (4) takes the else branch and jumps.",
+      "verifyVia": {
+        "input": "In each design, move between every adjacent pair of levels via the tab strip and via a drill click \u2014 REGION->PRISM and PRISM->SYSTEM especially.",
+        "observable": "Each transition is animated rather than an instant cut."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-7",
+      "statement": "\"I want to be able to grab and drag the system line view to look at the further planets from the star, rather than having to press a button exclusively\" \u2014 at SYSTEM in design 1, dragging sideways scrolls the ladder. Today S.ladderScroll moves only on ',' / '.' and on a click in the two '...' cap zones. The drag must land on a published stop (S.ladderStops), never on a continuous offset, or it scrolls to a position with no body in it.",
+      "verifyVia": {
+        "input": "At SYSTEM in design 1, press on the ladder and drag left and right.",
+        "observable": "The ladder scrolls with the drag and comes to rest on a body, not between bodies. The '1-14 OF 15' counter tracks it. The ',' / '.' keys and the cap clicks still work."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-8",
+      "statement": "\"On the orbits view of the system screen, I want to be able to rotate the view in 3D like I could with the previous one\" \u2014 at SYSTEM in design 2, dragging turns the orrery in 3D. _handleMouseMove already writes _systemRotX/_systemRotY on drag at level 4; d2System ignores them and uses a fixed TILT=0.42. \u26d4 ONE GESTURE, TWO MEANINGS: the same drag pans design 1's ladder (AC-7) and rotates design 2's orrery. Which one runs is chosen by the active design, deliberately, not by whichever handler happens to run first.",
+      "verifyVia": {
+        "input": "At SYSTEM in design 2, press and drag across the orbit view.",
+        "observable": "The orrery's tilt and heading follow the drag; the published S.bodyHits coordinates move with _systemRotX/_systemRotY. Dragging in design 1 at the same level scrolls the ladder instead and does not rotate anything."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-9",
+      "statement": "\"The indicators on the prism and system screens should be grabbable\" \u2014 the readouts that show a position along a range are handles, not decoration. On the prism that is the y-gauge and the zoom/index indicators; at SYSTEM it is the ladder's scroll indicator and the counter.",
+      "verifyVia": {
+        "input": "At PRISM and at SYSTEM in each design, press on each indicator and drag along its axis.",
+        "observable": "The indicator moves under the pointer and the view it reports moves with it. Releasing leaves the view where the indicator was dropped."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-10",
+      "statement": "FOUND IN PASSING, and it is a thing on the glass that is wrong: every body name in both designs is a silent error fallback, and past ten planets it reads 'Sol undefined'. state.js:109's makeRng returns { next, child } while NameGenerator's generatePlanetName / generateMoonName call rng.float() and rng.pick() \u2014 so every call throws, state.js:258-259's catch swallows it, and the fallback alphabet 'bcdefghijk' runs out at index 10. Sol has 13 planets. The comment at state.js:107 claims this rng is \"the same shape\" as NavComputer._makeRng (:315-327), which has float/int/pick/bool/chance; it is not.",
+      "verifyVia": {
+        "input": "At SYSTEM on Sol in design 1, read the ladder's body labels and the status line, scrolling to the outermost bodies.",
+        "observable": "No body is named 'Sol undefined'. Names come from the real generator, not the catch-block fallback \u2014 verifiable headlessly by asserting makeRng exposes float/int/pick/bool/chance and that generatePlanetName does not throw."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-11",
+      "statement": "THE REGRESSION GUARD, and it is the discipline that made the camera safe to wire last session: every rotation, drag and highlight added here leaves the DEFAULT picture exactly where Max ruled on it. Each view opens at the rotation it opens at today (_localRotX=0.5/_localRotY=0.3 at PRISM, _systemRotX=0.5/_systemRotY=0 at SYSTEM, against the designs' fixed rx=0.92/tilt=0.42), and only a real gesture changes it. \u26a0 _localRotY is unclamped and unwrapped \u2014 it grows without bound across drags and must be wrapped now that the designs read it.",
+      "verifyVia": {
+        "input": "Enter each level in each design and render without touching the mouse or keyboard; then drag, then re-enter.",
+        "observable": "The entry frame is byte-identical to the pre-change build's entry frame at every level in both designs. viewMode === null is today's nav, byte for byte. _localRotY stays bounded across many drags."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-13",
+      "statement": "FOUND IN PASSING, and it is live today without any rotation: design 2's orrery places every body at `a = i * 1.7 + 0.6` (d2System, lab:1406) where `i` is the DRAW-LOOP INDEX, not an orbital angle \u2014 and state.js:401 re-sorts D.bodies on [ / ] (AU / NAME / TEMP). So pressing the sort key at SYSTEM teleports every planet around its ring. The real angle exists and is simply dropped: StarSystemGenerator.js:550/609 and SolarSystemData.js:723/846 put `orbitAngle` on the planet wrapper and the LEGACY orrery already reads it (NavComputer.js:2853); buildBodies (state.js:265) never copies it across. \u26a0 Fixing it MOVES EVERY PLANET in design 2's orrery \u2014 a change to a picture Max ruled on, so it goes to him as a rendered A/B.",
+      "verifyVia": {
+        "input": "At SYSTEM in design 2, note where each planet sits on its ring, then press [ and ] to cycle the sort key.",
+        "observable": "Every body stays on its own ring at its own angle across every sort. The angles match the legacy orrery's, because both read the same p.orbitAngle."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-14",
+      "statement": "FOUND IN PASSING, and it is a live MIS-SELECTION, not an inert region: placeLabel (lab:296-306) walks 7 vertical offsets up to 18 texels from the star it labels and checks each candidate slot only against OTHER ALREADY-PLACED LABELS \u2014 never against star dots. So a label can land squarely on an unrelated star's mark, and clicking it selects the wrong star. The prism's index tags have the same drift at a fixed +3,-6 offset, over a field of up to 240 marks with a 3-texel hit radius.",
+      "verifyVia": {
+        "input": "At PRISM in design 2, find a placed star label that has drifted away from its own mark, and click the label.",
+        "observable": "The star the label NAMES is selected \u2014 not whatever mark happens to lie under the label's plate. S.labelHits is tested before S.prismHits, so the plate's texels belong to the label's own object."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-12",
+      "statement": "Max walks both nav menus again, screen by screen, and each one holds up close.",
+      "verifyVia": {
+        "input": "ORRERY -> N -> V, then walk GALAXY / SECTOR / REGION / PRISM / SYSTEM in both designs, clicking and dragging everything.",
+        "observable": "Max's judgment that the screens hold up. NEVER driven or PASSed by an agent."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "nav-240p-lab.html \u2014 THE SPEC. Every design change goes here and is re-extracted; designs.js is GENERATED and must never be hand-edited.",
+      "src/ui/NavComputer.js \u2014 the host. LINE-COUNT-FROZEN at 4711; ~700 line-anchored citations ride it, so new statements FOLD onto existing lines and every comment on a folded line must be /* */ terminated. Lines 586, 4345, 4420 and 4442 end in // and are poisoned. The keyboard fold line is 349.",
+      "NavComputer's live drag state \u2014 _dragging, _dragStartX/Y, _dragStartRotX/Y, _localRotX/_localRotY (PRISM), _systemRotX/_systemRotY (SYSTEM). All already written at 0.008 rad/px on drag; the designs simply never read them.",
+      "src/ui/navViewModes/state.js \u2014 the adapter that builds S and D. S.cam and S.view are the pipes the camera and the 2D frame already travel down; rotation is one more field on S.cam.",
+      "src/ui/navViewModes/index.js \u2014 the driver: modes, buffer, the render-tail hover picker, the keyboard methods, remapClick.",
+      "src/ui/navViewModes/picking.js \u2014 hit-testing over what the paint published; branches on S.mapProj.kind in exactly one place.",
+      "src/generation/NameGenerator.js \u2014 generatePlanetName / generateMoonName, whose rng contract state.js does not currently satisfy (AC-10)."
+    ],
+    "outputs": [
+      "The two 240p nav view modes ('rail' and 'bars') as the player drives them \u2014 both ship, per Max's 'I like both versions... let's keep both'.",
+      "S.cam gains rotX/rotY; d2System gains a real camera; new published-geometry fields on S for every element AC-2 makes pickable and for the AC-5 click-highlight.",
+      "The diegetic cockpit nav panel eventually represents these designs \u2014 \u26d4 but it MUST NOT change here. Two NavComputer instances exist (main.js:4700 and :5895); the gate is activate(), which _openCockpitNav never calls. NOT _bare, which is permanently false on the panel."
+    ],
+    "mustStayWorking": [
+      "wc -l src/ui/NavComputer.js == 4711 and wc -l src/main.js == 15161.",
+      "node scripts/extract-nav-designs.mjs --check exits 0 \u2014 designs.js matches the lab.",
+      "viewMode === null is today's nav, byte for byte.",
+      "Suites at baseline: tests/ 20 failed across the same 8 files (agent-camera-api, driver-pack-giantdeck, gas-body-lab-material, lab-shader-perframe-seam, moon-condition-contract, moon-rng-stream-identity, port-condition-contract, relief-octave-lod-ramp); src/cockpit 698 passed; src/ui 480 passed. \u26a0 navViewModes.test.js's 'rail: every level tab changes level when clicked where it is drawn' failed once under a full src/ui run and passed 3/3 in isolation \u2014 cross-test pollution, pre-existing, not caused here.",
+      "AC-1..AC-11 of the closed nav-menu-elements-functional workstream: the map is a picker at all five levels in both designs; Tab / Enter / [ ] / - = / / stay bound; the prism follows the camera on WASD/R/F and the wheel; the drawn search reuses the whole existing search pipeline.",
+      "Hover resolves at the TAIL of the driver's render() \u2014 the legacy painters rewrite all three hover fields every frame from _mouseX/_mouseY against LEGACY geometry, so any new pointer state must be written there too or the legacy pass wins.",
+      "The legacy renderer keeps running underneath every mode frame ON PURPOSE \u2014 it is also the lazy loader (_renderLocal -> _ensureStarsLoaded; _renderSystem resolves _systemData).",
+      "_autopilotButtonRect is a live invisible button that _handleClick tests FIRST; any new interactive rect competes with that ordering.",
+      "A painter throw freezes the glass \u2014 PanelHost catches once, then stops uploading, and the screen keeps showing the last good frame and looks alive. Every new field the designs read needs a default in state.js.",
+      "S and D are MUTATED, never replaced \u2014 a fresh object leaves every design painting the frame the factory was built on, forever, and it repaints happily."
+    ]
+  }
+}
