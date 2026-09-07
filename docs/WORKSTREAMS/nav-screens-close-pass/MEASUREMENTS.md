@@ -129,3 +129,53 @@ Sol has **13** planets.
 the real one exposes `float`, `int`, `pick`, `bool`, `chance`, `child`. A reader checking the comment
 instead of the code would close this as fine. Probability the 13 straight fallback-form names are
 coincidence, given the generator takes that form only 55% of the time: **~0.0004**.
+
+## 7. ⭐⭐ ITEM 1 — MEASURED LIVE AGAINST THE REAL 775 SECTORS, AND IT IS MUCH WORSE THAN "A FIFTH"
+
+The handoff estimated *"roughly a fifth of the pane can never be clicked"* from the geometry. Driven
+against the running game's own `_sectors.getSectorAt`, inverting through the design's own published
+`S.mapProj`:
+
+### Design 1 — **HALF THE MAP IS DEAD**
+
+| | |
+|---|---|
+| drawn grid | 8×8 = **64 cells** over a 216-texel square at `ox=21, oy=6, cell=27` |
+| cells whose CENTRE resolves to a sector | **32** |
+| cells whose centre resolves to **nothing** | **32 — exactly half** |
+| texels sampled across the square (every 4th) | 2916 |
+| texels resolving to no sector at all | **1375 = 47.2%** |
+
+⛔ **The dead cells are a complete RING, not just the corners.** The whole top row (`j=0`), the whole
+bottom row (`j=7`), both full side columns (`i=0` and `i=7`), and the corners of the next ring in:
+
+```
+0,0 1,0 2,0 3,0 4,0 5,0 6,0 7,0      ← entire top row
+0,1 1,1                 6,1 7,1
+0,2                         7,2
+0,3                         7,3
+0,4                         7,4
+0,5                         7,5
+0,6 1,6                 6,6 7,6
+0,7 1,7 2,7 3,7 4,7 5,7 6,7 7,7      ← entire bottom row
+```
+
+⭐ **AND THE PICTURE ALREADY ADMITS IT.** In the shot `shots/galaxy-design1-today.png` only **eight**
+tile-ID plates are drawn — `E3 D4 E4 F4 D5 E5 F5 E6` — and every one of them is in the middle two
+columns. The ranked tiles the design chooses to name are all central because that is where the
+galaxy is; the grid keeps being drawn over the black anyway.
+
+### Design 2 — the opposite failure, and it is small but it is a CORRECTNESS gap
+
+| | |
+|---|---|
+| projection | `kind: 'wide'`, `kpc = 0.103` per texel, clip `{x:0, y:8, w:427, h:224}` |
+| visible vertical band | **±11.54 kpc** |
+| sectors on the glass | **755 / 775** |
+| sectors **off the glass, unreachable by any click** | **20** |
+| furthest sector \|z\| | 15.00 kpc · furthest R | 21.21 kpc |
+
+⭐ **So the two failures are not the same size and should not get the same answer.** Design 1 draws a
+grid over ground that is 47% nothing — an **affordance** lie, since `pickSector` already returns
+`null` there correctly. Design 2 draws an honest picture that is **missing 20 real sectors** — a
+correctness gap, small in count only because 73% of all sectors sit inside R < 4 kpc.
