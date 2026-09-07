@@ -6,6 +6,10 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (HANDOFF) — ▶ **NEXT SESSION: `docs/FEATURES/handoff-2026-09-07-nav-close-pass-part2.md`.** All pushed, `543b709`, verified by `git ls-remote`. ⭐ **AC-16's LIVE CONFIRMATION IS THE PICKUP** — the orrery must track a planet as it ORBITS, the code is in and mutation-proved, and the live check **could not be run at all** because `spawnSystem` had never run in the ORRERY boot state, so the SYSTEM screen was drawing a system the nav generated for itself. Get into a spawned system first. ⛔ Do NOT mark it green on the headless proof.
+>
+> Then AC-2 (everything clickable — fully inventoried, `S.labelHits` is the worked example), AC-5's GALAXY half, AC-9, AC-6's inbound half.
+
 > ## ▶ 2026-09-07 (latest) — **MAX'S SCREEN-BY-SCREEN PASS: SEVEN OF EIGHT ITEMS BUILT AND VERIFIED LIVE; BOTH RULINGS TAKEN AND BOTH PICTURES APPROVED.** Lane A, **PUSHED at `3d03794`** (verified by `git ls-remote`). Workstream `docs/WORKSTREAMS/nav-screens-close-pass/`.
 >
 > ⭐ **HIS RULINGS AND HIS SIGN-OFF:** *"I want the nav screen to reflect the actual orientation of the planets in the game, so if B is correct then that's what we use"* · *"remove the negative/non-selectable space and redraw the cells from there"* + *"the chunky cells of design1 today are good"* · then on the re-fit and the label fix: ***"That's better, I like the after version better"*** and ***"looks good to me."***
