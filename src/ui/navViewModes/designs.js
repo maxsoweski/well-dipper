@@ -522,6 +522,31 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     return { i: Math.round(p.i), j: Math.round(p.j) };
   }
 
+  /**
+   * ⭐⭐ AT GALAXY THE ACKNOWLEDGEMENT IS THE SECTOR, NOT THE CELL — AC-5's REMAINING HALF.
+   *
+   * At SECTOR and REGION the thing clicked and the thing drilled are the same rectangle, so framing
+   * the cell is honest and `pickCell` above is the whole story. ⛔ AT LEVEL 0 THEY ARE DIFFERENT
+   * OBJECTS. The click resolves through `pickSector` to one of 775 IRREGULAR sectors and the drill
+   * flies to THAT sector's own centre and size, while the grid over it is a plain 8x8 of the re-fitted
+   * square. A frame on the cell would light up a rectangle the zoom does not go to — a promise the
+   * next 350 ms visibly breaks, which is worse than the nothing it replaces.
+   *
+   * ⭐ SO THE DRIVER PUBLISHES THE SECTOR IT ACTUALLY PICKED, out of the SAME `pickSector` call the
+   * drill uses, and each design frames it through its OWN projection. One picked object, two pictures,
+   * no third copy of anybody's geometry.
+   * ⚠ NULL ON A MISSING OR NON-FINITE SECTOR, and every caller is guarded on `S.level === 0` besides.
+   *   A painter that throws freezes the glass LOOKING ALIVE: `PanelHost` catches once and then stops
+   *   uploading, so the last good frame stays on the screen.
+   */
+  function pickedSector() {
+    const p = S.pick;
+    if (!p || p.level !== 0) return null;
+    const s = p.sector;
+    if (!s || !Number.isFinite(s.centerX) || !Number.isFinite(s.centerZ) || !Number.isFinite(s.size)) return null;
+    return s;
+  }
+
   // DESIGN 1 — THE 71x40.  A character-cell nav computer: a map pane and a persistent ranked rail.
   // ════════════════════════════════════════════════════════════════════════════════════════════════
   /** ⭐ THE HINT ROW WHILE THE DRAWN SEARCH IS OPEN, AND IT NAMES EVERY KEY THE FIELD CONSUMES.
@@ -536,6 +561,17 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // ⛔ AN ASSIGNMENT, NOT A `||= []`: a design that draws no labels must publish an EMPTY array, and
     //    a picker reading `undefined.length` inside `render()`'s tail freezes the glass.
     S.labelHits = [];
+    // ⭐ AND THE SAME CLEAR FOR AC-2's REMAINING RECTANGLES (INTERFACE §8). Design 2 clears its own
+    // set at the head of `drawDesign2`; this is design 1's half, and BOTH halves are wanted. One press
+    // of V must not leave design 2's list headers or its locator live under design 1's rail, and
+    // design 1's pager must not answer a click after the pilot has switched to design 2 — a rectangle
+    // published by a design that did not paint this frame is geometry out of NOBODY'S paint, which is
+    // the same lie as geometry restated in a hit-test.
+    // ⛔ ASSIGNED TO `null`, NEVER DELETED, for the reason `S.labelHits = []` is an assignment: a
+    //    picker dereferencing a field that is not there freezes the glass, and it freezes it LOOKING
+    //    ALIVE — `PanelHost` catches a painter throw once and then stops uploading frames.
+    S.pagerRect = null; S.ladderCounterRect = null;
+    S.listHeaderRects = null; S.locatorRect = null; S.minimapRect = null; S.companionRect = null;
     const CELL = FACE.advance, LEAD = FACE.h + 1;
     const cols = Math.floor((W + 1) / CELL), rows = Math.floor(H / LEAD);
     const cx = (c) => c * CELL, ry = (r) => r * LEAD;
@@ -783,6 +819,25 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // YOU marker — a "you hit this one" that a rule can cross is not an acknowledgement.
     const pk = pickCell(S.level);
     if (pk) frame(g, ox + pk.i * cell, mapY + pk.j * cell, cell, cell, INK.KEY);
+    // ⭐ AND AT GALAXY THE HIGHLIGHT IS THE SECTOR (AC-5). Same ink, same drawn-last rule, different
+    // geometry — see `pickedSector`. Both edges of each axis go through THIS pane's own `toX`/`toY`
+    // and are rounded ONE EDGE AT A TIME, which is exactly how the grid's rules are laid down
+    // (`gx(i) = ox + round(sq * i / n)`): rounding a width instead would let the frame drift a texel
+    // off the boundaries the grid already draws on.
+    // ⛔ INTERSECTED WITH THE PAINTED SQUARE, AND SKIPPED WHEN THE INTERSECTION IS EMPTY. A sector can
+    //    straddle the re-fitted footprint's edge and `rect()` clips nothing, so an unclipped frame
+    //    would paint over the map's rule, the rail and the status row — chrome that is not the map's
+    //    to write on, and the failure the region guard exists to catch elsewhere.
+    // ⛔ AND IT DRAWS NOTHING WHEN `S.pick` IS NULL, which is every frame until a click commits: the
+    //    default picture Max ruled on cannot move.
+    const ps = S.level === 0 ? pickedSector() : null;
+    if (ps) {
+      const sx0 = Math.max(ox, Math.round(toX(ps.centerX - ps.size / 2)));
+      const sy0 = Math.max(mapY, Math.round(toY(ps.centerZ - ps.size / 2)));
+      const sx1 = Math.min(ox + sq, Math.round(toX(ps.centerX + ps.size / 2)));
+      const sy1 = Math.min(mapY + sq, Math.round(toY(ps.centerZ + ps.size / 2)));
+      if (sx1 > sx0 && sy1 > sy0) frame(g, sx0, sy0, sx1 - sx0, sy1 - sy0, INK.KEY);
+    }
     // ⭐ THE PICK GEOMETRY, PUBLISHED BY THE CODE THAT DREW IT — the same principle as `region()` and
     // as `S.ladderStops` below. A hit-test that restates `ox` / `sq` / `n` is a SECOND COPY of this
     // layout, and two copies of one geometry with one silently wrong is the whole AC-4 defect shape.
@@ -962,7 +1017,18 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const vx = [];
     let lastV = -99;
     for (const b of shown) { let v = vpx(b.au); if (v - lastV < 8) v = lastV + 8; lastV = v; vx.push(v); }
-    const vMax = (vx.length ? vx[vx.length - 1] : 0) + 8;
+    // ⛔⛔ `+ 4`, NOT `+ 8` — AND THE 8 MADE EVERY LADDER OVERFLOW BY EXACTLY FOUR TEXELS. `vpx` already
+    //    carries the axis's 4-texel margin on BOTH ends (`4 + (winW - 8) * …` runs 4 .. winW - 4), so
+    //    the furthest body always lands at `winW - 4` and the right margin it needs is the same 4 the
+    //    left one got. Adding 8 counted that margin twice: `vMax = winW + 4`, `maxScroll = 4` on ONE
+    //    planet, four planets or forty (measured 2026-09-08, probing [1], [1,4], [1,4,12], [1,4,12,30],
+    //    six and forty bodies — 4 every time, and only the EMPTY ladder read 0). So the `...` cap was
+    //    drawn on every system that has a body, promising four texels of nothing beyond the last one,
+    //    and the `N-M OF K` counter read `1-N OF N` — the cap Max asked for exists to say "there is
+    //    more this way", and it was saying it where there was not. A ladder that fits now publishes
+    //    `maxScroll` 0, no caps and no counter; one that does not (Sol at 427x240) keeps all three,
+    //    four texels shorter, with its last body still at `x1 - 8` when scrolled to the end.
+    const vMax = (vx.length ? vx[vx.length - 1] : 0) + 4;
     const maxScroll = Math.max(0, vMax - winW);
     const scroll = Math.max(0, Math.min(maxScroll, Math.round(S.ladderScroll || 0)));
     // ⭐ PUBLISHED FOR THE SCROLL CONTROL, so the thing that moves the window and the thing that draws
@@ -1026,8 +1092,20 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // scrapes the context for text finds nothing and passes vacuously whatever the ladder does.
     S.ladderVisible = [first, lastI];
     if (maxScroll > 0) {
-      T(g, `${first + 1}-${lastI + 1} OF ${shown.length}`, x1 - 4, axisY + 16,
+      const cStr = `${first + 1}-${lastI + 1} OF ${shown.length}`;
+      const cW = T(g, cStr, x1 - 4, axisY + 16,
         { color: INK.DIM, align: 'right', rgn: 'map', what: 'ladder window' });
+      // ⭐ AC-9 — THE COUNTER IS A HANDLE, AND ITS BAND IS THE STRING'S OWN. `T()` returns the width it
+      // measured and the right align subtracts exactly that from `x1 - 4`, so `x` here is the left edge
+      // the glyphs landed on — not `measurePixelText` called a second time on a face that arrives as a
+      // parameter and could differ.
+      // ⛔ PUBLISHED ONLY INSIDE THIS BRANCH. The readout is drawn only when there is a window to
+      //    report (`maxScroll > 0`); a rectangle published when the whole ladder fits would be a
+      //    scrubber for a range with one stop in it, grabbable and inert.
+      // ⚠ THE COUNTER'S OWN TEXELS DO NOT MOVE UNDER THE DRAG — it is a READOUT, `N-M OF K`, and what
+      //   moves is the window it reports. A drawn thumb would be a new element on a SYSTEM picture Max
+      //   ruled on and is his call, not this pass's.
+      S.ladderCounterRect = { x: x1 - 4 - cW, y: axisY + 16, w: cW, h: FACE.h };
     }
     if (vis(sx(0))) rect(g, sx(0) - 1, axisY - 1, 3, 3, INK.YOU);
     S.bodyHits = hits;
@@ -1160,6 +1238,16 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     let pagerTxt = `  ${off + 1}-${off + lines.length} OF ${total}   - = PAGE`;
     if (off > 0 && measurePixelText(pagerTxt) > w) pagerTxt = `  ${off + 1}-${off + lines.length}/${fmtK(total)}  - = PAGE`;
     T(g, fit(pagerTxt, w), x, pagerY, { color: INK.DIM, rgn: 'rail', what: 'pager' });
+    // ⭐ AC-2 — THE PAGER ROW READS `- = PAGE` AND HAS NEVER ANSWERED A CLICK. Two halves, out of the
+    // three values the row was laid out with: `x` and `w` are the rail's own, `pagerY` is
+    // `y + (lines.length + 1) * LEAD` — the number of rows this frame actually DREW, so the band moves
+    // down with a shorter list instead of being pinned to where a full page would have put it.
+    // ⛔ `mid` IS PUBLISHED, NOT LEFT TO THE PICKER. A consumer computing `x + w / 2` would be a second
+    //    copy of this row's geometry, and the half it computed would silently stop matching the row the
+    //    moment the rail's width changed — the AC-4 defect shape at its smallest.
+    // ⚠ AND IT IS ABSENT WHILE THE DRAWN SEARCH IS OPEN, because `d1Rail` returns into `d1Search`
+    //   above and this line never runs: the pager is not on the glass, so it is not on offer.
+    S.pagerRect = { x0: x, mid: x + w / 2, x1: x + w, y: pagerY, h: FACE.h };
     rect(g, x, pagerY + LEAD - 1, w, 1, INK.RULE);
     detail.forEach(([t, ink], i) => {
       if (!t) return;
@@ -1270,6 +1358,13 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // that is not there. Whichever painter runs below republishes what it actually draws, so this
     // costs exactly one frame of nothing and closes a whole class of stale-pick defect at the source.
     S.mapProj = null; S.prismHits = null; S.bodyHits = null; S.listGeom = null; S.labelHits = []; S.orbitRings = null;
+    // ⭐ AC-2's REMAINING RECTANGLES, CLEARED ON THE SAME PRINCIPLE AND FOR BOTH DESIGNS' FIELDS
+    // (INTERFACE §8). Four of these six are design 2's own — the list headers only exist in list mode,
+    // the minimap only in map mode, the companion strip only in a wide binary — so each is republished
+    // by the branch that draws it and by nothing else; the two design 1 fields are cleared here for
+    // the mirror-image reason `drawDesign1` clears design 2's.
+    S.listHeaderRects = null; S.locatorRect = null; S.minimapRect = null; S.companionRect = null;
+    S.pagerRect = null; S.ladderCounterRect = null;
     if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
     else if (S.level === 3) d2Prism(g, W, mapY, mapH);
     else d2System(g, W, mapY, mapH);
@@ -1304,6 +1399,13 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const locW = measurePixelText(fit(loc, W - tx - 6));
     T(g, fit(loc, W - tx - 6), W - 4, 1, { color: INK.BODY, align: 'right', rgn: 'topbar', what: 'locator' });
     assertClear('tab strip vs locator', 'topbar', tx, W - 4 - locW);
+    // ⭐ AC-2 — `HERE · SECTOR` IS THE ONE THING THIS DESIGN SAYS ABOUT WHERE YOU ARE, and clicking it
+    // has always done nothing. `locW` is the FITTED string's width — the very value the right align
+    // above subtracts from `W - 4` — so the band is the text that LANDED, not the text that was asked
+    // for: at a narrow buffer `fit()` eats characters off the right and the band shrinks with them.
+    // ⛔ PUBLISHED AT EVERY LEVEL, because the topbar is drawn at every level. It is cleared at the
+    //    head of this same function, so the one frame where it is stale cannot exist.
+    S.locatorRect = { x: W - 4 - locW, y: 1, w: locW, h: FACE.h };
 
     // ── BOTTOM BAR: one 63-character status line, ' · '-joined so truncation eats the VERB first.
     rect(g, 0, H - BAR, W, 1, INK.RULE); rect(g, 0, H - BAR + 1, W, BAR - 1, INK.BG);
@@ -1385,6 +1487,22 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (pk0) {
         const gn = 8, gc = W / gn;
         frame(g, pk0.i * gc, mapY + mapH / 2 + (pk0.j / gn - 0.5) * W, gc, gc, INK.KEY);
+      }
+      // ⭐ AND THE SECTOR ITSELF, WHICH IS WHAT A GALAXY CLICK ACTUALLY DRILLS (AC-5) — see
+      // `pickedSector`. Through THIS design's `toX`/`toY`, which are isotropic at `W / v.size` texels
+      // per kpc, so a 0.5 kpc sector is the same handful of texels in both axes and nothing of design
+      // 1's square comes across with it. Drawn last, over the cell frame above and the YOU marker.
+      // ⛔ CLIPPED TO THE PAINTED BAND. The wide field is only ±(mapH/2)·kpc — about half the disc is
+      //    off the glass BY CONSTRUCTION — so a picked sector can be partly or wholly outside it, and
+      //    an unclipped frame would draw over the topbar's rule and the status bar. Empty
+      //    intersection, nothing drawn: the honest answer for a sector the crop does not show.
+      const ps0 = pickedSector();
+      if (ps0) {
+        const qx0 = Math.max(0, Math.round(toX(ps0.centerX - ps0.size / 2)));
+        const qy0 = Math.max(mapY, Math.round(toY(ps0.centerZ - ps0.size / 2)));
+        const qx1 = Math.min(W, Math.round(toX(ps0.centerX + ps0.size / 2)));
+        const qy1 = Math.min(mapY + mapH, Math.round(toY(ps0.centerZ + ps0.size / 2)));
+        if (qx1 > qx0 && qy1 > qy0) frame(g, qx0, qy0, qx1 - qx0, qy1 - qy0, INK.KEY);
       }
     } else {
       // the drillable block is SQUARE in world space; the density bleeding past it is real map and is
@@ -1470,6 +1588,20 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     rect(g, mx + mw / 2, my + mh / 2, 1, 1, INK.YOU);
     rect(g, W - 17, my, 1, mh, INK.DIM);
     rect(g, W - 19, my + mh / 2, 5, 1, INK.YOU);
+    // ⭐ AC-2 — THE WIDGET'S OWN 24x24, AND THE CLICK IT ANSWERS IS "NOTHING, ON PURPOSE". It has no
+    // downstream identity to act on and inventing one would be this design deciding what the minimap
+    // means; what it MUST do is EAT the press. The plate rule (INTERFACE §6) says texels belong to the
+    // thing drawn on them, and without this rectangle a press on the corner widget falls through to
+    // whatever star mark lies under it and selects a star the pilot cannot see.
+    // ⛔ MAP MODE ONLY. `d2Prism` returns into `d2List` before any of this runs, so list mode publishes
+    //    nothing and a list click can never land on a widget that is not on the glass.
+    // ⚠ THE BAND IS THE WIDGET'S WHOLE INK, NOT THE 24x24 ALONE. The two lines above it draw a scale
+    //   column at `W - 17` and a 5-texel mark from `W - 19`, both OUTSIDE the corner box — texel columns
+    //   `W - 19 .. W - 15` at any width. A rectangle stopping at `mx + mw` (measured: 383..406 against
+    //   ink to 412 at 427 wide) left a press on that little bar falling through to the star mark under
+    //   it, which is the exact mis-selection this rectangle exists to close. The right edge is the
+    //   mark's own `W - 19 + 5`, from the same expression that drew it.
+    S.minimapRect = { x: mx, y: my, w: (W - 19 + 5) - mx, h: mh };
   }
   /** DESIGN 2'S LIST MODE — 'L'. A 60% checker plate over the whole map plane (the starfield stays
    *  faintly behind it) and rows of real terminal at the repo's 6-texel pitch. ⛔ IT REPLACES THE MAP:
@@ -1491,7 +1623,23 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     S.listOffset = off;
     const cols = [4, 22, 148, 166, 208, 250];
     const hdr = ['N', 'NAME', 'SP', 'PC', 'PLANE', 'SYSTEM'];   // '#' is not in the face; tofu would lie
-    hdr.forEach((h, i) => cols[i] < W - 8 && T(g, h, cols[i], mapY + 4, { color: INK.DIM, rgn: 'map', what: 'list header ' + h }));
+    // ⭐ AC-2 — THE COLUMN HEADERS SORT THE LIST, AND EACH BAND IS THE ONE ITS OWN HEADER DREW.
+    // ⛔ THE GUARD IS THE DRAW'S OWN `cols[i] < W - 8`, evaluated once for both: at a narrow buffer the
+    //    right-hand headers are never painted, and a rectangle published for a header that is not on
+    //    the glass is a click target with nothing above it — the same "the glass promises what nothing
+    //    keeps" defect the culled GALAXY cells were removed for, one column wide.
+    // ⭐ `T()` RETURNS THE WIDTH IT MEASURED, so the band is the string's own. Calling
+    //    `measurePixelText(h)` again here would be a second measurement of a face that arrives as a
+    //    parameter — it agrees today and would stop agreeing silently.
+    // ⚠ `N` IS THE ROW ORDINAL AND SORTING BY IT IS THE IDENTITY, so it publishes `sortId: null`
+    //   (INTERFACE §8a). The click is still EATEN — the header is drawn, so it must answer — and it
+    //   does nothing. Inventing a key for it would be this design specifying a sort the driver has no
+    //   comparator for, which is a promise made in the wrong file.
+    const HDR_SORT = { N: null, NAME: 'name', SP: 'class', PC: 'dist', PLANE: 'plane', SYSTEM: 'catalog' };
+    S.listHeaderRects = [];
+    hdr.forEach((h, i) => { if (!(cols[i] < W - 8)) return;
+      const hw = T(g, h, cols[i], mapY + 4, { color: INK.DIM, rgn: 'map', what: 'list header ' + h });
+      S.listHeaderRects.push({ x: cols[i], y: mapY + 4, w: hw, h: FACE.h, sortId: HDR_SORT[h] }); });
     const drawn = D.starRows.slice(off, off + rows);
     drawn.forEach((s, i) => {
       const y = mapY + 4 + (i + 1) * LEAD;
@@ -1701,7 +1849,15 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //   that way, as do the selection frames. That is the low-fi idiom, not a mark that failed to turn.
     sprite(g, cxp + 8, cyp, SP.diam5, INK.TARGET);
     const far = (D.sys?.binarySeparationAU > 100) ? [`» ${(D.sysStar?.name || '').toUpperCase()} B ${Math.round(D.sys.binarySeparationAU)}AU`] : [];
-    if (far.length) T(g, fit(far.join('  '), W - 8), 4, mapY + 1, { color: INK.DIM, rgn: 'map', what: 'companion strip' });
+    // ⭐ AC-2 — THE COMPANION STRIP, AND IT IS EATEN RATHER THAN ACTED ON. `» STAR B nnAU` names a
+    // star this nav cannot reach: nothing in the pipeline resolves a companion to a system, so an
+    // action here would be invented. What the rectangle buys is the plate rule (INTERFACE §6) — the
+    // strip is drawn across the top of the orrery, directly over the outer orbit rings, and without it
+    // a press on the text selects whichever ring passes beneath.
+    // ⛔ PUBLISHED ONLY WHEN THE STRIP IS DRAWN (`far.length`), from the FITTED string's own returned
+    //    width — a band sized from the unfitted string would extend past the glyphs at a narrow buffer.
+    if (far.length) { const fW = T(g, fit(far.join('  '), W - 8), 4, mapY + 1, { color: INK.DIM, rgn: 'map', what: 'companion strip' });
+      S.companionRect = { x: 4, y: mapY + 1, w: fW, h: FACE.h }; }
     // ⭐ THE ORRERY'S BODY MARKS, OUT OF THE ORBIT ARITHMETIC THAT PLACED THEM. Even now that the
     // angle is the planet's REAL `orbitAngle`, the drawn position also carries `rOf`, `TILT`, the
     // azimuth offset and two roundings — so nothing else in the build could reconstruct where a

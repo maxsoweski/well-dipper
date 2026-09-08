@@ -730,3 +730,150 @@ describe('AC-6 — tabbing OUT of PRISM/SYSTEM eases the 2D frame open instead o
   }, 30000);   // `setPlayerPosition` regenerates the sector tree and the first level-1 frame builds a
                // density field; both are the fixture, not the assertion.
 });
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────
+// nav-screens-close-pass part 3 — AC-9's SECOND half: SYSTEM's ladder counter is a handle.
+//
+// ⛔ THE HOST OWNS THREE FOLDS AND NOTHING ELSE (INTERFACE.md §8c): arm at mousedown (:4405), own the
+// move (:4355), release at mouseup (:4415). `counterGrab` / `counterDragTo` are the DRIVER's, landing
+// in parallel, so every clause calls them OPTIONALLY and the end-to-end case is `runIf`-gated —
+// a missing implementation must report as SKIPPED, never as a green test that exercised nothing.
+// ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Whether the DRIVER's counter scrubber has actually landed, measured off a real driver. */
+const DRIVER_HAS_COUNTER = await (async () => {
+  const { nav } = await makeHeadlessNav({ width: 427, height: 240 });
+  const drv = makeViewModeDriver(nav);
+  return typeof drv.counterGrab === 'function' && typeof drv.counterDragTo === 'function';
+})();
+
+/**
+ * Install recorders for the counter surface ON THE LIVE DRIVER INSTANCE the folds reach, so these
+ * cases pin the HOST's three clauses whether or not the DRIVER's implementation has landed.
+ */
+function instrumentCounter(nav, { grab = true, value = 7 } = {}) {
+  const drv = (nav._viewDriverInst ||= makeViewModeDriver(nav));
+  const calls = { grab: [], dragTo: [] };
+  drv.counterGrab = (x, y) => { calls.grab.push({ x, y }); return grab; };
+  drv.counterDragTo = (px) => { calls.dragTo.push(px); return value; };
+  return calls;
+}
+
+describe('AC-9 — at SYSTEM in design 1 a press on the ladder COUNTER scrubs the window', () => {
+  it('⭐ the held counter writes `S.ladderScroll` from the driver, THROUGH THE REAL HANDLERS', async () => {
+    const { nav, drv } = await crowdedLadder('rail');
+    const calls = instrumentCounter(nav, { grab: true, value: 7 });
+    drv.S.ladderScroll = 0;
+    const rotX = nav._systemRotX, rotY = nav._systemRotY;
+
+    dragBy(nav, 200, 120, 40);
+
+    expect(calls.grab, 'the grab must be decided once, at the press, with the press point')
+      .toEqual([{ x: 200, y: 120 }]);
+    expect(calls.dragTo, 'the move must hand the driver the pointer x it is inverting').toEqual([240]);
+    expect(drv.S.ladderScroll, 'the scrub did not reach the ladder').toBe(7);
+    // ⚠ HONEST ABOUT WHAT THIS PAIR PINS. At level 4 in `rail` the AC-7 pan clause also returns, so
+    // the rotation is doubly guarded here and this assertion alone cannot kill the missing-`return`
+    // mutant — `ladderScroll` above does that (a fall-through pans to 0). The rotation assertion that
+    // discriminates is design 2's below, where a fold ignoring `viewMode` really would steal the turn.
+    expect(nav._systemRotX, 'the scrub also spun the orrery').toBe(rotX);
+    expect(nav._systemRotY, 'the scrub also spun the orrery').toBe(rotY);
+  });
+
+  it('⛔ a press that MISSES the counter still pans the ladder, and never asks the driver to scrub', async () => {
+    const { nav, drv } = await crowdedLadder('rail');
+    const calls = instrumentCounter(nav, { grab: false, value: 7 });
+    expect(drv.S.ladderMax, 'the fixture must overflow or a pan means nothing').toBeGreaterThan(60);
+    drv.S.ladderScroll = 0;
+
+    dragBy(nav, 200, 120, -37);
+
+    expect(calls.grab, 'the press must still be offered to the counter first').toHaveLength(1);
+    expect(calls.dragTo, 'a press that took no handle must not scrub').toEqual([]);
+    expect(drv.S.ladderScroll, 'AC-7\'s pan is what an unclaimed level-4 drag still does').toBe(37);
+  });
+
+  it('a move after the release changes nothing — the gesture ended with the button', async () => {
+    // ⚠ WHAT THIS ACTUALLY PINS IS `_dragging`, NOT THE RELEASE. `_handleMouseMove` never reaches the
+    // drag branch with the button up, so this case survives deleting `_counterDrag = false` at :4415.
+    // The path the release really guards is the next case; this one is the plain user-visible claim.
+    const { nav, drv } = await crowdedLadder('rail');
+    const calls = instrumentCounter(nav, { grab: true, value: 7 });
+    drv.S.ladderScroll = 0;
+    dragBy(nav, 200, 120, 40);
+    expect(drv.S.ladderScroll).toBe(7);
+
+    nav._handleMouseUp();
+    nav._handleMouseMove({ clientX: 60, clientY: 120 });
+
+    expect(calls.dragTo, 'a move with the button up scrubbed the ladder').toEqual([240]);
+    expect(drv.S.ladderScroll, 'releasing must leave the window where it was dropped').toBe(7);
+  });
+
+  it('⛔ THE RELEASE, PINNED: a grab taken at SYSTEM must not scrub a drag that began at PRISM', async () => {
+    // The level-4 mousedown reassigns `_counterDrag` on every press, so an ordinary press-release-press
+    // cycle needs nothing from :4415. The path that does is the one the y-gauge's fifth mutant found:
+    // armed at SYSTEM, RELEASED, the next press taken at PRISM (whose branch never writes the flag),
+    // then back to SYSTEM under the held button. A stale `true` there turns a pan into a scrub.
+    // ⚠ `_levelIndex` is assigned directly here as FIXTURE — `crowdedLadder` and `trappySystem` both
+    // do the same (part 3 trap 13); the behaviour under test is driven through the real handlers.
+    const { nav, drv } = await crowdedLadder('rail');
+    const calls = instrumentCounter(nav, { grab: true, value: 7 });
+    drv.S.ladderScroll = 0;
+
+    nav._handleMouseDown({ clientX: 200, clientY: 120, button: 0 });   // armed at SYSTEM
+    nav._handleMouseUp();
+    nav._levelIndex = 3;
+    nav._handleMouseDown({ clientX: 200, clientY: 120, button: 0 });   // PRISM: this branch never writes _counterDrag
+    nav._levelIndex = 4;
+    nav._handleMouseMove({ clientX: 240, clientY: 120 });
+
+    expect(calls.dragTo, 'a released grab survived into a drag that never took it').toEqual([]);
+    expect(drv.S.ladderScroll, 'the stale grab scrubbed the ladder').toBe(0);
+  });
+
+  it('⛔ THE CONTROL — design 2 draws an orrery at SYSTEM, so the counter is never consulted', async () => {
+    const { nav, drv } = await crowdedLadder('bars');
+    const calls = instrumentCounter(nav, { grab: true, value: 7 });
+    const scroll = drv.S.ladderScroll, rotY = nav._systemRotY;
+
+    dragBy(nav, 200, 120, -37, 10);
+
+    expect(calls.grab, 'design 2 publishes no counter; the press must not even ask').toEqual([]);
+    expect(calls.dragTo).toEqual([]);
+    expect(drv.S.ladderScroll).toBe(scroll);
+    expect(nav._systemRotY, 'the scrub stole design 2\'s rotation').toBeCloseTo(rotY - 37 * 0.008, 12);
+  });
+
+  it('⛔ THE CONTROL — with no mode today\'s nav is untouched: no ask, and the orbit still turns', async () => {
+    const { nav, drv } = await crowdedLadder('rail');
+    const calls = instrumentCounter(nav, { grab: true, value: 7 });
+    nav.viewMode = null;
+    const scroll = drv.S.ladderScroll, rotY = nav._systemRotY;
+
+    dragBy(nav, 200, 120, -37, 10);
+
+    expect(calls.grab, 'today\'s nav publishes no counter and must not be asked').toEqual([]);
+    expect(calls.dragTo).toEqual([]);
+    expect(drv.S.ladderScroll).toBe(scroll);
+    expect(nav._systemRotY).toBeCloseTo(rotY - 37 * 0.008, 12);
+  });
+
+  it.runIf(DRIVER_HAS_COUNTER)('⭐ AC-9 END TO END: a real drag across the counter walks the window edge to edge', async () => {
+    const { nav, drv } = await crowdedLadder('rail');
+    const r = drv.S.ladderCounterRect;
+    expect(r, 'the LAB must publish the counter\'s own rect or there is nothing to grab').toBeTruthy();
+    expect(drv.S.ladderMax, 'the counter is drawn only when there is a window to report').toBeGreaterThan(0);
+
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    nav._handleMouseDown({ clientX: cx, clientY: cy, button: 0 });
+    nav._handleMouseMove({ clientX: r.x + r.w, clientY: cy });
+    expect(drv.S.ladderScroll, 'dragged to the counter\'s right edge').toBe(drv.S.ladderMax);
+    nav._handleMouseMove({ clientX: r.x, clientY: cy });
+    expect(drv.S.ladderScroll, 'dragged back to the counter\'s left edge').toBe(0);
+
+    nav._handleMouseUp();
+    nav._handleMouseMove({ clientX: r.x + r.w, clientY: cy });
+    expect(drv.S.ladderScroll, 'a move after the release moved the window').toBe(0);
+  });
+});

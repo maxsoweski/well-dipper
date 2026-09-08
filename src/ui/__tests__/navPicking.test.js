@@ -412,21 +412,31 @@ describe('the map picks a BODY at SYSTEM', () => {
     // zone was `>= x1 - 10`, four texels wider than the three texels it draws. So on any ladder that
     // overflows at all, the outermost planet could not be clicked: the click scrolled by the few
     // texels of overflow and the planet stayed exactly where it was.
+    // ⚠ THE FIXTURE OVERFLOWS FOR REAL. This case used to run on the three-body trappy system, whose
+    //   "overflow" was the `+ 8` artifact `d1Ladder` carried until 2026-09-08 — every ladder overflowed
+    //   by exactly four texels, one planet or forty. With that gone a three-body ladder fits and draws
+    //   no caps, so the case walks a crowded ladder to its END, where the furthest body sits at the
+    //   same `x1 - 8` the artifact used to put it at on the first frame.
     const { nav, drv } = await trappySystem();
+    crowd(nav);
+    expect(drv.S.ladderMax, 'the fixture must overflow or the caps mean nothing').toBeGreaterThan(0);
+    drv.S.ladderScroll = drv.S.ladderMax;
+    nav.render();
     const caps = drv.S.ladderCaps;
-    expect(drv.S.ladderMax, 'this fixture overflows by a few texels, which is the trap').toBeGreaterThan(0);
-    const last = drv.D.bodies.find((b) => b.au === 30);
+    const last = drv.D.bodies.reduce((m, b) => (b.kind === 'planet' && (!m || b.au > m.au) ? b : m), null);
     const hit = find(drv, (h) => h.ref === last && h.moon < 0);
+    expect(hit, 'the furthest body is not on the glass at the end of the scroll').toBeTruthy();
     expect(hit.x, 'the furthest body really does sit under the old grab zone')
       .toBeGreaterThanOrEqual(caps.x1 - 10);
     nav._handleMouseMove({ clientX: hit.x, clientY: hit.y });
     clickAt(nav, hit.x, hit.y);
     expect(nav._selectedBody, 'the cap ate the click meant for the outermost planet')
       .toEqual({ type: 'planet', planetIndex: last.pIdx });
-    // and the cap itself still works, on the mark it actually draws
+    // and the cap itself still works, on the mark it actually draws — the LEFT one here, because the
+    // window is at its right-hand end and the right cap is (correctly) not drawn there
     const before = drv.S.ladderScroll;
-    clickAt(nav, caps.x1 - 2, caps.axisY);
-    expect(drv.S.ladderScroll, 'narrowing the zone killed the cap').toBeGreaterThan(before);
+    clickAt(nav, caps.x0 + 2, caps.axisY);
+    expect(drv.S.ladderScroll, 'narrowing the zone killed the cap').toBeLessThan(before);
   });
 
   it('⛔ a BELT is recognised and takes NO pick — it does not leave the last body armed', async () => {
@@ -2017,12 +2027,19 @@ describe('a clicked cell is highlighted, and stays highlighted into the zoom', (
     expect(drv.S.pick, 'a star glyph published a grid cell').toBe(null);
   }, 30000);
 
-  it('⛔ AND NEITHER DOES GALAXY, WHICH DRAWS A GRID — the cell is not the drill target there', async () => {
+  it('⛔ AND NEITHER DOES GALAXY, WHICH DRAWS A GRID — the SECTOR is the drill target there', async () => {
     // ⚠ THIS ONE IS NOT AN OVERSIGHT AND THE TEST EXISTS TO SAY SO. Design 1 draws an 8x8 lattice at
     // level 0, but the identity `_handleClick` drills is the containing SECTOR — one of 775 in an
     // irregular density-adaptive quadtree — and it flies to `s.centerX/centerZ` at `s.size`, which
     // need not coincide with the cell under the cursor. A frame on the cell would be the glass
     // promising "this is where you are going" about somewhere else.
+    //
+    // ⭐ AMENDED 2026-09-08 (AC-5's remaining half, INTERFACE §8): the exclusion was never "level 0
+    // gets no highlight", it was "level 0 gets no CELL highlight" — so the pick now carries the
+    // SECTOR, out of the same `pickSector` call the drill consumed, and the `i`/`j` a cell would have
+    // published are still absent. `pickCell` in designs.js declines a pick with no finite `i`/`j`,
+    // which is what keeps the lattice unframed. The sector's own framing is pinned in
+    // navClosePass3.test.js.
     const { nav, drv } = await loadedNav();
     nav._levelIndex = 0;
     nav.render();
@@ -2030,10 +2047,14 @@ describe('a clicked cell is highlighted, and stays highlighted into the zoom', (
     expect(p?.level, 'the fixture drew no level-0 map').toBe(0);
     const x = r.x + r.w * 0.34, y = r.y + r.h * 0.55;
     nav._handleMouseMove({ clientX: x, clientY: y });
-    expect(nav._hoveredTile?.sector, 'the fixture point must resolve to a sector').toBeTruthy();
+    const sec = nav._hoveredTile?.sector;
+    expect(sec, 'the fixture point must resolve to a sector').toBeTruthy();
     clickAt(nav, x, y);
-    expect(drv.S.pick, 'GALAXY framed a cell it was not going to zoom into').toBe(null);
-    expect(nav._anim?.toLevel, 'and it still drilled — the exclusion is the highlight, not the click')
+    expect(drv.S.pick?.i, 'GALAXY framed a cell it was not going to zoom into').toBeUndefined();
+    expect(drv.S.pick?.j).toBeUndefined();
+    expect(drv.S.pick?.sector, 'and it recorded the sector it IS going to zoom into')
+      .toEqual({ centerX: sec.centerX, centerZ: sec.centerZ, size: sec.size, name: sec.name });
+    expect(nav._anim?.toLevel, 'and it still drilled — the highlight rides the click, it does not eat it')
       .toBe(1);
   }, 30000);
 });

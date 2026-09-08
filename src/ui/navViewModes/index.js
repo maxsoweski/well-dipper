@@ -167,6 +167,24 @@ export function makeViewModeDriver(nav) {
     // is a different claim from "it published an empty set of them", and `pickOrbitRing` treats
     // either as no candidates.
     S.orbitRings = null; S.yGaugeRect = null;
+    // ── ⚠⚠ AC-2's REMAINING SIX (INTERFACE §8), AND THIS LINE IS A BELT, NOT THE BRACES. MEASURED.
+    //
+    // The interface says the DRIVER clears them each frame, and it does — but the LAB independently
+    // clears all six at the head of BOTH `drawDesign1` and `drawDesign2`, and `render()` always calls
+    // one of those immediately after this. So dropping this statement changes NOTHING that any test
+    // can see: the six-clear mutant SURVIVED all 33 cases, which means "this line is what stops a
+    // stale rectangle answering" is false as written today. What it actually buys is that the
+    // guarantee does not depend on `designs.js` — a GENERATED file — keeping both halves of a clear
+    // that neither design needs for itself: design 1 has no locator to clear and design 2 has no
+    // pager, so each is clearing the OTHER's fields as a courtesy that a regeneration could drop.
+    // ⛔ KEPT FOR THAT REASON AND FOR THE WRITTEN CONTRACT, NOT BECAUSE A TEST HOLDS IT. `S.orbitRings`
+    //    on the line above IS load-bearing (design 1 clears it nowhere), which is the shape this one
+    //    would have if the lab ever stopped clearing for its neighbour.
+    // ⛔ `null`, NOT `[]`, INCLUDING `listHeaderRects`: "this picture publishes no headers" is a
+    //    different claim from "it published an empty set of them", and every consumer below treats
+    //    either as no candidates.
+    S.pagerRect = null; S.ladderCounterRect = null; S.listHeaderRects = null;
+    S.locatorRect = null; S.minimapRect = null; S.companionRect = null;
     // ⛔ `S.pick` IS NOT IN THIS LIST AND MUST NOT BE. Everything above is published by the PAINT and
     // is one frame's worth by construction; `S.pick` is published by the CLICK and has to outlive
     // the frames between the click and the drill landing — which is the entire feature. Clearing it
@@ -194,9 +212,10 @@ export function makeViewModeDriver(nav) {
   /**
    * Record the cell a committed map click landed on, BEFORE `_handleClick` drills it.
    *
-   * ⛔ SECTOR AND REGION ONLY (levels 1-2), AND GALAXY'S EXCLUSION IS THE INTERESTING ONE.
-   * PRISM and SYSTEM are obvious: they publish MARKS (`S.prismHits` / `S.bodyHits`), not a lattice,
-   * so there is no cell for the lab to frame. GALAXY draws a grid and is still excluded, because at
+   * ⛔ THE 2D LEVELS ONLY (0-2), AND GALAXY IS A DIFFERENT SHAPE OF PICK FROM THE OTHER TWO.
+   * PRISM and SYSTEM are excluded and obvious: they publish MARKS (`S.prismHits` / `S.bodyHits`), not
+   * a lattice, so there is no cell for the lab to frame. GALAXY records the containing SECTOR rather
+   * than a cell — see the `S.level === 0` branch below — because at
    * level 0 THE CELL IS NOT WHAT GETS ZOOMED INTO: the drill identity is the containing SECTOR
    * (`pickSector` → `getSectorAt`), one of 775 in an irregular density-adaptive quadtree, and
    * `_handleClick` flies to `s.centerX/centerZ` at `s.size` — a rectangle that need not coincide
@@ -204,9 +223,11 @@ export function makeViewModeDriver(nav) {
    * glass promising "this is where you are going" about somewhere else, which is the defect shape
    * this workstream keeps finding rather than a smaller version of the feature. At 1-2 the cell IS
    * the drill target, exactly (`tileOf`), which is what makes the highlight true.
-   * ⚠ SO GALAXY HAS NO CLICK-HIGHLIGHT. If Max wants one there it needs the SECTOR's own drawn
-   * rectangle published out of the paint, not this field — log it, do not approximate it here.
-   * ⛔ AND IT REUSES `cellAt`, NEVER ITS OWN ARITHMETIC. The `i`/`j` written here are the same pair
+   * ⭐ SO GALAXY'S HIGHLIGHT IS THE SECTOR, PUBLISHED AS FOUR NUMBERS AND FRAMED BY EACH DESIGN
+   * THROUGH ITS OWN PROJECTION. That is what the note here used to say was missing; it is now the
+   * `S.level === 0` branch, and the two designs draw the same picked object at different sizes
+   * because their GALAXY views are different footprints, which is what §8 asks for.
+   * ⛔ AND AT 1-2 IT REUSES `cellAt`, NEVER ITS OWN ARITHMETIC. The `i`/`j` written here are the same pair
    * `pickTile` hands to `tileOf` on its way to the `col`/`row` the drill consumes, so the cell that
    * lights up and the cell that gets zoomed into cannot come apart. Restating the grid here would be
    * the AC-4 defect shape — two copies of one geometry, one of them silently wrong.
@@ -217,9 +238,28 @@ export function makeViewModeDriver(nav) {
    */
   function notePick(x, y) {
     S.pick = null;
-    if (S.level !== 1 && S.level !== 2) return;
+    if (S.level !== 0 && S.level !== 1 && S.level !== 2) return;
     const dx = x - nav._dragStartX, dy = y - nav._dragStartY;
     if (Number.isFinite(dx) && Number.isFinite(dy) && dx * dx + dy * dy > 25) return;
+    // ⭐⭐ AC-5's GALAXY HALF, AND IT CLOSES THE EXCLUSION THE BLOCK ABOVE ARGUED FOR RATHER THAN
+    // CONTRADICTING IT. The objection was never "level 0 should have no highlight" — it was that the
+    // CELL is not what gets zoomed into there, so framing the cell would promise the wrong
+    // destination. The identity IS the containing sector, and `pickSector` is the SAME call
+    // `pickFromMap` hands `_handleClick` for the drill, so what lights up and what the zoom flies to
+    // cannot come apart. The sector's own centre and size go on `S.pick`; each design frames them
+    // through its own projection (`pickedSector` in designs.js), which is why no rectangle is
+    // computed here — one picked object, two pictures, no third copy of anybody's geometry.
+    // ⚠ FOUR PLAIN NUMBERS AND A NAME, NOT THE SECTOR OBJECT. The designs read it unguarded every
+    //   frame it is set; handing them a live quadtree node would make the picture depend on whatever
+    //   else holds a reference to it.
+    if (S.level === 0) {
+      const hit = pickSector(nav, S, x, y);
+      const s = hit && hit.sector;
+      if (!s || !Number.isFinite(s.centerX) || !Number.isFinite(s.centerZ) || !Number.isFinite(s.size)) return;
+      S.pick = { level: 0, tMs: simClockMs(),
+                 sector: { centerX: s.centerX, centerZ: s.centerZ, size: s.size, name: s.name } };
+      return;
+    }
     const p = usableProj(S);
     if (!p || !insideProj(p, x, y)) return;
     const c = cellAt(p, x, y);
@@ -425,6 +465,14 @@ export function makeViewModeDriver(nav) {
     //    neither see nor reach, sitting armed for the moment the field closes. Same reasoning as the
     //    "a miss writes null" rule below, one layer up.
     if (S.search.open) { nav[HOVER_FIELD[S.level] || '_hoveredTile'] = null; return false; }
+    // ⛔ AND WHILE THE INBOUND EASE RUNS, THE SAME SHAPE FOR THE SAME REASON (INTERFACE §8d). The
+    //    picture on the glass is the level being LEFT, drawn through a frame that is closing, while
+    //    `nav._levelIndex` already names the level being entered — so every candidate published this
+    //    frame belongs to a screen the pilot is on his way off. A live hover there is a target he can
+    //    see for 350 ms and cannot act on (`remapClick` eats the click), sitting armed for the moment
+    //    the ease lands on a different level. `_handleClick` eats a click during a drill for exactly
+    //    this reason; this is the hover half of it.
+    if (S.levelLag) { nav[HOVER_FIELD[S.level] || '_hoveredTile'] = null; return false; }
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
     const row = listRowAt(g2, x, y, bars);
@@ -546,6 +594,12 @@ export function makeViewModeDriver(nav) {
     let rect = { left: 0, top: 0, width: w, height: h };
     try { rect = nav._canvas.getBoundingClientRect() || rect; } catch (e) { /* no layout box */ }
     const sx = (rect.width || w) / w, sy = (rect.height || h) / h;
+    // ⭐ AC-6's INBOUND EASE IS ARMED HERE, AND ARMED NOWHERE THIS FILE DOES NOT OWN (§8d). The click
+    // below moves `_levelIndex` synchronously — non-negotiable, four suites read it on the next
+    // statement — so the animation cannot live in the level. It lives in what `refresh()` tells the
+    // DESIGN the level is, and this is the token that says the change came from a tab rather than
+    // from a drill (which carries its own `_anim`) or from a test assigning the field.
+    S.levelArm = { from: nav._levelIndex | 0, tMs: simClockMs() };
     nav._handleClick({
       clientX: rect.left + pt.x * sx, clientY: rect.top + pt.y * sy, button: 0,
       preventDefault() {}, stopPropagation() {},
@@ -717,6 +771,118 @@ export function makeViewModeDriver(nav) {
     return Math.max(r.base - r.halfKpc, Math.min(r.base + r.halfKpc, k));
   }
 
+  /**
+   * ⭐ AC-2/AC-8 — SORT BY A NAMED KEY, WHICH IS WHAT A COLUMN HEADER MEANS (INTERFACE §8a).
+   *
+   * ⛔ IT IS NOT `cycleSort` WITH AN INDEX. A header names a KEY, not a position in a walk, and the
+   * two lists differ per level — `SORT_KEYS[3]` now has six entries and `SORT_KEYS[0]` has two, so an
+   * index the header knew would mean a different key at a different level, silently.
+   * ⚠ AND AN UNKNOWN ID CHANGES NOTHING AND SAYS SO. The `N` header publishes `sortId: null` (sorting
+   *   by the row ordinal is the identity), and a design at a level whose key list has no such
+   *   comparator must not land `S.sortIdx` on -1 — which would index past the end of the list and
+   *   blank `S.sortLabel`, a readout Max reads off the glass.
+   * @returns {boolean} true if the key moved.
+   */
+  function sortTo(id) {
+    const keys = SORT_KEYS[S.level] || [];
+    const i = keys.findIndex((k) => k && k.id === id);
+    if (i < 0) return false;
+    S.sortIdx = i;
+    S.sortLabel = keys[i].label;
+    S.listOffset = 0;   // page 4 of a list you just re-ordered names nothing you were looking at
+    return true;
+  }
+
+  /**
+   * ⭐ AC-2 — "CENTRE ON THE PLAYER", AND IT MEANS FOUR DIFFERENT THINGS (INTERFACE §8b).
+   *
+   * Design 2's topbar says `HERE · SECTOR` at every level and clicking it has always done nothing.
+   * What it should do is the one thing that phrase can mean, at whatever level it is read on:
+   *
+   *  · **GALAXY** — ease the frame's centre to the player at the CURRENT size, through the host's own
+   *    `_viewEase` (`:1419`), never `_startDrillAnim`: that arms `_anim`, which eats the next click
+   *    and changes the level. Design 2's wide band is what makes this worth anything — half the disc
+   *    is off the glass by construction and the player's own sector can be one of the 20 it crops.
+   *  · **SECTOR / REGION** — the player's own sector and region, which is exactly what
+   *    `_setupViewStackForPlayer` rebuilds. It SNAPS `_viewCenter`/`_viewSize` (`_applyLevelView`), so
+   *    the snapshot taken before it is what the ease then runs from — otherwise the frame cuts.
+   *  · **PRISM** — the loader's block is the player's again: the same three resets the tab-into-PRISM
+   *    path performs at `:4481`. Rotation is deliberately untouched; the pilot's camera angle is not
+   *    a position and re-centring is not a re-orientation.
+   *  · **SYSTEM** — NOT EATEN, no action, and it is a real open item rather than an omission: the
+   *    system on the glass IS the current one unless a foreign one was drilled, and re-entering the
+   *    current system from a foreign one is `resolveArrivalSystem` territory nobody has agreed.
+   *
+   * @returns {boolean} true if the click was consumed.
+   */
+  function recentreOnPlayer() {
+    const px = nav._playerX, pz = nav._playerZ;
+    if (!Number.isFinite(px) || !Number.isFinite(pz)) return false;
+    if (S.level === 4) return false;
+    if (S.level === 3) {
+      nav._setupViewStackForPlayer();
+      nav._localCenter = { x: px, y: nav._playerY, z: pz };
+      nav._localStars = [];
+      if (nav._resetPrismLoad) nav._resetPrismLoad();
+      return true;
+    }
+    const vc = nav._viewCenter || { x: px, z: pz };
+    const fromCenter = { x: vc.x, z: vc.z };
+    const fromSize = Number.isFinite(nav._viewSize) ? nav._viewSize : 44;
+    let toCenter = { x: px, z: pz }, toSize = fromSize;   // GALAXY: the player, at the size on the glass
+    if (S.level === 1 || S.level === 2) {
+      // ⚠ THIS SNAPS `_viewCenter`/`_viewSize` (through `_applyLevelView`), which is why the snapshot
+      //   above is taken first: the ease runs from where the frame WAS to where the rebuild put it.
+      nav._setupViewStackForPlayer();
+      const to = nav._viewCenter || { x: px, z: pz };
+      toCenter = { x: to.x, z: to.z };
+      toSize = Number.isFinite(nav._viewSize) ? nav._viewSize : fromSize;
+      nav._densityCacheKey = '';
+    }
+    nav._viewEase = { startTime: simClockMs(), duration: 350, fromCenter, fromSize, toCenter, toSize };
+    return true;
+  }
+
+  /**
+   * ⭐ AC-9 — IS THE POINTER ON DESIGN 1'S SYSTEM LADDER COUNTER? (INTERFACE §8c)
+   *
+   * ⛔ THE PUBLICATION IS THE GATE, exactly as it is for the y-gauge: `d1Ladder` writes
+   * `S.ladderCounterRect` ONLY inside its own `maxScroll > 0` branch, so "a counter was drawn this
+   * frame" and "there is a window to scrub" are the same question, asked once. A `level === 4 &&
+   * viewMode === 'rail' && ladderMax > 0` test here would be three copies of that condition.
+   * ⚠ ONE TEXEL OF SKIRT EITHER SIDE, like `gaugeGrab`: the readout is a handful of texels tall at
+   *   240p and a control the pilot has to hit exactly is a control that mostly misses.
+   */
+  function counterGrab(x, y) {
+    const r = S.ladderCounterRect;
+    if (!r) return false;
+    return x >= r.x - 1 && x < r.x + r.w + 1 && y >= r.y && y < r.y + r.h;
+  }
+
+  /**
+   * ⭐ AC-9 — THE LADDER OFFSET A POINTER AT `px` IS ASKING FOR, in TEXELS, or `null` if no counter
+   * was drawn this frame.
+   *
+   * ⛔ TEXELS, NOT A FRACTION. `S.ladderScroll` is a continuous texel offset that `d1Ladder`
+   * subtracts raw (`sx(v) = x0 + 4 + v - scroll`); handing it 0..1 would scrub the whole ladder
+   * inside the first texel of the drag and look like a control that does nothing.
+   * ⚠ Clamped to the readout's own span, so a pointer past either end pegs at that end — the same
+   *   thing the gauge's mark does, and the same thing `scrollLadder` already clamps to.
+   */
+  function counterDragTo(px) {
+    const r = S.ladderCounterRect;
+    if (!r || !Number.isFinite(px) || !(r.w > 0)) return null;
+    const f = Math.max(0, Math.min(1, (px - r.x) / r.w));
+    return Math.round((S.ladderMax || 0) * f);
+  }
+
+  /** Is `(x, y)` inside a published `{x,y,w,h}`? One arithmetic for all five of AC-2's remaining
+   *  bands, so a band cannot be half-open on one edge in one clause and closed in another. */
+  function inRect(r, x, y) {
+    return !!r && Number.isFinite(r.x) && Number.isFinite(r.w)
+      && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+  }
+
   function remapClick(p, w, h) {
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
@@ -752,6 +918,71 @@ export function makeViewModeDriver(nav) {
       if ((S.ladderScroll || 0) > 0 && p.x <= caps.x0 + CAP_GRAB) { scrollLadder(-1); return null; }
       if ((S.ladderScroll || 0) < S.ladderMax && p.x >= caps.x1 - CAP_GRAB) { scrollLadder(1); return null; }
     }
+    // ── ⛔ AND WHILE THE INBOUND EASE RUNS, EVERY CLICK IS EATEN (AC-6, INTERFACE §8d) ────────────
+    // The picture is the level being LEFT and `nav._levelIndex` already names the one being entered,
+    // so a click here would be resolved against candidates from one screen and acted on by the
+    // handler of another. `_handleClick` opens with `if (this._anim) return;` for the identical
+    // reason during a drill; this is the same rule for the transition the host has no field for.
+    // ⚠ IT IS FIRST OF THE NEW CLAUSES AND AFTER THE OLD TWO ON PURPOSE: the drawn search and the
+    //   ladder caps belong to a picture that is not mid-transition (neither can be open during a tab
+    //   ease), and putting the lag ahead of them would be a guard that never fires there.
+    // ⛔⛔ EXCEPT THE TAB STRIP, WHICH CANCELS THE EASE INSTEAD OF BEING EATEN BY IT. Measured on the
+    //    first build: `tabLevel` synthesises its click through this very function, so a second Tab
+    //    inside the 350 ms was swallowed and a quick double-Tab moved ONE level, not two — a key that
+    //    does nothing where the hint row says TAB LEVEL, the defect class this workstream closes.
+    //    A press on the strip (key or click) is the pilot changing level AGAIN; §8d says a level change
+    //    from anywhere else cancels a lag, so the strip cancels it here and goes on to move the level.
+    //    Map clicks stay eaten: they would be resolved against the picture that is leaving.
+    if (S.levelLag) {
+      const strip = bars ? (p.y >= 0 && p.y < g2.BAR) : (p.y >= g2.tabY && p.y < g2.tabY + g2.LEAD);
+      if (!strip) return null;
+      S.levelLag = null; S.level = nav._levelIndex | 0;
+    }
+    // ── ⭐ AC-2 — DESIGN 1'S PAGER ROW: LEFT HALF BACK, RIGHT HALF FORWARD ────────────────────────
+    // ⛔ THE PUBLICATION IS THE ONLY GATE, and this is the reason `gaugeGrab` gives: `S.pagerRect` is
+    //    written by `d1Rail` and by nothing else, and `resetPicks` clears it every frame — so "there
+    //    is a pager under this pointer" and "design 1 drew one, at a level with a rail, with no
+    //    search field over it" are the same question, asked once. A `!bars && !S.search.open` test
+    //    here would be a second copy of the paint's own condition, free to drift from it.
+    // ⚠ `mid` COMES FROM THE PAINT TOO. `p.x < r.mid` is the agreed test and `mid` is the row's true
+    //   midpoint (fractional at most buffers); recomputing `(x0 + x1) / 2` here would be the AC-4
+    //   defect shape at its smallest.
+    // ⚠ ITS OWN TEST RATHER THAN `inRect`, because the pager is the one band published as
+    //   `{x0, mid, x1}` and not as `{x, w}` — `mid` is the whole reason for the shape.
+    const pgr = S.pagerRect;
+    if (pgr && Number.isFinite(pgr.x0) && Number.isFinite(pgr.x1) && Number.isFinite(pgr.mid)
+        && p.x >= pgr.x0 && p.x < pgr.x1 && p.y >= pgr.y && p.y < pgr.y + pgr.h) {
+      page(p.x < pgr.mid ? -1 : 1);
+      return null;
+    }
+    // ── ⭐ AC-2/AC-8 — DESIGN 2'S LIST HEADERS SORT THE LIST ──────────────────────────────────────
+    // ⚠ A `null` `sortId` (the `N` ordinal) IS STILL EATEN. The header is drawn, so it must answer
+    //   the click, and what it answers is "nothing happens".
+    // ⚠⚠ AND THE EATING ITSELF IS UNOBSERVABLE TODAY — MEASURED, so the comment says so rather than
+    //   claiming a guard it cannot demonstrate. Turning `return null` into `return p` killed no case
+    //   of the 33: in list mode `d2List` publishes NO marks and NO labels (`drawDesign2` nulls
+    //   `prismHits`/`bodyHits` at its head and the list republishes neither), and the header row
+    //   resolves to list row -1, so there is nothing under a header for the click to fall through TO.
+    //   It is kept because it is what INTERFACE §8 specifies and because it is the plate rule (§6)
+    //   stated where a future `d2List` that draws marks would need it — not because a test holds it.
+    const hdr = (S.listHeaderRects || []).find((r) => inRect(r, p.x, p.y));
+    if (hdr) { if (hdr.sortId) sortTo(hdr.sortId); return null; }
+    // ── ⭐ AC-2 — DESIGN 2'S `HERE · SECTOR` LOCATOR RE-CENTRES ON THE PLAYER ─────────────────────
+    // ⛔ AND AT SYSTEM IT IS NOT EATEN, WHICH IS A DECISION AND NOT A GAP (§8b). "Centre on the
+    //    player" has no agreed meaning at level 4 — the system on the glass is the current one unless
+    //    a foreign one was drilled — so rather than invent one the click falls through to the topbar
+    //    it was drawn on, where design 2's tab test answers it or nothing does. `recentreOnPlayer`
+    //    makes the same refusal itself; the test here is what decides whether the click is CONSUMED.
+    if (inRect(S.locatorRect, p.x, p.y) && S.level !== 4) { recentreOnPlayer(); return null; }
+    // ── ⭐ AC-2 — THE TWO READOUTS THAT EAT A CLICK AND DO NOTHING (§6's plate rule) ──────────────
+    // ⛔ THIS IS THE POINT OF PUBLISHING THEM AT ALL. Neither the prism minimap nor the `» STAR B`
+    //    companion strip has a downstream identity, and inventing one would be the picker deciding
+    //    what those marks mean. What they MUST do is stop the press reaching what is underneath:
+    //    the minimap sits on the starfield and the strip is drawn straight across the outer orbit
+    //    rings, so without these two clauses a press on either selects an object the pilot cannot
+    //    see there — a wrong pick, which is worse than a missing one.
+    if (inRect(S.minimapRect, p.x, p.y)) return null;
+    if (inRect(S.companionRect, p.x, p.y)) return null;
     // ⭐ THE CLICK-HIGHLIGHT IS RECORDED AT BOTH FALL-THROUGHS AND NOWHERE ELSE — see `notePick`.
     // Every `return null` above ate the click (the drawn search, a ladder cap), and a click that was
     // eaten drills nothing, so highlighting it would be the glass making a promise nothing keeps.
@@ -765,6 +996,11 @@ export function makeViewModeDriver(nav) {
     // showing a system the nav generated for itself.
     if (i === 4 && !nav._currentSystemData) return null;   // the class field, for the reason `tabLevel` gives
     nav._modeTabIdx = i;
+    // ⭐ AND THE SAME ARM AS `tabLevel`'s, on the OTHER path into the tab branch (§8d). A click on the
+    // strip and the Tab key are one transition with two entrances, and an ease that only the keyboard
+    // got would be the kind of divergence AC-4 keeps finding. `from` is read BEFORE the handler moves
+    // the index — one statement later it would already be the destination and match nothing.
+    S.levelArm = { from: nav._levelIndex | 0, tMs: simClockMs() };
     // The handler only asks `p.y >= h - navTabHeight(h)`, so the bottom row is inside the strip at
     // every buffer without this file needing to know what navTabHeight returns.
     return { x: (i + 0.5) * (w / 5), y: h - 1 };
@@ -773,6 +1009,11 @@ export function makeViewModeDriver(nav) {
   return {
     S, D, render, bufferFor, applySurface, hover, resolveHover, remapClick, geo, scrollLadder,
     tabLevel, commit, cycleSort, page, searchOpen, searchActive, searchKey, gaugeGrab, gaugeDragTo,
+    // ⭐ AC-2/AC-9's REMAINING CONSUMERS (INTERFACE §8). `counterGrab` / `counterDragTo` are called
+    // OPTIONALLY by the HOST's three folds in the line-frozen `NavComputer.js`, so the NAMES ARE THE
+    // CONTRACT: renaming either leaves the class calling `undefined?.()`, which is an inert control
+    // and never a throw — the failure would be a scrubber that quietly does nothing.
+    sortTo, recentreOnPlayer, counterGrab, counterDragTo,
     regions: designs.regions,
     violations: () => violations.slice(),
     /**

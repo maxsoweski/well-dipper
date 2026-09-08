@@ -106,6 +106,10 @@
 import { generateSystemName, generatePlanetName, generateMoonName } from '../../generation/NameGenerator.js';
 import { displayClassOf } from '../../generation/worldClass.js';
 import { multiplicityForSeed } from '../../generation/multiplicityOracle.js';
+/** ⛔ THE SIM CLOCK, NOT `performance.now()` — the same one `_startDrillAnim`, `_viewEase` and
+ *  `_systemZoomAnim` are measured on, so the inbound ease and the transitions it is standing beside
+ *  cannot drift apart under a throttled tab. */
+import { simClockMs } from '../../core/SimClock.js';
 import alea from 'alea';
 
 /** `NavComputer.js:69`, verbatim. */
@@ -133,6 +137,22 @@ export const PRISM_ROT_X0 = Math.atan2(PRISM_DZ, PRISM_DY);
 export const SYSTEM_TILT = 0.42;
 /** = 0.43344532006988595 rad, and the round trip through it is bit-identical. */
 export const SYSTEM_ROT_X0 = Math.asin(SYSTEM_TILT);
+
+/**
+ * ⭐ AC-6's INBOUND EASE — the same 350 ms and the same smootherstep the OUTBOUND half already uses.
+ *
+ * ⛔ THE NUMBER IS NOT A TASTE CHOICE, IT IS A MATCH. `NavComputer.js:4476`'s tab-out `_viewEase`
+ * is `duration: 350` and `:1419` eases it with `t*t*t*(t*(t*6-15)+10)`; `_updateAnim` (:1268) uses
+ * the identical curve for every drill. A different duration or a different curve here would make the
+ * way IN visibly a different animation from the way OUT, on the same two keys.
+ */
+export const LEVEL_LAG_MS = 350;
+/** `NavComputer.gridNForLevel` (:71), the authority for the tile subdivision the outbound ease
+ *  divides by. Restating it is the AC-4 defect shape; it is two constants and it is imported nowhere,
+ *  so it is spelled here ONCE and read by the lag's `toView.size` and by nothing else. */
+const LAG_GRID_N = (level) => (level === 2 ? 16 : 8);
+/** The curve `_updateAnim` and `_viewEase` both run. */
+const smootherstep = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 
 /**
  * An azimuth into `[0, 2π)`.
@@ -226,6 +246,19 @@ export const SORT_KEYS = [
     { id: 'class', label: 'CLASS', cmp: (a, b) => String(a.spectral || '').localeCompare(String(b.spectral || ''))
                                                || ((a.dist ?? 0) - (b.dist ?? 0)) },
     { id: 'mult',  label: 'COMPS', cmp: (a, b) => ((b.mult ?? 1) - (a.mult ?? 1))
+                                               || ((a.dist ?? 0) - (b.dist ?? 0)) },
+    // ⭐ THE TWO KEYS DESIGN 2'S LIST HEADERS NAME AND NOTHING ELSE DID (INTERFACE §8a). They go
+    // AFTER the existing four so `SORT_KEYS[3][0]` is still DIST — today's order, and the picture
+    // Max ruled on — and so `[`/`]` keeps landing on the same key it always has on the first press.
+    // ⛔ `plane` SORTS BY `wy`, NOT BY THE COLUMN'S PRINTED VALUE. The header reads
+    //    `(wy - player.y) * 1000` PC; the player offset is a constant across every row, so sorting by
+    //    the raw `wy` is monotonic in the printed number and needs no access to `D.player` from
+    //    inside a comparator that has none.
+    // ⚠ `catalog` IS A TWO-LEVEL KEY because `isReal` is a boolean: real catalogue stars first, then
+    //   distance inside each group. Without the tiebreak the sort is only as ordered as the input
+    //   happened to be, and `Array.prototype.sort` stability would be doing the work silently.
+    { id: 'plane', label: 'PLANE', cmp: (a, b) => (a.wy ?? 0) - (b.wy ?? 0) },
+    { id: 'catalog', label: 'CATALOG', cmp: (a, b) => ((b.isReal ? 1 : 0) - (a.isReal ? 1 : 0))
                                                || ((a.dist ?? 0) - (b.dist ?? 0)) } ],
   [ { id: 'au',    label: 'AU',    cmp: (a, b) => (a.au ?? 0) - (b.au ?? 0) },
     { id: 'name',  label: 'NAME',  cmp: (a, b) => String(a.name || '').localeCompare(String(b.name || '')) },
@@ -290,6 +323,50 @@ export function makeViewState() {
      *  not decoration: they are what lets the drag INVERT the paint's own arithmetic instead of
      *  restating it, which is the AC-4 defect shape. `null` everywhere else. */
     yGaugeRect: null,   // {x,y,w,h,cy,span,halfKpc,base} — level 3, design 1
+    /** ⭐ AC-2 — DESIGN 1'S PAGER ROW, THE `- = PAGE` LINE THAT HAS NEVER ANSWERED A CLICK.
+     *  `mid` is published rather than left to the picker: `x0 + (x1 - x0) / 2` computed in the
+     *  hit-test would be a second copy of the rail's own geometry, free to drift the moment the rail
+     *  changes width. `null` in design 2 and while the drawn search is open — `d1Rail` returns into
+     *  `d1Search` before the line that publishes it, so the pager is not on the glass and not on
+     *  offer. */
+    pagerRect: null,    // {x0,mid,x1,y,h}              — design 1, every level with a rail
+    /** ⭐ AC-9 — DESIGN 1'S SYSTEM LADDER COUNTER, `N-M OF K`. Published ONLY when the ladder
+     *  overflows (`maxScroll > 0`), because that is the only time the readout is drawn: a rectangle
+     *  for a scrubber over a range with one stop in it would be grabbable and inert. `counterGrab`
+     *  therefore treats a missing field as "no" and `counterDragTo` returns `null`. */
+    ladderCounterRect: null,  // {x,y,w,h}              — level 4, design 1
+    /** ⭐ AC-2 — DESIGN 2'S LIST-MODE COLUMN HEADERS, one entry per header the draw's own
+     *  `cols[i] < W - 8` guard actually painted. `sortId` is the key `sortTo` looks up; the `N`
+     *  header carries `null` because sorting by the row ordinal is the identity — its click is still
+     *  EATEN (it is drawn, so it must answer) and does nothing. `null`, not `[]`, in map mode: "this
+     *  picture publishes no headers" is a different claim from "it published none of them". */
+    listHeaderRects: null,    // [{x,y,w,h,sortId}]     — level 3, design 2, list mode
+    /** ⭐ AC-2 — DESIGN 2'S TOPBAR `HERE · SECTOR`. Drawn at every level, so published at every
+     *  level; the click re-centres the frame on the player (INTERFACE §8b) at levels 0-3 and is
+     *  deliberately NOT eaten at SYSTEM, where "centre on the player" has no agreed meaning. */
+    locatorRect: null,        // {x,y,w,h}              — design 2, every level
+    /** ⭐ AC-2 — DESIGN 2'S 24x24 PRISM CORNER WIDGET. It has no downstream identity and inventing
+     *  one would be the picker deciding what the minimap means; what the rectangle buys is the PLATE
+     *  RULE (INTERFACE §6) — without it a press on the widget falls through to whatever star mark
+     *  lies under it and selects a star the pilot cannot see. Map mode only. */
+    minimapRect: null,        // {x,y,w,h}              — level 3, design 2, map mode
+    /** ⭐ AC-2 — DESIGN 2'S `» STAR B nnAU` STRIP. Same reasoning as the minimap: nothing in the
+     *  pipeline resolves a companion to a system, so the click is eaten and does nothing — but the
+     *  strip is drawn straight across the outer orbit rings, and without the rectangle a press on
+     *  the text selects whichever ring passes beneath it. */
+    companionRect: null,      // {x,y,w,h}              — level 4, design 2, wide binaries only
+    /** ⭐⭐ AC-6's INBOUND HALF (INTERFACE §8d), AND IT IS THE ONE FIELD HERE NO DESIGN EVER READS.
+     *  The designs read `S.level`, `S.view` and `S.cam` as they always have; this is what makes
+     *  `S.level` LAG `nav._levelIndex` for 350 ms so the 2D map keeps drawing while its frame closes.
+     *  ⛔ NOT IN `resetPicks`. Everything the PAINT publishes is one frame's worth by construction;
+     *     these two are the driver's own and have to outlive the frames between the press and the
+     *     arrival — which is the entire feature. */
+    levelLag: null,     // {from,to,kind,t0,dur,fromView,toView,fromRadius,toRadius,fromCam,toCam,hold}
+    /** ⭐ AND THE ARM IS SEPARATE FROM THE LAG, BECAUSE ONLY THE DRIVER'S OWN TAB PATHS MAY START
+     *  ONE. `tabLevel` and `remapClick`'s tab branch write `{ from, tMs }` immediately before handing
+     *  the click to `_handleClick`; a test that assigns `_levelIndex` directly, and the drill clicks
+     *  (which carry their own `_anim`/`_systemZoomAnim`), never arm it and therefore never lag. */
+    levelArm: null,     // { from, tMs } | null
     railTiles: [],      // [{i,j,id,x,z,n}]             — design 1's rail rows at levels 1-2
     listGeom: null,     // {x,y,rows,lead,offset,total} — design 2's list
     tabRects: null,     // [{x,y,w,h}] x5               — the DESIGN's tab strip, not the legacy one
@@ -477,12 +554,132 @@ export function makeViewState() {
   }
 
   /**
+   * ⭐⭐ AC-6's INBOUND HALF, AND THE WHOLE OF IT IS A LAG IN ONE FIELD (INTERFACE §8d).
+   *
+   * ⛔ MEASURED FIRST, WHICH IS WHY THE SCOPE IS THIS NARROW. The drill click REGION→PRISM already
+   * animates (`_startDrillAnim` to level 3 moves `_viewCenter`/`_viewSize`, which `S.view` reads) and
+   * the star click PRISM→SYSTEM already animates (`_systemZoomAnim` moves `_localRadius`, which
+   * `S.cam` reads). What still SNAPS is the TAB STRIP and the Tab KEY: `NavComputer.js:4477` sets
+   * `_levelIndex` synchronously — deliberately, four suites read it on the next statement — and
+   * `:4476`'s `_viewEase` covers only the way OUT.
+   *
+   * ⭐ SO THE ANIMATION IS NOT ADDED TO THE INSTRUMENT, IT IS ADDED TO WHAT THE DESIGN IS TOLD. The
+   * level the DESIGNS branch on is `S.level`; holding it at the level being left, while `S.view` /
+   * `S.cam` walk toward the level being entered, makes the 2D map close on the tile it is drilling
+   * and the prism zoom into the star it is entering, out of the picture that is already on the glass.
+   * ⛔ Animating the legacy painter instead would move pixels nobody can see — each design's first
+   * act is an opaque full-canvas fill.
+   *
+   * ⛔ ONLY THE DRIVER'S OWN TAB PATHS MAY START ONE (`S.levelArm`). A test that assigns
+   * `_levelIndex` directly gets no lag, and neither does a drill click — those carry `_anim` /
+   * `_systemZoomAnim`, which move the very fields this would be interpolating, and two writers on one
+   * field is a fight rather than an animation (`:1419` yields to `_anim` for exactly that reason).
+   *
+   * @returns {number} the level the DESIGNS should draw this frame — the held one while a lag runs.
+   */
+  function stepLevelLag(nav, navLevel) {
+    const now = simClockMs();
+    // ── A LEVEL CHANGE FROM ANYWHERE ELSE CANCELS IT, and so does either of the host's own
+    //    animations arriving mid-lag: both write the fields below, and a real transition always wins.
+    if (S.levelLag && (navLevel !== S.levelLag.to || nav._anim || nav._systemZoomAnim)) S.levelLag = null;
+    if (!S.levelLag) {
+      const arm = S.levelArm;
+      // ⚠ THE ARM IS MATCHED, NOT MERELY PRESENT. `from === S.level` is what keeps a stale arm — one
+      //   whose click was eaten, or one left by a tab that changed nothing — from lagging a level
+      //   change it had nothing to do with; the one-second window is the backstop for a driver that
+      //   never renders in between.
+      const armed = !!arm && arm.from === S.level && Number.isFinite(arm.tMs)
+        && now - arm.tMs >= 0 && now - arm.tMs <= 1000;
+      if (navLevel !== S.level) {
+        if (armed && !nav._anim && !nav._systemZoomAnim) startLevelLag(nav, S.level, navLevel, now);
+        S.levelArm = null;   // consumed either way: an arm outlives exactly one level change
+      } else if (arm && now - arm.tMs > 1000) {
+        S.levelArm = null;
+      }
+    }
+    const lag = S.levelLag;
+    if (!lag) return navLevel;
+    const t = lag.dur > 0 ? (now - lag.t0) / lag.dur : 1;
+    if (!(t < 1)) { S.levelLag = null; return navLevel; }
+    return lag.hold;
+  }
+
+  /** Arm the lag for one ordered pair, or leave it null for a pair §8d gives no ease. */
+  function startLevelLag(nav, from, to, now) {
+    const base = { from, to, t0: now, dur: LEVEL_LAG_MS,
+                   fromView: null, toView: null, fromRadius: null, toRadius: null,
+                   fromCam: null, toCam: null };
+    if (from <= 2 && (to === 3 || to === 4)) {
+      // ⭐ THE MIRROR OF THE OUTBOUND EASE, TERM FOR TERM. `:4476` opens the 2D frame FROM
+      // `_viewSize / (gridNForLevel(idx) * 2)`; this closes it TO the same window, on the centre the
+      // level being entered is actually about — `_localCenter` for the prism, the player for SYSTEM.
+      const fc = nav._viewCenter || { x: 0, z: 0 };
+      const fromSize = Number.isFinite(nav._viewSize) ? nav._viewSize : 44;
+      const lc = nav._localCenter || {};
+      const tc = (to === 3 && Number.isFinite(lc.x) && Number.isFinite(lc.z))
+        ? { cx: lc.x, cz: lc.z } : { cx: nav._playerX, cz: nav._playerZ };
+      const toSize = fromSize / (LAG_GRID_N(from) * 2);
+      if (!Number.isFinite(fc.x) || !Number.isFinite(fc.z) || !Number.isFinite(tc.cx)
+          || !Number.isFinite(tc.cz) || !(toSize > 0)) return null;
+      S.levelLag = { ...base, kind: 'map', hold: from,
+                     fromView: { cx: fc.x, cz: fc.z, size: fromSize },
+                     toView: { cx: tc.cx, cz: tc.cz, size: toSize } };
+      return S.levelLag;
+    }
+    if ((from === 3 && to === 4) || (from === 4 && to === 3)) {
+      // ⭐ THE MIRROR OF `_systemZoomAnim` (`:4621`), which is `fromRadius → fromRadius * 0.1` over
+      // 400 ms on the star-click path. Going IN the radius shrinks; coming back OUT it grows from the
+      // same tenth, so the pilot arrives at the prism by zooming out of the system rather than by a cut.
+      const r = Number.isFinite(nav._localRadius) ? nav._localRadius : S.cam.radius;
+      if (!(r > 0)) return null;
+      const star = nav._systemStar;
+      const toCam = (from === 3 && star && Number.isFinite(star.wx))
+        ? { x: star.wx, y: star.wy, z: star.wz }
+        : (from === 3 ? { x: nav._playerX, y: nav._playerY, z: nav._playerZ } : null);
+      S.levelLag = { ...base, kind: 'prism', hold: 3,
+                     fromRadius: from === 3 ? r : r * 0.1,
+                     toRadius: from === 3 ? r * 0.1 : r,
+                     fromCam: toCam ? { x: S.cam.x, y: S.cam.y, z: S.cam.z } : null,
+                     toCam };
+      return S.levelLag;
+    }
+    // ⚠ EVERY OTHER PAIR HAS AN ANIMATION ALREADY, OR IS NOT A TAB WORTH EASING: 0-2 ↔ 0-2 is the
+    //   host's own `_startDrillAnim`, and 3/4 → 0-2 is `:4476`'s outbound `_viewEase`.
+    return null;
+  }
+
+  /** Walk the running lag's eased values into the two fields the designs read. Runs AFTER the live
+   *  refresh below, so what it writes is the frame the design sees rather than something the
+   *  instrument overwrites one statement later. */
+  function applyLevelLag() {
+    const lag = S.levelLag;
+    if (!lag) return;
+    const e = smootherstep(Math.max(0, Math.min(1, (simClockMs() - lag.t0) / lag.dur)));
+    const mix = (a, b) => a + (b - a) * e;
+    if (lag.kind === 'map') {
+      S.view.cx = mix(lag.fromView.cx, lag.toView.cx);
+      S.view.cz = mix(lag.fromView.cz, lag.toView.cz);
+      S.view.size = mix(lag.fromView.size, lag.toView.size);
+      return;
+    }
+    S.cam.radius = mix(lag.fromRadius, lag.toRadius);
+    if (lag.fromCam && lag.toCam) {
+      S.cam.x = mix(lag.fromCam.x, lag.toCam.x);
+      S.cam.y = mix(lag.fromCam.y, lag.toCam.y);
+      S.cam.z = mix(lag.fromCam.z, lag.toCam.z);
+    }
+  }
+
+  /**
    * Pull one frame of live state off the instrument. Cheap: three cache checks and some field reads.
    * @param {object} nav the NavComputer
    * @param {{width:number,height:number,lines:number}} buf the buffer being drawn into
    */
   function refresh(nav, buf) {
-    S.level = nav._levelIndex | 0;
+    // ⛔ THE LEVEL IS NO LONGER READ STRAIGHT OFF THE INSTRUMENT, AND THAT IS AC-6's INBOUND HALF.
+    //    `stepLevelLag` answers with `nav._levelIndex` on every frame but the 350 ms of a tab into
+    //    PRISM or SYSTEM, where it answers with the level being LEFT — see its own note.
+    S.level = stepLevelLag(nav, nav._levelIndex | 0);
     S.noSystem = !nav._currentSystemData;
     S.lines = buf.lines;
     S.buf.width = buf.width; S.buf.height = buf.height;
@@ -521,6 +718,12 @@ export function makeViewState() {
     const vc = nav._viewCenter || { x: 8, z: 0 };
     S.view.cx = vc.x; S.view.cz = vc.z;
     S.view.size = Number.isFinite(nav._viewSize) ? nav._viewSize : 44;
+    // ⭐ AND THE INBOUND EASE OVERRIDES THEM, LAST, FOR THE 350 ms IT RUNS (INTERFACE §8d). It has to
+    // be AFTER the six lines above: they are the live read, and a lag applied before them would be
+    // overwritten by the instrument in the same function. ⛔ It writes ONLY `S.view` (map lag) or
+    // `S.cam` (prism lag), never the instrument's own fields — the game's camera stays the single
+    // source of truth and the ease is a property of what the DESIGN is told this frame.
+    applyLevelLag();
 
     D.gm = nav._gm;
     D.sectors = nav._sectors;
