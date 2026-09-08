@@ -183,10 +183,34 @@ export function pickSector(nav, S, x, y) {
   if (!p || !insideProj(p, x, y)) return null;
   const w = worldAt(p, x, y);
   if (!w || !Number.isFinite(w.wx) || !Number.isFinite(w.wz)) return null;
-  const { wx, wz } = w;
-  let sec = null;
-  try { sec = nav._sectors && nav._sectors.getSectorAt ? nav._sectors.getSectorAt({ x: wx, z: wz }) : null; }
-  catch (e) { sec = null; }
+  const sectorAt = (wx, wz) => {
+    try { return nav._sectors && nav._sectors.getSectorAt ? nav._sectors.getSectorAt({ x: wx, z: wz }) : null; }
+    catch (e) { return null; }
+  };
+  let sec = sectorAt(w.wx, w.wz);
+  // ⭐ AC-1, SECOND HALF — A DRAWN CELL'S DEAD CORNER RESOLVES TO THE SECTOR THE CELL WAS DRAWN FOR.
+  //
+  // Max: *"there are too many cells that are not selectable."* The first half removed the cells whose
+  // CENTRE answered nothing. What is left is sub-cell: a rim cell is drawn whole, but a square laid
+  // over a disc always has corners outside it, and those texels answer nothing — measured live,
+  // 28 of 208 rim corners in 20 of 52 drawn cells. To the pilot that is the same defect at a smaller
+  // size: a cell on the glass that does not take the click.
+  //
+  // ⛔ IT FIRES ONLY WHERE THE TEXEL ITSELF ANSWERED NOTHING, so every click that resolves today
+  //    resolves to exactly what it did — a cell can span more than one sector (52 centres named 42
+  //    distinct sectors on the live sweep), and an interior click keeps the sector under it.
+  // ⚠ THE FALLBACK POINT IS THE PAINT'S OWN PREDICATE, `cx + (i + 0.5 - n/2) * size/n` — the very
+  //   expression `liveGridCells` decides a cell is drawn with. That is ALSO why there is no "only
+  //   inside a drawn cell" gate here, and a mutant is what removed it: a culled cell is one whose
+  //   centre answers nothing, so falling back to that centre answers nothing too. The gate was a
+  //   second copy of the predicate that could never change the answer.
+  if (!sec) {
+    const c = cellAt(p, x, y);
+    if (c && Number.isFinite(p.size)) {
+      const k = p.size / c.n;
+      sec = sectorAt(p.cx + (c.i + 0.5 - c.n / 2) * k, p.cz + (c.j + 0.5 - c.n / 2) * k);
+    }
+  }
   return sec ? { sector: sec } : null;
 }
 

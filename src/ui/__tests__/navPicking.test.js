@@ -32,7 +32,7 @@ import { makeDesigns } from '../navViewModes/designs.js';
 import { SORT_KEYS, makeRng, makeViewState, wrapTau,
          PRISM_DZ, PRISM_DY, SYSTEM_TILT } from '../navViewModes/state.js';
 import { generatePlanetName, generateMoonName, generateSystemName } from '../../generation/NameGenerator.js';
-import { projRect, worldAt, pickLabel, pickBody, pickPrismStar, pickOrbitRing } from '../navViewModes/picking.js';
+import { projRect, worldAt, pickLabel, pickBody, pickPrismStar, pickOrbitRing, pickSector } from '../navViewModes/picking.js';
 
 /** `ZOOM_STOPS[0]`, read off the design code rather than retyped — a pinned copy cannot go stale. */
 const ZOOM_STOPS = makeDesigns({ S: { design: 1, level: 3 }, D: {} }).ZOOM_STOPS;
@@ -1241,6 +1241,92 @@ describe("design 1's prism y-gauge is grabbable", () => {
     nav._handleMouseMove({ clientX: r.x + 3, clientY: r.cy + r.span * 40 });
     expect(nav._localCenter.y).toBeCloseTo(r.base - r.halfKpc, 12);
     nav._handleMouseUp();
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// AC-1, SECOND HALF — A DRAWN CELL'S DEAD CORNER RESOLVES TO THE SECTOR THE CELL WAS DRAWN FOR.
+// ═══════════════════════════════════════════════════════
+describe("a drawn galaxy cell takes the click in its corners too", () => {
+  /**
+   * ⛔ BUILT, NOT FOUND. A disc of radius 18 under an 8x8 grid of 5-kpc cells: cell (7,3)'s centre
+   * (17.5, -2.5) is inside at R=17.7, its outer corner is not. The authority hands back a DISTINCT
+   * object per point so the tests can tell "the sector under the click" from "the sector under the
+   * cell's centre" by identity — a shared stub would let a wrong snap pass as a right one.
+   */
+  function disc() {
+    const made = new Map();
+    const getSectorAt = ({ x, z }) => {
+      if (Math.hypot(x, z) > 18) return null;
+      const key = `${x.toFixed(3)},${z.toFixed(3)}`;
+      if (!made.has(key)) made.set(key, { name: 'S' + key, x, z });
+      return made.get(key);
+    };
+    const nav = { _sectors: { getSectorAt } };
+    const live = new Set();
+    for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
+      if (getSectorAt({ x: (i + 0.5 - 4) * 5, z: (j + 0.5 - 4) * 5 })) live.add(j * 8 + i);
+    }
+    const S = { design: 1, level: 0, mapProj: { design: 1, level: 0, kind: 'square',
+      ox: 0, oy: 0, sq: 80, n: 8, cell: 10, cx: 0, cz: 0, size: 40 } };
+    return { nav, S, live, getSectorAt };
+  }
+
+  it('⭐⭐ THE OUTER CORNER OF A RIM CELL RESOLVES, to the sector under that cell\'s centre', () => {
+    const { nav, S, live, getSectorAt } = disc();
+    expect(live.has(3 * 8 + 7), 'the fixture must draw cell (7,3)').toBe(true);
+    // its outer corner texel: x = 79 (the last column of cell 7), y = 30 (the first row of cell 3)
+    const w = worldAt(S.mapProj, 79, 30);
+    expect(getSectorAt({ x: w.wx, z: w.wz }), 'the corner must be dead ground on its own').toBe(null);
+    const hit = pickSector(nav, S, 79, 30);
+    expect(hit, 'the corner of a drawn cell answered nothing').toBeTruthy();
+    expect(hit.sector).toBe(getSectorAt({ x: 17.5, z: -2.5 }));
+  });
+
+  it('⛔ A CULLED CELL STAYS A MISS — the fallback never re-invents the dead cells', () => {
+    const { nav, S, live } = disc();
+    expect(live.has(0 * 8 + 7), 'the fixture must cull cell (7,0)').toBe(false);
+    expect(pickSector(nav, S, 75, 5), 'a culled cell resolved to a sector').toBe(null);
+  });
+
+  it('⛔ A TEXEL THAT ANSWERS FOR ITSELF KEEPS ITS OWN SECTOR, not the centre\'s', () => {
+    // A cell can span more than one sector. The fallback must not snap interior clicks.
+    const { nav, S, getSectorAt } = disc();
+    const w = worldAt(S.mapProj, 72, 32);   // inside cell (7,3), inside the disc
+    const own = getSectorAt({ x: w.wx, z: w.wz });
+    expect(own, 'the fixture point must be live on its own').toBeTruthy();
+    expect(pickSector(nav, S, 72, 32).sector).toBe(own);
+    expect(own).not.toBe(getSectorAt({ x: 17.5, z: -2.5 }));
+  });
+
+  it('⭐ ON THE REAL GALAXY, every inset corner of every drawn cell resolves', async () => {
+    // The live sweep, headless: the same 4 corners per drawn cell the browser probe walked. Before
+    // the fallback 28 of 208 answered nothing on this seed.
+    const { nav, drv } = await loadedNav();
+    nav._levelIndex = 0; nav.render();
+    const p = drv.S.mapProj;
+    expect(p && p.kind, 'design 1 at GALAXY must publish its square').toBe('square');
+    // drawn = the paint's own predicate (centre resolves); the CORNERS are the independent probe
+    const live = new Set();
+    for (let k = 0; k < p.n * p.n; k++) {
+      const i = k % p.n, j = Math.floor(k / p.n), kk = p.size / p.n;
+      if (nav._sectors.getSectorAt({ x: p.cx + (i + 0.5 - p.n / 2) * kk, z: p.cz + (j + 0.5 - p.n / 2) * kk })) live.add(k);
+    }
+    expect(live.size, 'nothing culled — the fixture cannot show anything').toBeLessThan(p.n * p.n);
+    const r = projRect(p);
+    const gx = (i) => r.x + Math.round(p.sq * i / p.n), gy = (j) => r.y + Math.round(p.sq * j / p.n);
+    let probed = 0, dead = 0, culledResolving = 0;
+    for (let k = 0; k < p.n * p.n; k++) {
+      const i = k % p.n, j = Math.floor(k / p.n);
+      if (!live.has(k)) { if (pickSector(nav, drv.S, gx(i) + 13, gy(j) + 13)) culledResolving++; continue; }
+      for (const [x, y] of [[gx(i) + 1, gy(j) + 1], [gx(i + 1) - 1, gy(j) + 1], [gx(i) + 1, gy(j + 1) - 1], [gx(i + 1) - 1, gy(j + 1) - 1]]) {
+        probed++;
+        if (!pickSector(nav, drv.S, x, y)) dead++;
+      }
+    }
+    expect(probed).toBe(live.size * 4);
+    expect(dead, `${dead} of ${probed} drawn-cell corners still answer nothing`).toBe(0);
+    expect(culledResolving, 'a culled cell\'s centre resolved').toBe(0);
   });
 });
 

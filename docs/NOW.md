@@ -6,6 +6,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (part 2, later) — **THREE MORE CLOSED: THE ORBIT RINGS TAKE A CLICK, THE PRISM'S Y-GAUGE IS A HANDLE, AND THE GALAXY GRID'S CORNERS ANSWER.** Lane A, head after this entry's commit. All measured live with controls; nine of ten mutants red on first run, and the two that survived each rewrote a claim of mine rather than a test.
+>
+> ⭐ **AC-2, first rectangle — design 2's orbit ellipses answer a click** (`3ea1902`). Geometry out of `dottedEllipse`'s own arguments, cleared in the driver so one press of V cannot leave rings live under design 1's ladder, tested LAST so a mark or a label always wins. Live on Sol: a bare texel of Azcai's ring selected Azcai; fourteen texels further out selected nothing.
+>
+> ⭐⭐ **AC-9, the prism's y-gauge — and it turned out to be a RESTORATION** (`b4a2626`). The gauge reports `_localCenter.y`, the height R and F already move and the LEGACY prism already drew (camera mark `:3618`, height in pc `:3669`, a literal `R/F up/down` hint). Design 1 kept the selected star's offset and dropped the camera — which is the readout behind Max's own 2026-08-01 UAT line, *"I still can't use the up/down controls to rise and lower below the galactic plane on the prism menu."* The camera mark is drawn only once the camera leaves the player's plane, so the ruled picture gains nothing; a real drag moved the camera and all 22 star marks, and the mark was read off the glass at row 78 against a predicted 78.
+>
+> ⭐ **AC-1's second half, found by the verify workflow's skeptic.** '0 dead cells' had only ever been the paint's own predicate counted back. Clicked for real: 52 centres resolve, 0 drawn cells dead, 12 culled cells inert — AND 28 of 208 rim corners were dead ground, the same defect at sub-cell size. `pickSector` now falls back to the cell's centre only where the texel answered nothing; re-swept, 0 of 208. The picture did not move a texel and **still awaits Max's eyes**.
+>
+> ⚠ **`verify-workstream` in `light` mode verifies ONE AC — the first in the contract — by design (`slice(0, 1)`).** It therefore audited AC-1, not the two slices it was pointed at. Useful anyway: its skeptic found the gap above. Full mode over 17 ACs is ~60 agents and was not run.
+>
+> ▶ **STILL OPEN:** AC-2's other rectangles (`pagerRect`, `minimapRect`, `locatorRect`, `listHeaderRects`, `companionRect`); AC-9's prism zoom/index indicators and SYSTEM's counter; AC-5's GALAXY half; AC-6's inbound half; design 2's GALAXY crop. **For Max:** the galaxy picture (AC-1), the no-system ORRERY boot question, and his walk (AC-12).
+
 > ## ▶ 2026-09-07 (part 2) — **AC-16 IS GREEN, LIVE, WITH A MUTATION CONTROL: THE ORRERY TRACKS THE PLANETS AS THEY ORBIT.** Lane A.
 >
 > ⭐ **MAX'S BAR — *"I want the nav screen to reflect the actual orientation of the planets in the game"* — IS MET, AND IT IS MEASURED OFF THE RUNNING GAME, NOT OFF A TEST.** With the game's own time lever (`celestialTimeMultiplier` at 200000, so the SIM advances the angle and nothing is hand-written into it), the innermost planet's live angle ran 0.30006 → 1.29620 rad over six seconds and the design's drawn angle equalled it to five decimal places at every one of seven samples, while the frozen generation angle sat at 0.3 the whole time. **30 of the 42 published marks physically moved on the glass**; the star's and the belts' correctly did not.
