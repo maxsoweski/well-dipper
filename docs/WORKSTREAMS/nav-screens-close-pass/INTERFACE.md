@@ -236,3 +236,99 @@ already resolve correctly through `S.mapProj`; they need no entry.
   `PanelHost` catches once, then stops uploading, and the screen keeps showing the last good frame.
 - `S` and `D` are MUTATED, never replaced.
 - The cockpit panel cannot acquire a mode — the gate is `activate()`, never `_bare`.
+
+---
+
+## 8. THE REMAINING RECTANGLES, THE COUNTER, THE GALAXY HIGHLIGHT AND THE INBOUND EASE — agreed 2026-09-08 (part 3)
+
+Same three owners, same disjoint files (§0). LAB publishes at the draw site; DRIVER consumes; HOST folds.
+Every field below is cleared by the DRIVER's `resetPicks()` each frame and has a default in `state.js`.
+None of them moves a pixel of any entry frame Max ruled on.
+
+| field | shape | who writes · where | who reads |
+|---|---|---|---|
+| `S.pagerRect` | `{ x0, mid, x1, y, h }` | LAB · `d1Rail`, right after the pager `T()` | DRIVER `remapClick`: `x < mid` → `page(-1)`, else `page(1)`; eaten (`return null`). Design 1, every level with a rail; absent while the drawn search is open (d1Rail returns early). `mid = (x0 + x1) / 2`. |
+| `S.listHeaderRects` | `[{ x, y, w, h, sortId }]` | LAB · `d2List`, one per DRAWN header (`cols[i] < W - 8`) | DRIVER `remapClick`: inside a header → `sortTo(sortId)`; eaten. `sortId` map: `N→null, NAME→'name', SP→'class', PC→'dist', PLANE→'plane', SYSTEM→'catalog'`. Design 2, PRISM in list mode only. |
+| `S.locatorRect` | `{ x, y, w, h }` | LAB · `drawDesign2`, from the same `fit(loc)`/`locW` the text was drawn with (right-aligned at `W - 4`) | DRIVER `remapClick`: `recentreOnPlayer()`; eaten. Design 2, every level. |
+| `S.minimapRect` | `{ x, y, w, h }` | LAB · `d2Prism`, the 24x24 widget's own `mx, my, mw, mh` | DRIVER `remapClick`: eaten, no action — a click on the widget must not resolve to the star mark UNDER it (the plate-ambiguity rule, §6). Design 2, PRISM map mode. |
+| `S.companionRect` | `{ x, y, w, h }` | LAB · `d2System`, only when the `» STAR B nnAU` strip is drawn (`far.length`), from the fitted string's own width | DRIVER `remapClick`: eaten, no action — a click on the strip must not select the ring under it. Design 2, SYSTEM. |
+| `S.ladderCounterRect` | `{ x, y, w, h }` | LAB · `d1Ladder`, where `N-M OF K` is drawn (only when `maxScroll > 0`), from `measurePixelText` of the string it drew, right-aligned at `x1 - 4` | DRIVER `counterGrab(x, y)` / `counterDragTo(px)`; HOST folds (below). Design 1, SYSTEM. |
+| `S.pick` (level 0) | `{ level: 0, sector: { centerX, centerZ, size, name }, tMs }` | DRIVER `notePick` at level 0, via `pickSector` (the SAME call the drill uses) | LAB `d1TwoD` / `d2TwoD` at level 0: `frame()` the sector's rect in `INK.KEY`, through the design's OWN `toX`/`toY`, intersected with `REGIONS.map` (design 1) / the painted band (design 2) so nothing paints over chrome. Drawn LAST. Levels 1-2 keep `{ level, i, j, tMs }` unchanged. |
+| `S.levelLag` | `{ from, to, kind:'map'|'prism', t0, dur, fromView, toView, fromRadius, toRadius, fromCam, toCam }` \| `null` | DRIVER only (`state.js` refresh + `index.js`) | DRIVER only. The designs never read it; they read `S.level`, `S.view`, `S.cam` as always. |
+
+### 8a. The sort keys DRIVER adds at level 3 (for the headers)
+
+`SORT_KEYS[3]` gains, AFTER the existing four so index 0 (DIST, today's order) is untouched:
+`{ id:'plane', label:'PLANE', cmp: (a,b) => (a.wy ?? 0) - (b.wy ?? 0) }` — monotonic in the column's own
+`(wy - player.y)` since the offset is constant — and
+`{ id:'catalog', label:'CATALOG', cmp: (a,b) => (b.isReal?1:0) - (a.isReal?1:0) || ((a.dist ?? 0) - (b.dist ?? 0)) }`.
+`sortTo(id)`: sets `S.sortIdx` to that key's index at the ACTIVE level, `S.sortLabel`, `S.listOffset = 0`;
+returns `false` (and changes nothing) for an id the level has no key for. ⚠ The `N` header is the row
+ordinal — sorting by it is the identity — so it publishes `sortId: null` and its click is eaten and does
+nothing. Log it in the contract; do not invent a key for it.
+
+### 8b. `recentreOnPlayer()` — what "centre on the player" MEANS at each level (DRIVER)
+
+- **Level 0** — ease the frame's centre to `(player.x, player.z)` at the current size, through the HOST's
+  existing `nav._viewEase` (the outbound AC-6 tween at `:1419`, `{ startTime, duration: 350, fromCenter,
+  fromSize, toCenter, toSize }`), NOT through `_startDrillAnim` (which arms `_anim` and eats clicks).
+  Design 2's wide band is the reason this is worth anything: half the disc is off the band by
+  construction, and the player's own sector can be one of the 20 sectors off it.
+- **Levels 1-2** — the player's sector / region: snapshot `_viewCenter`/`_viewSize`, call
+  `nav._setupViewStackForPlayer()` (rebuilds stack[1..2] from the player and snaps), then set
+  `nav._viewEase` from the snapshot to the new `_viewCenter`/`_viewSize` so the frame eases instead of
+  cutting. `_densityCacheKey = ''`.
+- **Level 3** — `nav._setupViewStackForPlayer()` (so the loader's block is the player's), then
+  `nav._localCenter = { x: player.x, y: player.y, z: player.z }`, `nav._localStars = []`,
+  `nav._resetPrismLoad()` — the tab-into-PRISM path at `:4481` does the same reset. Rotation untouched.
+- **Level 4** — NOT eaten, no action: the current system is the one on the glass unless a foreign one was
+  drilled, and re-entering the current system from a foreign one is `resolveArrivalSystem` territory
+  nobody has agreed. The contract carries it as an open item for Max.
+
+### 8c. The counter scrubber — DRIVER methods + HOST folds
+
+DRIVER: `counterGrab(x, y)` → true iff `S.ladderCounterRect` is published and contains the point (one texel
+of skirt each side, like `gaugeGrab`). `counterDragTo(px)` → `Math.round(ladderMax * clamp((px - r.x) / r.w,
+0, 1))`, or `null` when no counter was drawn this frame.
+HOST, three folds mirroring the y-gauge exactly, all on CLEAN lines (§4's survey):
+- `:4405` (mousedown, level 4): `this._counterDrag = !!(this.viewMode === 'rail' && this._viewDriverInst && this._viewDriverInst.counterGrab?.(p.x, p.y));` — folded BEFORE the existing `_dragStartLadder` statement so a press on the counter is decided first.
+- `:4355` (mousemove, level 4): `if (this._counterDrag) { const cv = this._viewDriverInst.counterDragTo?.(p.x); if (cv != null) this._viewDriverInst.S.ladderScroll = cv; return; }` — folded BEFORE the ladder-pan clause; the `return` is load-bearing (one hand, one control).
+- `:4415` (mouseup): `this._counterDrag = false;`.
+⚠ The counter's own pixels do not move — it is a READOUT, `N-M OF K`, and the AC's "indicator moves under
+the pointer" is met by the readout changing as the window it reports moves. A drawn thumb would be a new
+element on the SYSTEM picture and goes to Max as a picture question, not into this pass.
+
+### 8d. The inbound ease (AC-6, second half) — DRIVER only, armed only by the DRIVER's own tab paths
+
+⛔ MEASURED FIRST, SO THE SCOPE IS RIGHT: the drill click REGION→PRISM already animates (`_startDrillAnim`
+to level 3 moves `_viewCenter`/`_viewSize`, which `S.view` reads) and the star click PRISM→SYSTEM already
+animates (`_systemZoomAnim` moves `_localRadius`/`_localCenter`, which `S.cam` reads). What still SNAPS is
+the TAB STRIP and the Tab KEY into PRISM or SYSTEM (`:4475` sets `_levelIndex` synchronously; `:4476`'s
+`_viewEase` covers only the way OUT). So:
+- `tabLevel()` and the tab branch of `remapClick()` set `S.levelArm = { from: nav._levelIndex, tMs: simClockMs() }`
+  immediately before handing the click to `_handleClick`. Nothing else arms it — a test that assigns
+  `_levelIndex` directly, and the drill-click paths (which carry their own `_anim`), never lag.
+- In `refresh()`: when `nav._levelIndex !== S.level`, `S.levelArm` matches (`from === S.level`, within
+  one second), `!nav._anim` and `!nav._systemZoomAnim`, start `S.levelLag` for the pair:
+  · `from ≤ 2, to ∈ {3,4}` → `kind:'map'`: hold `S.level = from` and ease `S.view` from the current frame
+    to `{ cx, cz }` = `nav._localCenter` (to 3) or the player (to 4), `size = fromSize / (gridN(from) * 2)`
+    — the exact mirror of `:4476`'s outbound `fromSize`. 350 ms, smootherstep, sim clock.
+  · `3 → 4` → `kind:'prism'`: hold `S.level = 3` and ease `S.cam.radius` to `× 0.1` and `S.cam.{x,y,z}`
+    toward `nav._systemStar` (fall back to the player) — the mirror of `_systemZoomAnim`. 350 ms.
+  · `4 → 3` → `kind:'prism'` reversed: `S.level = 3` at once, `S.cam.radius` eases from `× 0.1` up to the
+    live radius (arrive by zooming out).
+  · every other pair: no lag (0-2 ↔ 0-2 are the host's own drills/eases; 3/4 → 0-2 is `:4476`).
+  While a lag runs `S.level` is the HELD level, so the designs keep drawing the picture that is leaving.
+- While `S.levelLag` is set, `remapClick` returns `null` (a click during the ease is eaten, exactly as
+  `_handleClick`'s `if (this._anim) return;` eats one during a drill) and `resolveHover` writes `null`.
+- The lag ends when `t ≥ 1`: `S.levelLag = null`, `S.level = nav._levelIndex`, and `S.view`/`S.cam` go back
+  to being read straight off the instrument. A level change from anywhere else during a lag cancels it.
+
+### 8e. What every owner's tests must drive (§2 of the last INTERFACE still governs)
+
+A key through `nav._onKeyDown`; a click through `clickAt`/`_handleMouseMove` + `_handleClick`; a drag
+through `_handleMouseDown`/`_handleMouseMove`/`_handleMouseUp`; the clock through `_setSimClockMs`.
+Every new field: (1) published where the design draws it, (2) `null`/`[]` in the other design and at the
+other levels after ONE `render()` (the clear is per frame), (3) the consumer acts on it, (4) mutate the
+fix — drop the publication, stop eating the click, flip the half, skip the clear — and name the test that
+goes red. A survived mutant means the claim is false as written (part 3 trap 19), not that the test is weak.
