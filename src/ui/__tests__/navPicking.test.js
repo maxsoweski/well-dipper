@@ -27,7 +27,7 @@
  * system whose body list has the shape that makes `pIdx` differ from a slot.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { makeHeadlessNav, clickAt } from './helpers/headlessNav.mjs';
+import { makeHeadlessNav, clickAt, tabCentre } from './helpers/headlessNav.mjs';
 import { makeDesigns } from '../navViewModes/designs.js';
 import { SORT_KEYS, makeRng, makeViewState, wrapTau,
          PRISM_DZ, PRISM_DY, SYSTEM_TILT } from '../navViewModes/state.js';
@@ -1397,6 +1397,55 @@ describe('the SYSTEM screen is disabled when the ship is in no system', () => {
     drv.tabLevel(1);
     expect(nav._levelIndex).toBe(4);
   });
+});
+
+// ═══════════════════════════════════════════════════════
+// MAX, 2026-09-07 ("3 yes"): the disabled SYSTEM screen holds for TODAY'S NAV and the COCKPIT PANEL too.
+// ═══════════════════════════════════════════════════════
+describe("…and the same holds for today's nav and the cockpit panel", () => {
+  /** Today's nav: no view mode, the legacy strip, `_localStars` loaded by the legacy prism paint. */
+  async function todaysNav({ bare = false } = {}) {
+    const h = await makeHeadlessNav({ width: 614, height: 512 });
+    h.nav._levelIndex = 3;
+    h.nav.chromeless = bare;   // `_bare` is a getter over this — the cockpit panel's chrome-less state
+    h.nav.render();
+    h.star = h.nav._localStars.find((s) => s.dist > 1e-9);
+    expect(h.nav.viewMode, 'this harness must be today\'s nav').toBe(null);
+    expect(h.nav._currentSystemData, 'the harness must start in no system').toBeFalsy();
+    return h;
+  }
+
+  it("⛔ TODAY'S NAV: a click on the SYSTEM tab does nothing, and with a system it drills", async () => {
+    const { nav } = await todaysNav();
+    const t = tabCentre(nav, 4);
+    clickAt(nav, t.x, t.y);
+    expect(nav._levelIndex, 'the disabled SYSTEM tab opened the screen').toBe(3);
+    expect(nav._systemData, 'a preview was generated for a system the ship is not in').toBeFalsy();
+    nav._currentSystemData = { planets: [] };
+    clickAt(nav, t.x, t.y);
+    expect(nav._levelIndex, 'CONTROL: in a system the tab must still work').toBe(4);
+  });
+
+  for (const bare of [false, true]) {
+    it(`⭐⭐ ${bare ? 'COCKPIT PANEL' : "TODAY'S NAV"}: a prism star click selects the star and does not drill`, async () => {
+      // ⚠ THE HOVER IS A FIXTURE. The legacy prism resolves `_hoveredLocalStar` from `_mouseX`/`_mouseY`
+      // against its own projection inside `render()`; standing the star in the field directly is the
+      // input that projection would have produced, without this test restating the projection.
+      const { nav, star } = await todaysNav({ bare });
+      nav._hoveredLocalStar = { star, sx: 0, sy: 0 };
+      const drills = []; nav._onDrillSound = (i) => drills.push(i);
+      clickAt(nav, 300, 200);   // mousedown first, or the class reads the click as a drag from (0,0)
+      expect(nav._selectedNavStar?.seed, 'the click did not select the star').toBe(star.seed);
+      expect(nav._systemZoomAnim, 'the click drilled into the disabled SYSTEM screen').toBeFalsy();
+      expect(nav._levelIndex).toBe(3);
+      expect(drills).toEqual([]);
+      // CONTROL: in a system the same click drills
+      nav._currentSystemData = { planets: [] };
+      nav._hoveredLocalStar = { star, sx: 0, sy: 0 };
+      clickAt(nav, 300, 200);
+      expect(nav._systemZoomAnim, 'in a system the star click must still drill').toBeTruthy();
+    });
+  }
 });
 
 describe('the commit rectangle comes out of the paint', () => {

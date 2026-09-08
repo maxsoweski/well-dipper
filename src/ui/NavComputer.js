@@ -4184,7 +4184,7 @@ export class NavComputer {
 
       // Label
       ctx.font = '11px "DotGothic16", monospace';
-      ctx.fillStyle = active ? '#fff' : 'rgba(255,255,255,0.4)';
+      ctx.fillStyle = active ? '#fff' : (i === 4 && !this._currentSystemData) ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.4)';   /* ⭐ AC-18 on today's nav: the SYSTEM tab draws at 0.15 against an inactive tab's 0.4 while the ship is in no system, off the same field the click gate reads, so it looks and acts disabled from ONE value. */
       ctx.textAlign = 'center';
       // ⭐ AN ABBREVIATION TABLE ON THE PANEL, NOT A CLIP. Only one glyph fits a `w / 5` cell at
       // every shipped buffer, and clipping 'SECTOR' and 'SYSTEM' both produced a bare `S` — see
@@ -4441,7 +4441,7 @@ export class NavComputer {
     const tabY = this._canvas.height - tabH;
     if (!this._bare && p.y >= tabY && (!this.viewMode || this._modeTabIdx >= 0)) {   // ⛔ AND STAND DOWN UNDER A VIEW MODE UNLESS remapClick SAID THIS WAS A TAB. This strip is navTabHeight(h) tall — 32 rows of a 240-row buffer — and design 1 draws its full-width COMMIT row inside it, so `[ WARP ]` reached this test first and changed level instead of warping. Same defect as the bare-path one this block already documents, from the other direction.
       const tabW = this._canvas.width / LEVELS.length;
-      const idx = Math.floor(p.x / tabW);
+      const idx = Math.floor(p.x / tabW);  if (idx === 4 && !this._currentSystemData) return;   /* ⭐ MAX, 2026-09-07, widening AC-18 to today's nav: *"disable the system screen when not in a system."* With no spawned system the SYSTEM tab answers nothing here — the branch six lines down would otherwise auto-select the nearest star and open a preview of a system the nav generated for itself, which is the picture he ruled off. Under a view mode `remapClick` has already eaten this click; this clause is the same gate for the strip today's nav draws. The tab itself is drawn dimmer on the same field (`_renderTabs`, the fillStyle fold). */
       if (idx >= 0 && idx < LEVELS.length) {
         this._systemZoomAnim = null; // cancel in-flight zoom so a tab click isn't overridden by it landing on level 4
         this._pendingComponentSelect = null; // the pre-select dies with the zoom (S5-verify)
@@ -4599,7 +4599,7 @@ export class NavComputer {
     // Prism level — click a star to enter system view with zoom animation
     if (this._levelIndex === 3 && this._hoveredLocalStar) {
       const star = this._hoveredLocalStar.star;
-      console.log('[NAV] Entering system view for:', star.name, 'seed:', star.seed, 'type:', star.spectral);  if (this.viewMode && !this._currentSystemData) { this._systemStar = star; this._selectedNavStar = star; this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' }; this._hoveredBody = null; if (this._onSound) this._onSound('select'); return; }   /* ⭐⭐ MAX, 2026-09-07: *"disable the system screen when not in a system."* With no spawned system (`_currentSystemData` null — the ORRERY splash boot, and nothing else) a prism star click SELECTS the star and arms the warp — `_systemStar`, `_selectedNavStar`, `_externalTarget`, the three fields the drill below sets before it animates — and then STOPS, ahead of the drill sound and the zoom. The SYSTEM screen it would have opened draws a system the nav generated for itself, and Max ruled it off. ⛔ THE SELECTION IS KEPT ON PURPOSE: the driver's `commit()` warps from `_selectedNavStar` / `_externalTarget` whenever the level is not 4, so Enter and the rail's chip still fly the pilot out of deep space — the screen is disabled, the function is not. ⚠ `this.viewMode` gates it: today's nav (V to null) and the cockpit panel keep their preview, byte for byte, until Max widens the ruling. Folded, not a new line: this file is line-frozen at 4711. */
+      console.log('[NAV] Entering system view for:', star.name, 'seed:', star.seed, 'type:', star.spectral);  if (!this._currentSystemData) { this._systemStar = star; this._selectedNavStar = star; this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' }; this._hoveredBody = null; if (this._onSound) this._onSound('select'); return; }   /* ⭐⭐ MAX, 2026-09-07: *"disable the system screen when not in a system."* With no spawned system (`_currentSystemData` null — the ORRERY splash boot, and nothing else) a prism star click SELECTS the star and arms the warp — `_systemStar`, `_selectedNavStar`, `_externalTarget`, the three fields the drill below sets before it animates — and then STOPS, ahead of the drill sound and the zoom. The SYSTEM screen it would have opened draws a system the nav generated for itself, and Max ruled it off. ⛔ THE SELECTION IS KEPT ON PURPOSE: the driver's `commit()` warps from `_selectedNavStar` / `_externalTarget` whenever the level is not 4, so Enter and the rail's chip still fly the pilot out of deep space — the screen is disabled, the function is not. ⭐ WIDENED THE SAME DAY on Max's word (*"3 yes"*): no `viewMode` gate, so today's nav and the cockpit panel select-and-stop too — one predicate for every surface. Folded, not a new line: this file is line-frozen at 4711. */
       if (this._onDrillSound) this._onDrillSound(4);
       this._systemStar = star;
       this._selectedNavStar = star;

@@ -6,6 +6,12 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (part 2, final) — **HIS THREE ANSWERS: PUSHED; THE GALAXY PICTURE APPROVED (AC-1 CLOSED); THE DISABLED SYSTEM SCREEN WIDENED TO TODAY'S NAV AND THE COCKPIT PANEL.** *"1 yes 2 yes, new one looks good 3 yes."*
+>
+> ✅ **AC-1 CLOSED BY HIS EYES** — *"new one looks good."* ✅ `89acf6f` pushed (ls-remote verified). ⭐ **AC-18 widened**: one predicate (`_currentSystemData` null) now disables the SYSTEM screen on every surface — the two designs, today's nav (V to null) and the cockpit panel. Live in the real no-system state, today's nav: SYSTEM tab at luminance 170 against GALAXY's 325, a real click on it changes nothing, a real star click on the legacy prism selects without drilling. Two more mutants red; `src/ui` 551/551, `src/cockpit` 698/698.
+>
+> ▶ **HANDING OFF TO A FRESH SESSION** → `docs/FEATURES/handoff-2026-09-07-nav-close-pass-part3.md`. The widening commit is local until he says push.
+
 > ## ▶ 2026-09-07 (part 2, close) — **MAX'S THREE RULINGS TAKEN: PUSHED, PARKED, AND THE SYSTEM SCREEN IS DISABLED WHEN THE SHIP IS IN NO SYSTEM.** Lane A. *"1. push 2. park; 3. disable the system screen when not in a system."*
 >
 > ⭐ **AC-18 (new, his words) BUILT AND VERIFIED LIVE in the real no-system state** — splash → ORRERY, intro played out. One predicate (`_currentSystemData` null): both designs draw the SYSTEM tab in the rule's ink, Tab skips it both ways, a click on it is eaten, and a prism star click selects the star without drilling so Enter still warps. Read off the glass: SYSTEM glyphs 29,58,74 against GALAXY's 47,107,122. Three mutants red. ⚠ Scoped to the view modes; today's nav and the cockpit panel keep their preview until he widens it.
