@@ -183,8 +183,13 @@ export function makeViewModeDriver(nav) {
     // ⛔ `null`, NOT `[]`, INCLUDING `listHeaderRects`: "this picture publishes no headers" is a
     //    different claim from "it published an empty set of them", and every consumer below treats
     //    either as no candidates.
+    // ⛔ AND `S.minimapRect` IS NOT ON THIS LINE ANY MORE — THE FIELD IS WITHDRAWN (INTERFACE §8f).
+    //    The lab publishes nothing for design 2's corner widget and the driver eats nothing there:
+    //    the widget is ~49 texels of ink in a 720-texel box over a starfield drawn BEFORE it, so a
+    //    star inside the box is visible and hoverable and the band turned a live pick into nothing.
+    //    Clearing a field nobody writes would be housekeeping for a contract that no longer exists.
     S.pagerRect = null; S.ladderCounterRect = null; S.listHeaderRects = null;
-    S.locatorRect = null; S.minimapRect = null; S.companionRect = null;
+    S.locatorRect = null; S.companionRect = null;
     // ⛔ `S.pick` IS NOT IN THIS LIST AND MUST NOT BE. Everything above is published by the PAINT and
     // is one frame's worth by construction; `S.pick` is published by the CLICK and has to outlive
     // the frames between the click and the drill landing — which is the entire feature. Clearing it
@@ -244,17 +249,22 @@ export function makeViewModeDriver(nav) {
     // ⭐⭐ AC-5's GALAXY HALF, AND IT CLOSES THE EXCLUSION THE BLOCK ABOVE ARGUED FOR RATHER THAN
     // CONTRADICTING IT. The objection was never "level 0 should have no highlight" — it was that the
     // CELL is not what gets zoomed into there, so framing the cell would promise the wrong
-    // destination. The identity IS the containing sector, and `pickSector` is the SAME call
-    // `pickFromMap` hands `_handleClick` for the drill, so what lights up and what the zoom flies to
-    // cannot come apart. The sector's own centre and size go on `S.pick`; each design frames them
-    // through its own projection (`pickedSector` in designs.js), which is why no rectangle is
-    // computed here — one picked object, two pictures, no third copy of anybody's geometry.
+    // destination. The identity IS the containing sector.
+    // ⛔⛔ AND IT IS ONE OBJECT, TAKEN FROM THE FIELD THE DRILL READS — NOT TWO CALLS THAT AGREE
+    //    (INTERFACE §8f). The comment here used to say `pickSector` was "the SAME call" the drill
+    //    consumes; it was not, it was a SECOND call at the same coordinates, and two calls agree only
+    //    while nothing between them moves. `_handleClick`:4633 drills `this._hoveredTile.sector`, so
+    //    THAT is what is recorded: `resolveHover` has just run at this click's own point (see
+    //    `remapClick`'s fall-throughs), and whatever it left in the field is the object about to be
+    //    flown to. `pickSector` remains as the fallback for the one case the field cannot answer —
+    //    no hover resolved at all — and never as a second opinion about a hover that did.
     // ⚠ FOUR PLAIN NUMBERS AND A NAME, NOT THE SECTOR OBJECT. The designs read it unguarded every
     //   frame it is set; handing them a live quadtree node would make the picture depend on whatever
     //   else holds a reference to it.
     if (S.level === 0) {
-      const hit = pickSector(nav, S, x, y);
-      const s = hit && hit.sector;
+      const hovered = nav._hoveredTile && nav._hoveredTile.sector;
+      const fallback = hovered ? null : pickSector(nav, S, x, y);
+      const s = hovered || (fallback && fallback.sector);
       if (!s || !Number.isFinite(s.centerX) || !Number.isFinite(s.centerZ) || !Number.isFinite(s.size)) return;
       S.pick = { level: 0, tMs: simClockMs(),
                  sector: { centerX: s.centerX, centerZ: s.centerZ, size: s.size, name: s.name } };
@@ -933,9 +943,21 @@ export function makeViewModeDriver(nav) {
     //    A press on the strip (key or click) is the pilot changing level AGAIN; §8d says a level change
     //    from anywhere else cancels a lag, so the strip cancels it here and goes on to move the level.
     //    Map clicks stay eaten: they would be resolved against the picture that is leaving.
+    // ⛔⛔ AND "THE STRIP" IS A REAL TAB, NOT THE STRIP'S BAND (INTERFACE §8f, defect 2). The first
+    //    build cancelled on the BAND — `p.y` inside the tab row, at any `x` — so a press on the empty
+    //    run past the last drawn tab, on the disabled SYSTEM tab, or on the tab of the level already
+    //    on the glass killed the ease and then did nothing, which is the transition abandoned halfway
+    //    with no level change to show for it. The cancel now needs a tab that WILL move the level:
+    //    drawn (`tabIndexAt >= 0`), enabled, and not the current one — the same three conditions
+    //    `tabLevel` already refuses on. Everything else during a lag is eaten, map and chrome alike.
+    // ⚠ `inStrip` / `tabI` ARE COMPUTED ONCE, HERE, AND REUSED BY THE TAB BRANCH AT THE BOTTOM. The
+    //   band expression was written out twice and the two copies were free to drift — the AC-4 defect
+    //   shape inside one function.
+    const inStrip = bars ? (p.y >= 0 && p.y < g2.BAR) : (p.y >= g2.tabY && p.y < g2.tabY + g2.LEAD);
+    const tabI = inStrip ? tabIndexAt(g2, p.x, bars) : -1;
+    const realTab = tabI >= 0 && !(tabI === 4 && !nav._currentSystemData) && tabI !== (nav._levelIndex | 0);
     if (S.levelLag) {
-      const strip = bars ? (p.y >= 0 && p.y < g2.BAR) : (p.y >= g2.tabY && p.y < g2.tabY + g2.LEAD);
-      if (!strip) return null;
+      if (!realTab) return null;
       S.levelLag = null; S.level = nav._levelIndex | 0;
     }
     // ── ⭐ AC-2 — DESIGN 1'S PAGER ROW: LEFT HALF BACK, RIGHT HALF FORWARD ────────────────────────
@@ -965,8 +987,12 @@ export function makeViewModeDriver(nav) {
     //   resolves to list row -1, so there is nothing under a header for the click to fall through TO.
     //   It is kept because it is what INTERFACE §8 specifies and because it is the plate rule (§6)
     //   stated where a future `d2List` that draws marks would need it — not because a test holds it.
+    // ⚠ AND `sortTo` IS CALLED UNCONDITIONALLY, WITHOUT AN `if (hdr.sortId)` IN FRONT OF IT: `sortTo`
+    //   already answers `false` and changes nothing for an id no key at this level owns, `null`
+    //   included, so the guard was a second copy of that refusal — two places to keep in step for a
+    //   behaviour one of them fully defines.
     const hdr = (S.listHeaderRects || []).find((r) => inRect(r, p.x, p.y));
-    if (hdr) { if (hdr.sortId) sortTo(hdr.sortId); return null; }
+    if (hdr) { sortTo(hdr.sortId); return null; }
     // ── ⭐ AC-2 — DESIGN 2'S `HERE · SECTOR` LOCATOR RE-CENTRES ON THE PLAYER ─────────────────────
     // ⛔ AND AT SYSTEM IT IS NOT EATEN, WHICH IS A DECISION AND NOT A GAP (§8b). "Centre on the
     //    player" has no agreed meaning at level 4 — the system on the glass is the current one unless
@@ -974,36 +1000,58 @@ export function makeViewModeDriver(nav) {
     //    it was drawn on, where design 2's tab test answers it or nothing does. `recentreOnPlayer`
     //    makes the same refusal itself; the test here is what decides whether the click is CONSUMED.
     if (inRect(S.locatorRect, p.x, p.y) && S.level !== 4) { recentreOnPlayer(); return null; }
-    // ── ⭐ AC-2 — THE TWO READOUTS THAT EAT A CLICK AND DO NOTHING (§6's plate rule) ──────────────
-    // ⛔ THIS IS THE POINT OF PUBLISHING THEM AT ALL. Neither the prism minimap nor the `» STAR B`
-    //    companion strip has a downstream identity, and inventing one would be the picker deciding
-    //    what those marks mean. What they MUST do is stop the press reaching what is underneath:
-    //    the minimap sits on the starfield and the strip is drawn straight across the outer orbit
-    //    rings, so without these two clauses a press on either selects an object the pilot cannot
-    //    see there — a wrong pick, which is worse than a missing one.
-    if (inRect(S.minimapRect, p.x, p.y)) return null;
+    // ── ⭐ AC-2 — THE ONE READOUT THAT EATS A CLICK AND DOES NOTHING (§6's plate rule) ────────────
+    // ⛔ THE `» STAR B` COMPANION STRIP HAS NO DOWNSTREAM IDENTITY, and inventing one would be the
+    //    picker deciding what that mark means. What the rectangle buys is that the press does not
+    //    reach the outer orbit rings the strip is drawn straight across — a wrong pick, which is
+    //    worse than a missing one.
+    // ⚠ AND THE EAT GUARDS NOTHING THE PAINT CAN PRODUCE TODAY — MEASURED (INTERFACE §8f). The strip
+    //   is a glyph row at `mapY + 1` and no orrery ring reaches above y ≈ 21 at any tilt, so there is
+    //   nothing under it to protect. Kept as the plate rule stated where a taller orrery would need
+    //   it, NOT because a test holds it; the case below asserts the CONTROL — one texel under the
+    //   band the click is not eaten — which is the half that can fail.
+    // ⛔⛔ THE PRISM MINIMAP'S CLAUSE IS GONE (INTERFACE §8f). It read the same as the line above and
+    //    the premise under it was measured false: `plated()` labels earn the plate rule by KNOCKING
+    //    OUT a BG rect first, so nothing under them is visible, while the corner widget is four
+    //    brackets, a dot, a scale column and a 5-texel mark — ~49 texels in a 720-texel box — over a
+    //    starfield drawn BEFORE it and showing straight through. A star inside that box is on the
+    //    glass and the pilot can see it; eating the press traded AC-2's mis-selection for a LOST
+    //    pick, which is the AC backwards. The starfield under the widget answers as it did before.
     if (inRect(S.companionRect, p.x, p.y)) return null;
     // ⭐ THE CLICK-HIGHLIGHT IS RECORDED AT BOTH FALL-THROUGHS AND NOWHERE ELSE — see `notePick`.
     // Every `return null` above ate the click (the drawn search, a ladder cap), and a click that was
     // eaten drills nothing, so highlighting it would be the glass making a promise nothing keeps.
     // The two returns below are the only paths on which `_handleClick` goes on to pick a tile.
-    const inStrip = bars ? (p.y >= 0 && p.y < g2.BAR) : (p.y >= g2.tabY && p.y < g2.tabY + g2.LEAD);
-    if (!inStrip) { notePick(p.x, p.y); return p; }
-    const i = tabIndexAt(g2, p.x, bars);
-    if (i < 0) { notePick(p.x, p.y); return p; }
+    // ⛔⛔ AND THE HOVER IS RESOLVED AT THE CLICK'S OWN POINT FIRST (INTERFACE §8f, AC-5's identity).
+    //    `notePick` and `_handleClick` must act on ONE object, and the field `_handleClick` drills is
+    //    written by `resolveHover` — which otherwise last ran at the tail of the last RENDER, from
+    //    `_mouseX`/`_mouseY`. Two gestures make those disagree with this click: a TAP, which fires
+    //    mousedown/up/click with no `_handleMouseMove` at all (a touch, and the shipped panel path),
+    //    and a press-move-release under the 5-texel drag threshold, which is still a click but at a
+    //    different texel from the last frame's hover. Both drilled the PREVIOUS frame's target while
+    //    lighting this one. Resolving here costs one hit-test and makes the two the same object by
+    //    construction rather than by the pointer happening not to have moved.
+    if (!inStrip) { resolveHover(p.x, p.y, w, h); notePick(p.x, p.y); return p; }
+    if (tabI < 0) { resolveHover(p.x, p.y, w, h); notePick(p.x, p.y); return p; }
     // ⭐ THE DISABLED SYSTEM TAB EATS ITS CLICK (see `tabLevel`). The designs draw it in INK.RULE on
     // `S.noSystem`, so what the pilot sees is a dimmed tab that does not answer — never a screen
     // showing a system the nav generated for itself.
-    if (i === 4 && !nav._currentSystemData) return null;   // the class field, for the reason `tabLevel` gives
-    nav._modeTabIdx = i;
+    if (tabI === 4 && !nav._currentSystemData) return null;   // the class field, for the reason `tabLevel` gives
+    nav._modeTabIdx = tabI;
     // ⭐ AND THE SAME ARM AS `tabLevel`'s, on the OTHER path into the tab branch (§8d). A click on the
     // strip and the Tab key are one transition with two entrances, and an ease that only the keyboard
     // got would be the kind of divergence AC-4 keeps finding. `from` is read BEFORE the handler moves
     // the index — one statement later it would already be the destination and match nothing.
-    S.levelArm = { from: nav._levelIndex | 0, tMs: simClockMs() };
+    // ⛔ ARMED ONLY ON A TAB THAT WILL MOVE THE LEVEL (`realTab`, INTERFACE §8f defect 3). A click on
+    //    the tab of the level already on the glass changes nothing — `tabLevel` refuses `idx === cur`
+    //    and `_handleClick`'s strip branch lands on the same index — so arming there left a token
+    //    that no level change would ever consume on the frame it was written for. It is consumed on
+    //    the next `refresh()` either way now, so nothing can attach it to a later transition, but
+    //    writing it at all would still be the driver claiming a tab moved something it did not.
+    if (realTab) S.levelArm = { from: nav._levelIndex | 0, tMs: simClockMs() };
     // The handler only asks `p.y >= h - navTabHeight(h)`, so the bottom row is inside the strip at
     // every buffer without this file needing to know what navTabHeight returns.
-    return { x: (i + 0.5) * (w / 5), y: h - 1 };
+    return { x: (tabI + 0.5) * (w / 5), y: h - 1 };
   }
 
   return {

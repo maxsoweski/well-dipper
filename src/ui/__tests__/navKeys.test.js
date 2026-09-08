@@ -793,6 +793,26 @@ describe('AC-9 — at SYSTEM in design 1 a press on the ladder COUNTER scrubs th
     expect(drv.S.ladderScroll, 'AC-7\'s pan is what an unclaimed level-4 drag still does').toBe(37);
   });
 
+  it('⛔ A HELD COUNTER THAT ANSWERS `null` STILL EATS THE MOVE — no scrub, no pan, no rotation', async () => {
+    // ⛔ THE HOST'S `cv == null` BRANCH, WHICH NO CASE DROVE. `counterDragTo` answers `null` when NO
+    //    COUNTER WAS DRAWN THIS FRAME — the ladder stopped overflowing under the drag, a level change,
+    //    a design switch — and the fold's clause is `if (cv != null) …; return;`. The `return` is
+    //    outside the guard on purpose: the press took the counter, so the move belongs to it whether
+    //    or not it has an answer, and falling through would pan the ladder from `_dragStartLadder`
+    //    with the same hand. Three assertions, because there are three things the fall-through does.
+    const { nav, drv } = await crowdedLadder('rail');
+    const calls = instrumentCounter(nav, { grab: true, value: null });
+    drv.S.ladderScroll = 12;
+    const rotX = nav._systemRotX, rotY = nav._systemRotY;
+
+    dragBy(nav, 200, 120, -37, 10);
+
+    expect(calls.dragTo, 'the held counter was not asked').toEqual([163]);
+    expect(drv.S.ladderScroll, 'a `null` answer was written to the ladder as a number').toBe(12);
+    expect(nav._systemRotX, 'the eaten move also spun the orrery').toBe(rotX);
+    expect(nav._systemRotY, 'the eaten move also spun the orrery').toBe(rotY);
+  });
+
   it('a move after the release changes nothing — the gesture ended with the button', async () => {
     // ⚠ WHAT THIS ACTUALLY PINS IS `_dragging`, NOT THE RELEASE. `_handleMouseMove` never reaches the
     // drag branch with the button up, so this case survives deleting `_counterDrag = false` at :4415.

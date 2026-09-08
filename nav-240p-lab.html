@@ -716,11 +716,27 @@ function blitLum(g, img, dx, dy, dw, dh, sqSide) {
 //    `nav._viewCenter`/`_viewSize`; this page writes it from `labViewForLevel`, which returns
 //    exactly what the deleted lines computed — so the picture is unchanged here, and unchanged at
 //    the game's entry state too, where `_setupViewStackForPlayer` builds the same two frames.
-// ⛔ LEVEL 0 IS NOT READ FROM `S.view`: it is the whole 44 kpc disc by definition, and there is no
-//    drill above it that could have moved it.
+// ⭐⭐ AND LEVEL 0 READS `S.view` TOO, SINCE 2026-09-08 — THE FIXED DISC WAS THREE DEFECTS AT ONCE.
+//    This line used to return the literal `{ cx: 0, cz: 0, size: 44 }` on the argument that the disc
+//    is "the whole galaxy by definition". Measured live on the running game (417x240, design 2 at
+//    GALAXY): a 60-texel drag moved `_viewCenter.x` 0 → -16.5 kpc and the canvas hash did not change
+//    by one bit — the host's own 2D pan (`_handleMouseMove`'s `_panStartCenter` branch, live at every
+//    2D level in today's nav) was moving a frame nothing drew. Three things hung off that: design 2's
+//    wide crop keeps 20 of 775 sectors off the band with NO way to reach them (a drag is the way);
+//    the `HERE · SECTOR` locator's level-0 re-centre eased a field nobody painted; and a GALAXY drill,
+//    whose `_startDrillAnim` walks `_viewCenter`/`_viewSize` 44 → 0.5 exactly as a SECTOR drill does,
+//    CUT to SECTOR after 500 ms instead of zooming — Max: *"clicking on a cell from the grid should
+//    highlight it, then zoom into it"*. Reading the frame closes all three with one line.
+// ⛔ THE ENTRY FRAME IS UNMOVED, BY THE SAME ARGUMENT LEVELS 1-2 USE: `_setupViewStackForPlayer` puts
+//    `{ center: (0, 0), size: 44 }` in `_viewStack[0]` and `_applyLevelView` loads it on every entry,
+//    so `S.view` at level 0 IS the literal this used to return until a gesture moves it. This page's
+//    own stand-in (`labViewForLevel`) returns the same literal, so the lab picture is byte-identical.
+// ⚠ Design 1's re-fit (`d1GalaxyView`, `Math.min(v.size, 2R)`) composes with it: at rest the square
+//   is still 36 kpc; under a pan the cull keeps a cell drawn only where its centre resolves, so no
+//   dead ground comes in from the rim; under a drill the square closes on the sector.
 function levelView(level) {
-  if (level === 0) return { cx: 0, cz: 0, size: 44, n: 0 };
   const v = S.view;
+  if (level === 0) return { cx: v.cx, cz: v.cz, size: v.size, n: 0 };
   if (level === 1) return { cx: v.cx, cz: v.cz, size: v.size, n: 8 };
   return { cx: v.cx, cz: v.cz, size: v.size, n: 16 };
 }
@@ -838,16 +854,22 @@ function drawDesign1(g, W, H) {
   //    a picker reading `undefined.length` inside `render()`'s tail freezes the glass.
   S.labelHits = [];
   // ⭐ AND THE SAME CLEAR FOR AC-2's REMAINING RECTANGLES (INTERFACE §8). Design 2 clears its own
-  // set at the head of `drawDesign2`; this is design 1's half, and BOTH halves are wanted. One press
-  // of V must not leave design 2's list headers or its locator live under design 1's rail, and
-  // design 1's pager must not answer a click after the pilot has switched to design 2 — a rectangle
-  // published by a design that did not paint this frame is geometry out of NOBODY'S paint, which is
-  // the same lie as geometry restated in a hit-test.
+  // set at the head of `drawDesign2`, and the driver's `resetPicks` clears every one of them for both
+  // designs before either paints. One press of V must not leave design 2's list headers or its
+  // locator live under design 1's rail, and design 1's pager must not answer a click after the pilot
+  // has switched to design 2 — a rectangle published by a design that did not paint this frame is
+  // geometry out of NOBODY'S paint, which is the same lie as geometry restated in a hit-test.
+  // ⚠ MEASURED 2026-09-08, AND THE COMMENT SAYS SO RATHER THAN CLAIMING A GUARD: with the driver's
+  //   clear in place this line kills no test — the adversarial pass deleted it, and the mirror line in
+  //   `drawDesign2`, and the driver's, one at a time, and the suite stayed green each time; only
+  //   removing all three at once goes red. The clears are load-bearing as a SET and redundant one by
+  //   one. This one is kept because this page is also the SPEC and has to stand without the driver
+  //   (the lab page has no `resetPicks`), not because a test holds it on its own.
   // ⛔ ASSIGNED TO `null`, NEVER DELETED, for the reason `S.labelHits = []` is an assignment: a
   //    picker dereferencing a field that is not there freezes the glass, and it freezes it LOOKING
   //    ALIVE — `PanelHost` catches a painter throw once and then stops uploading frames.
   S.pagerRect = null; S.ladderCounterRect = null;
-  S.listHeaderRects = null; S.locatorRect = null; S.minimapRect = null; S.companionRect = null;
+  S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null;
   const CELL = FACE.advance, LEAD = FACE.h + 1;
   const cols = Math.floor((W + 1) / CELL), rows = Math.floor(H / LEAD);
   const cx = (c) => c * CELL, ry = (r) => r * LEAD;
@@ -904,7 +926,13 @@ function drawDesign1(g, W, H) {
                  `CLICK A TILE OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
                  `CLICK A TILE OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
                  `CLICK A STAR OR A LIST ROW   ${sortHint}   / SEARCH   WASD PAN`,
-                 `SELECT A BODY   SCROLL , . OR CLICK ...   ${sortHint}   TAB LEVEL`];
+                 // ⭐ THE SCROLL CONTROLS ARE NAMED ONLY WHEN THE LADDER HAS SOMEWHERE TO SCROLL. `d1Ladder`
+                 // has already run (the map pane paints before this row), so `S.ladderMax` is this
+                 // frame's own answer: 0 means no `...` cap is drawn and `,` / `.` move nothing, and a
+                 // hint naming a click target that is not on the glass is the lie AC-10 sweeps for.
+                 // Measured 2026-09-08: Sol's 15 stops end at 222 against a 226-texel window at Max's
+                 // 417x240, so on Sol this row reads `SELECT A BODY   [ ] SORT AU   TAB LEVEL`.
+                 `SELECT A BODY   ${(S.ladderMax || 0) > 0 ? 'SCROLL , . OR CLICK ...   ' : ''}${sortHint}   TAB LEVEL`];
   // ⭐ AND WHILE THE DRAWN SEARCH IS OPEN THE ROW NAMES THE SEARCH'S OWN CONTROLS. The field takes
   // the rail, so the row that would say "CLICK A LIST ROW" would be naming rows that are not there.
   // ⛔ ESC CLOSES AND ONLY CLOSES — it must never also drill a level, which is the one behaviour the
@@ -1302,8 +1330,14 @@ function d1Ladder(g, mapW, mapY, mapH) {
   //    drawn on every system that has a body, promising four texels of nothing beyond the last one,
   //    and the `N-M OF K` counter read `1-N OF N` — the cap Max asked for exists to say "there is
   //    more this way", and it was saying it where there was not. A ladder that fits now publishes
-  //    `maxScroll` 0, no caps and no counter; one that does not (Sol at 427x240) keeps all three,
+  //    `maxScroll` 0, draws no cap MARKS and no counter (`S.ladderCaps`, the geometry, is published
+  //    regardless — the driver's cap clause gates on `ladderMax`); one that does not keeps all three,
   //    four texels shorter, with its last body still at `x1 - 8` when scrolled to the end.
+  // ⚠ AND SOL FITS. The first version of this comment said Sol at 427x240 "keeps all three"; it was
+  //   written from the old `1-14 OF 15` readout, not measured. Measured live 2026-09-08 at Max's
+  //   417x240: Sol's 15 stops end at 222 against a 226-texel window, so no cap and no counter are
+  //   drawn on Sol, and the counter appears on a denser system or a narrower buffer (227 wide:
+  //   `maxScroll` 21). The counter is a control for the ladders that need it, which Sol is not.
   const vMax = (vx.length ? vx[vx.length - 1] : 0) + 4;
   const maxScroll = Math.max(0, vMax - winW);
   const scroll = Math.max(0, Math.min(maxScroll, Math.round(S.ladderScroll || 0)));
@@ -1635,11 +1669,12 @@ function drawDesign2(g, W, H) {
   // costs exactly one frame of nothing and closes a whole class of stale-pick defect at the source.
   S.mapProj = null; S.prismHits = null; S.bodyHits = null; S.listGeom = null; S.labelHits = []; S.orbitRings = null;
   // ⭐ AC-2's REMAINING RECTANGLES, CLEARED ON THE SAME PRINCIPLE AND FOR BOTH DESIGNS' FIELDS
-  // (INTERFACE §8). Four of these six are design 2's own — the list headers only exist in list mode,
-  // the minimap only in map mode, the companion strip only in a wide binary — so each is republished
-  // by the branch that draws it and by nothing else; the two design 1 fields are cleared here for
-  // the mirror-image reason `drawDesign1` clears design 2's.
-  S.listHeaderRects = null; S.locatorRect = null; S.minimapRect = null; S.companionRect = null;
+  // (INTERFACE §8). Three of these five are design 2's own — the list headers only exist in list
+  // mode, the companion strip only in a wide binary — so each is republished by the branch that
+  // draws it and by nothing else; the two design 1 fields are cleared here for the mirror-image
+  // reason `drawDesign1` clears design 2's. (The minimap publishes nothing — see `d2Prism`.)
+  // ⚠ Measured redundant one by one and load-bearing as a set — see the note on `drawDesign1`'s.
+  S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null;
   S.pagerRect = null; S.ladderCounterRect = null;
   if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
   else if (S.level === 3) d2Prism(g, W, mapY, mapH);
@@ -1750,24 +1785,15 @@ function d2TwoD(g, W, mapY, mapH) {
     //   CONSTRUCTION. `clip` is the band that was actually painted; outside it a click is a miss.
     S.mapProj = { design: 2, level: S.level, kind: 'wide', ox: W / 2, oy: mapY + mapH / 2,
                   kpc: v.size / W, cx: v.cx, cz: v.cz, clip: { x: 0, y: mapY, w: W, h: mapH } };
-    // ⭐ THE CLICK-HIGHLIGHT AT GALAXY (INTERFACE §5), AND THE ONE PLACE IT NEEDS A WORD OF DEFENCE.
-    // ⛔ This branch draws NO cell grid — it is a full-bleed density field with sector dots on it —
-    //    so there is no drawn rectangle to reuse and `kind: 'wide'` publishes no `n`. What IS
-    //    unambiguous is the WORLD cell: GALAXY is the whole 44 kpc disc in both designs and the
-    //    galaxy grid is 8x8 over it (`d1TwoD`'s `S.level === 0 ? 8`). So the cell's world bounds go
-    //    through THIS design's own `toX`/`toY` and nothing about design 1's picture comes with them.
-    // ⚠ It can land outside the painted band — the wide field is ±(mapH/2)·kpc and about half the
-    //   disc is off the glass BY CONSTRUCTION — so it is deliberately NOT `assertMark`ed: that is
-    //   the projection's documented crop, not a mark that escaped its pane.
-    const pk0 = pickCell(S.level);
-    if (pk0) {
-      const gn = 8, gc = W / gn;
-      frame(g, pk0.i * gc, mapY + mapH / 2 + (pk0.j / gn - 0.5) * W, gc, gc, INK.KEY);
-    }
-    // ⭐ AND THE SECTOR ITSELF, WHICH IS WHAT A GALAXY CLICK ACTUALLY DRILLS (AC-5) — see
-    // `pickedSector`. Through THIS design's `toX`/`toY`, which are isotropic at `W / v.size` texels
-    // per kpc, so a 0.5 kpc sector is the same handful of texels in both axes and nothing of design
-    // 1's square comes across with it. Drawn last, over the cell frame above and the YOU marker.
+    // ⭐ THE CLICK-HIGHLIGHT AT GALAXY IS THE SECTOR, WHICH IS WHAT A GALAXY CLICK ACTUALLY DRILLS
+    // (AC-5) — see `pickedSector`. Through THIS design's `toX`/`toY`, which are isotropic at
+    // `W / v.size` texels per kpc, so a 0.5 kpc sector is the same handful of texels in both axes and
+    // nothing of design 1's square comes across with it. Drawn last, over the YOU marker.
+    // ⛔ THERE IS NO CELL FRAME HERE ANY MORE, AND THERE NEVER COULD HAVE BEEN ONE. A `pickCell` block
+    //    sat above this until 2026-09-08, framing an 8x8 world cell at level 0; the adversarial pass
+    //    found it unreachable — the driver's `notePick` writes `{ level: 0, sector }` and never `i`/`j`,
+    //    and `pickCell` refuses a pick without them — so it was five lines of paint and nine of
+    //    argument for a frame the build cannot draw. Deleted rather than defended.
     // ⛔ CLIPPED TO THE PAINTED BAND. The wide field is only ±(mapH/2)·kpc — about half the disc is
     //    off the glass BY CONSTRUCTION — so a picked sector can be partly or wholly outside it, and
     //    an unclipped frame would draw over the topbar's rule and the status bar. Empty
@@ -1864,20 +1890,18 @@ function d2Prism(g, W, mapY, mapH) {
   rect(g, mx + mw / 2, my + mh / 2, 1, 1, INK.YOU);
   rect(g, W - 17, my, 1, mh, INK.DIM);
   rect(g, W - 19, my + mh / 2, 5, 1, INK.YOU);
-  // ⭐ AC-2 — THE WIDGET'S OWN 24x24, AND THE CLICK IT ANSWERS IS "NOTHING, ON PURPOSE". It has no
-  // downstream identity to act on and inventing one would be this design deciding what the minimap
-  // means; what it MUST do is EAT the press. The plate rule (INTERFACE §6) says texels belong to the
-  // thing drawn on them, and without this rectangle a press on the corner widget falls through to
-  // whatever star mark lies under it and selects a star the pilot cannot see.
-  // ⛔ MAP MODE ONLY. `d2Prism` returns into `d2List` before any of this runs, so list mode publishes
-  //    nothing and a list click can never land on a widget that is not on the glass.
-  // ⚠ THE BAND IS THE WIDGET'S WHOLE INK, NOT THE 24x24 ALONE. The two lines above it draw a scale
-  //   column at `W - 17` and a 5-texel mark from `W - 19`, both OUTSIDE the corner box — texel columns
-  //   `W - 19 .. W - 15` at any width. A rectangle stopping at `mx + mw` (measured: 383..406 against
-  //   ink to 412 at 427 wide) left a press on that little bar falling through to the star mark under
-  //   it, which is the exact mis-selection this rectangle exists to close. The right edge is the
-  //   mark's own `W - 19 + 5`, from the same expression that drew it.
-  S.minimapRect = { x: mx, y: my, w: (W - 19 + 5) - mx, h: mh };
+  // ⛔ AC-2 — THIS WIDGET PUBLISHES NO RECTANGLE AND EATS NO PRESS, AND FOR HALF A DAY IT DID BOTH.
+  //    The first build (88510cb) published `S.minimapRect` and the driver swallowed every click inside
+  //    it, on the plate rule (INTERFACE §6): texels belong to the thing drawn on them. The adversarial
+  //    pass measured the premise false. The plate rule holds for `plated()` labels because `plated()`
+  //    KNOCKS OUT a BG rect first, so nothing under a label is visible; this widget is four corner
+  //    brackets, a dot, a scale column and a 5-texel mark — about 49 texels of ink in a 720-texel box —
+  //    over a starfield that is drawn BEFORE it and shows straight through. A star inside the box is on
+  //    the glass, hoverable, and the pilot can see it; the band turned a click on it into nothing. That
+  //    trades the mis-selection AC-2 was closing for a lost pick, which is the opposite of the AC.
+  //    So the starfield under the widget keeps answering, exactly as it did before part 3. What the
+  //    widget itself DOES on a click is still nothing, and marking it visibly as a readout is a
+  //    picture change that goes to Max, not into this pass.
 }
 /** DESIGN 2'S LIST MODE — 'L'. A 60% checker plate over the whole map plane (the starfield stays
  *  faintly behind it) and rows of real terminal at the repo's 6-texel pitch. ⛔ IT REPLACES THE MAP:

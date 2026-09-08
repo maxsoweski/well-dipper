@@ -110,6 +110,11 @@ import { multiplicityForSeed } from '../../generation/multiplicityOracle.js';
  *  `_systemZoomAnim` are measured on, so the inbound ease and the transitions it is standing beside
  *  cannot drift apart under a throttled tab. */
 import { simClockMs } from '../../core/SimClock.js';
+/** ⛔ THE DRIVER'S ONE COPY OF `NavComputer.gridNForLevel` (:71), IMPORTED RATHER THAN RESTATED.
+ *  This file used to spell its own `LAG_GRID_N`, which made three copies of two constants across the
+ *  build — the AC-4 defect shape, counted by the adversarial pass. `picking.js` already owns the
+ *  driver's copy for the rail's z-flip, so the lag's `toView.size` reads that one. */
+import { gridNFallback } from './picking.js';
 import alea from 'alea';
 
 /** `NavComputer.js:69`, verbatim. */
@@ -147,10 +152,6 @@ export const SYSTEM_ROT_X0 = Math.asin(SYSTEM_TILT);
  * way IN visibly a different animation from the way OUT, on the same two keys.
  */
 export const LEVEL_LAG_MS = 350;
-/** `NavComputer.gridNForLevel` (:71), the authority for the tile subdivision the outbound ease
- *  divides by. Restating it is the AC-4 defect shape; it is two constants and it is imported nowhere,
- *  so it is spelled here ONCE and read by the lag's `toView.size` and by nothing else. */
-const LAG_GRID_N = (level) => (level === 2 ? 16 : 8);
 /** The curve `_updateAnim` and `_viewEase` both run. */
 const smootherstep = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 
@@ -345,15 +346,18 @@ export function makeViewState() {
      *  level; the click re-centres the frame on the player (INTERFACE §8b) at levels 0-3 and is
      *  deliberately NOT eaten at SYSTEM, where "centre on the player" has no agreed meaning. */
     locatorRect: null,        // {x,y,w,h}              — design 2, every level
-    /** ⭐ AC-2 — DESIGN 2'S 24x24 PRISM CORNER WIDGET. It has no downstream identity and inventing
-     *  one would be the picker deciding what the minimap means; what the rectangle buys is the PLATE
-     *  RULE (INTERFACE §6) — without it a press on the widget falls through to whatever star mark
-     *  lies under it and selects a star the pilot cannot see. Map mode only. */
-    minimapRect: null,        // {x,y,w,h}              — level 3, design 2, map mode
-    /** ⭐ AC-2 — DESIGN 2'S `» STAR B nnAU` STRIP. Same reasoning as the minimap: nothing in the
-     *  pipeline resolves a companion to a system, so the click is eaten and does nothing — but the
-     *  strip is drawn straight across the outer orbit rings, and without the rectangle a press on
-     *  the text selects whichever ring passes beneath it. */
+    /* ⛔ THERE IS NO `minimapRect` HERE ANY MORE (INTERFACE §8f). Design 2's 24x24 prism corner
+     *  widget published one for half a day and the driver ate every press inside it, on the plate
+     *  rule (INTERFACE §6). The premise was measured false: the rule holds for `plated()` labels
+     *  because `plated()` knocks out a BG rect first, and this widget is four brackets, a dot, a
+     *  scale column and a 5-texel mark over a starfield drawn BEFORE it and showing through. The
+     *  band turned a star the pilot could see into an unclickable one. The lab publishes nothing,
+     *  the driver eats nothing, and the field is gone rather than left as a `null` nobody writes. */
+    /** ⭐ AC-2 — DESIGN 2'S `» STAR B nnAU` STRIP. Nothing in the pipeline resolves a companion to a
+     *  system, so the click is eaten and does nothing — the strip is drawn straight across the outer
+     *  orbit rings, and the rectangle is the plate rule stated where a taller orrery would need it.
+     *  ⚠ Measured: no ring reaches the strip's row at any tilt today, so the eat guards nothing the
+     *    paint can currently produce. The tested half is its EDGE — one texel below, nothing eaten. */
     companionRect: null,      // {x,y,w,h}              — level 4, design 2, wide binaries only
     /** ⭐⭐ AC-6's INBOUND HALF (INTERFACE §8d), AND IT IS THE ONE FIELD HERE NO DESIGN EVER READS.
      *  The designs read `S.level`, `S.view` and `S.cam` as they always have; this is what makes
@@ -398,8 +402,11 @@ export function makeViewState() {
      *  ⛔ `i`/`j` ARE THE DESIGN'S OWN GRID COORDINATES, NOT the game's `col`/`row`: `row = n-1-j`
      *  is the Z-flip and it lives in `picking.tileOf`, on the other side of this field.
      *  ⛔ `null` IS THE DEFAULT AND IT HAS TO BE DECLARED — see the note above; the lab reads it
-     *  unguarded at its draw site. */
-    pick: null,       // { level, i, j, tMs } | null
+     *  unguarded at its draw site.
+     *  ⚠ TWO SHAPES, NOT ONE, AND THE COMMENT NAMED ONLY THE OLDER OF THEM. At levels 1-2 it is the
+     *    grid cell; at level 0 it is the containing SECTOR, because that is what a GALAXY click
+     *    drills — the cell there is not the destination (INTERFACE §5 / §8). */
+    pick: null,       // { level: 1|2, i, j, tMs } | { level: 0, sector: {centerX,centerZ,size,name}, tMs } | null
     /** ⭐ MAX, 2026-09-07: *"disable the system screen when not in a system."* True when the ship is
      *  in no spawned system at all — `nav._currentSystemData` is null, which is the ORRERY splash boot
      *  and nothing else (every arrival sets it via `_applyNavArrival`). The designs dim the SYSTEM tab
@@ -584,18 +591,20 @@ export function makeViewState() {
     if (S.levelLag && (navLevel !== S.levelLag.to || nav._anim || nav._systemZoomAnim)) S.levelLag = null;
     if (!S.levelLag) {
       const arm = S.levelArm;
-      // ⚠ THE ARM IS MATCHED, NOT MERELY PRESENT. `from === S.level` is what keeps a stale arm — one
-      //   whose click was eaten, or one left by a tab that changed nothing — from lagging a level
-      //   change it had nothing to do with; the one-second window is the backstop for a driver that
-      //   never renders in between.
-      const armed = !!arm && arm.from === S.level && Number.isFinite(arm.tMs)
-        && now - arm.tMs >= 0 && now - arm.tMs <= 1000;
-      if (navLevel !== S.level) {
-        if (armed && !nav._anim && !nav._systemZoomAnim) startLevelLag(nav, S.level, navLevel, now);
-        S.levelArm = null;   // consumed either way: an arm outlives exactly one level change
-      } else if (arm && now - arm.tMs > 1000) {
-        S.levelArm = null;
+      // ⚠ THE ARM IS MATCHED, NOT MERELY PRESENT. `from === S.level` is what keeps an arm whose click
+      //   was eaten from lagging a level change it had nothing to do with.
+      const armed = !!arm && arm.from === S.level && Number.isFinite(arm.tMs);
+      if (armed && navLevel !== S.level && !nav._anim && !nav._systemZoomAnim) {
+        startLevelLag(nav, S.level, navLevel, now);
       }
+      // ⛔⛔ AND THE ARM IS CONSUMED ON THE VERY NEXT `refresh()`, MOVED OR NOT (INTERFACE §8f). It
+      //    used to survive for a second, on the theory that a driver might not render between the
+      //    press and the arrival — but there is nothing to wait FOR: both writers (`tabLevel` and
+      //    `remapClick`'s tab branch) hand the click straight to `_handleClick`, which moves
+      //    `_levelIndex` SYNCHRONOUSLY before either returns. So by the first refresh after the arm
+      //    the move has already happened or it never will, and a window is only a span in which a
+      //    stale token can attach itself to somebody else's level change.
+      S.levelArm = null;
     }
     const lag = S.levelLag;
     if (!lag) return navLevel;
@@ -618,7 +627,7 @@ export function makeViewState() {
       const lc = nav._localCenter || {};
       const tc = (to === 3 && Number.isFinite(lc.x) && Number.isFinite(lc.z))
         ? { cx: lc.x, cz: lc.z } : { cx: nav._playerX, cz: nav._playerZ };
-      const toSize = fromSize / (LAG_GRID_N(from) * 2);
+      const toSize = fromSize / (gridNFallback(from) * 2);
       if (!Number.isFinite(fc.x) || !Number.isFinite(fc.z) || !Number.isFinite(tc.cx)
           || !Number.isFinite(tc.cz) || !(toSize > 0)) return null;
       S.levelLag = { ...base, kind: 'map', hold: from,
@@ -630,6 +639,11 @@ export function makeViewState() {
       // ⭐ THE MIRROR OF `_systemZoomAnim` (`:4621`), which is `fromRadius → fromRadius * 0.1` over
       // 400 ms on the star-click path. Going IN the radius shrinks; coming back OUT it grows from the
       // same tenth, so the pilot arrives at the prism by zooming out of the system rather than by a cut.
+      // ⚠ THE `0.1` IS A COPY AND THE COMMENT SAYS SO RATHER THAN PRETENDING IT IS NOT. Its source is
+      //   `NavComputer.js:4625`, `toRadius: this._localRadius * 0.1`, written inline inside a literal
+      //   in a LINE-FROZEN file — there is nothing to import and no line to spare to export one. So it
+      //   is one restated constant, named here, kept beside the sentence that says where it came from;
+      //   `gridNFallback` above is the shape this would take if `:4625` ever had a name.
       const r = Number.isFinite(nav._localRadius) ? nav._localRadius : S.cam.radius;
       if (!(r > 0)) return null;
       const star = nav._systemStar;
