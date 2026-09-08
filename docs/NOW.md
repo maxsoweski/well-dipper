@@ -6,6 +6,14 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 
 
+> ## ▶ 2026-09-07 (part 2, close) — **MAX'S THREE RULINGS TAKEN: PUSHED, PARKED, AND THE SYSTEM SCREEN IS DISABLED WHEN THE SHIP IS IN NO SYSTEM.** Lane A. *"1. push 2. park; 3. disable the system screen when not in a system."*
+>
+> ⭐ **AC-18 (new, his words) BUILT AND VERIFIED LIVE in the real no-system state** — splash → ORRERY, intro played out. One predicate (`_currentSystemData` null): both designs draw the SYSTEM tab in the rule's ink, Tab skips it both ways, a click on it is eaten, and a prism star click selects the star without drilling so Enter still warps. Read off the glass: SYSTEM glyphs 29,58,74 against GALAXY's 47,107,122. Three mutants red. ⚠ Scoped to the view modes; today's nav and the cockpit panel keep their preview until he widens it.
+>
+> ✅ Pushed `a7e920a..c3d47c1` (ls-remote verified) BEFORE this commit — this one is local until he says push again. The galaxy flip (`review.html`) is parked in front for AC-1.
+>
+> ▶ **HE IS HANDING OFF TO A FRESH SESSION** → `docs/FEATURES/handoff-2026-09-07-nav-close-pass-part3.md`.
+
 > ## ▶ 2026-09-07 (part 2, later) — **THREE MORE CLOSED: THE ORBIT RINGS TAKE A CLICK, THE PRISM'S Y-GAUGE IS A HANDLE, AND THE GALAXY GRID'S CORNERS ANSWER.** Lane A, head after this entry's commit. All measured live with controls; nine of ten mutants red on first run, and the two that survived each rewrote a claim of mine rather than a test.
 >
 > ⭐ **AC-2, first rectangle — design 2's orbit ellipses answer a click** (`3ea1902`). Geometry out of `dottedEllipse`'s own arguments, cleared in the driver so one press of V cannot leave rings live under design 1's ladder, tested LAST so a mark or a label always wins. Live on Sol: a bare texel of Azcai's ring selected Azcai; fourteen texels further out selected nothing.

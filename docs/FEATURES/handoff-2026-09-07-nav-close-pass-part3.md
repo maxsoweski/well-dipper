@@ -1,8 +1,8 @@
 # Handoff — ▶ **AC-2's REMAINING RECTANGLES ARE THE PICKUP. AC-1's PICTURE AND THE ORRERY-BOOT QUESTION ARE MAX'S.**
 
 > ⚠ **IN-REPO ON PURPOSE** — `/tmp` does not survive a WSL restart. **Branch** `feature/world-engine-production-L1`
-> (lane A, **NOT** master). Head **`906b7e4`**, four commits past the pushed `543b709` — **NOT PUSHED**; Max was
-> asked. ⛔ Hundreds of untracked stray PNGs are normal — **never `git add -A`**.
+> (lane A, **NOT** master). **`c3d47c1` IS PUSHED** (ls-remote verified). The commit after it — AC-18, the
+> disabled SYSTEM screen — is **LOCAL** until Max says push again. ⛔ Hundreds of untracked stray PNGs are normal — **never `git add -A`**.
 
 ---
 
@@ -29,6 +29,7 @@ wc -l src/ui/NavComputer.js src/main.js                                 # 4711 /
 | **AC-2** (1 of 8) | design 2's orbit ellipses answer a click — `S.orbitRings`, `pickOrbitRing`, tested LAST | `3ea1902` |
 | **AC-9** (1 of 4) | design 1's prism y-gauge is a grabbable handle for `_localCenter.y` — a RESTORATION of the legacy camera-height readout | `b4a2626` |
 | **AC-1** (2nd half) | the click sweep was actually run; rim-cell corners (28/208 dead) now resolve via `pickSector`'s centre fallback | `906b7e4` |
+| **AC-18** (new ruling) | *"disable the system screen when not in a system"* — SYSTEM tab dimmed + eaten, Tab skips it, a prism star click selects without drilling; view modes only | after `c3d47c1` |
 
 **Ten mutants across the three builds; eight red on first run.** The two that survived each corrected a
 claim of mine, not a test: the y-gauge's mouseup release (guards only the level-3→level-4→Tab path, now
@@ -84,9 +85,9 @@ returns a sector for every drawn-cell texel, which helps), AC-6's inbound half, 
 
 ## 4. FOR MAX (carried; not mine to close)
 
+0. **Push the AC-18 commit** — he approved the earlier push; this one came after it.
 1. **AC-1's picture** — *"remove the negative/non-selectable space and redraw the cells from there"* — built,
    measured, clicked; still awaits his eyes. `review.html` flip.
-2. **The ORRERY boot with no system**: the nav's SYSTEM screen draws a system it generated for itself. Right
-   by design, or should it say "no system"? Asked; not patched.
+2. ~~The ORRERY boot with no system~~ — RULED and BUILT (AC-18). Open half: widen to today's nav + the cockpit panel? His call.
 3. **AC-12** — his walk of both menus. Two new things to try: click an orbit *line*; drag the thin strip on
    the prism's right edge.

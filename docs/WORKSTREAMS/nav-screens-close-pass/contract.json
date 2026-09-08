@@ -183,6 +183,17 @@
         "observable": "Max's judgment that the screens hold up. NEVER driven or PASSed by an agent."
       },
       "layer": "uat"
+    },
+    {
+      "id": "AC-18",
+      "statement": "\u2b50 MAX RULED 2026-09-07 (part 2), asked whether the nav should draw a system it generated for itself when the ship is in no system: *\"disable the system screen when not in a system.\"* So with no spawned system (`_currentSystemData` null \u2014 the ORRERY splash boot with the intro played out, and nothing else, since every arrival sets it) the SYSTEM screen is not reachable in either design: the SYSTEM tab is drawn dimmer than an inactive tab and does not answer a click, Tab skips it in both directions, and a prism star click SELECTS the star without drilling \u2014 so Enter and the rail's chip still warp the pilot out of deep space. The screen is disabled; the function is not. \u26a0 SCOPED TO THE VIEW MODES: today's nav (V to null) and the cockpit panel keep their preview byte for byte until Max widens the ruling.",
+      "verifyVia": {
+        "input": "Boot ORRERY from the splash, let the intro play out, open the nav, in each design: press Tab from PRISM and Shift+Tab from GALAXY; click the SYSTEM tab; click a star in the prism.",
+        "observable": "Tab lands on GALAXY and Shift+Tab on PRISM; the SYSTEM tab is visibly dimmer and the click changes nothing; the star click selects the star (Enter warps to it) and the SYSTEM screen never appears. In a spawned system all four behave exactly as before."
+      },
+      "layer": "integration",
+      "live": true,
+      "progress": "\u2705 BUILT AND VERIFIED LIVE 2026-09-07 in the genuine no-system state (splash \u2192 ORRERY, intro played out, `_lab.systemInfo()` 0 planets, `_currentSystemData` null). One predicate, three consumers: `S.noSystem` is published by the paint's `refresh` and read by both tab rows (SYSTEM in INK.RULE instead of INK.DIM); the driver's `tabLevel` skips level 4 and `remapClick` eats a SYSTEM-tab click, both reading `nav._currentSystemData` directly because the mirror is a frame stale between an arrival and its first paint; and one folded clause in the line-frozen `NavComputer.js` (still 4711) makes the prism star click select-and-stop ahead of the drill sound and the zoom. LIVE, design 1: GALAXY tab glyphs 47,107,122 (DIM), SYSTEM tab glyphs 29,58,74 (RULE); Tab from PRISM \u2192 0, Shift+Tab from GALAXY \u2192 3; a real click on the SYSTEM tab left the level at 3; a real click on an isolated prism mark hovered, selected and armed seed 163760118 (`_externalTarget` set) with `_systemZoomAnim` null and the level still 3. Design 2 via `S.tabRects[4]`: SYSTEM ink RULE only, GALAXY DIM. THREE MUTANTS, ALL RED: Tab never skipping (2 tests), the tab click not eaten (1), the star click drilling anyway (1). Three inherited ring tests now state their precondition (`_currentSystemData` set) instead of relying on the harness's default, which IS the no-system state. Suites: `src/ui` 548/548, `src/cockpit` 698/698. \u25b6 MAX'S WALK: boot ORRERY, let the intro finish, N, then Tab round the levels and click a star."
     }
   ],
   "architecturalConnections": {

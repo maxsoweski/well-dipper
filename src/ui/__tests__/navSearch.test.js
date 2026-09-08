@@ -405,6 +405,7 @@ describe('the drawn rows are clickable, off the geometry the paint published', (
 describe('TAB is a ring, not a clamp', () => {
   it('⛔ Tab at SYSTEM wraps to GALAXY, through `_onKeyDown`', async () => {
     const { nav } = await loadedNav({ level: 3 });
+    nav._currentSystemData = { planets: [] };   // in a system — with none, SYSTEM is skipped by design
     press(nav, 'Tab');
     expect(nav._levelIndex, 'Tab did not reach SYSTEM').toBe(4);
     press(nav, 'Tab');
@@ -413,6 +414,7 @@ describe('TAB is a ring, not a clamp', () => {
 
   it('⛔ Shift+Tab at GALAXY wraps to SYSTEM', async () => {
     const { nav } = await loadedNav({ level: 3 });
+    nav._currentSystemData = { planets: [] };   // in a system — with none, SYSTEM is skipped by design
     nav._levelIndex = 0;
     nav.render();
     press(nav, 'Tab', { shiftKey: true });
@@ -437,6 +439,7 @@ describe('TAB is a ring, not a clamp', () => {
    */
   it('⚠ INHERITED: the backward wrap cannot land while `_localStars` is empty', async () => {
     const { nav } = await loadedNav({ level: 3 });
+    nav._currentSystemData = { planets: [] };   // in a system — with none, the back-wrap goes to PRISM and lands
     press(nav, 'Tab', { shiftKey: true });        // PRISM -> REGION, which clears _localStars
     press(nav, 'Tab', { shiftKey: true });        // REGION -> SECTOR
     press(nav, 'Tab', { shiftKey: true });        // SECTOR -> GALAXY

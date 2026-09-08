@@ -886,7 +886,10 @@ function drawDesign1(g, W, H) {
     const lx = x + (tabW - measurePixelText(lbl)) / 2;
     if (i === S.level) { rect(g, x, ry(rows - 2) - 1, tabW, LEAD, INK.YOU);
                          T(g, lbl, lx, ry(rows - 2), { color: INK.BG, rgn: 'tabs', what: 'tab ' + name }); }
-    else T(g, lbl, lx, ry(rows - 2), { color: INK.DIM, rgn: 'tabs', what: 'tab ' + name });
+    // ⭐ SYSTEM is drawn in the rule's own ink — dimmer than an inactive tab — when the ship is in no
+    //   system (`S.noSystem`, Max 2026-09-07: *"disable the system screen when not in a system"*). The
+    //   driver refuses the level on the same flag, so the tab looks and acts disabled off ONE value.
+    else T(g, lbl, lx, ry(rows - 2), { color: (i === 4 && S.noSystem) ? INK.RULE : INK.DIM, rgn: 'tabs', what: 'tab ' + name });
   });
   const counts = [`${D.sectorRows.length} SECTORS`, '64 TILES', '256 TILES',
                   `${D.stars.length} STARS`, `${D.bodies.length} BODIES`][S.level];
@@ -1563,7 +1566,7 @@ function drawDesign2(g, W, H) {
   const tabRects = [];
   LEVELS.forEach((n, i) => {
     const w = measurePixelText(n);
-    T(g, n, tx, 1, { color: i === S.level ? INK.KEY : INK.DIM, rgn: 'topbar', what: 'tab ' + n });
+    T(g, n, tx, 1, { color: i === S.level ? INK.KEY : (i === 4 && S.noSystem) ? INK.RULE : INK.DIM, rgn: 'topbar', what: 'tab ' + n });   // SYSTEM dims on S.noSystem — see design 1's tab row
     if (i === S.level) rect(g, tx - 2, BAR - 2, w + 4, 1, INK.YOU);
     tabRects.push({ x: tx - 2, y: 0, w: w + 4, h: BAR });
     tx += w + 6;

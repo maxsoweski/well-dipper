@@ -864,6 +864,7 @@ describe('TAB changes level THROUGH the shipped click handler', () => {
     // of the five levels. A control that is advertised and inert at one level is the whole defect
     // class this workstream exists to close, so the cycle wraps rather than stopping.
     const { nav, drv } = await loadedNav();
+    nav._currentSystemData = { planets: [] };   // in a system — with none, SYSTEM is skipped by design
     nav._levelIndex = 0; nav.render();
     drv.tabLevel(-1);
     expect(nav._levelIndex, 'backwards from GALAXY wraps to SYSTEM').toBe(4);
@@ -1327,6 +1328,74 @@ describe("a drawn galaxy cell takes the click in its corners too", () => {
     expect(probed).toBe(live.size * 4);
     expect(dead, `${dead} of ${probed} drawn-cell corners still answer nothing`).toBe(0);
     expect(culledResolving, 'a culled cell\'s centre resolved').toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// MAX, 2026-09-07: "disable the system screen when not in a system."
+// The harness's default IS the no-system state: `_currentSystemData` is null until an arrival sets it.
+// ═══════════════════════════════════════════════════════
+describe('the SYSTEM screen is disabled when the ship is in no system', () => {
+  for (const mode of ['rail', 'bars']) {
+    it(`${mode}: Tab from PRISM lands on GALAXY, Shift+Tab from GALAXY lands on PRISM`, async () => {
+      const { nav, drv } = await loadedNav({ mode });
+      expect(nav._currentSystemData, 'the harness must start in no system').toBeFalsy();
+      nav.render();
+      expect(drv.S.noSystem).toBe(true);
+      drv.tabLevel(1);
+      expect(nav._levelIndex, `${mode}: Tab opened the disabled SYSTEM screen`).toBe(0);
+      drv.tabLevel(-1);
+      expect(nav._levelIndex, `${mode}: Shift+Tab opened the disabled SYSTEM screen`).toBe(3);
+    });
+  }
+
+  it('⛔ A CLICK ON THE SYSTEM TAB IS EATEN — not a drill, not a fall-through to the map', async () => {
+    const { nav, drv } = await loadedNav({ mode: 'bars' });
+    nav.render();
+    const t = drv.S.tabRects[4];
+    expect(t, 'design 2 must publish the SYSTEM tab').toBeTruthy();
+    const p = drv.remapClick({ x: t.x + Math.floor(t.w / 2), y: t.y + 1 }, nav._canvas.width, nav._canvas.height);
+    expect(p, 'the disabled tab handed the click on').toBe(null);
+    expect(nav._modeTabIdx).toBe(-1);
+    clickAt(nav, t.x + Math.floor(t.w / 2), t.y + 1);
+    expect(nav._levelIndex).toBe(3);
+  });
+
+  it('⭐⭐ A PRISM STAR CLICK SELECTS THE STAR AND DOES NOT DRILL — and Enter still warps to it', async () => {
+    const { nav, drv, star } = await loadedNav();
+    const hit = isolatedHit(drv.S.prismHits.filter((h) => h.ref && h.ref.seed === star.seed)) || drv.S.prismHits.find((h) => h.ref && h.ref.seed === star.seed);
+    expect(hit, 'the prism must publish a mark for the loaded star').toBeTruthy();
+    const drills = []; nav._onDrillSound = (i) => drills.push(i);
+    const fired = []; nav._onCommit = (a) => fired.push(a);
+    nav._handleMouseMove({ clientX: hit.x, clientY: hit.y });
+    nav.render();
+    expect(nav._hoveredLocalStar?.star?.seed, 'the hover did not land on the star').toBe(star.seed);
+    clickAt(nav, hit.x, hit.y);
+    expect(nav._selectedNavStar?.seed, 'the click did not select the star').toBe(star.seed);
+    expect(nav._externalTarget?.name).toBe(star.name || '');
+    expect(nav._systemZoomAnim, 'the click drilled into the disabled SYSTEM screen').toBeFalsy();
+    expect(nav._levelIndex).toBe(3);
+    expect(drills, 'the drill sound fired for a drill that did not happen').toEqual([]);
+    // the function survives the disabled screen: Enter warps to the selected star
+    expect(drv.commit()).toBe(true);
+    expect(fired).toHaveLength(1);
+    expect(fired[0].type).toBe('warp');
+    expect(fired[0].star.seed).toBe(star.seed);
+  });
+
+  it('⛔ CONTROL — in a system, the same star click DRILLS and Tab reaches SYSTEM', async () => {
+    const { nav, drv, star } = await loadedNav();
+    nav._currentSystemData = { planets: [] };
+    nav.render();
+    expect(drv.S.noSystem).toBe(false);
+    const hit = drv.S.prismHits.find((h) => h.ref && h.ref.seed === star.seed);
+    nav._handleMouseMove({ clientX: hit.x, clientY: hit.y });
+    nav.render();
+    clickAt(nav, hit.x, hit.y);
+    expect(nav._systemZoomAnim, 'in a system the star click must still drill').toBeTruthy();
+    nav._systemZoomAnim = null; nav._levelIndex = 3; nav.render();
+    drv.tabLevel(1);
+    expect(nav._levelIndex).toBe(4);
   });
 });
 

@@ -529,7 +529,15 @@ export function makeViewModeDriver(nav) {
     // names a key which does nothing where it is printed is exactly the class of lie AC-10 sweeps
     // for. Five levels in a ring: forward off SYSTEM lands on GALAXY, back off GALAXY lands on
     // SYSTEM, and the drill path is unchanged — see the two ⛔ notes below.
-    const idx = dir > 0 ? (cur + 1) % 5 : (cur + 4) % 5;
+    let idx = dir > 0 ? (cur + 1) % 5 : (cur + 4) % 5;
+    // ⭐ MAX, 2026-09-07: *"disable the system screen when not in a system."* With no spawned system
+    // the ring has four stops, not five: forward off PRISM lands on GALAXY, back off GALAXY lands on
+    // PRISM. Skipped rather than clamped, for the reason the ring exists at all — a Tab that does
+    // nothing where the hint row says TAB LEVEL is the defect class this workstream closes.
+    // ⚠ READ THE CLASS FIELD, NOT `S.noSystem`: the mirror is refreshed by the PAINT, so between an
+    //   arrival and its first frame the mirror is a frame stale and a Tab in that gap would skip a
+    //   SYSTEM that now exists. The designs read the mirror because they run inside the frame.
+    if (idx === 4 && !nav._currentSystemData) idx = dir > 0 ? 0 : 3;
     if (idx === cur) return;
     const w = lastW || nav._canvas?.width || 0, h = lastH || nav._canvas?.height || 0;
     if (!(w > 0 && h > 0)) return;
@@ -752,6 +760,10 @@ export function makeViewModeDriver(nav) {
     if (!inStrip) { notePick(p.x, p.y); return p; }
     const i = tabIndexAt(g2, p.x, bars);
     if (i < 0) { notePick(p.x, p.y); return p; }
+    // ⭐ THE DISABLED SYSTEM TAB EATS ITS CLICK (see `tabLevel`). The designs draw it in INK.RULE on
+    // `S.noSystem`, so what the pilot sees is a dimmed tab that does not answer — never a screen
+    // showing a system the nav generated for itself.
+    if (i === 4 && !nav._currentSystemData) return null;   // the class field, for the reason `tabLevel` gives
     nav._modeTabIdx = i;
     // The handler only asks `p.y >= h - navTabHeight(h)`, so the bottom row is inside the strip at
     // every buffer without this file needing to know what navTabHeight returns.

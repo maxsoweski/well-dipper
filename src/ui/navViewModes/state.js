@@ -323,6 +323,11 @@ export function makeViewState() {
      *  ⛔ `null` IS THE DEFAULT AND IT HAS TO BE DECLARED — see the note above; the lab reads it
      *  unguarded at its draw site. */
     pick: null,       // { level, i, j, tMs } | null
+    /** ⭐ MAX, 2026-09-07: *"disable the system screen when not in a system."* True when the ship is
+     *  in no spawned system at all — `nav._currentSystemData` is null, which is the ORRERY splash boot
+     *  and nothing else (every arrival sets it via `_applyNavArrival`). The designs dim the SYSTEM tab
+     *  on it; the driver refuses the level on it. `false` by default so a design never reads undefined. */
+    noSystem: false,
 
     /** SORT + PAGE (AC-8, AC-9). `sortLabel` exists because Max never uses a browser console — an
      *  active sort key that is not on the glass is not an affordance, it is a secret. */
@@ -478,6 +483,7 @@ export function makeViewState() {
    */
   function refresh(nav, buf) {
     S.level = nav._levelIndex | 0;
+    S.noSystem = !nav._currentSystemData;
     S.lines = buf.lines;
     S.buf.width = buf.width; S.buf.height = buf.height;
 
