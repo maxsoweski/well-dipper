@@ -153,7 +153,7 @@ export class NavComputer {
     this._viewStack = [];
 
     // ── Local level (3D) ──
-    this._localCenter = { x: 8, y: 0, z: 0 };
+    this._localCenter = { x: 8, y: 0, z: 0 };  this._gaugeDrag = false;   /* ⭐ AC-9's ARMED FLAG, DEFAULTED HERE beside the value it moves. `undefined` would be falsy and would work; a declared default is what stops the field being invisible to anyone reading the constructor for what this class owns. ⚠ FOLDED, NOT A NEW LINE: this file is line-frozen at 4711 for its ~700 line-anchored citations, and every folded comment is a TERMINATED block comment because a `//` mid-line comments out every statement after it. */
     this._localRadius = 0.005; // kpc = 5 pc
     this._localStars = [];
     this._localRotX = 0.5;   // ~30° above the plane — good starting view
@@ -4346,7 +4346,7 @@ export class NavComputer {
 
     // Dragging
     if (this._dragging) {
-      if (this._levelIndex === 3) {
+      if (this._levelIndex === 3) {  if (this._gaugeDrag) { const ky = this._viewDriverInst.gaugeDragTo(p.y); if (ky != null) this._localCenter.y = ky; return; }   /* ⭐⭐ AC-9 — AND WHILE THE GAUGE IS HELD, THE DRAG MOVES THE CAMERA'S HEIGHT INSTEAD OF THE ROTATION. The exact counterpart of AC-7's ladder clause at level 4. `gaugeDragTo` inverts the paint's OWN mapping off the four numbers `d1Prism` published, so the mark lands under the pointer by construction rather than by two pieces of arithmetic agreeing. ⛔ THE `return` IS LOAD-BEARING: without it the same press would also spin the prism, and the pilot would be dragging two controls with one hand. ⚠ `null` FROM THE DRIVER MEANS NO GAUGE WAS DRAWN THIS FRAME (a level change under the pointer, or a design switch), and the clause still eats the move rather than falling through to a rotation the press did not ask for. */
         // Prism: orbit
         const dx = p.x - this._dragStartX;
         const dy = p.y - this._dragStartY;
@@ -4399,7 +4399,7 @@ export class NavComputer {
     this._dragStartX = p.x;
     this._dragStartY = p.y;
 
-    if (this._levelIndex === 3) {
+    if (this._levelIndex === 3) {  this._gaugeDrag = !!(this.viewMode && (this._viewDriverInst ||= makeViewModeDriver(this)).gaugeGrab(p.x, p.y));   /* ⭐⭐ AC-9 — THE Y-GAUGE IS A HANDLE, AND WHETHER THIS PRESS TOOK IT IS DECIDED HERE, ONCE, AT THE PRESS. Max, 2026-09-07: *"The indicators on the prism and system screens should be grabbable."* The gauge reports `_localCenter.y`, the height R and F already move (`:1392-1393`) and the LEGACY prism already drew (`:3618`, `:3669`) — Max, UAT 2026-08-01: *"I still can't use the up/down controls to rise and lower below the galactic plane on the prism menu."* ⛔ ARMED AT MOUSEDOWN AND NOWHERE ELSE, exactly like `_dragStartLadder` below it: a per-move hit-test would hand the drag back to the rotation the instant the pointer left the 6-texel strip, which is one texel of jitter on a 240p glass. ⛔ AND THE ROTATION SNAPSHOT BELOW STILL RUNS on this branch, for the same reason it does on the ladder's: a press that misses the gauge must rotate exactly as it always has. ⚠ `this.viewMode` GATES IT, so today's nav and the cockpit panel are untouched — neither ever publishes `S.yGaugeRect`, but the flag is what makes that unreachable rather than merely false. */
       this._dragStartRotX = this._localRotX;
       this._dragStartRotY = this._localRotY;
     } else if (this._levelIndex === 4) {  this._dragStartLadder = (this.viewMode === 'rail' && this._viewDriverInst) ? (this._viewDriverInst.S.ladderScroll || 0) : null;   /* ⭐ AC-7’s start snapshot, the exact counterpart of `_panStartCenter` below. ⛔ `_dragStartRotX/Y` ARE STILL TAKEN on this branch and that is deliberate: design 2 and today’s nav both still rotate from them, and a ladder pan leaves them merely unused. ⚠ No driver, no ladder — `null` here is what the move handler tests, so a gesture that began before the first paint can never write a scroll offset against a layout that was never published. */
@@ -4412,7 +4412,7 @@ export class NavComputer {
 
   _handleMouseUp() {
     this._dragging = false;
-    this._panStartCenter = null;
+    this._panStartCenter = null;  this._gaugeDrag = false;   /* ⭐ AC-9 — THE GRAB IS RELEASED WITH EVERY OTHER DRAG STATE. Max's bar is *"Releasing leaves the view where the indicator was dropped"*, which is what NOT writing anything here achieves: `_localCenter.y` keeps whatever the last move put in it. ⚠ AND WHAT IT ACTUALLY GUARDS IS NARROWER THAN IT LOOKS, WHICH THE MUTANT PROVED: the level-3 mousedown REASSIGNS the flag on every press, so an ordinary press-release-press cycle needs nothing from this. The path that does is the one where the flag is set at level 3 and the next press is taken at ANOTHER level — that branch never writes it — and Tab then brings the drag back to level 3, where a stale `true` would turn a rotation into a camera jump. Pinned by navPicking's "a grab does not survive the press that follows it". */
   }
 
   _handleClick(e) {

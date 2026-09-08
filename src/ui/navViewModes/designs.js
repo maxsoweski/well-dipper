@@ -889,12 +889,38 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
                          ref: s, kind: 'index' });
     });
     // the Y-gauge: 6 texels carrying the whole 60x160 minimap
+    //
+    // ── ⭐ AC-9 — IT IS A HANDLE, AND WHAT IT HANDLES IS A CONTROL MAX ALREADY ASKED FOR ──────────
+    //
+    // Max, UAT 2026-08-01: *"I still can't use the up/down controls to rise and lower below the
+    // galactic plane on the prism menu."* That is `R` / `F` (`NavComputer:1392-1393`), which moves
+    // `_localCenter.y` — and the LEGACY prism drew it: a camera mark at `camScreenY` (`:3618`), a
+    // height in pc beside it (`:3669`) and a literal `WASD move · R/F up/down` hint. This design's
+    // gauge kept the SELECTED STAR's offset and dropped the camera entirely, so the one readout that
+    // told you where you were vertically went with it. Max, 2026-09-07: *"The indicators on the prism
+    // and system screens should be grabbable."*
+    //
+    // ⛔ THE MAPPING IS DECLARED ONCE AND USED BY BOTH MARKS, and it is published as `S.yGaugeRect` so
+    //    the drag can invert exactly the arithmetic that drew it. The star mark is algebraically the
+    //    line it replaces — `dy = (wy - base)/HALF` then `dy * mapH/2` is `((wy - base)/HALF) * span`
+    //    — so the picture Max ruled on is reproduced texel for texel, not approximately.
+    // ⛔ AND THE CAMERA MARK IS DRAWN ONLY ONCE THE CAMERA HAS LEFT THE PLAYER'S PLANE. At entry
+    //    `_localCenter` IS the player (`NavComputer:1186`), so the default picture gains no mark at
+    //    all and AC-11's regression guard holds; the mark appears the moment R, F or a drag moves it,
+    //    which is the only moment it says anything.
+    // ⚠ THE STRIP'S OWN SCALE IS THE DRAG'S RANGE. +/-2 pc is what the gauge DISPLAYS, so it is what
+    //   the grab traverses — one scale for the readout and the handle. Beyond it the keys still go
+    //   further and the mark pegs at the end, exactly as a star's mark already does.
+    const GAUGE_HALF_KPC = 0.002, gaugeCy = mapY + mapH / 2, gaugeSpan = mapH / 2;
+    const gaugeTexel = (kpc) => gaugeCy - Math.max(-gaugeSpan + 2, Math.min(gaugeSpan - 2,
+                                  ((kpc - D.player.y) / GAUGE_HALF_KPC) * gaugeSpan));
     rect(g, gaugeX + 3, mapY + 2, 1, mapH - 4, INK.RULE);
-    rect(g, gaugeX + 1, mapY + mapH / 2, 3, 1, INK.YOU);
-    if (D.selStar) {
-      const dy = (D.selStar.wy - D.player.y) / 0.002;
-      rect(g, gaugeX, mapY + mapH / 2 - Math.max(-mapH / 2 + 2, Math.min(mapH / 2 - 2, dy * mapH / 2)), 5, 1, INK.TARGET);
-    }
+    rect(g, gaugeX + 1, gaugeCy, 3, 1, INK.YOU);
+    if (D.selStar) rect(g, gaugeX, gaugeTexel(D.selStar.wy), 5, 1, INK.TARGET);
+    const camY = (S.cam && Number.isFinite(S.cam.y)) ? S.cam.y : D.player.y;
+    if (Math.abs(camY - D.player.y) > 1e-9) rect(g, gaugeX + 1, gaugeTexel(camY), 4, 1, INK.KEY);
+    S.yGaugeRect = { x: gaugeX, y: mapY, w: 6, h: mapH,
+                     cy: gaugeCy, span: gaugeSpan, halfKpc: GAUGE_HALF_KPC, base: D.player.y };
   }
 
   function d1Ladder(g, mapW, mapY, mapH) {

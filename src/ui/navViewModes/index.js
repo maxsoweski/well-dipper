@@ -166,7 +166,7 @@ export function makeViewModeDriver(nav) {
     // selects a planet that is not on the glass. `null`, not `[]`: "this design publishes no rings"
     // is a different claim from "it published an empty set of them", and `pickOrbitRing` treats
     // either as no candidates.
-    S.orbitRings = null;
+    S.orbitRings = null; S.yGaugeRect = null;
     // ⛔ `S.pick` IS NOT IN THIS LIST AND MUST NOT BE. Everything above is published by the PAINT and
     // is one frame's worth by construction; `S.pick` is published by the CLICK and has to outlive
     // the frames between the click and the drill landing — which is the entire feature. Clearing it
@@ -676,6 +676,39 @@ export function makeViewModeDriver(nav) {
   function searchActive() { return search.active(); }
   function searchKey(e) { return search.key(e); }
 
+  /**
+   * ⭐ AC-9 — IS THE POINTER ON DESIGN 1'S PRISM Y-GAUGE?
+   *
+   * ⛔ THE PUBLICATION IS THE GATE, NOT A LEVEL TEST. `S.yGaugeRect` is written by `d1Prism` and by
+   * nothing else, and `resetPicks` clears it every frame — so "there is a gauge under this pointer"
+   * and "this design, at this level, drew one" are the same question, asked once. A `S.level === 3
+   * && viewMode === 'rail'` test here would be a second copy of that condition, free to drift.
+   *
+   * ⚠ ONE TEXEL OF SKIRT EITHER SIDE. The strip is 6 texels wide and its marks reach `gaugeX + 5`;
+   * a control the pilot has to hit within six texels at 240p is a control that mostly misses.
+   */
+  function gaugeGrab(x, y) {
+    const r = S.yGaugeRect;
+    if (!r) return false;
+    return x >= r.x - 1 && x < r.x + r.w + 1 && y >= r.y && y < r.y + r.h;
+  }
+
+  /**
+   * ⭐ AC-9 — THE CAMERA HEIGHT A POINTER AT `py` IS ASKING FOR, in kpc, or `null` if no gauge is drawn.
+   *
+   * This is `gaugeTexel` from `d1Prism` run backwards, off the SAME four numbers the paint published
+   * — so the mark lands under the pointer by construction rather than by two pieces of arithmetic
+   * happening to agree. Clamped to the strip's own span: the gauge shows +/-`halfKpc` and that is
+   * therefore what it can be dragged across. R and F still go further; the mark pegs, exactly as a
+   * star's mark already does.
+   */
+  function gaugeDragTo(py) {
+    const r = S.yGaugeRect;
+    if (!r || !Number.isFinite(py) || !(r.span > 0)) return null;
+    const k = r.base + ((r.cy - py) / r.span) * r.halfKpc;
+    return Math.max(r.base - r.halfKpc, Math.min(r.base + r.halfKpc, k));
+  }
+
   function remapClick(p, w, h) {
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
@@ -727,7 +760,7 @@ export function makeViewModeDriver(nav) {
 
   return {
     S, D, render, bufferFor, applySurface, hover, resolveHover, remapClick, geo, scrollLadder,
-    tabLevel, commit, cycleSort, page, searchOpen, searchActive, searchKey,
+    tabLevel, commit, cycleSort, page, searchOpen, searchActive, searchKey, gaugeGrab, gaugeDragTo,
     regions: designs.regions,
     violations: () => violations.slice(),
     /**

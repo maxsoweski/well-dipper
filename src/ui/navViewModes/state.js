@@ -285,6 +285,11 @@ export function makeViewState() {
      *  that drew it. Tested LAST of the level-4 candidates: a ring is the weakest claim on the glass
      *  and must never beat a body mark or a label sitting on top of it. */
     orbitRings: null,   // [{cx,cy,rx,ry,ref}]          — level 4, design 2
+    /** ⭐ AC-9 — DESIGN 1'S PRISM Y-GAUGE, WITH THE MAPPING IT DREW ITSELF WITH.
+     *  `{x,y,w,h,cy,span,halfKpc,base}`, level 3, design 1 only. `cy`/`span`/`halfKpc`/`base` are
+     *  not decoration: they are what lets the drag INVERT the paint's own arithmetic instead of
+     *  restating it, which is the AC-4 defect shape. `null` everywhere else. */
+    yGaugeRect: null,   // {x,y,w,h,cy,span,halfKpc,base} — level 3, design 1
     railTiles: [],      // [{i,j,id,x,z,n}]             — design 1's rail rows at levels 1-2
     listGeom: null,     // {x,y,rows,lead,offset,total} — design 2's list
     tabRects: null,     // [{x,y,w,h}] x5               — the DESIGN's tab strip, not the legacy one

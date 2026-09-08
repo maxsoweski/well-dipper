@@ -1121,6 +1121,129 @@ describe("design 2's orbit ellipses are clickable", () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════
+// AC-9 — THE PRISM'S Y-GAUGE IS A HANDLE.
+// Max: "The indicators on the prism and system screens should be grabbable."
+// ═══════════════════════════════════════════════════════
+describe("design 1's prism y-gauge is grabbable", () => {
+  /** Every camera mark this frame drew: `rect(g, gaugeX + 1, …, 4, 1, INK.KEY)` — 4x1 is its own. */
+  const camMarks = (rec, r) => rec.calls.filter((c) => c.op === 'fillRect'
+    && c.args[0] === r.x + 1 && c.args[2] === 4 && c.args[3] === 1).map((c) => c.args[1]);
+
+  it('⛔ THE DEFAULT PICTURE GAINS NOTHING — no camera mark until the camera has moved', async () => {
+    // At prism entry `_localCenter` IS the player (`NavComputer:1186`), so the branch that draws the
+    // camera never runs and the picture Max ruled on is reproduced. AC-11 in one assertion.
+    const { nav, drv, rec } = await loadedNav();
+    const r = drv.S.yGaugeRect;
+    expect(r, 'design 1 at PRISM must publish a y-gauge').toBeTruthy();
+    expect(Math.abs(drv.S.cam.y - drv.D.player.y), 'the camera does not enter on the player')
+      .toBeLessThanOrEqual(1e-9);
+    rec.calls.length = 0;
+    nav.render();
+    expect(camMarks(rec, r), 'a camera mark was drawn on the default picture').toEqual([]);
+  });
+
+  it('⭐⭐ DRAGGING THE GAUGE MOVES THE CAMERA HEIGHT, and the mark lands under the pointer', async () => {
+    const { nav, drv, rec } = await loadedNav();
+    const r = drv.S.yGaugeRect;
+    const before = nav._localCenter.y;
+    const grabAt = { x: r.x + 3, y: r.cy };
+    const dropAt = { x: r.x + 3, y: Math.round(r.cy - r.span * 0.5) };
+    nav._handleMouseDown({ clientX: grabAt.x, clientY: grabAt.y, button: 0 });
+    nav._handleMouseMove({ clientX: dropAt.x, clientY: dropAt.y });
+    expect(nav._localCenter.y, 'the drag did not move the camera at all').not.toBe(before);
+    expect(nav._localCenter.y, 'the class did not use the driver\'s inverse of the paint')
+      .toBe(drv.gaugeDragTo(dropAt.y));
+    // ⭐⭐ AND THIS IS THE ASSERTION THAT IS NOT CIRCULAR. The line above checks the class called the
+    // driver; both sides of it are the same arithmetic, so on its own it would survive the mapping
+    // being wrong. The MARK comes out of `d1Prism`'s own `gaugeTexel`, which is the FORWARD
+    // direction — if the inverse the drag uses ever stopped matching the paint, the mark would land
+    // somewhere the pointer is not, and only this can see that.
+    rec.calls.length = 0;
+    nav.render();
+    const marks = camMarks(rec, drv.S.yGaugeRect);
+    expect(marks.length, 'the camera moved but nothing was drawn to say so').toBe(1);
+    expect(Math.abs(marks[0] - dropAt.y), `the mark is at ${marks[0]}, the pointer at ${dropAt.y}`)
+      .toBeLessThanOrEqual(1);
+    // ⛔ AND THE ROTATION IS UNTOUCHED — one hand, one control.
+    nav._handleMouseUp();
+  });
+
+  it('⛔ RELEASING LEAVES THE VIEW WHERE THE INDICATOR WAS DROPPED', async () => {
+    const { nav, drv } = await loadedNav();
+    const r = drv.S.yGaugeRect;
+    nav._handleMouseDown({ clientX: r.x + 3, clientY: r.cy, button: 0 });
+    nav._handleMouseMove({ clientX: r.x + 3, clientY: Math.round(r.cy - r.span * 0.5) });
+    const dropped = nav._localCenter.y;
+    nav._handleMouseUp();
+    nav._handleMouseMove({ clientX: r.x + 3, clientY: r.y + 2 });
+    expect(nav._localCenter.y, 'the camera kept moving after the button came up').toBe(dropped);
+  });
+
+  it('⛔ A GRAB DOES NOT SURVIVE THE PRESS THAT FOLLOWS IT, taken at another level', async () => {
+    // ⭐ WRITTEN BECAUSE A MUTANT SURVIVED. Deleting the release in `_handleMouseUp` broke nothing
+    // the other cases could see — the level-3 mousedown reassigns the flag on every press, so an
+    // ordinary press-release-press never inherits anything. This is the path that does: the grab is
+    // armed at PRISM, the NEXT press is taken at SYSTEM (a branch that never writes the flag), and
+    // Tab brings the drag back to PRISM. With the release, that drag rotates; without it, a stale
+    // `true` turns it into a camera jump on a press the pilot never aimed at the gauge.
+    const { nav, drv } = await loadedNav();
+    const r = drv.S.yGaugeRect;
+    nav._handleMouseDown({ clientX: r.x + 3, clientY: r.cy, button: 0 });
+    nav._handleMouseMove({ clientX: r.x + 3, clientY: Math.round(r.cy - r.span * 0.5) });
+    nav._handleMouseUp();
+    const parked = nav._localCenter.y;
+    // a press taken at SYSTEM — `_handleMouseDown`'s level-4 branch does not touch the flag
+    nav._levelIndex = 4; nav.render();
+    nav._handleMouseDown({ clientX: 200, clientY: 120, button: 0 });
+    // ...and Tab brings the still-held drag back to the prism
+    nav._levelIndex = 3; nav.render();
+    const rotBefore = nav._localRotY;
+    nav._handleMouseMove({ clientX: 150, clientY: 60 });
+    expect(nav._localCenter.y, 'a stale grab moved the camera on a press aimed at nothing').toBe(parked);
+    expect(nav._localRotY, 'the drag did not fall through to the rotation it should be').not.toBe(rotBefore);
+    nav._handleMouseUp();
+  });
+
+  it('⛔ A PRESS THAT MISSES THE STRIP STILL ROTATES THE PRISM — the grab steals nothing', async () => {
+    // The gauge sits in its own column beside the map, so before this AC a press there rotated. The
+    // control it gains must not spread: ten texels left of the strip is the map, and the map orbits.
+    const { nav, drv } = await loadedNav();
+    const r = drv.S.yGaugeRect;
+    const rotBefore = nav._localRotY, yBefore = nav._localCenter.y;
+    nav._handleMouseDown({ clientX: r.x - 10, clientY: r.cy, button: 0 });
+    nav._handleMouseMove({ clientX: r.x - 40, clientY: r.cy - 20 });
+    expect(nav._localRotY, 'the prism did not rotate').not.toBe(rotBefore);
+    expect(nav._localCenter.y, 'a press off the gauge moved the camera height').toBe(yBefore);
+    nav._handleMouseUp();
+  });
+
+  it('⛔ DESIGN 2 PUBLISHES NO GAUGE, and a drag in that column rotates as it always has', async () => {
+    const { nav, drv } = await loadedNav({ mode: 'bars' });
+    expect(drv.S.yGaugeRect, 'design 2 drew a y-gauge it does not have').toBe(null);
+    const rotBefore = nav._localRotY, yBefore = nav._localCenter.y;
+    nav._handleMouseDown({ clientX: 400, clientY: 120, button: 0 });
+    nav._handleMouseMove({ clientX: 380, clientY: 100 });
+    expect(nav._localRotY).not.toBe(rotBefore);
+    expect(nav._localCenter.y).toBe(yBefore);
+    nav._handleMouseUp();
+  });
+
+  it('⛔ THE DRAG IS CLAMPED TO THE STRIP THE GAUGE ACTUALLY DRAWS', async () => {
+    // The gauge displays +/-halfKpc, so that is what it can be dragged across — one scale for the
+    // readout and the handle. R and F still go further; this control does not silently outrun its
+    // own picture.
+    const { nav, drv } = await loadedNav();
+    const r = drv.S.yGaugeRect;
+    nav._handleMouseDown({ clientX: r.x + 3, clientY: r.cy, button: 0 });
+    nav._handleMouseMove({ clientX: r.x + 3, clientY: r.cy - r.span * 40 });
+    expect(nav._localCenter.y).toBeCloseTo(r.base + r.halfKpc, 12);
+    nav._handleMouseMove({ clientX: r.x + 3, clientY: r.cy + r.span * 40 });
+    expect(nav._localCenter.y).toBeCloseTo(r.base - r.halfKpc, 12);
+    nav._handleMouseUp();
+  });
+});
+
 describe('the commit rectangle comes out of the paint', () => {
   it('⭐ prefers S.chipRect over the geometry restatement above it', async () => {
     // ⚠ THE GETTER IS THE FIXTURE, NOT A HACK. On this buffer the published chip and the restated
