@@ -20,6 +20,8 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 >
 > ▶ **FOR MAX** (numbered; one line each): **1** walk both menus (AC-12): ORRERY → D-hold into Sol → N → V; drag GALAXY, click `HERE · SECTOR`, click a cell and watch it zoom, Tab into PRISM/SYSTEM, sort by a header in design 2's list (`L`), page the rail with the `- = PAGE` row. **2** The minimap, the companion strip and the `N` header eat or ignore a click with no visible marking — mark them, or pass? (recommend: pass for now). **3** `HERE · SECTOR` at SYSTEM does nothing — should it jump back to the current system from a foreign one? (recommend: park). **4** No zoom gauge exists on the prism to grab (design 2 prints the zoom as a number) — draw one, or close AC-9 as is? (recommend: close). **5** Design 2's GALAXY crop is now reachable by dragging; want a letterbox too? (recommend: no).
 >
+> ⭐ **MAX'S CLOSING WORD:** *"There are some defects we'll have to work through but this is good for now; let's handoff to a fresh session to continue."* The defects are UNNAMED — the next session's first job is to ask which. Asks 2-5 above are unanswered and carry forward.
+>
 > ▶ **HANDOFF → `docs/FEATURES/handoff-2026-09-08-nav-close-pass-part4.md`.**
 
 > ## ▶ 2026-09-07 (part 2, final) — **HIS THREE ANSWERS: PUSHED; THE GALAXY PICTURE APPROVED (AC-1 CLOSED); THE DISABLED SYSTEM SCREEN WIDENED TO TODAY'S NAV AND THE COCKPIT PANEL.** *"1 yes 2 yes, new one looks good 3 yes."*

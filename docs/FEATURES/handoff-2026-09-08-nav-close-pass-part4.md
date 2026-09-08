@@ -1,4 +1,6 @@
-# Handoff — ▶ **THE CLOSE PASS IS BUILT AND VERIFIED; MAX'S WALK (AC-12) AND FOUR PICTURE QUESTIONS ARE WHAT IS LEFT.**
+# Handoff — ▶ **MAX: *"There are some defects we'll have to work through but this is good for now."* THE DEFECTS ARE UNNAMED — ASK HIM WHICH, FIRST.**
+
+> ⭐⭐ **HIS CLOSING WORD, 2026-09-08 (verbatim):** *"There are some defects we'll have to work through but this is good for now; let's handoff to a fresh session to continue."* He did NOT name the defects and did not answer asks 2-5. So the first message of the next session is ONE question: which defects did he see, on which screen, in which design? Do not guess them from §2 item 4 or from the critic's list — those are mine; his are the ones that count. Then work through them one at a time, each with a live measurement and a control, and take his rulings on asks 2-5 as they come.
 
 > ⚠ **IN-REPO ON PURPOSE** — `/tmp` does not survive a WSL restart and this file has to outlive one.
 > **Branch** `feature/world-engine-production-L1` (lane A, **NOT** master). Last code commit **`876b540`**, on the
@@ -41,7 +43,9 @@ exception; AC-13/14 closed from the record.
 
 ---
 
-## 2. ▶ THE PICKUP — nothing to build until Max rules; then, in order
+## 2. ▶ THE PICKUP — his defects first (unnamed; ask), then in order
+
+0. **ASK WHICH DEFECTS.** He saw some on his own walk; nothing in this repo records them yet. Get screen + design + what he expected, then reproduce each live on `:5175` before touching code.
 
 1. **AC-12 — his walk.** ORRERY → hold D into Sol → `N` → `V`. New things to try, in his words: drag the GALAXY
    band (design 2) and click `HERE · SECTOR`; click a galaxy cell and watch it light and zoom; Tab into PRISM
