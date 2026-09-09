@@ -2,6 +2,9 @@
 
 > ⭐⭐ **HIS CLOSING WORD, 2026-09-08 (verbatim):** *"There are some defects we'll have to work through but this is good for now; let's handoff to a fresh session to continue."* He did NOT name the defects and did not answer asks 2-5. So the first message of the next session is ONE question: which defects did he see, on which screen, in which design? Do not guess them from §2 item 4 or from the critic's list — those are mine; his are the ones that count. Then work through them one at a time, each with a live measurement and a control, and take his rulings on asks 2-5 as they come.
 
+
+> ▶ **UPDATE 2026-09-08 (later session): HE DID NOT NAME THE DEFECTS — HE ASKED FOR A WALK SHEET INSTEAD, AND IT EXISTS.** `docs/FEATURES/nav-menu-guide.html` / artifact `https://claude.ai/code/artifact/1dd706c5-3d98-490a-b508-1ad689c332de`, 70 checklist rows with ✓ ✗ + notes saved to the artifact db doc `walk/results`. **Read that doc first** (`Artifact action:"read_db" db_op:"get" collection:"walk" doc_id:"results"`); the `fail` rows and `__general.text` ARE the defect list §0 below asks for. Then §2 in order. Memory: `well-dipper-nav-walk-sheet.md`.
+
 > ⚠ **IN-REPO ON PURPOSE** — `/tmp` does not survive a WSL restart and this file has to outlive one.
 > **Branch** `feature/world-engine-production-L1` (lane A, **NOT** master). Last code commit **`876b540`**, on the
 > remote (ls-remote verified); the docs commit after it carries this file — check `git log -1` and
