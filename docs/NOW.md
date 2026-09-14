@@ -12,6 +12,8 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 >
 > ⭐ **MEASURED WHILE BUILDING, REAL KEYS:** Esc with the drawn search open closes only the search, a second Esc the nav (the hint's ESC CLOSE is true). Tab is not bound in legacy (tab strip only). No stuck `S.levelLag` after V mid-ease. One thing I got wrong on the way and retracted before it reached him: I read the wrong element for "nav open" and briefly believed Esc did nothing.
 >
+> ▶ **HANDOFF (2026-09-14) → `docs/FEATURES/handoff-2026-09-14-nav-walk-sheet-next.md`.** `walk/results` was still EMPTY at handoff time; three commits local, unpushed.
+>
 > ▶ **NEXT SESSION:** `Artifact read_db get walk/results` FIRST — every `fail` row + `__general.text` is the defect list; reproduce each live before code. Memory: `well-dipper-nav-walk-sheet.md`.
 
 > ## ▶ 2026-09-08 — **THE CLOSE PASS'S LAST SLICES ARE BUILT, ADVERSARIALLY VERIFIED, CORRECTED, AND LIVE. ▶ MAX'S WALK (AC-12) IS THE GATE; FOUR PICTURE QUESTIONS ARE HIS.** Lane A, `876b540`, **pushed** (ls-remote verified). Workstream `docs/WORKSTREAMS/nav-screens-close-pass/`, contract AC-5/6/9/11 at `VERIFIED_PENDING_MAX`, AC-13/14 `VERIFIED_BY_MAX`, AC-2 open on the picture questions below.
