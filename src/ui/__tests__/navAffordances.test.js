@@ -148,6 +148,62 @@ const VOCABULARY = [
       return n._localCenter.y !== before && n._viewDriverInst.S.cam.y === n._localCenter.y;
     },
   },
+  // ── ⭐ AC-12 (nav-defects-batch-2026-09-18) — THE THREE PHRASES THE DESIGNS NOW PRINT ───────────
+  // Design 1 prints `V LOOK  SHIFT+TAB BACK  ESC CLOSE` in the free run of its tab strip and design 2
+  // prints the same line, plus `SELECT A BODY  DRAG ROTATE  ENTER` at SYSTEM, over the bottom-left of
+  // its map. Two of them (`TAB BACK`, `DRAG ROTATE`) are reported by `tokenize` as unbacked promises
+  // until they are here, which is this file working exactly as designed: a new word on the glass has
+  // to arrive with the probe that proves the control behind it.
+  // ⚠ `V LOOK` IS HERE THOUGH THE TOKENISER DOES NOT DEMAND IT — a bare letter followed by a verb is
+  //   not one of the shapes it matches, so V could have gone on the glass unswept. A promise that
+  //   slips past the guard is exactly the promise most worth a probe.
+  {
+    phrase: 'V LOOK',
+    control: 'V cycles the look',
+    async probe() {
+      const n = await nav();
+      const before = n.viewMode;
+      press(n, 'KeyV');
+      return n.viewMode !== before && n.viewMode !== null;
+    },
+  },
+  {
+    phrase: 'SHIFT+TAB BACK',
+    control: 'Shift+Tab walks the drill back one level',
+    async probe() {
+      const n = await nav({ level: 3 });
+      press(n, 'Tab', { shiftKey: true });
+      n.render();
+      // a 2D<-2D step eases rather than snapping, so accept the animation's destination
+      return (n._anim ? n._anim.toLevel ?? n._levelIndex : n._levelIndex) === 2;
+    },
+  },
+  {
+    phrase: 'DRAG ROTATE',
+    control: "a drag on design 2's orrery turns it",
+    async probe() {
+      const n = await nav({ mode: 'bars', level: 4 });
+      n._systemStar = { wx: 8, wy: 0, wz: 0, seed: 31, spectral: 'G', name: 'Spin' };
+      n._systemData = {
+        star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
+        planets: [{ orbitRadiusAU: 1.0, moons: [],
+                    planetData: { radiusEarth: 1, T_eq: 288, habitability: { score: 0.2 }, rings: false } }],
+      };
+      n.render();
+      const before = n._systemRotY;
+      // ⭐ THE PRESS LANDS IN THE MAP PANE ON PURPOSE. Since AC-4 the host asks the driver whether the
+      //    press starts a gesture at all, so a probe that pressed on the status bar would report a
+      //    working rotation as broken — and would be measuring AC-4, not this promise.
+      n._handleMouseDown({ clientX: n._canvas.width / 2, clientY: n._canvas.height / 2, button: 0 });
+      n._handleMouseMove({ clientX: n._canvas.width / 2 + 40, clientY: n._canvas.height / 2 });
+      n._handleMouseUp();
+      n.render();
+      // both halves: the camera moved AND the design is drawing from the moved camera
+      return n._systemRotY !== before
+          && n._viewDriverInst.S.sysCam.rotY !== undefined
+          && Math.abs(Math.cos(n._viewDriverInst.S.sysCam.rotY) - Math.cos(n._systemRotY)) < 1e-9;
+    },
+  },
   {
     phrase: 'SCROLL , . OR CLICK ...',
     control: 'comma and full stop walk the SYSTEM ladder',

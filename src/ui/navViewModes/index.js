@@ -48,7 +48,7 @@ import { makeViewState, SORT_KEYS } from './state.js';
 import { makeDesigns } from './designs.js';
 import { railGeometry, barsGeometry, tabIndexAt } from './geometry.js';
 import { pickSector, pickTile, pickPrismStar, pickBody, bodyIdentity,
-         usableProj, insideProj, cellAt, gridNFallback, tileOf, HOVER_FIELD } from './picking.js';
+         usableProj, insideProj, projRect, cellAt, gridNFallback, tileOf, HOVER_FIELD } from './picking.js';
 import { makeSearch } from './search.js';
 import { FACE, measurePixelText } from '../../rendering/PixelText.js';
 import { simClockMs } from '../../core/SimClock.js';
@@ -366,7 +366,19 @@ export function makeViewModeDriver(nav) {
       return i >= 0 && i < lg.rows ? i : -1;
     }
     if (bars) {
-      if (!S.list || S.level === 4) return -1;
+      // ── ⭐ AC-5 (nav-defects-batch-2026-09-18) — THE FALLBACK IS BOUNDED THE WAY THE DRAWN LIST IS,
+      //    IN BOTH AXES, AND THE OLD ONE WAS BOUNDED IN NEITHER. `!S.list || S.level === 4` let `L`
+      //    pressed at GALAXY, SECTOR or REGION arm full-width rows across the whole map band — rows
+      //    nothing draws, because `d2List` runs at level 3 and nowhere else (`d2Prism`'s first line)
+      //    — and `resolveHover` then wrote `pickFromRow` into `_hoveredTile`, so a click meant for a
+      //    sector drilled a phantom list row. The level test is now the same one `d2Prism` makes.
+      // ⚠ AND THE x BOUND IS `d2List`'S OWN PUBLISHED SPAN (`x0: 2, x1: W - 2`, designs.js:1687),
+      //   restated here only because this branch runs when nothing has been published yet — the same
+      //   status `geometry.js`'s header gives `listTop`/`listRows`. The published path above is the
+      //   authority and is bounded by the paint's own numbers.
+      if (!S.list || S.level !== 3) return -1;
+      const W = lastW || nav._canvas?.width || 0;
+      if (!(W > 4) || x < 2 || x > W - 2) return -1;
       const i = Math.round((y - g2.listTop - g2.LEAD) / g2.LEAD);
       return i >= 0 && i < g2.listRows ? i : -1;
     }
@@ -531,6 +543,15 @@ export function makeViewModeDriver(nav) {
     //    scroll a ladder the pilot cannot see. The clause hands them here, so here is where they can
     //    still be recovered, and this is the recovery.
     if (S.search.open) { search.key({ code: dir > 0 ? 'Period' : 'Comma', key: dir > 0 ? '.' : ',' }); return; }
+    // ── ⭐ AC-5 (nav-defects-batch-2026-09-18) — AND ONLY WHERE A LADDER IS DRAWN. `d1Ladder` runs at
+    //    level 4 and nowhere else, so at 0-3 `S.ladderStops` / `S.ladderMax` are whatever the last
+    //    SYSTEM frame left behind and this wrote `S.ladderScroll` against them — a control acting on a
+    //    picture that is not on the glass, which is the whole defect class this workstream closes.
+    //    ⛔ BELT AND BRACES WITH THE HOST'S OWN GATE ON `NavComputer.js:349` (INTERFACE §3): the key
+    //    clause is the pilot's route in, this is the method's own invariant, and the two are separately
+    //    owned files. ⚠ IT SITS AFTER THE SEARCH RECOVERY ON PURPOSE — `,` and `.` typed into the
+    //    drawn field must still reach it from any level; the level test is about the LADDER, not the key.
+    if (S.level !== 4) return;
     const stops = S.ladderStops || [], cur = S.ladderScroll || 0, max = S.ladderMax || 0;
     const next = dir > 0 ? stops.find((v) => v > cur) : [...stops].reverse().find((v) => v < cur);
     S.ladderScroll = Math.max(0, Math.min(max, next == null ? (dir > 0 ? max : 0) : next));
@@ -670,7 +691,21 @@ export function makeViewModeDriver(nav) {
    * SORT keeps the spelling that is repeated most and the pager's label is corrected in the lab.
    * The re-order itself happens in `state.js`, against the arrays the PAINT reads.
    */
+  /**
+   * ⭐ AC-5 (nav-defects-batch-2026-09-18) — IS A RANKED LIST ON THE GLASS AT THIS LEVEL?
+   *
+   * Design 1 draws its rail at EVERY level, so `[ ]` and `-` `=` always name something there. Design 2
+   * draws a list ONLY at PRISM in list mode (`d2Prism`'s first line hands off to `d2List`), so at
+   * GALAXY, SECTOR, REGION and SYSTEM the two pairs re-ranked and paged a list nobody could see — and
+   * the re-rank is not inert: `S.sortIdx` moves `D.starRows`' order, which is what the PRISM marks and
+   * the picker both read, so a `]` pressed at GALAXY silently re-ordered the screen the pilot had not
+   * arrived at yet. ⛔ THE TEST IS THE SAME PAIR `d2Prism` MAKES, in the same order; anything else here
+   * would be a second copy of the condition, free to drift from the paint.
+   */
+  function listOnGlass() { return nav.viewMode !== 'bars' || (S.level === 3 && !!S.list); }
+
   function cycleSort(dir) {
+    if (!listOnGlass()) return;
     const keys = SORT_KEYS[S.level] || [];
     if (keys.length < 2) return;
     S.sortIdx = (((S.sortIdx | 0) + (dir > 0 ? 1 : -1)) % keys.length + keys.length) % keys.length;
@@ -697,6 +732,7 @@ export function makeViewModeDriver(nav) {
    * split as `S.ladderScroll`.
    */
   function page(dir) {
+    if (!listOnGlass()) return;   // ⭐ AC-5 — see `listOnGlass`: design 2 pages only the list it draws
     const w = lastW || nav._canvas?.width || 0, h = lastH || nav._canvas?.height || 0;
     if (!(w > 0 && h > 0)) return;
     const { rows, total } = listBounds(w, h);
@@ -893,6 +929,83 @@ export function makeViewModeDriver(nav) {
       && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
   }
 
+  /**
+   * ⭐⭐ AC-3 (nav-defects-batch-2026-09-18) — WORLD UNITS PER TEXEL OF THE MAP THIS FRAME DREW.
+   *
+   * `NavComputer.js:4364` scales a 2D pan by `_viewSize / navMapSize(w, h)`, and `navMapSize` is the
+   * LEGACY renderer's square: 160 texels at 417x240. Neither design draws that square. Design 1 lays a
+   * 216-texel square, design 2 a 224-texel block at SECTOR/REGION and the FULL 417-wide band at GALAXY
+   * — so the same drag moved the picture 216/160 = 1.35x, 224/160 = 1.4x and 417/160 = 2.6x further
+   * than the pointer, which is exactly the three ratios the audit measured. The cell under the pointer
+   * ran away from it.
+   *
+   * ⛔ IT IS THE PAINT'S OWN PROJECTION INVERTED, NOT A SECOND LAYOUT PASS. `S.mapProj` is written by
+   * the draw code that drew the map (`designs.js:876/1510/1562`) and `usableProj` refuses one stamped
+   * for another design or level, so a pan cannot be scaled by a picture that is no longer on the glass.
+   * A restatement of `sq` / `blk` / `W` here would be the AC-4 defect shape — two copies of one
+   * geometry, one silently wrong — in the one place where being wrong is invisible until you drag.
+   *
+   * ⚠⚠ AND `'wide'` IS NOT `size / w`, WHICH IS WHERE THE OBVIOUS ONE-LINER IS WRONG. The seam sketched
+   *   this as `usableProj(S).scale / projRect(p).w`; that is right for the two SQUARE kinds, whose
+   *   `size` spans `r.w` texels, and wrong by a factor of `W` for `'wide'`, whose published `kpc` IS
+   *   ALREADY the per-texel scale (`worldAt` reads `cx + (x - ox) * kpc`, `designs.js:1511` sets it to
+   *   `v.size / W`). Both branches are checked against the audit's three measured ratios in
+   *   `navDefects2026.driver.test.js`, which is the only reason the difference is visible at all.
+   *
+   * @returns {?number} world units (kpc) per texel, or `null` when this frame published no usable
+   *   projection — the host then keeps the legacy expression rather than panning by NaN.
+   */
+  function panKpcPerTexel() {
+    const p = usableProj(S);
+    if (!p) return null;
+    if (p.kind === 'wide') return (Number.isFinite(p.kpc) && p.kpc > 0) ? p.kpc : null;
+    const r = projRect(p);
+    if (!r || !(r.w > 0) || !(Number.isFinite(p.size) && p.size > 0)) return null;
+    return p.size / r.w;
+  }
+
+  /**
+   * ⭐⭐ AC-4 (nav-defects-batch-2026-09-18) — SHOULD THIS PRESS START A PAN / ROTATE / SCRUB?
+   *
+   * `NavComputer._handleMouseDown` arms every drag from anywhere on the canvas, which was harmless
+   * while the whole canvas WAS the map. Under a design most of it is chrome: design 1 gives a third of
+   * the width to the rail and four rows to status / hint / tabs / commit, design 2 two 8-row bars. A
+   * press on any of them and a 40-texel drag panned the map or spun the prism behind the words.
+   *
+   * ⛔ THE ANSWER IS THE PAINT'S, NOT A LEVEL TABLE. `regions().map` is declared by `drawDesign1` /
+   * `drawDesign2` as they lay the frame out (`designs.js:607`, `:1385`) and is the pane the prism and
+   * the orrery are drawn INSIDE, so "is this the map" is one question at all five levels and in both
+   * designs, asked of the code that drew it. The three handles are published the same way and by the
+   * painters that draw them — `S.yGaugeRect` (`d1Prism`), `S.ladderCounterRect` and `S.ladderCaps`
+   * (`d1Ladder`) — which is why `gaugeGrab`/`counterGrab` are reused here rather than restated: the
+   * host must not decline a press that those two are about to accept one statement later.
+   *
+   * ⚠ THE LADDER AXIS IS ALREADY INSIDE `regions().map`, so its clause is belt-and-braces and says so;
+   *   it is spelled out because the seam names the axis band as a handle and because a future design
+   *   that draws the ladder outside the pane would lose the drag silently.
+   * ⚠ DESIGN 2'S LIST IS NOT THE MAP. `d2List` paints over the whole map band, and a drag down a list
+   *   row would spin the prism underneath it — the same "a gesture that starts on chrome moves the
+   *   picture" defect this AC closes, one layer in. `S.listGeom` is the drawn grid, published by the
+   *   painter, so the exclusion costs one clause and no second copy of anything.
+   * ⛔ AND NO PUBLISHED MAP MEANS TRUE, NOT FALSE. Before the first frame of a design there are no
+   *   regions at all, and answering "not the map" there would leave the nav with no drag anywhere —
+   *   a dead gesture that looks exactly like this fix having gone wrong. Unknown degrades to today's
+   *   behaviour; known is what narrows it.
+   */
+  function pressStartsGesture(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    if (gaugeGrab(x, y) || counterGrab(x, y)) return true;
+    const caps = S.ladderCaps;
+    if (nav.viewMode === 'rail' && S.level === 4 && caps && Number.isFinite(caps.axisY)
+        && y >= caps.axisY - 6 && y <= caps.axisY + 6 && x >= caps.x0 && x <= caps.x1) return true;
+    const map = designs.regions().map;
+    if (!map || !Number.isFinite(map.x) || !(map.w > 0)) return true;
+    const lg = S.listGeom;
+    if (nav.viewMode === 'bars' && lg && Number.isFinite(lg.top) && lg.lead > 0 && lg.rows > 0
+        && x >= lg.x0 && x <= lg.x1 && y >= lg.top && y < lg.top + (lg.rows + 1) * lg.lead) return false;
+    return inRect(map, x, y);
+  }
+
   function remapClick(p, w, h) {
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
@@ -960,6 +1073,24 @@ export function makeViewModeDriver(nav) {
       if (!realTab) return null;
       S.levelLag = null; S.level = nav._levelIndex | 0;
     }
+    // ── ⭐⭐ AC-1 (nav-defects-batch-2026-09-18) — THE DRAWN COMMIT ANSWERS AT EVERY LEVEL ─────────
+    // Both designs draw the commit row / `[WARP]` chip on all five screens and `render()` publishes its
+    // rectangle into `_commitButtonRect` on all five, but `NavComputer.js:4499` wraps the handler's
+    // rect test inside `if (this._levelIndex === 4)` — so at GALAXY, SECTOR, REGION and PRISM the
+    // button was drawn armed, carried a live target in its own label, and did nothing. That is the
+    // defect this workstream is named for, in its purest form: a control that lies about being live.
+    // ⛔ AND IT IS `commit()`, NOT A SECOND COPY OF THE HANDLER'S BRANCH. `commit()` is already what
+    //    `Enter` fires, and its `_commitAction` branch fires the SAME `_onSound` name and the SAME
+    //    `_onCommit` payload as `NavComputer.js:4503-4509` — so the key, the button and the handler are
+    //    one path and cannot diverge, which is the observable ("the click does what Enter does"). At
+    //    0-3 it warps to the selected / external star; at 4 with nothing armed it returns false.
+    // ⛔ THE CLICK IS EATEN EITHER WAY — `return null`, armed or not. The rectangle is DRAWN, so it
+    //    must answer the press (§6's plate rule), and falling through would hand a click on the bottom
+    //    row to the tab strip that shares the band with it (design 1, pre-AC-11) or to the map.
+    // ⚠ PLACED AFTER THE LAG CLAUSE AND BEFORE THE TAB BRANCH, which is the seam this batch fixed
+    //   across three lanes: during the inbound ease every click is still eaten, and a press inside the
+    //   commit rect beats the tab strip rather than the other way round.
+    if (inRect(nav._commitButtonRect, p.x, p.y)) { commit(); return null; }
     // ── ⭐ AC-2 — DESIGN 1'S PAGER ROW: LEFT HALF BACK, RIGHT HALF FORWARD ────────────────────────
     // ⛔ THE PUBLICATION IS THE ONLY GATE, and this is the reason `gaugeGrab` gives: `S.pagerRect` is
     //    written by `d1Rail` and by nothing else, and `resetPicks` clears it every frame — so "there
@@ -999,7 +1130,16 @@ export function makeViewModeDriver(nav) {
     //    a foreign one was drilled — so rather than invent one the click falls through to the topbar
     //    it was drawn on, where design 2's tab test answers it or nothing does. `recentreOnPlayer`
     //    makes the same refusal itself; the test here is what decides whether the click is CONSUMED.
-    if (inRect(S.locatorRect, p.x, p.y) && S.level !== 4) { recentreOnPlayer(); return null; }
+    // ⛔⛔ AND AT SYSTEM IT IS NOW EATEN, WHICH REVERSES §8b'S DECISION AND NOT ITS REASONING (AC-9,
+    //    nav-defects-batch-2026-09-18). "Not eaten" was recorded as a decision because "centre on the
+    //    player" has no agreed meaning at level 4 — that part still stands, and `recentreOnPlayer`
+    //    still refuses level 4 itself. What was not intended was the CONSEQUENCE: the press fell
+    //    through to the top bar it is drawn on, where no tab answered it, and `_handleClick`'s level-4
+    //    empty-space branch (`NavComputer.js:4592`) took it and called `_clearCommitSelection()`. So
+    //    clicking `HERE · SECTOR` at SYSTEM threw the pilot's body selection away — a readout acting
+    //    as a destructive control. The click is eaten until Max rules what it should do there; the
+    //    level test moved INSIDE so 0-3 re-centre exactly as before.
+    if (inRect(S.locatorRect, p.x, p.y)) { if (S.level !== 4) recentreOnPlayer(); return null; }
     // ── ⭐ AC-2 — THE ONE READOUT THAT EATS A CLICK AND DOES NOTHING (§6's plate rule) ────────────
     // ⛔ THE `» STAR B` COMPANION STRIP HAS NO DOWNSTREAM IDENTITY, and inventing one would be the
     //    picker deciding what that mark means. What the rectangle buys is that the press does not
@@ -1062,6 +1202,12 @@ export function makeViewModeDriver(nav) {
     // CONTRACT: renaming either leaves the class calling `undefined?.()`, which is an inert control
     // and never a throw — the failure would be a scrubber that quietly does nothing.
     sortTo, recentreOnPlayer, counterGrab, counterDragTo,
+    // ⭐ AC-3 / AC-4's DRIVER HALVES (nav-defects-batch-2026-09-18). Both are called OPTIONALLY by the
+    // HOST's folds in the line-frozen `NavComputer.js` (`panKpcPerTexel?.()` at :4364,
+    // `pressStartsGesture?.()` at :4396), so THE NAMES ARE THE CONTRACT exactly as `counterGrab`'s is:
+    // rename either and the class calls `undefined?.()`, the fold falls back to the legacy expression,
+    // and the failure is a pan that is 1.35x fast again — silent, and identical to never having fixed it.
+    panKpcPerTexel, pressStartsGesture,
     regions: designs.regions,
     violations: () => violations.slice(),
     /**
@@ -1076,6 +1222,15 @@ export function makeViewModeDriver(nav) {
      */
     toggleList: () => {
       if (S.search.open) { search.key({ code: 'KeyL', key: 'l' }); return; }
+      // ── ⭐ AC-5 (nav-defects-batch-2026-09-18) — AND ONLY WHERE THE LIST EXISTS. `d2Prism` is the one
+      //    painter that reads `S.list`, so at GALAXY, SECTOR, REGION and SYSTEM `L` flipped a flag that
+      //    changed no picture — and then `listRowAt`'s bars fallback armed full-width rows over the map
+      //    off the same flag, so the invisible toggle went on to eat the map's clicks. The picker's
+      //    bound closes the second half; this closes the first, so the flag cannot be set from a screen
+      //    that has no list to show for it.
+      //    ⚠ AFTER THE SEARCH RECOVERY, for the reason `scrollLadder`'s gate is: an `L` typed into the
+      //    drawn field is a LETTER at every level, and the level test is about the LIST, not the key.
+      if (S.level !== 3) return;
       S.list = !S.list;
     },
   };

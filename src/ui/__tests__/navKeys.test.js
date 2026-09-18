@@ -522,19 +522,36 @@ describe('AC-11 — the camera is re-seeded onto the design\'s own default', () 
   });
 
   it('⛔ THE CONTROL — cycling back to today\'s nav re-seeds NOTHING', async () => {
-    // The seed is guarded on `this.viewMode`. Without that guard the third press would overwrite
-    // these two sentinels with the designs' angles, and "viewMode === null is today's nav byte for
-    // byte" would stop being true.
+    // The seed is guarded on `this.viewMode`. Without that guard the third press would overwrite the
+    // legacy camera with the DESIGNS' angles, and "viewMode === null is today's nav byte for byte"
+    // would stop being true.
+    // ⛔ REWRITTEN 2026-09-18 FOR AC-6 (nav-defects-batch), WHICH CHANGED WHAT "NOTHING" MEANS HERE.
+    //    The old form wrote three sentinels WHILE IN A DESIGN and asserted they survived the trip
+    //    home — which only held because the trip home restored nothing at all. That was the defect:
+    //    a design's angles leaked into the old nav's prism and orrery (measured live: _localRotX
+    //    0.652…, _systemRotX 0.433… after one V lap). AC-6 now saves legacy's four angles on the way
+    //    OUT and puts them back on the way IN, so the sentinels are correctly overwritten.
+    //    ⭐ THE SUBJECT IS UNCHANGED AND STILL PROVABLE: what comes back must be THE VALUES LEGACY
+    //      LEFT, never the designs' seeds. The two are far apart (0.652… / asin 0.42 vs whatever
+    //      `loadedNav` opened on), so the `not.toBeCloseTo` pair below still fails the instant
+    //      `_seedViewModeCam` fires at `viewMode === null`, which is what this case is for.
     const { nav } = await loadedNav({ mode: null, level: 3 });
     nav.viewMode = null;
+    const legacy = { lrx: nav._localRotX, lry: nav._localRotY, srx: nav._systemRotX };
     press(nav, 'KeyV');                       // -> rail
     press(nav, 'KeyV');                       // -> bars
     nav._localRotX = 1.234; nav._systemRotX = 1.111; nav._localRotY = 0.777;
     press(nav, 'KeyV');                       // -> today's nav
     expect(nav.viewMode).toBe(null);
-    expect(nav._localRotX).toBe(1.234);
-    expect(nav._systemRotX).toBe(1.111);
-    expect(nav._localRotY).toBe(0.777);
+    expect(nav._localRotX, 'the old nav did not get its own prism pitch back').toBe(legacy.lrx);
+    expect(nav._systemRotX, 'the old nav did not get its own orrery tilt back').toBe(legacy.srx);
+    expect(nav._localRotY, 'the old nav did not get its own prism yaw back').toBe(legacy.lry);
+    // …and none of the three is a design seed: `D_DZ`/`D_DY` pin the prism's pitch and 0.42 the
+    // orrery's sine, so a seed that ran at null would land on these and be caught here.
+    expect(Math.abs(D_K * Math.sin(nav._localRotX) - D_DZ) > 1e-6,
+      'the prism came back at the DESIGNS\' pitch — the seed ran at viewMode null').toBe(true);
+    expect(Math.abs(Math.sin(nav._systemRotX) - 0.42) > 1e-6,
+      'the orrery came back at the DESIGNS\' tilt — the seed ran at viewMode null').toBe(true);
   });
 
   it('⛔ AND THE COCKPIT PANEL IS STILL OUT — the gate is _viewModesEnabled', async () => {

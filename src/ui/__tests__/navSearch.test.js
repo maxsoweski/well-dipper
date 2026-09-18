@@ -311,16 +311,29 @@ describe('the field is on the canvas, in each design\'s own face', () => {
         `design ${design} drew no result row for ${first}`).toBe(true);
       expect(strings.some((s) => s.includes('ESC CLOSE')),
         `design ${design} advertises no way out of the field`).toBe(true);
+      // ⭐ AND THE STRING THE CLOSED-FIELD CONTROL BELOW LOOKS FOR IS ASSERTED HERE, so that control
+      //    cannot pass vacuously against a phrase no design draws at all.
+      expect(strings.some((s) => s.includes('UP DOWN MOVE')),
+        `design ${design} drew no arrow-key legend for the field`).toBe(true);
     });
 
     it(`design ${design}: with the field CLOSED not one of those strings is on the glass`, async () => {
       // The control for the case above. Without it, a test that only ever looks at an open field
       // cannot tell "the search is drawn" from "the design always draws these words".
+      //
+      // ⛔ THE ESC HALF OF THIS CONTROL MOVED TO `UP DOWN MOVE`, AND THAT IS THE CONTROL WORKING, NOT
+      //    A LOOSENING. It read `'ESC CLOSE'`, which stopped discriminating on 2026-09-18: AC-12 of
+      //    nav-defects-batch gives BOTH designs a standing legend — `V LOOK  SHIFT+TAB BACK  ESC
+      //    CLOSE` — because under `.nav-lowres` the DOM × is hidden (AC-8) and the printed ESC is the
+      //    only way out a pilot can see. So "the design always draws these words" became TRUE of that
+      //    substring, which is exactly the confusion this case exists to prevent — the assertion has
+      //    to name a string only the FIELD draws. `UP DOWN MOVE` is one: it is in design 1's
+      //    `SEARCH_HINT` and in `d2Status`'s search branch, and nowhere else in either design.
       const { nav, drv } = await loadedNav({ mode });
       nav.render();
       const strings = drawnStrings(drv, { design });
       expect(strings.some((s) => s.includes('>' + QUERY.toUpperCase()))).toBe(false);
-      expect(strings.some((s) => s.includes('ESC CLOSE'))).toBe(false);
+      expect(strings.some((s) => s.includes('UP DOWN MOVE'))).toBe(false);
     });
   }
 

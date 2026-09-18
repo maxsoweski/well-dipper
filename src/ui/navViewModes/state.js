@@ -442,6 +442,11 @@ export function makeViewState() {
     sysRef: undefined, bodiesBase: null, bodySortId: null,
     level: -1,
     nameBySeed: new Map(),
+    // ⭐ AC-10 (nav-defects-batch-2026-09-18) — see `multFor`. `multGm` remembers WHICH galactic map the
+    // filled values were rolled against, because a value rolled with no context is a different answer
+    // and caching it silently would be worse than not filling at all.
+    multBySeed: new Map(),
+    multGm: undefined,
   };
 
   /** The system name for a prism star — memoised, because `generateSystemName` is not cheap and the
@@ -454,6 +459,50 @@ export function makeViewState() {
     cache.nameBySeed.set(s.seed, n);
     return n;
   };
+
+  /**
+   * ⭐⭐ AC-10 (nav-defects-batch-2026-09-18) — HOW MANY STARS A ROW'S SYSTEM HAS, MEMOISED BY SEED.
+   *
+   * Three consumers read `s.mult` on ORDINARY rows and all three got `undefined`: `d2Prism`'s
+   * multiplicity pips (`designs.js:1582`), the rail's COMPS column (`:1234`) and `SORT_KEYS[3]`'s
+   * `mult` comparator (`state.js:249`), which is why "sort by COMPS" re-ordered nothing. The field was
+   * filled for `D.selStar` alone (`:798-803`) and for no other row, because `starRowsBase` is built by
+   * spreading `_localStars` entries and those carry no multiplicity — the oracle that answers the
+   * question has existed the whole time and nothing called it.
+   *
+   * ⛔ KEYED BY SEED AND NEVER INVALIDATED, WHICH IS WHAT MAKES FILLING EVERY ROW AFFORDABLE.
+   * `starRowsBase` is REBUILT EVERY TIME THE BACKGROUND LOADER GROWS `_localStars` — measured
+   * headless at 417x240: 31 rebuilds carrying the list from 212 to 9,988 rows in chunks of 153-973 —
+   * so a fill that recomputed would pay the whole cost once per rebuild. Against this map a rebuild
+   * pays only for the seeds it has never seen.
+   *
+   * ⭐ MEASURED, BECAUSE THE SEAM ASKED FOR A NUMBER (node, this machine, 2026-09-18): a cold
+   * `multiplicityForSeed` costs 0.97-1.60 us per row (four passes over 9,988 real prism rows: 16.0,
+   * 12.7, 12.4, 9.7 ms), so filling ALL of the 42,511 rows Sol reaches would be 41-68 ms **if it
+   * happened in one frame**. It does not: the worst single rebuild adds ~1,000 new seeds (~1.3 ms of
+   * oracle) plus one map lookup per existing row (~50 ns each), so the ~53 ms lands spread across the
+   * ~31 frames of the load and no frame carries more than a few. That is why this fills eagerly rather
+   * than lazily — the lazy variant the seam allowed for would have had to fill every row anyway the
+   * moment COMPS was selected, since a sort reads all of them, and would have paid it in ONE frame.
+   *
+   * ⚠ NO OVERLAY IS PASSED, exactly as `D.selStar`'s call passes none. It is the difference between
+   *   the 'table' chain and the 'archive-roll' / 'procgen' chain for real stars, and the selected row
+   *   and the list row must not be able to report different counts for the same star.
+   * ⚠ A THROW IS A 1, NOT A GAP. Both designs compare `s.mult > 1` unguarded; `undefined > 1` is false,
+   *   so a gap reads as "single" and is indistinguishable from an answer — the disguise `buildBodies`'
+   *   name catches were caught wearing. A number is always published.
+   */
+  function multFor(row, gm) {
+    if (cache.multBySeed.has(row.seed)) return cache.multBySeed.get(row.seed);
+    let m = 1;
+    try {
+      m = multiplicityForSeed({ seed: row.seed, pos: { x: row.wx, y: row.wy, z: row.wz },
+                                type: row.spectral, name: row.name }, { galacticMap: gm }).count;
+    } catch (e) { m = 1; }
+    if (!Number.isFinite(m) || m < 1) m = 1;
+    cache.multBySeed.set(row.seed, m);
+    return m;
+  }
 
   /** Flatten `_systemData` into the AU-ordered list every design wants and the instrument has never
    *  had. Lifted from the lab's `buildSystem`, minus its choice of WHICH system. */
@@ -766,8 +815,25 @@ export function makeViewState() {
     const starKey = sortKeyFor(S, 3);
     if (cache.starsRef !== D.stars || cache.starsLen !== D.stars.length) {
       cache.starsRef = D.stars; cache.starsLen = D.stars.length; cache.starSortId = null;
-      cache.starRowsBase = D.stars
-        .map((s) => ({ ...s, name: nameFor(s), pc: (s.dist ?? 0) * 1000, ly: (s.dist ?? 0) * KPC_TO_LY }));
+      // ⭐ AC-10 — `mult` IS FILLED HERE, ON EVERY ROW, THROUGH THE SEED MAP. See `multFor` for the
+      //    measurement that says this is affordable and for why it is not lazy. ⛔ AFTER `nameFor`,
+      //    because the oracle's highest-precedence chain is `KnownSystems.findByAlias(name, pos)` —
+      //    Alpha Centauri reports 3 by NAME and would roll 1 or 2 procedurally without one.
+      cache.multGm = D.gm;
+      cache.starRowsBase = D.stars.map((s) => {
+        const row = { ...s, name: nameFor(s), pc: (s.dist ?? 0) * 1000, ly: (s.dist ?? 0) * KPC_TO_LY };
+        row.mult = D.gm ? multFor(row, D.gm) : (row.mult ?? 1);
+        return row;
+      });
+    }
+    // ⚠ AND IF THE BASE WAS BUILT BEFORE THE GALACTIC MAP ARRIVED, THE FILL IS REDONE ONCE. Every roll
+    //   taken with a null context is a different answer from the one arrival will give, so a base built
+    //   without a map holds placeholder 1s; `multGm` is the only thing that can tell them apart, and
+    //   without this the COMPS sort would be the identity for as long as that base survived. One pass,
+    //   at most once, and it re-ranks by clearing the sort id the way a key change does.
+    if (cache.starRowsBase && D.gm && cache.multGm !== D.gm) {
+      cache.multGm = D.gm; cache.multBySeed.clear(); cache.starSortId = null;
+      for (const row of cache.starRowsBase) row.mult = multFor(row, D.gm);
     }
     if (cache.starRowsBase && cache.starSortId !== starKey.id) {
       cache.starSortId = starKey.id;
@@ -795,13 +861,12 @@ export function makeViewState() {
       ly: Math.hypot(nav._externalTarget.x - D.player.x, nav._externalTarget.y - D.player.y,
                      nav._externalTarget.z - D.player.z) * KPC_TO_LY,
     } : null);
-    if (D.selStar && D.selStar.mult == null && D.gm) {
-      try {
-        D.selStar.mult = multiplicityForSeed(
-          { seed: D.selStar.seed, pos: { x: D.selStar.wx, y: D.selStar.wy, z: D.selStar.wz },
-            type: D.selStar.spectral, name: D.selStar.name }, { galacticMap: D.gm }).count;
-      } catch (e) { D.selStar.mult = 1; }
-    }
+    // ⭐ AC-10 — THE SELECTED STAR GOES THROUGH THE SAME MEMO AS EVERY OTHER ROW NOW. When it IS a row
+    //    (`D.starRows.find`) this is already filled and the map answers from cache; when it is the
+    //    synthesised copy for a star the loader has not reached, this is the only fill it gets. ⛔ ONE
+    //    CALL SITE, so the COMPS column in the detail block and the COMPS column in the list cannot
+    //    report different counts for one star — which they could while this had its own `try`.
+    if (D.selStar && D.selStar.mult == null && D.gm) D.selStar.mult = multFor(D.selStar, D.gm);
 
     // ── THE SYSTEM ON SCREEN — whatever was drilled into, INCLUDING an empty one.
     D.sys = nav._systemData || null;
@@ -852,14 +917,40 @@ export function makeViewState() {
     //    `undefined` on every path, `D.bodies[undefined]` was `undefined`, and the selection fell
     //    through to the habitability guess EVERY TIME — the detail block has never once shown the
     //    body the pilot picked. `index` is still accepted below in case a caller honours the comment.
+    // ── ⭐⭐ AC-2 (nav-defects-batch-2026-09-18) — NOTHING SELECTED IS NOW `null`, AND THE STAR IS A ROW
+    //    ⛔ THE HABITABILITY FALLBACK IS GONE, AND IT WAS THE DEFECT, NOT A COURTESY. It ran whenever
+    //    the pick was absent OR unresolvable, so the designs opened SYSTEM with a frame already on some
+    //    planet, a detail block naming it and a commit row reading `BURN TO <that planet>` — a target
+    //    the pilot never chose, armed, with `Enter` live. Clearing the selection (`_clearCommitSelection`
+    //    at `NavComputer.js:4592`) then changed nothing on the glass, so "the selection never clears"
+    //    was literally true. A guess that cannot be distinguished from a choice is not a default.
+    //    ⚠ AND AN UNRESOLVABLE PICK IS `null` TOO. A `planetIndex` that matches no row means the pick
+    //      and the body list disagree; drawing SOMETHING there is what hid that for a whole workstream.
+    //    ⭐ THE STAR IS A ROW OF THE SAME SHAPE AS A PLANET'S, so every reader that already walks a body
+    //      row — the detail block, the status line, the ladder frame, the orrery frame — reads it with
+    //      no new field and no new branch beyond `kind === 'star'`. `NavComputer.js:4567` has always
+    //      written `{ type: 'star', starIndex }` and this adapter has never had anywhere to put it, so
+    //      picking the star left the frame wherever the fallback had put it.
+    //    ⛔ `name` AND `cls` ARE NEVER `undefined`. Both designs call `.toUpperCase()` on them unguarded
+    //      (`d1Rail`'s detail block does it twice on one line) and a throw out of a painter is not a
+    //      blank field: `PanelHost` catches one ONCE and then stops uploading, so the glass freezes on
+    //      the last good frame and still looks alive. Same rule `buildBodies` states for its rows.
+    //    ⚠ `au: 0` IS TRUE OF A STAR AND IS WHAT THE LADDER NEEDS — `d1Ladder`'s virtual axis puts 0 AU
+    //      at the axis origin, which is where the star mark is drawn.
     const pick = nav._selectedBody;
     const pickP = pick ? (pick.planetIndex ?? pick.index) : null;
-    D.selBody = (pick && pick.type === 'planet'
-                   ? D.bodies.find((r) => r.kind === 'planet' && r.pIdx === pickP) : null)
-      || (pick && pick.type === 'moon'
-                   ? D.bodies.find((r) => r.kind === 'moon' && r.pIdx === pickP && r.mIdx === pick.moonIndex) : null)
-      || (D.bodies.find((r) => r.kind === 'planet' && r.hab != null && r.hab > 0.5)
-         || D.bodies.find((r) => r.kind === 'planet') || D.bodies[0] || null);
+    const starName = (D.sysStar?.name || D.sys?.star?.name || 'STAR');
+    const starCls = (D.sysStar?.spectral || D.sys?.star?.type || D.sys?.star?.spectral || 'STAR');
+    D.selBody = !pick ? null
+      : pick.type === 'star'
+        ? { kind: 'star', name: String(starName) || 'STAR', cls: String(starCls) || 'STAR',
+            au: 0, rE: null, T: null, hab: null, rings: false, moons: 0,
+            starIndex: pick.starIndex | 0 }
+      : pick.type === 'planet'
+        ? (D.bodies.find((r) => r.kind === 'planet' && r.pIdx === pickP) || null)
+      : pick.type === 'moon'
+        ? (D.bodies.find((r) => r.kind === 'moon' && r.pIdx === pickP && r.mIdx === pick.moonIndex) || null)
+      : null;
 
     D.ready = !!(D.gm && D.player);
     return { S, D };

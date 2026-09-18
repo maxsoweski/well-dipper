@@ -27,7 +27,11 @@ import { projRect, worldAt, pickBody, pickOrbitRing, pickSector, gridNFallback }
 import { simClockMs, _setSimClockMs } from '../../core/SimClock.js';
 /** ⛔ THE HOST'S OWN PAN SCALE, IMPORTED. `_handleMouseMove`'s 2D branch converts texels to kpc with
  *  `_viewSize / navMapSize(w, h)`; a test restating that ratio would be a second copy of the
- *  production layout and would go stale silently. Only the DRAG in the design-1 clip case needs it. */
+ *  production layout and would go stale silently. Only the DRAG in the design-1 clip case needs it.
+ *  ⭐ AND SINCE AC-6 (nav-defects-batch-2026-09-18) THAT IS THE *LEGACY* RATIO ONLY: under a design
+ *  the host asks `drv.panKpcPerTexel()` instead, so the drag case below derives from the driver and
+ *  falls back to this. Kept because the fallback is the honest statement of "no published
+ *  projection" and because a hard-coded 160 here would be exactly the second copy this warns about. */
 import { navMapSize } from '../navLayout.js';
 
 /** ⭐ THE LAB'S OWN INK, READ OFF THE DESIGN CODE. A pinned `'#d8fbff'` here would be a second copy
@@ -527,8 +531,12 @@ describe("design 2's locator centres the frame on the player", () => {
     // Absolute against the paint: `drawDesign2` aligns the locator's right edge at `W - 4` and draws
     // it on row 1 of the topbar. Both are the design's own literals, so a band that drifted anywhere
     // fails here rather than passing on "a texel two inside it hit something".
-    // ⛔ AND THE EAT IS THE RETURN VALUE, AT ALL FOUR LEVELS THAT HAVE ONE. `null` is "the mode took
-    //    it"; SYSTEM answers a POINT, which is §8b's open item and not an omission.
+    // ⛔ AND THE EAT IS THE RETURN VALUE, AT ALL FIVE LEVELS. `null` is "the mode took it".
+    // ⭐ UPDATED 2026-09-18 FOR AC-9 (nav-defects-batch). SYSTEM used to answer a POINT — §8b's
+    //    "not eaten" — and the consequence was not what §8b intended: the point fell through to the
+    //    top bar, where the level-4 empty-space branch (`NavComputer.js:4592`) THREW THE BODY
+    //    SELECTION AWAY. Clicking a read-only locator band cleared the pilot's pick. AC-9 eats the
+    //    click at 4 as well, doing nothing, until Max rules what it should do there.
     const { nav, drv } = await loadedNav({ mode: 'bars' });
     const W = nav._canvas.width, H = nav._canvas.height;
     for (const level of [0, 1, 2, 3]) {
@@ -544,7 +552,8 @@ describe("design 2's locator centres the frame on the player", () => {
     }
     wideBinary(nav);
     const p4 = locPoint(drv);
-    expect(drv.remapClick({ x: p4.x, y: p4.y }, W, H), 'SYSTEM ate the locator click').not.toBe(null);
+    expect(drv.remapClick({ x: p4.x, y: p4.y }, W, H),
+      'SYSTEM let the locator click fall through — at 4 that clears the body selection').toBe(null);
   }, 60000);
 
   it('⭐⭐ AT GALAXY IT EASES THE FRAME ONTO THE PLAYER — and the ease actually lands', async () => {
@@ -645,19 +654,27 @@ describe("design 2's locator centres the frame on the player", () => {
     expect(nav._loadedYMin, 'the prism loader kept the band it had already fetched').toBe(null);
   }, 60000);
 
-  it('⛔ AT SYSTEM IT IS NOT EATEN AND CHANGES NOTHING — §8b leaves that one to Max', async () => {
+  it('⛔ AT SYSTEM IT IS EATEN AND CHANGES NOTHING — AC-9 closes what §8b left open', async () => {
+    // ⭐ REWRITTEN 2026-09-18 FOR AC-9 (nav-defects-batch). §8b recorded "not eaten" as a decision and
+    //    this case pinned it; what it could not see is what the fall-through then DID. The point went
+    //    on to the top bar and `NavComputer.js:4592` — level 4's empty-space branch — cleared the body
+    //    selection. "Changes nothing" was true of the camera and false of the pick. AC-9 eats the
+    //    press at 4 so BOTH hold, and the selection assertion below is the half that was missing.
     const { nav, drv } = await loadedNav({ mode: 'bars' });
     wideBinary(nav);
     const p = locPoint(drv);
     const centre = { ...nav._localCenter };
     // ⛔ THE RETURN VALUE IS THE OBSERVABLE: `null` is "the mode ate it" and a point is "the handler
-    //    carries on". At every other level this band answers `null`.
+    //    carries on". This band now answers `null` at every level, 4 included.
     expect(drv.remapClick({ x: p.x, y: p.y }, nav._canvas.width, nav._canvas.height),
-      'SYSTEM ate the locator click').not.toBe(null);
+      'SYSTEM let the locator click through to the handler').toBe(null);
+    nav._selectedBody = { type: 'planet', planetIndex: 0 };
     nav._handleMouseMove({ clientX: p.x, clientY: p.y });
     clickAt(nav, p.x, p.y);
     expect(nav._viewEase, 'SYSTEM armed a re-centre nobody agreed').toBeFalsy();
     expect(nav._localCenter).toEqual(centre);
+    expect(nav._selectedBody, 'the locator click threw the pilot\'s body selection away')
+      .toEqual({ type: 'planet', planetIndex: 0 });
   }, 60000);
 
   it("⛔ AND `recentreOnPlayer()` REFUSES SYSTEM ON ITS OWN — the exported contract, not remapClick's", async () => {
@@ -1066,12 +1083,20 @@ describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
     // stays inside — derived from the published projection, `toX(left) = ox - 2`. It has to STRADDLE:
     // pan far enough and the intersection is empty and the design correctly draws nothing, which
     // would make the clip assertion below vacuous.
+    // ⭐ TWO THINGS MOVED HERE ON 2026-09-18, BOTH BECAUSE THE FIXTURE ENCODED A DEFECT.
+    //   (a) AC-3: the host no longer scales a design's pan by `_viewSize / navMapSize` (160 texels)
+    //       but by the DRAWN map — design 1's square is 216 — so a derivation off the legacy ratio
+    //       lands the frame 1.35x too far and this case's own assertion fires. The number now comes
+    //       from the same method the host calls, with the legacy ratio as the no-projection fallback.
+    //   (b) AC-4: the press was at `clientX: 300`, which at 417 wide is on design 1's RAIL (x 264..413),
+    //       not on its map (x 0..252). A press on chrome no longer arms a pan — correctly — so the
+    //       drag moved nothing at all. It now presses at the fixture's own map point `x`.
     const overshootKpc = (p.size * 2) / r.w;
     const targetCx = sec.centerX - sec.size / 2 + p.size / 2 + overshootKpc;
-    const scale = nav._viewSize / navMapSize(W, H);
+    const scale = drv.panKpcPerTexel() ?? (nav._viewSize / navMapSize(W, H));
     const dxTexels = -(targetCx - nav._viewCenter.x) / scale;      // `_viewCenter.x = start.x - dx`
-    nav._handleMouseDown({ clientX: 300, clientY: y, button: 0 });
-    nav._handleMouseMove({ clientX: 300 + dxTexels, clientY: y });
+    nav._handleMouseDown({ clientX: x, clientY: y, button: 0 });
+    nav._handleMouseMove({ clientX: x + dxTexels, clientY: y });
     nav._handleMouseUp();
     nav.render();
     expect(nav._viewCenter.x, 'the pan did not move the frame where the derivation said')

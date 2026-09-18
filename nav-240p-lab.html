@@ -925,14 +925,30 @@ function drawDesign1(g, W, H) {
   const hints = [`CLICK A SECTOR OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
                  `CLICK A TILE OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
                  `CLICK A TILE OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
-                 `CLICK A STAR OR A LIST ROW   ${sortHint}   / SEARCH   WASD PAN`,
+                 // ⭐ AC-12 — `R` AND `F` RAISE AND LOWER THE PRISM CAMERA AND NOTHING SAID SO. They
+                 // are bound at PRISM and only at PRISM, they move the picture Max is looking at, and
+                 // this row is the only place design 1 names a key.
+                 // ⛔ AND `OR A LIST ROW` PAID FOR IT, WHICH IS A MEASUREMENT AND NOT A PREFERENCE.
+                 //    At 417 the hint row is 69 characters. With the longest key this level owns
+                 //    (`CATALOG`, `SORT_KEYS[3]`) the old row is already 67; adding `   R/F UP` makes
+                 //    76 and `fit()` truncates from the RIGHT — so the new promise would disappear at
+                 //    exactly the moment a pilot sorted by anything. Dropping the clause that names
+                 //    the rail (which is DRAWN, two texels to the right, with its rows highlighted)
+                 //    leaves 62 at the worst key. A row that fits is the only kind that can be read.
+                 `CLICK A STAR   ${sortHint}   / SEARCH   WASD PAN   R/F UP`,
                  // ⭐ THE SCROLL CONTROLS ARE NAMED ONLY WHEN THE LADDER HAS SOMEWHERE TO SCROLL. `d1Ladder`
                  // has already run (the map pane paints before this row), so `S.ladderMax` is this
                  // frame's own answer: 0 means no `...` cap is drawn and `,` / `.` move nothing, and a
                  // hint naming a click target that is not on the glass is the lie AC-10 sweeps for.
                  // Measured 2026-09-08: Sol's 15 stops end at 222 against a 226-texel window at Max's
                  // 417x240, so on Sol this row reads `SELECT A BODY   [ ] SORT AU   TAB LEVEL`.
-                 `SELECT A BODY   ${(S.ladderMax || 0) > 0 ? 'SCROLL , . OR CLICK ...   ' : ''}${sortHint}   TAB LEVEL`];
+                 // ⭐ AC-12 — `/` OPENS THE DRAWN SEARCH AT SYSTEM TOO, AND THIS ROW NEVER SAID SO.
+                 // ⛔ `TAB LEVEL` PAID FOR IT, AND ONLY ON THIS ROW. With the ladder overflowing and
+                 //    the longest key this level owns the row is already 65 characters of 69; adding
+                 //    `   / SEARCH` makes 78. The tab strip is drawn on the very next row with the
+                 //    active tab filled, so TAB is the one control on this row a pilot can SEE, and
+                 //    the strip's own legend (below) names SHIFT+TAB. The other four rows keep it.
+                 `SELECT A BODY   ${(S.ladderMax || 0) > 0 ? 'SCROLL , . OR CLICK ...   ' : ''}${sortHint}   / SEARCH`];
   // ⭐ AND WHILE THE DRAWN SEARCH IS OPEN THE ROW NAMES THE SEARCH'S OWN CONTROLS. The field takes
   // the rail, so the row that would say "CLICK A LIST ROW" would be naming rows that are not there.
   // ⛔ ESC CLOSES AND ONLY CLOSES — it must never also drill a level, which is the one behaviour the
@@ -955,16 +971,50 @@ function drawDesign1(g, W, H) {
     //   driver refuses the level on the same flag, so the tab looks and acts disabled off ONE value.
     else T(g, lbl, lx, ry(rows - 2), { color: (i === 4 && S.noSystem) ? INK.RULE : INK.DIM, rgn: 'tabs', what: 'tab ' + name });
   });
-  const counts = [`${D.sectorRows.length} SECTORS`, '64 TILES', '256 TILES',
-                  `${D.stars.length} STARS`, `${D.bodies.length} BODIES`][S.level];
-  T(g, fit(counts, W - 5 * tabW - 2), W - 1, ry(rows - 2), { color: INK.DIM, align: 'right', rgn: 'tabs', what: 'level counts' });
+  // ⭐⭐ AC-12 — THE FREE RUN RIGHT OF THE FIFTH TAB NOW NAMES THE THREE KEYS NO ROW EVER NAMED.
+  //    `V` cycles the whole look, `SHIFT+TAB` walks back up the drill and `ESC` is the way out — all
+  //    three bound in every design at every level, and all three invisible until a pilot was told.
+  //    ⭐ AND THIS IS THE ROW THEY BELONG ON: it is the tab strip, so the key that moves between tabs
+  //    is legible beside the tabs it moves between.
+  // ⛔ THE LEVEL COUNTS GAVE UP THIS RUN, AND THEY ARE NOT LOST — MEASURED. The run is 207 texels at
+  //    417 (five 42-texel tabs); the legend is 197 and the counts up to 71, so the two cannot share
+  //    it at any spelling. `d1Rail` already draws the SAME number as its header's right-hand column
+  //    (`SECTORS 775`, `TILES 64`, `TILES 256`, `STARS 12/27K`, `BODIES 9`) at every level, four
+  //    texels to the right of where this row printed it — so what is removed here is the SECOND copy
+  //    of a readout, which is the shape this codebase names as a defect everywhere else.
+  // ⛔ AND IT IS NOT DRAWN OVER THE DRAWN SEARCH'S OWN LEGEND. `d1Search` takes the rail, not this
+  //    row, so the strip keeps saying what it always says; `SEARCH_HINT` names ESC for the FIELD.
+  const legend = 'V LOOK  SHIFT+TAB BACK  ESC CLOSE';
+  T(g, fit(legend, W - 5 * tabW - 2), W - 1, ry(rows - 2), { color: INK.DIM, align: 'right', rgn: 'tabs', what: 'global legend' });
 
   // ── COMMIT, full width ───────────────────────────────────────────────────────────────────────
   const cur = isHere();
-  const label = cur ? `BURN TO ${(D.selBody?.name || '—').toUpperCase()} · ${(D.selBody?.au ?? 0).toFixed(2)} AU · ENTER`
+  // ⭐ AC-2 — A SELECTION CAN BE NOTHING, AND THE ROW HAS TO BE ABLE TO SAY SO. `D.selBody` was
+  // resolved to a fallback planet whenever nothing was picked, so this row has never drawn an
+  // unarmed state at home: it said `BURN TO <some planet>` over a selection the pilot never made.
+  // With `state.js` now publishing `null`, the row reads as a PROMPT and the bar drops to the rule's
+  // own ink — the same "drawn but not live" treatment design 2's chip already gives its `armed`.
+  // ⚠ SCOPED TO HOME ON PURPOSE. `!cur || …` leaves levels 0-3 exactly as they were, including the
+  //   full TARGET bar with no target armed; that is design 2's chip's business (`armed` there reads
+  //   `D.target`) and changing it here would move a picture no AC in this batch asked about.
+  // ⛔ AND A STAR IS NOT A PLANET: `au` on a star row is 0 by construction, so `0.00 AU` would be a
+  //    number the instrument does not mean. The star names its CLASS in the same slot instead.
+  const armed = !cur || !!D.selBody;
+  const label = cur ? (D.selBody
+                        ? `BURN TO ${(D.selBody.name || '—').toUpperCase()} · ${D.selBody.kind === 'star'
+                            ? (D.selBody.cls || 'STAR').toUpperCase() : `${(D.selBody.au ?? 0).toFixed(2)} AU`} · ENTER`
+                        : 'SELECT A BODY TO BURN')
                     : `WARP TO ${(D.target?.name || '—').toUpperCase()} · ${(D.target?.ly || 0).toFixed(1)} LY · ENTER`;
-  rect(g, 0, ry(rows - 1) - 1, W, LEAD, cur ? INK.YOU : INK.TARGET);
-  T(g, fit(label, W - 4), W / 2, ry(rows - 1), { color: INK.BG, align: 'center', rgn: 'commit', what: 'commit label' });
+  // ⭐⭐ AC-11 — THE BAR STARTS AT `ry(rows - 1)`, NOT ONE TEXEL ABOVE IT.
+  //    `region('commit', …)` above declares row 39 (y 234 at 240p) and `geometry.js`'s `commitY` says
+  //    the same, but this fill started at 233 — which is the LAST row of the tab band
+  //    (`tabY = (rows-2)*LEAD = 228`, band 228-233). So the top row of the drawn commit bar answered
+  //    the tab strip's hit-test: at SYSTEM a press on what looks like BURN changed level instead.
+  //    Moving the fill down one texel makes the button the pilot sees and the button the driver tests
+  //    the same rectangle. ⚠ Nothing else moves: the LABEL was already drawn at `ry(rows - 1)`, and
+  //    240 / LEAD 6 leaves exactly six rows here, so 234-239 is the last full row on the glass.
+  rect(g, 0, ry(rows - 1), W, LEAD, armed ? (cur ? INK.YOU : INK.TARGET) : INK.RULE);
+  T(g, fit(label, W - 4), W / 2, ry(rows - 1), { color: armed ? INK.BG : INK.DIM, align: 'center', rgn: 'commit', what: 'commit label' });
 }
 
 /**
@@ -1361,6 +1411,13 @@ function d1Ladder(g, mapW, mapY, mapH) {
   // ⭐ THE SYSTEM STAR IS A TARGET. It is the one mark on this ladder a pilot will certainly click,
   // and `ref: null` with `star: true` is how the picker tells it from a row of `D.bodies`.
   if (vis(sx(0))) hits.push({ x: sx(0), y: axisY, r: 4, ref: null, moon: -1, star: true });
+  // ⭐ AC-2 — AND WHEN THE STAR IS WHAT IS SELECTED, THE FRAME FOLLOWS IT. The mark was already a
+  // target the picker offers (`star: true`, above), but nothing on this ladder could SHOW that the
+  // pick had landed: `D.selBody` only ever held a planet or a moon, so clicking the star left the
+  // frame sitting on whichever planet was selected before — the defect AC-2 names.
+  // ⛔ THE SAME 9x9 AT THE SAME `r = 4`, so the frame and the hit radius stay one number apart from
+  //    each other, and `INK.TARGET` because that is the ink every other selected body here wears.
+  if (vis(sx(0)) && D.selBody?.kind === 'star') frame(g, sx(0) - 4, axisY - 4, 9, 9, INK.TARGET);
   const z = D.sys?.zones;
   if (z) {
     const a2 = Math.max(x0, sx(vpx(z.hzInnerAU))), b2 = Math.min(x1, sx(vpx(z.hzOuterAU)));
@@ -1522,7 +1579,19 @@ function d1Rail(g, x, y, w, cols, rowCount) {
            `${rpad(b.au.toFixed(2), 5)} ${rpad(b.T ? Math.round(b.T) + 'K' : '—', 5)}`,
       bar: 0, sel: b === D.selBody }));
     const b = D.selBody;
-    if (b) detail.push([fit(b.name.toUpperCase(), w), INK.KEY], [b.cls.toUpperCase(), INK.BODY],
+    // ⭐⭐ AC-2 — THE TWO STATES THIS BLOCK COULD NOT DRAW, AND WHY SILENCE WAS THE WRONG ANSWER.
+    //    `if (b)` was already here, so a null selection drew NOTHING — seven blank rows under the
+    //    pager, which on a 240p glass reads as "the instrument is still thinking", not as "nothing is
+    //    selected". `state.js` never produced that state (it resolved to a fallback planet), so the
+    //    branch was untested; now that null is reachable the block has to SAY the thing.
+    // ⛔ ONE LINE, NOT SEVEN EM-DASHES. A `RADIUS —  ORBIT —  TEMP —` skeleton would be the readout
+    //    of a body that does not exist, which is the failure `d1Rail`'s sector branch already names.
+    // ⭐ AND A STAR GETS ITS OWN THREE ROWS. Fed through the planet form it would print `ORBIT 0.00
+    //   AU` and `MOONS 0` — four plausible numbers about the thing every orbit is measured FROM.
+    if (!b) detail.push(['NO BODY SELECTED', INK.DIM]);
+    else if (b.kind === 'star') detail.push([fit((b.name || '—').toUpperCase(), w), INK.KEY],
+      [(b.cls || '').toUpperCase(), INK.BODY], ['PRIMARY', INK.DIM]);
+    else if (b) detail.push([fit(b.name.toUpperCase(), w), INK.KEY], [b.cls.toUpperCase(), INK.BODY],
       [`RADIUS ${b.rE ? b.rE.toFixed(2) + ' EARTH' : '—'}`, INK.BODY],
       [`ORBIT  ${b.au.toFixed(2)} AU`, INK.BODY],
       [`TEMP   ${b.T ? Math.round(b.T) + ' K' : '—'}`, INK.BODY],
@@ -1688,6 +1757,36 @@ function drawDesign2(g, W, H) {
   //    `mapProj` / `prismHits` / `bodyHits`, and skipping it would leave the candidates from the
   //    frame BEFORE the search opened live under the overlay.
   if (S.search.open) d2Search(g, W, mapY, mapH);
+  // ⭐⭐ AC-12 — THE LEGEND ROWS, AND WHY THEY ARE ON THE MAP AND NOT IN A BAR.
+  //
+  // This design is two 8-texel bars and a sky, and BOTH BARS ARE FULL — measured, not assumed. The
+  // top bar is five tabs (203 texels at 417) plus the locator, which is already fitted into what is
+  // left. The bottom bar is `W - 8 - chipW - 4` = 364 texels, 60 characters, and the PRISM clause set
+  // alone is 68 before any of this — `fit()` is already eating the end of that row. There is no third
+  // bar to add without moving the picture Max ruled on, so the only surface left is the sky.
+  //
+  // ⛔ SO IT IS DRAWN AS STRUCTURE, NOT AS DATA: `INK.RULE`, the dimmest ink this design owns, the
+  //    one it uses for rules and for the disabled SYSTEM tab. Two rows at the pane's bottom-left, the
+  //    corner every one of the three map painters leaves emptiest. The design's premise survives —
+  //    no plate, no frame, no box, and no word that could be mistaken for a readout.
+  // ⛔ AND ONLY WHILE THE MAP IS ON THE GLASS. List mode and the drawn search REPLACE the pane with
+  //    full-pane content of their own, each with its own legend in the bar (`L=MAP`, `ESC CLOSE`), so
+  //    drawing this under them would be text over text. `S.list` is the same flag `d2List` runs on.
+  // ⭐ THE SYSTEM ROW IS LEVEL-4 ONLY, because those three are the only controls in this design bound
+  //    at exactly one level and drawn nowhere: the orrery answers a click, a drag turns it, and Enter
+  //    commits. Two 33-character rows do not fit one 417-texel row together, so they take one each.
+  // ⛔ IT SAYS `ENTER`, NOT `ENTER BURN`, AND THE CHIP IS THE REASON. `[BURN]` and `[WARP]` are the
+  //    SAME button under `isHere()` — browsing a foreign system from SYSTEM still arms a warp — so a
+  //    legend that said BURN would be wrong on every foreign system. The chip is drawn eight texels
+  //    below this row with the right word already on it; the legend names the key and lets the button
+  //    name the act, which is the one spelling that cannot go out of step with `S.chipRect.armed`.
+  if (!S.search.open && !(S.level === 3 && S.list)) {
+    const LEG = 'V LOOK  SHIFT+TAB BACK  ESC CLOSE';
+    const legY = mapY + mapH - FACE.h - 1;
+    if (S.level === 4) T(g, fit('SELECT A BODY  DRAG ROTATE  ENTER', W - 8), 4, legY - (FACE.h + 1),
+                         { color: INK.RULE, rgn: 'map', what: 'system legend' });
+    T(g, fit(LEG, W - 8), 4, legY, { color: INK.RULE, rgn: 'map', what: 'global legend' });
+  }
 
   // ── TOP BAR: tabs left, ONE locator right.  "Where am I" is answered here and nowhere else —
   //    today it is answered five ways in three visual languages.
@@ -1750,15 +1849,36 @@ function d2Status() {
     `${ps ? fmtK(estStars(ps.centerX, ps.centerZ, ps.size)) : '—'} SYSTEMS`, 'CLICK TO ENTER'];
   if (S.level <= 2) return [LEVELS[S.level], (D.playerSector?.name || '').toUpperCase(),
     `${rankMax(d1TileRows(levelView(S.level), levelView(S.level).n))} SYSTEMS IN BEST TILE`, 'CLICK TO ENTER'];
+  // ⭐⭐ AC-12 — LIST MODE NAMES THE TWO KEYS THAT ONLY WORK IN LIST MODE. `[` `]` re-order the list
+  //    and `-` `=` page it; both are bound at PRISM, both were bound at every OTHER level too (AC-5
+  //    takes that away), and neither has ever been printed in this design. This bar is the only place
+  //    design 2 says anything, so a key not named here is a key that does not exist for the pilot.
+  // ⛔ `ENTER TO WARP` PAID FOR THEM, AND IT IS THE CLAUSE THAT COULD AFFORD TO GO — MEASURED. The
+  //    bar is `W - 8 - chipW - 4` = 364 texels at 417, 60 characters. With the longest key this level
+  //    owns (`CATALOG`) the new row is 58; keeping `ENTER TO WARP` makes 74 and `fit()` truncates
+  //    from the right, which would eat the very clauses this AC adds. And the commit chip is drawn at
+  //    the right-hand end of this same bar, lit, reading `[WARP]` — Enter's promise is a BUTTON here,
+  //    two texels away, which is more than the other five clauses can say for themselves.
+  // ⛔ AND `PRISM LIST` LOST ITS FIRST WORD FOR THE LAST 6 CHARACTERS: 58 of 60 at the worst key, and
+  //    the tab strip is drawn across the top of this same frame with PRISM filled, which is where
+  //    this design says which level is on the glass in the first place.
   if (S.level === 3) return S.list
-    ? ['PRISM LIST', `NEAREST ${D.starRows.length}`, 'L=MAP', 'ENTER TO WARP']
+    ? ['LIST', `NEAREST ${D.starRows.length}`, 'L=MAP', d2SortHint(), '- = PAGE']
     : ['PRISM', `VIEW ${(S.cam.radius * 2000).toFixed(1)} PC ACROSS`, `${D.stars.length} STARS`,
        'L=LIST', 'WASD PAN', 'R/F UP'];
   const b = D.selBody;
+  // ⭐ AC-2 — THREE STATES, NOT ONE. `null` already had its clause pair and was unreachable until
+  // `state.js` stopped inventing a fallback; the STAR is new, and it is not run through the planet
+  // form for the reason `d1Rail`'s detail block gives — `0.00 AU` and `0 MOONS` about the body every
+  // orbit is measured from are four plausible numbers the instrument does not mean.
+  if (b && b.kind === 'star') return [(b.name || '—').toUpperCase(), (b.cls || '').toUpperCase(), 'PRIMARY'];
   return b ? [b.name.toUpperCase(), b.cls.toUpperCase(), `${b.au.toFixed(2)} AU`,
               b.T ? `${Math.round(b.T)} K` : '—', `${b.moons} MOONS`, ...(b.rings ? ['RINGED'] : [])]
            : ['SYSTEM', 'NO BODY SELECTED'];
 }
+/** The active sort key, named — design 1's hint row builds the same string inline (`sortHint` there).
+ *  Empty is the honest default: with no key on, the row degrades to `[ ] SORT`. */
+function d2SortHint() { return S.sortLabel ? `[ ] SORT ${S.sortLabel}` : '[ ] SORT'; }
 function d2TwoD(g, W, mapY, mapH) {
   const v = levelView(S.level);
   // ⭐ FULL BLEED WITH SQUARE WORLD PIXELS.  NavGalaxyRenderer/GalaxyLuminosityRenderer are square by
@@ -2057,6 +2177,13 @@ function d2System(g, W, mapY, mapH) {
   }
   sprite(g, cxp, cyp, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
   hits.push({ x: cxp, y: cyp, r: 4, ref: null, moon: -1, star: true });
+  // ⭐ AC-2 — THE FRAME SITS ON THE STAR WHEN THE STAR IS WHAT IS SELECTED. Same as `d1Ladder`: the
+  // primary has always been a target the picker offers (`star: true`, the line above) with no way to
+  // show that the pick landed, because `D.selBody` only ever held a planet or a moon. Same 9x9 at the
+  // same `r = 4`, same `INK.KEY` the selected planets wear, and its own `assertMark` — the pane
+  // centre cannot overflow the pane, but an unguarded mark is how the orrery's ring got off the glass.
+  if (D.selBody?.kind === 'star') { frame(g, cxp - 4, cyp - 4, 9, 9, INK.KEY);
+                                    assertMark('star selection frame', 'map', cxp - 4, cyp - 4, 9, 9); }
   D.bodies.filter((b) => b.kind !== 'moon').forEach((b, i) => {
     // ⭐⭐ THE PLANET'S REAL ORBITAL ANGLE, AND FIXING IT CLOSES A LIVE DEFECT.
     //    This was `i * 1.7 + 0.6` — the DRAW-LOOP INDEX, dressed as an angle. `D.bodies` is

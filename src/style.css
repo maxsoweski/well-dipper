@@ -1229,10 +1229,37 @@ body.hud-hidden #targeting-overlay {
   max-height: none;
 }
 
+/* ⭐⭐ AC-8 (nav-defects-batch-2026-09-18) — THE × SITS IN THE 20px BACKDROP BAND ABOVE THE PANEL,
+   AND THAT IS THE ONLY PLACE ON THIS OVERLAY THAT COVERS NOTHING.
+
+   Measured 2026-09-18: `top: -40px` on a panel that `.nav-computer-overlay`'s flex centring puts
+   20px below the viewport top placed a 40x40 button from viewport y -20 to y 20 — half of it above
+   the screen, unclickable, on legacy as well as under the designs.
+
+   ⛔ WHY NOT INSIDE THE GLASS. Every corner of the legacy canvas is already drawn on:
+   `CURRENT SYSTEM` at (16, 24) and the level name right-aligned at (w - 16, 24) with a stack of
+   readouts under it at baselines 42/58/74/90/106 (NavComputer.js:4216, :4263-:4296); the AUTOPILOT
+   toggle is a 140x24 box at (8, h - tabH - 32) (:4242); the five level tabs are a full-width strip
+   across the bottom (:4154); the PRISM minimap is a 60x160 widget at (w - 80, h - 220) (:3543).
+   An inset × lands on one of them at some level, so it goes in the letterbox instead — where the
+   contract's two demands, "fully inside the viewport" and "does not cover a drawn readout", are
+   both satisfied by construction rather than by a placement that happens to miss.
+
+   ⚠ THE BAND IS 20px, SO THE BUTTON IS 20px. `calc(100vh - 40px)` centred leaves exactly 20px above
+   the panel; `top: -20px` puts the button's top edge on viewport y 0 and its bottom edge on the
+   panel's top edge. The size, line-height and font-size below override the 40x40 base at :356 —
+   without them the base height would push it back off the top of the screen.
+   ⚠ THE `pointer: coarse` OVERRIDE BELOW IS DELIBERATELY LEFT ALONE: a 20px target is not a touch
+   target, and on a phone the button is inset over the glass on purpose (the mobile program owns
+   that rule). This batch changes the desktop placement only. */
 .nav-computer-panel .overlay-close {
   position: absolute;
-  top: -40px;
+  top: -20px;
   right: 0;
+  width: 20px;
+  height: 20px;
+  line-height: 18px;
+  font-size: 14px;
   z-index: 10;
 }
 
@@ -1273,6 +1300,21 @@ body.hud-hidden #targeting-overlay {
 .nav-computer-panel.nav-lowres {
   width: 100vw;
   height: 100vh;
+}
+
+/* ⛔ AND UNDER A DESIGN THE DOM × STANDS DOWN, FOR THE SAME REASON THE SEARCH BOX DOES BELOW.
+   AC-8 (nav-defects-batch-2026-09-18). Full bleed deletes the 20px letterbox the button was just
+   moved into, so the only placements left are over the glass — and a 40x40 full-resolution widget
+   on a 240p texel grid is roughly seven texels square of chrome sitting on design 1's status line
+   or design 2's tab strip, which is the defect this batch is fixing, not a fix for it.
+   ⭐ THE WAY OUT IS PRINTED INSTEAD: both designs name `ESC CLOSE` in their at-rest legend
+   (AC-12, drawn in nav-240p-lab.html and extracted into designs.js), so the control the pilot uses
+   is on the glass, in the glass's own resolution. AC-8's observable — "a visible close control
+   exists and closes the nav" — is met by the legend, not by this button.
+   ⚠ NO `!important` NEEDED, unlike `.nav-search-overlay` below: nothing writes `style.display` on
+   the × inline. `_toggleNavClose()` does not exist; `main.js:6156` only binds its click. */
+.nav-computer-panel.nav-lowres .overlay-close {
+  display: none;
 }
 
 /* ⛔ AND THE DOM SEARCH BOX STANDS DOWN, BECAUSE IT WAS SITTING ON THE CHROME.
