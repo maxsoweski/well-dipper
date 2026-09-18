@@ -1,0 +1,146 @@
+{
+  "workstream": "nav-defects-batch-2026-09-18",
+  "commit": "b3f7737",
+  "perLayer": {
+    "unit": "INSUFFICIENT",
+    "integration": "INSUFFICIENT",
+    "uat": "N/A"
+  },
+  "perAC": [
+    {
+      "id": "AC-1",
+      "result": "PASS",
+      "evidence": "Commit-row/chip click fix in navViewModes/index.js remapClick() now fires unconditionally at every level (0-4); legacy's own level-4-only gate in NavComputer.js untouched. 4/4 targeted vitest cases pass (single-worker run, after a full-suite fork crash forced isolation). contract.json still marks this live:true/'pending' — adversarial review judged the headless evidence sufficient anyway.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-2",
+      "result": "INSUFFICIENT",
+      "evidence": "Null-tolerant selBody + star-form fix (state.js/designs.js) confirmed by building an isolated copy of exact b3f7737 and running 10/10 targeted tests green, uncontaminated. Held INSUFFICIENT because contract.json marks this live:true, and during this very verification window a concurrent live session found and fixed a closely related real bug — home/foreign detection used a seed STRING vs hash NUMBER, so BURN/WARP armed wrong at home — landing as commit 48159e6, one commit after b3f7737. That fix postdates the code being verified here.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-3",
+      "result": "INSUFFICIENT",
+      "evidence": "Pan-scale-follows-drawn-map fix (navLayout.js / navViewModes/index.js panKpcPerTexel) confirmed in code and via 13/13 targeted headless tests reproducing the review's three named overshoot ratios. Held INSUFFICIENT by adversarial review; contract.json marks it live:true ('pending, coordinator'), and REVIEW-2026-09-18.md's still-open C15 (legacy prism-wheel clamp widened, unruled) touches the same 'legacy stays byte-identical' claim this AC leans on.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-4",
+      "result": "PASS",
+      "evidence": "onMap/pressStartsGesture gate (NavComputer.js press start + navViewModes/index.js driver answer) confirmed; 10/10 targeted tests pass across host+driver, covering both designs at every level plus the two drawn-handle exceptions. A same-run untargeted full-file pass hit unrelated AC-5 failures and concurrent-edit drift, but the targeted AC-4 run completed before that drift appeared.",
+      "adversarialVotes": "2/3 sufficient"
+    },
+    {
+      "id": "AC-5",
+      "result": "PASS",
+      "evidence": "Level-gates added at 5 named sites (comma/period, scrollLadder, list-key `[`]`-`=`, toggleList, listRowAt bars fallback) so ladder/list keys act only at their drawn level. 12/12 dedicated unit tests pass (7 host + 5 driver, isolated after an unrelated fork-teardown timeout on the full suite).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-6",
+      "result": "PASS",
+      "evidence": "KeyV save/restore of legacy camera angles (_legacyCam) confirmed in NavComputer.js; 157/157 tests pass across 3 files once re-run in isolation (a first contended run had produced spurious failures from a sibling process editing the same files). contract.json still marks this live:true; adversarial review judged headless evidence sufficient.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-7",
+      "result": "INSUFFICIENT",
+      "evidence": "contextmenu listener (preventDefault + same 25-texel drag threshold as the old right-click branch + handleEscape) confirmed in the NavComputer.js constructor; 7/7 targeted jsdom tests pass across all three looks. Held INSUFFICIENT because the defect and its fix concern real-browser secondary-button semantics (no native 'click' event fires) that jsdom only approximates, and contract.json marks it live:true, not yet driven with a real pointer.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-8",
+      "result": "INSUFFICIENT",
+      "evidence": "Close-button CSS reposition (top:-20px, now inside the viewport) and the nav-lowres full-bleed variant (DOM × hidden, canvas-drawn ESC legend as the stated equivalent) confirmed via a CSS-text unit test, 3/3 passing. That only proves the numbers compose correctly on paper — no real DOM/canvas render, click, or backdrop-click-to-close was exercised. contract.json marks this live:true, 'pending (coordinator).'",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-9",
+      "result": "PASS",
+      "evidence": "HERE·SECTOR locator (navViewModes/index.js) now unconditionally eats a SYSTEM-level click (recentre skipped; selection/frame/chip left untouched), with recentrePlayer()'s own independent level-4 refusal as a second gate. 10/10 targeted tests pass across two files.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-10",
+      "result": "INSUFFICIENT",
+      "evidence": "Star-multiplicity fill (`mult`) memoized by seed, plus the COMPS sort comparator, confirmed in state.js/designs.js; targeted tests 3/3 pass and a broader 58/76 run showed zero assertion failures (remaining gaps were vitest worker-fork crashes, a known WSL resource issue, not defects). Despite clean results, adversarial review returned 0/3 sufficient — the tree was not quiescent during the run (concurrent AC-2 edits mid-session). Recommend reproducing the pass in an isolated checkout, the technique already used for AC-2's authoritative run, before trusting it.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-11",
+      "result": "PASS",
+      "evidence": "Commit-bar/tab-band row separation (tabY=228 vs commitY=234 in geometry.js, drawn one texel apart in designs.js, hit-test ordering fixed in navViewModes/index.js) confirmed; extractor `--check` green; 2/2 targeted tests pass, including a real click-path case distinguishing the commit rect from the tab strip by one texel.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-12",
+      "result": "INSUFFICIENT",
+      "evidence": "All named key legends (design 1 PRISM/SYSTEM hints, both designs' 'V LOOK SHIFT+TAB BACK ESC CLOSE' legend, design 2's sort/page/list keys) confirmed in designs.js; 12/12 dedicated tests pass plus 55 more in adjacent suites (3 unrelated timeouts under memory pressure). Adversarial review returned only 1/3 sufficient, most likely for the same non-quiescent-tree reason as AC-10/AC-21 — recommend a clean isolated re-run before closing.",
+      "adversarialVotes": "1/3 sufficient"
+    },
+    {
+      "id": "AC-13",
+      "result": "PASS",
+      "evidence": "remapClick's new drag guard (refuses any point >5 texels from the recorded mousedown, keyboard-Tab exempted via synthClick) sits before every acting branch; 12/12 targeted tests pass covering the pager, the locator, and a drawn-search release. One gap disclosed, not tested directly: the list-header-sort and ladder-end-cap controls are inferred (not proven) safe by the same control-flow position.",
+      "adversarialVotes": "2/3 sufficient"
+    },
+    {
+      "id": "AC-14",
+      "result": "PASS",
+      "evidence": "deactivate() now delegates to the driver's onDeactivate(), which resets search/levelLag/levelArm/pick/listOffset while preserving sort/list/zoom preferences; 54/54 tests pass across the only 3 files in the repo that reference this path.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-15",
+      "result": "PASS",
+      "evidence": "_handleMouseUp now also clears _dragStartLadder (previously only re-armed, never released), closing the stale-ladder-scrub gap from review item C8. 5/5 targeted tests pass deterministically, reproducing the exact stale-press-then-later-SYSTEM-gesture sequence.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-16",
+      "result": "PASS",
+      "evidence": "KeyV now resets _systemMode/_selectedComponentIdx/_componentView whenever the NEW look is a design (not when returning to legacy). 5/5 targeted tests pass, and a mutation/liveness probe (deleting the fix on a scratch copy) reproduced exactly the AC's defect shape in 3/5 cases — confirms the tests are not vacuous.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-17",
+      "result": "PASS",
+      "evidence": "Math.round→Math.floor at all 4 named hit-test sites (search.js rowAt + 3 in navViewModes/index.js listRowAt), independently re-derived against the actual per-row draw offset rather than trusted from the diff's own comments. 9/9 targeted tests pass across 3 files.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-18",
+      "result": "PASS",
+      "evidence": "Design 2's SECTOR/REGION status line now measures its fixed clauses first and truncates only the variable sector name, preserving 'CLICK TO ENTER'; extractor --check green; 4/4 tests pass. The AC statement's own line-number citation is stale (file has grown since authoring) but the substantive fix and dedicated test agree.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-19",
+      "result": "PASS",
+      "evidence": "New clipBox/rectClip/frameClip/spriteClip primitives keep the YOU marker and target diamond inside the map pane at both the top-level 2D map and the band/block sub-view. A real 200-texel-pan test plus a mark-guard assertion (0 violations at GALAXY/SECTOR/REGION) pass; extractor sync confirmed.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-20",
+      "result": "PASS",
+      "evidence": "Ladder and rail now derive body letters from one shared AU-ordered function (d1LadderOrder/d1BodyTagger) independent of the active sort key; moons resolve to their parent's letter via the shared `au` field. A test driving the real `]` key through all 3 sort keys on a 5-planet/3-moon system confirms ladder tag == rail tag for every body under every sort.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-21",
+      "result": "INSUFFICIENT",
+      "evidence": "chord() gate (Ctrl/Meta/Alt) added to search's printable()/key() and to the V/L host handler, so those chords are neither typed into the query nor preventDefault'd; 6/6 targeted tests pass. Adversarial review returned 0/3 sufficient. Note: contract.json itself marks this AC only '◐ partial by design,' not '✅ built' — the WASDRF pan-key clause deliberately keeps eating Ctrl+W/Ctrl+R/Ctrl+S on purpose (letting them through would let a pilot close the tab or reload the game from inside a full-screen overlay). That looks like a documented, accepted scope exception rather than an open defect; the contract's acceptance text should say so explicitly rather than leave the AC reading as unmet.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-22",
+      "result": "PASS",
+      "evidence": "KeyV now runs the same gesture-release fields _handleMouseUp does (_dragging, _panStartCenter, gauge/counter drags, _dragStartLadder), so pressing V mid-drag ends the gesture instead of carrying stale coordinates into the new canvas buffer. 8/8 targeted tests pass, including the exact mismatched-CSS-box scenario (2021x1162 vs 417x240) from the original review.",
+      "adversarialVotes": "3/3 sufficient"
+    }
+  ],
+  "overall": "INSUFFICIENT. 15 of 22 ACs are clean with strong adversarial consensus (unit 12/15: AC-5,9,11,13-20,22; integration 3/7: AC-1,4,6). 4 integration ACs (AC-2,3,7,8) still need a real chrome-devtools pass — their own contract.json entries are marked live:true, \"pending (coordinator)\" — and 3 unit ACs (AC-10,12,21) have passing tests but were verified in a non-quiescent working tree, so they need a clean re-run before being trusted. No UAT-layer AC exists in this batch. Separately (outside this AC set): HEAD has already moved one commit past b3f7737 to 48159e6, a live fix for exactly AC-2's flagged gap, then to a handoff commit (ca792ab) claiming the full 22-defect batch is \"built and live-checked\" and asking Max to rule on 11 restoration items plus 4 pictures/2 decisions — that claim is not yet reflected in contract.json's stale per-AC progress notes and should be reconciled.",
+  "summaryForMax": "Verification of nav-defects-batch-2026-09-18 at b3f7737 (22 ACs, wave 1 + wave 2): 15 confirmed clean by 3-way adversarial review. 7 are unresolved verification, not known-broken code:\n\nIntegration (4 open — AC-2, AC-3, AC-7, AC-8): each has passing headless tests, but the AC's own contract marks it live:true because the defect is about real-browser behavior headless can't fully stand in for (secondary-button click semantics, close-button rendering, home/foreign identity). AC-2 in particular: the exact bug this verification worried about — home detection compared a seed STRING to a seed NUMBER, so BURN/WARP armed wrong at home — was found live and fixed one commit later, in 48159e6, already on this branch. That's a re-verify against current HEAD, not a live check starting from zero.\n\nUnit (3 open — AC-10, AC-12, AC-21): tests pass, but two of these got 0-1-of-3 adversarial votes because another process was live-editing the same files (the AC-2 fix above) while the check ran — recommend an isolated-checkout re-run rather than trusting a run made in a moving tree. AC-21 is different: contract.json already marks it \"◐ partial by design\" — WASDRF deliberately keeps eating Ctrl+W/Ctrl+R/Ctrl+S so a pilot can't close the tab or reload the game from inside the overlay. That's an accepted decision, not a gap; the contract text should say so.\n\nBigger picture: the branch has already moved past this to a handoff commit (ca792ab) declaring the whole batch \"built and live-checked\" and putting the ball in your court — four pictures + two decisions, and a ruling on 11 restoration items (13-23 on the nav-menu-map-old-vs-new page, docs/FEATURES/handoff-2026-09-18-nav-defects-batch.md). This AC-level check doesn't touch or close that; it's a separate, larger review already waiting on you.\n\nOpen items:\n- Working-Claude: drive live chrome-devtools checks for AC-3, AC-7, AC-8; re-verify AC-2 against current HEAD (48159e6+) instead of b3f7737.\n- Working-Claude: re-run AC-10/AC-12's unit suites in an isolated checkout for an uncontaminated pass.\n- Coordinator: update contract.json's \"Live checks pending\" progress notes against what's actually been driven, and rewrite AC-21's acceptance text to record the WASDRF exception as accepted rather than open.\n- You: the handoff's four pictures/two decisions and the 11 restoration-item ruling are still waiting, independent of this verification.",
+  "note": "verify-workstream FULL (90 agents) at b3f7737, 2026-09-18. The 7 INSUFFICIENT items are procedural (4 pending a live check that the coordinator drove the same day; 3 judged while the home-test fix 48159e6 was landing in the tree) — see the contract progress notes for the live evidence. No AC was judged broken."
+}

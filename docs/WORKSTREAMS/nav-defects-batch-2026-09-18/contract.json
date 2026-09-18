@@ -2,7 +2,7 @@
   "workstream": "nav-defects-batch-2026-09-18",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verifying",
   "acceptanceCriteria": [
     {
       "id": "AC-1",
@@ -13,7 +13,8 @@
       },
       "layer": "integration",
       "live": true,
-      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator).",
+      "status": "VERIFIED_PENDING_MAX"
     },
     {
       "id": "AC-2",
@@ -24,7 +25,8 @@
       },
       "layer": "integration",
       "live": true,
-      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator). ✅ LIVE 2026-09-18 (after the home-test fix 48159e6), design 2 at SYSTEM on Sol: D.selBody null on open with chip armed FALSE; a planet click → 'Sol-1', armed true, _commitAction burn; an empty click → null, armed false, _commitAction null; a press on the unarmed chip commits nothing. Design 1: unarmed row drawn with NO BODY SELECTED (capture rail-L4-noselect). verify-workstream at b3f7737 held this INSUFFICIENT precisely because the live finding landed one commit later — the finding IS the Sol string-seed isHere() defect, fixed in 48159e6 and pinned by 14/14 design cases.",
+      "status": "VERIFIED_PENDING_MAX"
     },
     {
       "id": "AC-3",
@@ -35,7 +37,8 @@
       },
       "layer": "integration",
       "live": true,
-      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator). ✅ LIVE 2026-09-18, design 2 at GALAXY (wide band): panKpcPerTexel 0.10552, a 60-texel drag moved _viewCenter.x by −6.314 against −6.331 expected (0.16 texel of client-px rounding). Design 1's 1.35× and design 2's 1.4×/2.6× overshoots are reproduced and killed headlessly (13/13). verify held it INSUFFICIENT only for the pending live check.",
+      "status": "VERIFIED_PENDING_MAX"
     },
     {
       "id": "AC-4",
@@ -46,7 +49,8 @@
       },
       "layer": "integration",
       "live": true,
-      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator).",
+      "status": "VERIFIED_PENDING_MAX"
     },
     {
       "id": "AC-5",
@@ -67,7 +71,8 @@
       },
       "layer": "integration",
       "live": true,
-      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator).",
+      "status": "VERIFIED_PENDING_MAX"
     },
     {
       "id": "AC-7",
@@ -78,7 +83,8 @@
       },
       "layer": "integration",
       "live": true,
-      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator). ✅ LIVE 2026-09-18 with a REAL secondary button through raw CDP (Input.dispatchMouseEvent button 'right'): design 2 at SYSTEM → PRISM (4 → 3); legacy at PRISM → REGION (3 → 2). No context menu (preventDefault). verify held it INSUFFICIENT only because jsdom cannot stand in for the secondary-button semantics — the CDP run is that evidence.",
+      "status": "VERIFIED_PENDING_MAX"
     },
     {
       "id": "AC-8",
@@ -89,7 +95,8 @@
       },
       "layer": "integration",
       "live": true,
-      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator). ✅ LIVE 2026-09-18: legacy × at viewport y 0-20 (the backdrop band above the panel), the element at its centre IS the button, and its DOM click closed the overlay; under both designs .overlay-close computes display:none and the legend prints ESC CLOSE (capture rail-L3-hint / bars-L4-legend — Max's eyes for legibility). verify held it INSUFFICIENT only for the pending live check.",
+      "status": "VERIFIED_PENDING_MAX"
     },
     {
       "id": "AC-9",
@@ -109,7 +116,7 @@
         "observable": "The multiple system's mark carries its pips; the rail/table COMPS column shows a number; the COMPS sort re-orders by it. `mult` is filled for every drawn row without a per-frame recomputation (cached per seed, or computed once per starRowsBase build) — frame time at PRISM does not regress."
       },
       "layer": "unit",
-      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator). ✅ BUILT wave 1 (STATE: seed-memoised mult, one call site shared with D.selStar; measured 0.97-1.6 µs/seed, ~53 ms for Sol's 42,511 rows spread over the loader's rebuilds). LIVE 2026-09-18 design 2 at PRISM: 16,140 rows, 5,577 with mult>1, 0 undefined, 11 drawn marks carrying pips (capture bars-L3). verify's 0/3 was the moving-tree caveat (my AC-2 edits landed mid-run); re-run alone after the tree settled: navDefects2026.driver 30/30, full src/ui 767/35 green."
     },
     {
       "id": "AC-11",
@@ -129,7 +136,7 @@
         "observable": "Each bound key at that level is named where it works: design 1 names / SEARCH and R/F UP at PRISM and / SEARCH at SYSTEM; design 2 names [ ] SORT <key> and - = PAGE where a list is drawn and a legend of its SYSTEM controls; both name V LOOK (or equivalent) and SHIFT+TAB somewhere the pilot sees at rest. No string overflows its row at 417 wide (fit() guard, no mark-guard violations)."
       },
       "layer": "unit",
-      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator). ✅ BUILT wave 1 (DESIGN, lab → extractor): 12/12 dedicated cases read the post-fit() strings off the recording face at every level, both designs, all eight sort keys; mark guard silent. LIVE captures for Max's eyes: rail-L3-hint (PRISM hint + the tab-strip legend V LOOK · SHIFT+TAB BACK · ESC CLOSE), bars-L4-legend (design 2's SYSTEM legend). verify's 1/3 was the moving-tree caveat; re-run alone: navDefects2026.design 14/14, full src/ui 767/35 green. ⚠ TRADE FOR MAX: design 1's tab-strip level counts and two hint clauses (OR A LIST ROW at PRISM, TAB LEVEL at SYSTEM) were cut to fit 417 texels; the count still prints in the rail header."
     },
     {
       "id": "AC-13",
