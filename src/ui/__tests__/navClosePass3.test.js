@@ -280,6 +280,14 @@ describe("design 1's pager row is two halves", () => {
     const { nav, drv } = await loadedNav();
     const r = drv.S.pagerRect;
     const off = drv.S.listOffset;
+    // ⛔ THE PRESS IS PART OF THE QUESTION (AC-13, nav-defects-batch-2026-09-18). `remapClick`
+    //    now returns null before every acting branch when the point lies more than 5 texels from
+    //    `_dragStartX`/`_dragStartY`, so that a release which ended a pan operates nothing. Asked
+    //    BARE, this probe measured its point against the constructor's (0, 0) (NavComputer.js:290-291)
+    //    and was correctly answered "that was a drag". A real click always arrives after
+    //    `_handleMouseDown` wrote both fields (:4399-4400) — which is exactly what `clickAt` below
+    //    does — so the press is restored here and the bare probe asks the shipped path's question.
+    nav._handleMouseDown({ clientX: r.x1 - 2, clientY: r.y + r.h, button: 0 });
     expect(drv.remapClick({ x: r.x1 - 2, y: r.y + r.h }, nav._canvas.width, nav._canvas.height),
       'the band ate a click one texel below it').not.toBe(null);
     nav._handleMouseMove({ clientX: r.x1 - 2, clientY: r.y + r.h });
@@ -743,6 +751,10 @@ describe('the corner widget lets its starfield through; the companion strip does
     nav._handleMouseMove({ clientX: inside.x, clientY: inside.y });
     expect(nav._hoveredLocalStar, 'the widget went back to eating the hover under it').toBeTruthy();
     nav._selectedNavStar = null;
+    // ⛔ THE PRESS IS PART OF THE QUESTION — see the note on the pager's bottom-edge case above
+    //    (AC-13): a bare `remapClick` with no press before it is measured against (0, 0) and read as
+    //    the release of a drag. `clickAt` below performs this same press itself.
+    nav._handleMouseDown({ clientX: inside.x, clientY: inside.y, button: 0 });
     expect(drv.remapClick({ x: inside.x, y: inside.y }, W, H),
       'the widget ate a press on a star the pilot can see').not.toBe(null);
     clickAt(nav, inside.x, inside.y);
@@ -782,6 +794,10 @@ describe('the corner widget lets its starfield through; the companion strip does
     const r = drv.S.companionRect;
     expect(r, 'a 500 AU binary must draw and publish the companion strip').toBeTruthy();
     const below = { x: r.x + 2, y: r.y + r.h };
+    // ⛔ THE PRESS IS PART OF THE QUESTION — see the note on the pager's bottom-edge case above
+    //    (AC-13): a bare `remapClick` with no press before it is measured against (0, 0) and read as
+    //    the release of a drag. `clickAt` below performs this same press itself.
+    nav._handleMouseDown({ clientX: below.x, clientY: below.y, button: 0 });
     expect(drv.remapClick(below, nav._canvas.width, nav._canvas.height),
       'the strip ate a press one texel below the band it published').not.toBe(null);
   }, 60000);

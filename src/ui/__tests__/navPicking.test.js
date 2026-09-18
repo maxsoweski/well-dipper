@@ -105,6 +105,33 @@ const rowPoint = (drv, i) => {
   return { x: lg.x0 + 4, y: lg.top + (i + 1) * lg.lead };
 };
 
+/**
+ * ⭐ THE BAND A DRAWN ROW OWNS — its first texel and its last (AC-17 / REVIEW C16-C17).
+ *
+ * Drawn row `i` occupies `[top + (i+1)*lead, top + (i+2)*lead)`: the glyph rows plus the lead gap
+ * below them, which is what the pilot sees as "the row". `rowPoint` above hands back the FIRST texel
+ * of that band and nothing else, and that single texel is the one `Math.round` and `Math.floor`
+ * agree on — so every case in this file could pass while the bottom 2 of every 6 texels of every
+ * rail, list and search row picked the row BELOW, which is exactly what shipped. The band's two
+ * edges, and the texel immediately above it, are the probes that tell the two apart.
+ */
+const rowBand = (drv, i) => {
+  const lg = drv.S.listGeom;
+  return { x: lg.x0 + 4, top: lg.top + (i + 1) * lg.lead, bottom: lg.top + (i + 2) * lg.lead - 1 };
+};
+
+/**
+ * Put the pointer there and let a FRAME resolve it (trap 4 — the hover resolves at the tail of the
+ * driver's `render()`), then hand back what the class is holding.
+ *
+ * ⛔ THE `render()` IS LOAD-BEARING FOR A MISS. `_handleMouseMove` alone leaves the LEGACY pass's
+ * answer standing when the driver resolves nothing — measured: the texel above rail row 0 reports
+ * `{col:6,row:0}` off the legacy full-canvas projection with no frame, and `null` with one. A band
+ * probe that skipped the frame would read "nothing" as "some tile" and could not fail.
+ */
+const hoverTile = (nav, x, y) => { nav._handleMouseMove({ clientX: x, clientY: y }); nav.render(); return nav._hoveredTile; };
+const hoverStar = (nav, x, y) => { nav._handleMouseMove({ clientX: x, clientY: y }); nav.render(); return nav._hoveredLocalStar?.star?.seed; };
+
 /** A published mark with no other mark inside its own radius, so the pick is unambiguous. */
 function isolatedHit(hits) {
   return hits.find((a) => hits.every((b) => b === a || Math.hypot(a.x - b.x, a.y - b.y) > a.r + b.r + 1));
@@ -317,6 +344,72 @@ describe('the map picks a TILE at SECTOR and REGION', () => {
       const target = level === 1 ? nav._viewStack[2].center : nav._localCenter;
       expect(target.x, 'the rail row did not drill to its own tile')
         .toBeCloseTo(nav._viewCenter.x - ext + (tiles[1].i + 0.5) * tile, 9);
+    });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// 2b. ⛔⛔ AC-17 (REVIEW C16/C17) — A ROW OWNS EXACTLY THE BAND IT WAS DRAWN IN.
+//
+// `listRowAt` and `search.rowAt` both resolved the row with `Math.round((y - top - lead) / lead)`,
+// which centres the hit band half a lead ABOVE the drawn row: with `lead` 6 the band ran
+// `[top+(i+0.5)*lead, top+(i+1.5)*lead)`, so the bottom 2 of every 6 texels of every rail row, list
+// row and search result picked the row BELOW — and the highlight under the cursor still said the
+// right one. Every existing case in this file aimed at `rowPoint`, which is the band's FIRST texel,
+// and that is the one texel round and floor agree on; none of them could have failed.
+//
+// ⭐ THESE PROBES ASSERT AN ABSOLUTE FACT, NOT A NEIGHBOUR RELATION: at L1/L2 the rail row's tile is
+// `{col: tiles[i].i, row: n-1-tiles[i].j}` off the paint's own `S.railTiles`, and at PRISM the row's
+// star is `D.starRows[offset+i]`. Both edges of the band, the texel above it, and the two texels
+// outside the list entirely.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('a drawn row owns the whole band it was drawn in, and nothing outside it', () => {
+  for (const level of [1, 2]) {
+    it(`⛔ L${level} rail: the top AND bottom texel of row i are row i; the texel above is row i-1`, { timeout: 30000 }, async () => {
+      const { nav, drv } = await loadedNav();
+      nav._levelIndex = level;
+      nav.render();
+      const lg = drv.S.listGeom, tiles = drv.S.railTiles, gn = drv.S.mapProj.n;
+      expect(lg?.lead, "the band arithmetic needs the paint's own lead").toBeGreaterThan(1);
+      expect(lg.rows, 'the sample needs rows either side of the ones probed').toBeGreaterThan(4);
+      expect(tiles.length, 'the rail must publish a tile per drawn row').toBeGreaterThanOrEqual(lg.rows);
+      const tileOf = (i) => ({ col: tiles[i].i, row: gn - 1 - tiles[i].j });
+
+      for (const i of [1, 2, lg.rows - 1]) {
+        const b = rowBand(drv, i);
+        expect(hoverTile(nav, b.x, b.top), `row ${i}: the TOP texel of the band`).toEqual(tileOf(i));
+        expect(hoverTile(nav, b.x, b.bottom), `row ${i}: the BOTTOM texel of the band picked another row`)
+          .toEqual(tileOf(i));
+        expect(hoverTile(nav, b.x, b.top - 1), `row ${i}: the texel ABOVE the band is row ${i - 1}`)
+          .toEqual(tileOf(i - 1));
+      }
+      // …and the list does not run on past its ends
+      const first = rowBand(drv, 0), last = rowBand(drv, lg.rows - 1);
+      expect(hoverTile(nav, first.x, first.top - 1), 'the texel above the FIRST row picked a row').toBe(null);
+      expect(hoverTile(nav, last.x, last.bottom + 1), 'the texel below the LAST row picked a row').toBe(null);
+    });
+  }
+
+  for (const [mode, design, list] of [['rail', 1, false], ['bars', 2, true]]) {
+    it(`⛔ design ${design} at PRISM: both band edges of row i name the star row i draws`, { timeout: 30000 }, async () => {
+      const { nav, drv } = await loadedNav({ mode });
+      nav._levelIndex = 3;
+      if (list) drv.toggleList();          // design 2's list is its picker at PRISM
+      nav.render();
+      const lg = drv.S.listGeom;
+      expect(lg?.rows, `design ${design} published no row grid at PRISM`).toBeGreaterThan(4);
+      const seedOf = (i) => drv.D.starRows[(lg.offset | 0) + i]?.seed;
+      expect(seedOf(0), 'the sample needs real rows').toBeTruthy();
+      expect(seedOf(1), 'the rows must name DIFFERENT stars or the probe cannot fail').not.toBe(seedOf(2));
+
+      for (const i of [1, 2, 3]) {
+        const b = rowBand(drv, i);
+        expect(hoverStar(nav, b.x, b.top), `row ${i}: the TOP texel of the band`).toBe(seedOf(i));
+        expect(hoverStar(nav, b.x, b.bottom), `row ${i}: the BOTTOM texel of the band named another star`)
+          .toBe(seedOf(i));
+        expect(hoverStar(nav, b.x, b.top - 1), `row ${i}: the texel ABOVE the band is row ${i - 1}`)
+          .toBe(seedOf(i - 1));
+      }
     });
   }
 });
@@ -1532,16 +1625,56 @@ describe('what none of this may break', () => {
     expect(nav._viewDriverInst).toBe(null);
   });
 
-  it('every published field has a default, so no design can read undefined', async () => {
+  it('every published field has a default, so no design can read undefined', { timeout: 30000 }, async () => {
     // A painter throw is not a blank field: PanelHost catches it ONCE and then stops uploading, and
     // the glass keeps showing the last good frame and looks alive.
-    const { drv } = await loadedNav();
-    for (const k of ['mapProj', 'prismHits', 'bodyHits', 'railTiles', 'listGeom', 'tabRects',
-                     'chipRect', 'cam', 'view', 'sysCam', 'pick', 'sortIdx', 'sortLabel',
-                     'listOffset', 'search']) {
-      expect(drv.S, `S.${k} has no default`).toHaveProperty(k);
-      expect(drv.S[k], `S.${k} is undefined`).not.toBe(undefined);
+    //
+    // ── ⛔⛔ REVIEW C27 (2026-09-18) — THIS WAS A HARDCODED LIST OF 15 NAMES AND `makeViewState()`
+    //    NOW RETURNS 39. The 24 it never grew to cover are the ones added AFTER it was written —
+    //    `labelHits`, `orbitRings`, `yGaugeRect`, `pagerRect`, `ladderCounterRect`,
+    //    `listHeaderRects`, `locatorRect`, `companionRect`, `searchGeom`, the five `ladder*` fields,
+    //    `levelLag`, `levelArm`, `noSystem` — i.e. every field this workstream and the two before it
+    //    published, which is precisely the population at risk. Reproduced by the reviewer: the old
+    //    assertion body passed on a state with all 24 unlisted fields DELETED. A guard whose scope
+    //    has to be widened by hand, in a file nobody opens when adding a field to another file, is a
+    //    guard that stops being widened. The field set is DERIVED from the factory now, so a field
+    //    declared without a value fails here on the day it is declared.
+    const FACTORY = makeViewState().S;
+    const KEYS = Object.keys(FACTORY);
+    // ⭐ LIVENESS CONTROL, AND IT IS THE WHOLE REASON THE DERIVATION IS SAFE TO TRUST: a derivation
+    //   that silently produced an empty set would pass every assertion below forever — the same
+    //   vacuum the hardcoded list died in, arriving by a cleverer road.
+    expect(KEYS.length, 'the factory published no fields at all').toBeGreaterThan(30);
+    for (const known of ['mapProj', 'prismHits', 'bodyHits', 'railTiles', 'listGeom', 'tabRects',
+                         'chipRect', 'cam', 'view', 'sysCam', 'pick', 'sortIdx', 'sortLabel',
+                         'listOffset', 'search', 'labelHits', 'searchGeom', 'ladderStops',
+                         'levelLag', 'levelArm', 'noSystem']) {
+      expect(KEYS, `the derivation lost "${known}", which state.js definitely declares`).toContain(known);
     }
+    // (a) THE FACTORY ITSELF declares a value for every field it names — the default is the thing on
+    //     trial, and `null` is a legitimate one (`mapProj`, `pick`); `undefined` is not.
+    for (const k of KEYS) {
+      expect(FACTORY[k], `makeViewState().S.${k} is declared with no default`).not.toBe(undefined);
+    }
+    // (b) …and no painted frame, at any level in either design, leaves one undefined. `resetPicks()`
+    //     re-assigns 15 of them at the head of every frame; this is the other 24 and the window
+    //     before the first paint, which is where a missing default actually bites.
+    //     ⚠ ONE nav, BOTH designs — `viewMode` is a field on the same driver and `S` is the same
+    //     object, so flipping it re-paints without paying for a second GalacticMap.
+    const h = await loadedNav();
+    for (const mode of ['rail', 'bars']) {
+      h.nav.viewMode = mode;
+      for (const level of [0, 1, 2, 3, 4]) {
+        h.nav._levelIndex = level;
+        h.nav.render();
+        for (const k of KEYS) {
+          expect(h.drv.S, `${mode} L${level}: S.${k} vanished from the live state`).toHaveProperty(k);
+          expect(h.drv.S[k], `${mode} L${level}: S.${k} is undefined after a painted frame`).not.toBe(undefined);
+        }
+      }
+    }
+    h.nav.viewMode = 'rail'; h.nav._levelIndex = 3; h.nav.render();
+    const drv = h.drv;
     // ⚠ `sysCam` AND `pick` ARE THE 2026-09-08 ADDITIONS AND THEY CARRY THE SAME RISK AS `search`
     // did: a design reads them UNGUARDED at its draw site, so an absent one is not a blank mark, it
     // is a painter throw — caught ONCE by PanelHost, after which the glass shows the last good frame

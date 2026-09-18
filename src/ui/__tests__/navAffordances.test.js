@@ -32,12 +32,28 @@
  * parsed and unreachable — because every one of them set state directly and not one drove the
  * keyboard. Max found it by playing the game. A probe here that called `drv.cycleSort()` would be
  * that same test again.
+ *
+ * ── ⛔⛔ REVIEW C24 (2026-09-18) — AND FIVE PROBES IN THIS FILE WERE BREAKING THAT RULE ──────────
+ *
+ * `CLICK A SECTOR`, `CLICK A TILE`, `CLICK A STAR`, `CLICK TO ENTER` and `SELECT A BODY` all name a
+ * CLICK on the glass, and all five asserted a HOVER and stopped — worse, they reached the hover by
+ * writing `_mouseX`/`_mouseY` as plain fields, so they entered neither `_handleClick` NOR
+ * `_handleMouseMove`. Both halves of the rule above were broken for exactly the five phrases whose
+ * promise is the click. Under a mode the click path has three gates the hover path does not —
+ * `_handleClick`'s `if (this._anim) return`, `remapClick` returning `null`, and the 25-texel drag
+ * test — so "the pointer lights something up" was never evidence that "the click does anything".
+ *
+ * All five now move the pointer through `_handleMouseMove`, let a FRAME resolve the pick (trap 4:
+ * the hover resolves at the tail of the driver's `render()`), then press-release-click through
+ * `clickAt` and assert THE CONSEQUENCE THE PHRASE PROMISES — the drill destination, the selected
+ * star, the selected body. And the two map probes assert it DISCRIMINATINGLY: two different pointers
+ * must produce two different destinations, so a click that drilled a constant cannot pass.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { makeHeadlessNav } from './helpers/headlessNav.mjs';
+import { makeHeadlessNav, clickAt } from './helpers/headlessNav.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..');
 const DESIGNS = readFileSync(join(ROOT, 'src/ui/navViewModes/designs.js'), 'utf8');
@@ -53,6 +69,33 @@ async function nav({ mode = 'rail', level = 3 } = {}) {
   h.nav._levelIndex = level;
   h.nav.render();
   return h.nav;
+}
+
+/**
+ * Move the pointer and let a FRAME decide what is under it (trap 4).
+ *
+ * ⛔ THE `render()` IS NOT OPTIONAL AND IT IS NOT A FLUSH. The legacy painters run first under every
+ * mode frame and rewrite all three hover fields from `_mouseX`/`_mouseY` against the LEGACY
+ * projection; the driver re-resolves at the tail. A probe that moves without rendering reads
+ * whichever of the two spoke last, which is how the five C24 probes could "see" a pick that the
+ * click would never act on.
+ */
+const hover = (n, x, y) => { n._handleMouseMove({ clientX: x, clientY: y }); n.render(); };
+
+/**
+ * Hover a point, click it, and report the tile that was under the pointer and where the drill went.
+ *
+ * `null` when nothing was under the pointer or the click did not drill one level deeper — either is
+ * the promise unkept. `_anim.toCenter` is the destination `_startDrillAnim` was handed, which is the
+ * observable a 2D→2D drill produces synchronously (the LEVEL only moves when the ease lands).
+ */
+function drillFrom(n, x, y, level) {
+  hover(n, x, y);
+  const tile = n._hoveredTile;
+  if (!tile || tile.col === undefined) return null;
+  clickAt(n, x, y);
+  if (n._anim?.toLevel !== level + 1) return null;
+  return { tile, dest: { ...n._anim.toCenter } };
 }
 
 /**
@@ -237,7 +280,7 @@ const VOCABULARY = [
   { phrase: 'L=MAP', control: "L toggles design 2's list mode", sameAs: 'L=LIST' },
   {
     phrase: 'CLICK A SECTOR',
-    control: 'a click in the GALAXY map picks the sector under the pointer',
+    control: 'a click in the GALAXY map drills the sector under the pointer',
     async probe() {
       const n = await nav({ level: 0 });
       const p = n._viewDriverInst.S.mapProj;
@@ -245,71 +288,121 @@ const VOCABULARY = [
       // ⭐ AIMED AT THE MIDDLE OF THE DISC ON PURPOSE. The square's corners are outside the galaxy,
       //    where `getSectorAt` correctly answers null — a probe that aimed there would report a
       //    working picker as broken.
-      n._mouseX = p.ox + p.sq / 2; n._mouseY = p.oy + p.sq / 2;
-      n.render();
-      return !!n._hoveredTile?.sector;
+      const x = p.ox + p.sq / 2, y = p.oy + p.sq / 2;
+      hover(n, x, y);
+      const s = n._hoveredTile?.sector;
+      if (!s) return false;
+      clickAt(n, x, y);
+      // ⛔ THE SECTOR THE POINTER WAS OVER, NOT "a" sector: `_viewStack[1]` is built from the pick's
+      //    own `centerX`/`centerZ`, so a click that drilled anything else lands somewhere else.
+      const dest = n._viewStack[1]?.center;
+      return n._anim?.toLevel === 1 && !!dest && dest.x === s.centerX && dest.z === s.centerZ;
     },
   },
   {
     phrase: 'CLICK A TILE',
-    control: 'a click in the SECTOR / REGION map picks the tile under the pointer',
+    control: 'a click in the SECTOR / REGION map drills the tile under the pointer',
     async probe() {
       for (const level of [1, 2]) {
         const n = await nav({ level });
         const p = n._viewDriverInst.S.mapProj;
         if (!p) return false;
-        n._mouseX = p.ox + p.cell * 1.5; n._mouseY = p.oy + p.cell * 1.5;
-        n.render();
-        if (n._hoveredTile?.col === undefined) return false;
+        const a = drillFrom(n, p.ox + p.cell * 1.5, p.oy + p.cell * 1.5, level);
+        // ⭐ THE FIRST DRILL'S EASE IS STOOD DOWN so the second click is not eaten by
+        //    `_handleClick`'s `if (this._anim) return` gate. Nothing else about the level moves
+        //    until the ease lands, so the second pointer meets the same picture as the first.
+        n._anim = null;
+        const b = drillFrom(n, p.ox + p.cell * 3.5, p.oy + p.cell * 4.5, level);
+        if (!a || !b) return false;
+        // ⛔ THE DISCRIMINATOR. Two different tiles under two different pointers must drill to two
+        //    different places; a click that drilled a constant — or the tile the LAST frame hovered
+        //    — passes "something happened" and fails this.
+        if (a.tile.col === b.tile.col && a.tile.row === b.tile.row) return false;
+        if (a.dest.x === b.dest.x && a.dest.z === b.dest.z) return false;
       }
       return true;
     },
   },
   {
     phrase: 'CLICK A STAR',
-    control: 'a click in the PRISM map picks the star under the pointer',
+    control: 'a click in the PRISM map selects the star under the pointer',
     async probe() {
       const n = await nav({ level: 3 });
       const hits = n._viewDriverInst.S.prismHits;
       if (!hits?.length) return false;
-      n._mouseX = hits[hits.length - 1].x; n._mouseY = hits[hits.length - 1].y;
-      n.render();
-      return !!n._hoveredLocalStar?.star;
+      const h = hits[hits.length - 1];
+      hover(n, h.x, h.y);
+      const star = n._hoveredLocalStar?.star;
+      if (!star) return false;
+      clickAt(n, h.x, h.y);
+      // ⚠ WITH NO SPAWNED SYSTEM (`_currentSystemData` null, which is this harness) the click SELECTS
+      //   and stops — Max, 2026-09-07: *"disable the system screen when not in a system."* The
+      //   selection is the promise `CLICK A STAR` makes; the SYSTEM screen is a separate one.
+      return n._selectedNavStar?.seed === star.seed && n._systemStar?.seed === star.seed;
     },
   },
   {
     phrase: 'CLICK TO ENTER',
-    control: "design 2's map picks at GALAXY, SECTOR and REGION",
+    control: "design 2's map enters the sector / tile under the pointer at GALAXY, SECTOR and REGION",
     async probe() {
       for (const level of [0, 1, 2]) {
         const n = await nav({ mode: 'bars', level });
         const p = n._viewDriverInst.S.mapProj;
         if (!p) return false;
-        n._mouseX = p.kind === 'block' ? p.bx + p.blk / 2 : p.ox;
-        n._mouseY = p.kind === 'block' ? p.by + p.blk / 2 : p.oy;
-        n.render();
-        if (!n._hoveredTile) return false;
+        if (level === 0) {
+          // design 2 draws GALAXY as a full-width band (`kind: 'wide'`), whose `ox`/`oy` IS the centre
+          hover(n, p.ox, p.oy);
+          const s = n._hoveredTile?.sector;
+          if (!s) return false;
+          clickAt(n, p.ox, p.oy);
+          const dest = n._viewStack[1]?.center;
+          if (n._anim?.toLevel !== 1 || !dest || dest.x !== s.centerX || dest.z !== s.centerZ) return false;
+        } else {
+          const a = drillFrom(n, p.bx + p.cell * 1.5, p.by + p.cell * 1.5, level);
+          n._anim = null;
+          const b = drillFrom(n, p.bx + p.cell * 3.5, p.by + p.cell * 4.5, level);
+          if (!a || !b) return false;
+          if (a.tile.col === b.tile.col && a.tile.row === b.tile.row) return false;
+          if (a.dest.x === b.dest.x && a.dest.z === b.dest.z) return false;
+        }
       }
       return true;
     },
   },
   {
     phrase: 'SELECT A BODY',
-    control: 'a click on a body glyph at SYSTEM selects it',
+    control: 'a click on a body glyph at SYSTEM selects THAT body and arms the commit',
     async probe() {
       const n = await nav({ level: 4 });
-      n._systemStar = { wx: 8, wy: 0, wz: 0, seed: 12, spectral: 'G', name: 'Probe' };
+      // ⭐ THE SYSTEM IS THE PLAYER'S OWN ON PURPOSE. `_handleClick`'s foreign-system planet branch
+      //    arms no selection at all under a mode (it armed a `_systemMode` the designs do not draw —
+      //    logged as AC-2 work in picking.js, not faked here), so a foreign fixture would be asking
+      //    this phrase to prove something the instrument does not yet do.
+      n._systemStar = { wx: n._playerX, wy: n._playerY, wz: n._playerZ, seed: 12, spectral: 'G', name: 'Probe' };
       n._systemData = {
         star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
-        planets: [{ orbitRadiusAU: 1.0, moons: [],
-                    planetData: { radiusEarth: 1, T_eq: 288, habitability: { score: 0.9 }, rings: false } }],
+        planets: [
+          { orbitRadiusAU: 1.0, moons: [],
+            planetData: { radiusEarth: 1, T_eq: 288, habitability: { score: 0.9 }, rings: false } },
+          { orbitRadiusAU: 5.0, moons: [],
+            planetData: { radiusEarth: 4, T_eq: 120, habitability: { score: 0 }, rings: false } },
+        ],
       };
+      n._currentSystemData = n._systemData;
       n.render();
-      const hits = (n._viewDriverInst.S.bodyHits || []).filter((h) => h.ref);
-      if (!hits.length) return false;
-      n._mouseX = hits[0].x; n._mouseY = hits[0].y;
-      n.render();
-      return !!n._hoveredBody;
+      const hits = (n._viewDriverInst.S.bodyHits || []).filter((h) => h.ref && h.ref.kind === 'planet' && h.moon < 0);
+      if (hits.length < 2) return false;
+      // both planets, so "it selected the body under the pointer" cannot pass on a constant
+      for (const h of hits.slice(0, 2)) {
+        hover(n, h.x, h.y);
+        const held = n._hoveredBody;
+        if (!held || held.type !== 'planet') return false;
+        n._selectedBody = null; n._commitAction = null;
+        clickAt(n, h.x, h.y);
+        if (n._selectedBody?.type !== 'planet' || n._selectedBody.planetIndex !== held.index) return false;
+        if (!n._commitAction) return false;
+      }
+      return true;
     },
   },
   {

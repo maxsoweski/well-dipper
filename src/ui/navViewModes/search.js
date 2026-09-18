@@ -58,13 +58,33 @@
 export const SEARCH_TEXT_CAP = 40;
 
 /**
+ * Is this keystroke a MODIFIER CHORD — Ctrl, Meta (Cmd/Win) or Alt held?
+ *
+ * ⭐⭐ AC-21 (nav-defects-batch-2026-09-18), REVIEW C30. Shift is deliberately absent: Shift is how
+ * a capital letter is typed and the field wants it. The other three are never text on any layout the
+ * game ships to — they are the browser's and the operating system's own shortcuts.
+ * ⚠ THE ONE LAYOUT THIS IS ROUGH ON IS AltGr, which Windows reports as Ctrl+Alt, so a European
+ *   keyboard's `@` or `{` will no longer reach the query. That is the review's stated bound and it is
+ *   the safe side of the trade: a missing character in a search box is a nuisance, a swallowed Ctrl+R
+ *   / Ctrl+W / Cmd+Q is the pilot's browser refusing to answer him.
+ */
+function chord(e) {
+  return !!(e && (e.ctrlKey || e.metaKey || e.altKey));
+}
+
+/**
  * Did this keystroke produce text? `e.key.length === 1` is the browser's own answer — every named
  * key ('Escape', 'ArrowDown', 'Backspace', 'Shift') is longer, and every printable one, including
  * the ones a layout puts somewhere unexpected, is exactly one code unit.
+ *
+ * ⛔ AND A CHORD IS NOT TEXT, WHICH `key.length === 1` ALONE CANNOT SEE: `Ctrl+R` arrives with
+ * `key: 'r'` and `Ctrl+V` with `key: 'v'`, so both passed this test, were appended to the query and
+ * then `preventDefault`ed by the host's fold on `NavComputer.js:349` — the reload and the paste both
+ * eaten, and an `R` typed into the field for each one.
  */
 function printable(e) {
   const k = e && typeof e.key === 'string' ? e.key : '';
-  return k.length === 1;
+  return k.length === 1 && !chord(e);
 }
 
 /**
@@ -162,6 +182,23 @@ export function makeSearch(nav, S) {
    */
   function key(e) {
     if (!S.search.open) return false;
+    // ⛔⛔ AC-21 — A MODIFIER CHORD IS NOT THE FIELD'S, AND SAYING SO IS THE WHOLE FIX. `false` is the
+    //    only way to leave a key ALONE: the host's fold routes here first and `preventDefault`s +
+    //    `stopPropagation`s whatever this answers `true` to (`NavComputer.js:349`), so "consume it but
+    //    let the browser keep it" is not expressible — and consuming it is what ate `Ctrl+R`,
+    //    `Ctrl+W` and `Cmd+Q` while the drawn field was open, and made `Ctrl+V` type a `V` into the
+    //    query instead of pasting. `printable()` refusing the chord is only half: without this line
+    //    the key fell through to the catch-all `return true` at the bottom and was eaten anyway,
+    //    silently, which is worse than typing the letter.
+    // ⚠ IT IS AHEAD OF Escape/Enter/Arrow/Backspace ON PURPOSE. None of those is a chord the field
+    //   defines a meaning for, and a `Ctrl+Backspace` handled here would be the field claiming the
+    //   platform's delete-word. The field's own keys are the unmodified ones.
+    // ⚠⚠ AND IT HANDS THE CHORD TO THE CLAUSES BEHIND IT ON `:349` — which is where `Ctrl+V` now
+    //   reaches the `KeyV` clause and cycles the look, because that clause tests `e.code` with no
+    //   modifier test of its own. That is the HOST's line and its own defect (it is already true with
+    //   the field closed); flagged to the coordinator rather than worked around here, because the
+    //   alternative is this file keeping `Ctrl+V` away from the browser to hide it.
+    if (chord(e)) return false;
     const code = e && e.code;
     // ⛔ ESCAPE CLOSES AND ONLY CLOSES. The DOM widget got this right — its Escape stopped at
     //    `input.blur()` and never reached `handleEscape` — and losing it here would mean the pilot
@@ -192,7 +229,14 @@ export function makeSearch(nav, S) {
     if (!g || !(g.lead > 0) || !(g.rows > 0)) return -1;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return -1;
     if (x < g.x0 || x > g.x1) return -1;
-    const i = Math.round((y - g.top - g.lead) / g.lead);
+    // ⭐⭐ AC-17 (nav-defects-batch-2026-09-18), REVIEW C16 — THE BAND IS THE DRAWN ROW. Both fields
+    // draw result row `i` at `top + (i + 1) * lead` (`designs.js:1415` and `:1837`, the lines that
+    // publish this very grid), so row `i` owns `[top + (i+1)*lead, top + (i+2)*lead)`. `Math.round`
+    // asked about the band CENTRED on the row — half a row high — so the lower half of every result
+    // resolved to the result BELOW it, and clicking it warped to the wrong star. Identical change and
+    // identical reasoning to `listRowAt`'s in `index.js`; one arithmetic, stated in both pickers
+    // because the two grids are published by different painters.
+    const i = Math.floor((y - g.top - g.lead) / g.lead);
     return i >= 0 && i < g.rows ? i : -1;
   }
 

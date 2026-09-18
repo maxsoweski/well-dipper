@@ -138,7 +138,8 @@
         "input": "In each design: press on the map, drag 60+ texels, release over (a) the pager row, (b) a list header (design 2 list mode), (c) a drawn-search result row with the search open, (d) a ladder end cap on an overflowing ladder, (e) HERE · SECTOR.",
         "observable": "Nothing fires: listOffset, sortLabel, ladderScroll, the search highlight and the view centre are all unchanged and no _onCommit is called. A genuine click (press and release within 5 texels) on each control still works. Legacy is unchanged."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "✅ BUILT wave 2 (DRIVER, index.js remapClick guard against nav._dragStartX/Y; keyboard Tab exempt via synthClick). Driver file x4 incl. the C29 search-row release with no _onCommit. Three pre-existing navClosePass3 probes that called remapClick bare were given the press they implied (integrator); proved non-vacuous against three mutants."
     },
     {
       "id": "AC-14",
@@ -147,7 +148,8 @@
         "input": "Open a design, press /, type 'sol', press N to close, press N to reopen; separately, Tab into PRISM and press N within the 350 ms ease, then reopen; separately page the rail to page 3, close, reopen.",
         "observable": "On reopen the search is closed with an empty query and V/Tab work; no level lag is pending and a map click drills; the list is on page 1. The sort key, the list-mode flag and the zoom index MAY persist (they are preferences)."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "✅ BUILT wave 2 (HOST fold on NavComputer.js:621 `this._viewDriverInst?.onDeactivate?.()` — 621 not 620 because prismPan.test.js source-scans the signature line; DRIVER onDeactivate clears search/levelLag/levelArm/pick/listOffset, keeps sortIdx/list/zoomIdx). Both halves pinned to meet. Live: the × / N close route end to end."
     },
     {
       "id": "AC-15",
@@ -156,7 +158,8 @@
         "input": "Design 1: press at PRISM (do not release), Tab to SYSTEM on a system whose ladder overflows, move the pointer.",
         "observable": "The ladder does not scroll from the stale press; a fresh press on the ladder still pans it."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "✅ BUILT wave 2 (HOST fold 4415). C8 sequence reproduced and killed; mouseleave drops it too."
     },
     {
       "id": "AC-16",
@@ -165,7 +168,8 @@
         "input": "In legacy at SYSTEM click a planet with moons (planet detail opens), press V.",
         "observable": "Under the design _systemMode is 'system' immediately; the first click on a body selects it. V back to legacy returns to the whole-system orrery (no sub-view resurrected)."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "✅ BUILT wave 2 (HOST V clause on 349, gated on the NEW look being non-null). Planet detail and component drill cleared on V into a design; V back to legacy leaves legacy alone."
     },
     {
       "id": "AC-17",
@@ -174,7 +178,8 @@
         "input": "In each design, click the top texel and the bottom texel of drawn row i in the rail (design 1, any level), the PRISM table (design 2), and the drawn search results.",
         "observable": "Both texels resolve to row i (the band equals the drawn row: glyph rows plus the lead gap below); the texel above row 0 and below the last row resolve to nothing."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "✅ BUILT wave 2 (DRIVER: round→floor in listRowAt x3 and search.rowAt; TESTS lane pinned the band independently at navPicking/navSearch). Band = [top+(i+1)*lead, top+(i+2)*lead)."
     },
     {
       "id": "AC-18",
@@ -183,7 +188,8 @@
         "input": "Design 2 at SECTOR and REGION at 417x240, read the status line.",
         "observable": "The whole line fits (fit() passes, no truncation); CLICK TO ENTER is on the glass at both levels."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "✅ BUILT wave 2 (DESIGN, lab → extract). D2 L1/L2 status ends with CLICK TO ENTER and fits 417 with the chip; only those two frames changed (hashes)."
     },
     {
       "id": "AC-19",
@@ -192,7 +198,8 @@
         "input": "In each design at GALAXY/SECTOR/REGION, pan until the player's cell or the target leaves the map pane.",
         "observable": "The markers are clipped at the pane edge and never overdraw chrome texels (mark-guard clean; the chrome rows' pixels are unchanged by the pan)."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "✅ BUILT wave 2 (DESIGN, clipped primitives at the lab call sites). Design 1 proven by a 200-texel pan (0 marks outside the map); design 2 preventive (its bars repaint after the map)."
     },
     {
       "id": "AC-20",
@@ -201,7 +208,8 @@
         "input": "Design 1 at SYSTEM on Sol, press ] to sort by NAME, then TEMP.",
         "observable": "For every body the ladder tag equals the rail tag under every sort key."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "✅ BUILT wave 2 (DESIGN). One letter per body: the ladder's AU order; the rail prints that letter under every sort/page; moons carry the parent letter. ▶ FOR MAX: the ladder is now sort-independent (a picture by AU); if he wants it to follow the active sort it is one line (lab :1477 / designs.js:1201)."
     },
     {
       "id": "AC-21",
@@ -210,7 +218,8 @@
         "input": "Open the drawn search; press Ctrl+R, Ctrl+V, Alt+Tab-like chords.",
         "observable": "No chord character enters the query and the event is not preventDefaulted (the browser keeps its shortcut); plain typing still enters the query."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "◐ DRIVER half built wave 2 (search.js printable() refuses ctrl/meta/alt; chords never enter the query). HOST half folded by the coordinator on 349: the V/L clause ignores chords, so Ctrl+V no longer cycles the look (4 cases in navDefects2026w2.host). ⚠ DELIBERATELY NOT gated: the WASDRF held-keys clause still eats Ctrl+W / Ctrl+R / Ctrl+S while the nav is open — a full-screen game overlay that lets Ctrl+W close the tab or Ctrl+R reload the game is worse than an eaten shortcut. The observable's 'not preventDefaulted' clause is met for V/L chords and intentionally unmet for the six pan letters."
     },
     {
       "id": "AC-22",
@@ -219,7 +228,8 @@
         "input": "Press and hold on the map in legacy, press V, move the pointer.",
         "observable": "The gesture ends on V (no pan/rotation applies from the stale start); the next press starts a clean gesture in the new space."
       },
-      "layer": "unit"
+      "layer": "unit",
+      "progress": "✅ BUILT wave 2 (HOST V clause on 349 ends any gesture: _dragging, _panStartCenter, gauge/counter, _dragStartLadder). C7's −8.589 rad reproduced on a 2021x1162 box and killed."
     }
   ],
   "architecturalConnections": {

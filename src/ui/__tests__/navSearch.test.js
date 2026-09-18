@@ -394,6 +394,34 @@ describe('the drawn rows are clickable, off the geometry the paint published', (
       expect(fired[0].star.name).toBe(want.name);
       expect(drv.searchActive()).toBe(false);
     });
+
+    it(`design ${design}: ⛔ AC-17 — a result row owns the WHOLE band it was drawn in`, { timeout: 30000 }, async () => {
+      // ⛔ REVIEW C16: `search.rowAt` resolved the row with `Math.round`, which puts the hit band half
+      // a lead ABOVE the drawn row — so the bottom 2 of every 6 texels of a result warped to the NEXT
+      // star, silently, with the right row highlighted under the cursor. The case above clicks
+      // `top + 3*lead`, which is the ONE texel `Math.round` and `Math.floor` agree on; these are the
+      // two that tell them apart. THE BAND: drawn row `i` owns `[top + (i+1)*lead, top + (i+2)*lead)`.
+      const probe = async (yOfBand, wantRow) => {
+        const h = await loadedNav({ mode });
+        openAndType(h);
+        h.nav.render();
+        const g = h.drv.S.searchGeom;
+        expect(g?.rows, 'the sample needs three drawn rows').toBeGreaterThan(2);
+        const want = h.nav._searchResults[(g.offset | 0) + wantRow];
+        const fired = [];
+        h.nav._onCommit = (a) => fired.push(a);
+        clickAt(h.nav, g.x0 + 4, yOfBand(g));
+        return { fired, want };
+      };
+      // the BOTTOM texel of row 1's band is row 1 — under Math.round it was row 2
+      let r = await probe((g) => g.top + 3 * g.lead - 1, 1);
+      expect(r.fired, "the bottom texel of row 1 did not reach a row at all").toHaveLength(1);
+      expect(r.fired[0].star.name, 'the bottom texel of row 1 warped to the NEXT star').toBe(r.want.name);
+      // and the texel ONE ABOVE that band belongs to row 0 — under Math.round it was row 1
+      r = await probe((g) => g.top + 2 * g.lead - 1, 0);
+      expect(r.fired, 'the texel above row 1 did not reach a row at all').toHaveLength(1);
+      expect(r.fired[0].star.name, 'the texel above row 1 warped to row 1').toBe(r.want.name);
+    });
   }
 
   it('⛔ a click OFF the rows closes the field and does NOT drill the map underneath', async () => {
@@ -425,11 +453,35 @@ describe('TAB is a ring, not a clamp', () => {
     expect(nav._levelIndex, 'Tab is a dead key at SYSTEM — the hint row still says TAB LEVEL').toBe(0);
   });
 
-  it('⛔ Shift+Tab at GALAXY wraps to SYSTEM', async () => {
+  it('⛔ Shift+Tab at GALAXY wraps to SYSTEM — from the state a pilot actually arrives in', async () => {
+    // ⛔⛔ REVIEW C25 (2026-09-18) — THE FIXTURE, NOT THE ASSERTION, WAS THE DEFECT.
+    //
+    // This case used to reach GALAXY by assigning `nav._levelIndex = 0` after a PRISM load, which
+    // leaves `_localStars` FULL of 212 stars. No pilot route to GALAXY produces that: the shipped
+    // tab branch clears the prism on every drill to a level that is not PRISM or SYSTEM
+    // (NavComputer.js:4482) and so does `handleEscape` (:1495). So the case was green through
+    // `_findNearestStar()` — a door the running game has already shut by the time the pilot is
+    // standing at GALAXY — and could not have failed if the wrap a pilot takes were broken.
+    //
+    // ⭐ THE WRAP THAT LANDS FOR A PILOT LANDS THROUGH `_systemData`: the `:4459` refusal
+    // (`idx === 4 && !this._systemData` → `_findNearestStar()` or nothing) is SKIPPED once the
+    // SYSTEM view has built its system, and Tab out of SYSTEM does not clear it. Every step below
+    // is a real keypress and a real frame, in the order a pilot makes them.
     const { nav } = await loadedNav({ level: 3 });
     nav._currentSystemData = { planets: [] };   // in a system — with none, SYSTEM is skipped by design
-    nav._levelIndex = 0;
+    press(nav, 'Tab');                          // PRISM -> SYSTEM, through the shipped tab branch
+    expect(nav._levelIndex, 'Tab did not reach SYSTEM').toBe(4);
+    nav.render();                               // the SYSTEM frame that generates the system
+    expect(nav._systemData, 'the SYSTEM view never built its system — the route is staged, not walked')
+      .toBeTruthy();
+    press(nav, 'Tab');                          // SYSTEM -> GALAXY, the forward wrap
+    expect(nav._levelIndex, 'the forward wrap did not reach GALAXY').toBe(0);
     nav.render();
+    // ⭐ THE FIXTURE'S OWN LIVENESS CONTROL. This is the line that makes the state pilot-reachable
+    //   rather than staged: an empty prism is precisely what the old fixture did not have, and
+    //   precisely what makes `_findNearestStar()` unavailable as a way for the wrap to pass.
+    expect(nav._localStars, 'a pilot standing at GALAXY has no prism loaded').toHaveLength(0);
+
     press(nav, 'Tab', { shiftKey: true });
     expect(nav._levelIndex, 'Shift+Tab is a dead key at GALAXY').toBe(4);
   });
@@ -449,6 +501,11 @@ describe('TAB is a ring, not a clamp', () => {
    * `NavComputer.js:1434` has already ruled on where a load may be called from ("⛔ AND THE FIX IS
    * NOT TO CALL THE LOADERS FROM THE DRIVER"), so it is not this owner's to make. Pinned rather than
    * hidden, so the next reader finds the measurement instead of re-discovering the symptom.
+   *
+   * ⭐ AND IT IS THE COMPLEMENT OF THE CASE ABOVE, NOT A CONTRADICTION OF IT (REVIEW C25): the
+   * discriminator between the two is `_systemData`. Walked to GALAXY with a system already built,
+   * the back-wrap lands; walked there with none — ESCAPE out of SYSTEM, or never entering it —
+   * `:4459` refuses and the key is dead. Both walks are pilot routes; only the second dead-ends.
    */
   it('⚠ INHERITED: the backward wrap cannot land while `_localStars` is empty', async () => {
     const { nav } = await loadedNav({ level: 3 });

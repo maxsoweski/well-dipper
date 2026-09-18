@@ -104,6 +104,14 @@ export function makeViewModeDriver(nav) {
    * source, with the canvas as a fallback for a key pressed before the first frame.
    */
   let lastW = 0, lastH = 0;
+  /**
+   * Is the click `remapClick` is looking at one THIS FILE synthesised from a key?
+   *
+   * ⛔ ONE CALLER AND ONE READER: `tabLevel` sets it around its `nav._handleClick`, AC-13's drag
+   * guard reads it. A synthetic click has no `_handleMouseDown` behind it, so measuring it against
+   * `nav._dragStartX` asks where the POINTER was last pressed — which has nothing to do with a key.
+   */
+  let synthClick = false;
   /** ⛔ ONE PER INSTANCE, over the SAME `S` the designs captured — see the "mutate, never replace"
    *  note in `state.js`. It owns no state of its own: the query lives on `S.search` and the results
    *  and the cursor live on the instrument, exactly where `_activateSearchHighlight` reads them. */
@@ -357,12 +365,26 @@ export function makeViewModeDriver(nav) {
    * that carry nobody.
    *
    * ⚠ The `geometry.js` formulas below it are the FALLBACK, for a frame that has not painted yet.
+   *
+   * ── ⭐⭐ AC-17 (nav-defects-batch-2026-09-18) — THE BAND IS THE DRAWN ROW, SO IT IS A `floor` ───
+   *
+   * REVIEW C16/C17. Every publisher of a row grid draws row `i` at `top + (i + 1) * lead` — `d1Rail`
+   * (`designs.js:1362`), `d2List` (`:1806`) and both search fields (`:1431`, `:1851`) say so in the
+   * line that publishes the grid — so the band row `i` owns is `[top + (i+1)*lead, top + (i+2)*lead)`:
+   * its glyph rows plus the lead gap under them. `Math.round` answers that question about the band
+   * CENTRED on the row instead, which is half a row higher: with `lead` 6 it sent the bottom half of
+   * every drawn row to the row BELOW it. A click on the lower half of a rail row selected the next
+   * star down, and on a drawn search result it warped to the wrong one.
+   * ⛔ `floor` OF THE SAME EXPRESSION IS THE WHOLE FIX and no geometry moves: `(y - top - lead) / lead`
+   *    is already the row index in units of the lead, and flooring it is the definition of "which band
+   *    is this texel in". It also closes the top edge for free — the texel above row 0 lands on -1
+   *    instead of rounding up into row 0.
    */
   function listRowAt(g2, x, y, bars) {
     const lg = S.listGeom;
     if (lg && Number.isFinite(lg.top) && lg.lead > 0 && lg.rows > 0) {
       if (x < lg.x0 || x > lg.x1) return -1;
-      const i = Math.round((y - lg.top - lg.lead) / lg.lead);
+      const i = Math.floor((y - lg.top - lg.lead) / lg.lead);
       return i >= 0 && i < lg.rows ? i : -1;
     }
     if (bars) {
@@ -379,11 +401,15 @@ export function makeViewModeDriver(nav) {
       if (!S.list || S.level !== 3) return -1;
       const W = lastW || nav._canvas?.width || 0;
       if (!(W > 4) || x < 2 || x > W - 2) return -1;
-      const i = Math.round((y - g2.listTop - g2.LEAD) / g2.LEAD);
+      // ⚠ AC-17'S BAND IN THE FALLBACK TOO, from `geometry.js`'s own statement of the same grid
+      //   (`:70` — "`d2List` draws its header at `mapY + 4` and row i at `mapY + 4 + (i+1)*LEAD`").
+      const i = Math.floor((y - g2.listTop - g2.LEAD) / g2.LEAD);
       return i >= 0 && i < g2.listRows ? i : -1;
     }
     if (x < g2.railX || x > g2.railX + g2.railW) return -1;
-    const i = Math.round((y - g2.rowY(0)) / g2.LEAD);
+    // ⚠ AND HERE `rowY(0)` IS ALREADY THE TOP OF ROW 0's BAND (`geometry.js:56`, `LEAD + (i+1)*LEAD`),
+    //   so the same floor lands on the same band without restating the offset a second time.
+    const i = Math.floor((y - g2.rowY(0)) / g2.LEAD);
     return i >= 0 && i < g2.listRows ? i : -1;
   }
 
@@ -631,10 +657,28 @@ export function makeViewModeDriver(nav) {
     // DESIGN the level is, and this is the token that says the change came from a tab rather than
     // from a drill (which carries its own `_anim`) or from a test assigning the field.
     S.levelArm = { from: nav._levelIndex | 0, tMs: simClockMs() };
-    nav._handleClick({
-      clientX: rect.left + pt.x * sx, clientY: rect.top + pt.y * sy, button: 0,
-      preventDefault() {}, stopPropagation() {},
-    });
+    // ⛔⛔ AC-13's DRAG GUARD MUST NOT SEE THIS CLICK, AND THE FLAG IS WHY (nav-defects-batch-
+    //    2026-09-18). `remapClick` now refuses any click whose release is more than 5 texels from the
+    //    last `_handleMouseDown` — which is the whole point of AC-13 — and THIS click never had a
+    //    press at all: it is a KEY, synthesised at the centre of a tab that is nowhere near wherever
+    //    the pointer was last put down. Measured while building the guard: with the pointer last
+    //    pressed at the middle of the map, Tab moved no level at all, because the synthetic click was
+    //    read as the release of a 200-texel drag. A key that does nothing where the hint row says TAB
+    //    LEVEL is the exact defect class this workstream closes, arriving from inside the fix.
+    // ⛔ A FLAG RATHER THAN WRITING `nav._dragStartX`/`_dragStartY` TO THE TAB POINT. That would also
+    //    work and is one line shorter, and it would move the origin of a pan that is IN PROGRESS —
+    //    `_handleMouseMove` reads those same two fields every move while `_dragging` — so a Tab
+    //    pressed mid-drag would make the map jump. The flag says the true thing ("this click had no
+    //    press behind it") and touches no host state.
+    // ⚠ `finally`, so a throw out of the shipped handler cannot leave the guard disarmed for every
+    //   later click.
+    synthClick = true;
+    try {
+      nav._handleClick({
+        clientX: rect.left + pt.x * sx, clientY: rect.top + pt.y * sy, button: 0,
+        preventDefault() {}, stopPropagation() {},
+      });
+    } finally { synthClick = false; }
   }
 
   /**
@@ -783,6 +827,42 @@ export function makeViewModeDriver(nav) {
   function searchOpen() { return search.open(); }
   function searchActive() { return search.active(); }
   function searchKey(e) { return search.key(e); }
+
+  /**
+   * ⭐⭐ AC-14 (nav-defects-batch-2026-09-18) — THE NAV CLOSED, SO THE TRANSIENTS GO WITH IT.
+   *
+   * REVIEW C4/C11 + the completeness critic. `NavComputer.deactivate()` (`:620`) tears down the
+   * overlay and NEVER TOLD THE DRIVER, and the driver instance is cached on `_viewDriverInst` and
+   * never rebuilt — so everything on `S` survived a close-and-reopen:
+   *   · `S.search.open` — the pilot reopened INSIDE the field, with his old query still in it and
+   *     every key captured by it (V and Tab included, because the search clause is first on `:349`);
+   *   · `S.levelLag` — `resolveHover` and `remapClick` both eat everything while one is set, so a
+   *     nav closed inside the 350 ms tab ease reopened with a dead map;
+   *   · `S.pick` — a click highlight framing a cell from the previous session;
+   *   · `S.listOffset` — the rail reopened on page 3 of a list the pilot last read minutes ago.
+   *
+   * ⛔ THE PREFERENCES STAY, AND THAT IS THE WHOLE LINE THIS DRAWS. `S.sortIdx` / `S.sortLabel`,
+   *    `S.list` (design 2's list mode) and `S.zoomIdx` are CHOICES the pilot made about how he wants
+   *    to read the screen; a transient is something he is in the MIDDLE of. Clearing the first group
+   *    would be the nav forgetting his settings every time he closed it; keeping the second is the
+   *    defect. (`S.sortIdx` is re-clamped per level by `refresh` anyway — `state.js:756`.)
+   *
+   * ⛔ AND IT IS CALLED, NOT INFERRED. The host fold on `NavComputer.js:620` is the only thing that
+   *    knows the overlay closed (`this._viewDriverInst?.onDeactivate?.()`), and it is OPTIONAL there,
+   *    so THE NAME IS THE CONTRACT exactly as `pressStartsGesture`'s is: rename this and the class
+   *    calls `undefined?.()`, the close goes back to leaving the field open, and nothing throws.
+   * ⚠ `search.close()` RATHER THAN `S.search.open = false`: closing is also what resets the query,
+   *   the mirrored rows, the highlight and `S.searchGeom`, and it runs the instrument's own
+   *   `_runSearch('')` reset — all of it already wrapped against a throwing resolver, which matters
+   *   here because this runs from a teardown path under `PanelHost`.
+   */
+  function onDeactivate() {
+    search.close();
+    S.levelLag = null;
+    S.levelArm = null;
+    S.pick = null;
+    S.listOffset = 0;
+  }
 
   /**
    * ⭐ AC-9 — IS THE POINTER ON DESIGN 1'S PRISM Y-GAUGE?
@@ -1010,6 +1090,28 @@ export function makeViewModeDriver(nav) {
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
     nav._modeTabIdx = -1;
+    // ── ⭐⭐ AC-13 (nav-defects-batch-2026-09-18) — A RELEASE THAT ENDED A DRAG OPERATES NOTHING ───
+    // REVIEW C1/C29, reproduced headlessly: every chrome control under a design fired on the RELEASE
+    // of a pan. `_handleClick` opens by calling this function (`NavComputer.js:4420`) and its own
+    // "was a drag, not a click" test is 76 lines further down (`:4496`) — so by the time the host
+    // asked the question, the pager had already paged, the header had already re-sorted, the ladder
+    // cap had already scrolled, and a release over a drawn search row had already called
+    // `_activateSearchHighlight()` → `_onCommit({type:'warp'})`, which `main.js:5970` answers by
+    // closing the nav and starting the jump. Measured at 417x240: a press at (20,120) dragged to the
+    // pager and released paged the rail 0 → 27. A pan must never operate a control.
+    // ⛔ THE THRESHOLD IS THE HOST'S OWN, AGAINST THE HOST'S OWN START POINT — the same squared 5
+    //    texels `_handleClick:4496` and the `contextmenu` listener (`:336`) measure, against the same
+    //    `_dragStartX`/`_dragStartY` `_handleMouseDown` wrote. A second constant here would be the
+    //    AC-4 defect shape (two copies of one number) in the guard written to close a defect of it.
+    // ⚠ NOT-A-NUMBER MEANS NOT-A-DRAG, which is `notePick`'s rule and is why the finiteness is
+    //   tested rather than assumed: a click that arrives with no press before it (a synthetic event,
+    //   the first click after construction) has no start point, and answering "that was a drag" there
+    //   would make every such click dead — a far bigger failure than the one this closes.
+    // ⚠ AND IT SITS AFTER `_modeTabIdx = -1`, WHICH IS A RESET AND NOT AN ACTING BRANCH: the field
+    //   says "a mode is on and this was not a tab", and leaving a stale index in it would be a live
+    //   tab strip in `_handleClick` for exactly one drag.
+    const sdx = p.x - nav._dragStartX, sdy = p.y - nav._dragStartY;
+    if (!synthClick && Number.isFinite(sdx) && Number.isFinite(sdy) && sdx * sdx + sdy * sdy > 25) return null;
     // ── ⭐ THE DRAWN SEARCH TAKES THE CLICK FIRST, AND IT TAKES ALL OF THEM ────────────────────
     // The DOM widget bound `mousedown` on every result row — deliberately, so the selection fired
     // before the input's blur could tear the list down — and losing the ability to click a result
@@ -1208,6 +1310,10 @@ export function makeViewModeDriver(nav) {
     // rename either and the class calls `undefined?.()`, the fold falls back to the legacy expression,
     // and the failure is a pan that is 1.35x fast again — silent, and identical to never having fixed it.
     panKpcPerTexel, pressStartsGesture,
+    // ⭐ AC-14's DRIVER HALF (same batch), called OPTIONALLY by the host's fold on
+    // `NavComputer.js:620` — `this._viewDriverInst?.onDeactivate?.()`. THE NAME IS THE CONTRACT, for
+    // the reason the two above give: a rename is a close that silently stops clearing anything.
+    onDeactivate,
     regions: designs.regions,
     violations: () => violations.slice(),
     /**

@@ -316,6 +316,51 @@ function sprite(g, cx, cy, widths, ink) {
     rect(g, Math.round(cx) - ((w - 1) >> 1), top + r, w, 1, ink);
   }
 }
+/**
+ * ⭐⭐ AC-19 — THE CLIPPED FORMS OF `rect` / `frame` / `sprite`, FOR MARKS THAT MOVE WITH A CAMERA.
+ *
+ * ⛔ `rect()` CLIPS NOTHING, AND THE CANVAS ONLY CLIPS AT THE BUFFER'S EDGE. A mark placed through a
+ * map transform therefore leaves its pane the moment the pane's camera is panned, and keeps painting
+ * — over the status row, over the ranked rail, over the tab strip. The mark guard cannot see it
+ * either: `assertMark` is advisory, and it was never called from the 2D painters, so the YOU marker
+ * walking onto the chrome was a silent, shipped picture (REVIEW C19).
+ *
+ * ⚠ THEY ROUND THE WAY `rect()` ROUNDS, AND THEN CLIP THE ROUNDED BOX. `rect()` rounds x, y, w and h
+ *   INDEPENDENTLY, so clipping `round(x + w)` instead of `round(x) + round(w)` would move an edge by
+ *   a texel on a mark that is wholly inside its pane — i.e. it would change the picture Max ruled on
+ *   in order to fix the picture he did not. Fully inside, every call below is byte-for-byte the
+ *   unclipped one.
+ *
+ * ⚠ AND THEY RETURN THE CLIPPED BOX, so the caller can hand exactly what landed to `assertMark`
+ *   rather than the box it asked for: a guard fed the unclipped box would fire on every pan, which
+ *   is a guard that gets switched off.
+ */
+function clipBox(x, y, w, h, cl) {
+  const rx = Math.round(x), ry = Math.round(y), rw = Math.round(w), rh = Math.round(h);
+  if (!cl) return { x: rx, y: ry, w: rw, h: rh };
+  const x0 = Math.max(rx, cl.x), y0 = Math.max(ry, cl.y);
+  const x1 = Math.min(rx + rw, cl.x + cl.w), y1 = Math.min(ry + rh, cl.y + cl.h);
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+function rectClip(g, x, y, w, h, ink, cl) {
+  const b = clipBox(x, y, w, h, cl);
+  if (b.w > 0 && b.h > 0) rect(g, b.x, b.y, b.w, b.h, ink);
+  return b;
+}
+function frameClip(g, x, y, w, h, ink, cl, t = 1) {   // the same four rects `frame()` draws, each clipped
+  rectClip(g, x, y, w, t, ink, cl); rectClip(g, x, y + h - t, w, t, ink, cl);
+  rectClip(g, x, y + t, t, h - 2 * t, ink, cl); rectClip(g, x + w - t, y + t, t, h - 2 * t, ink, cl);
+  return clipBox(x, y, w, h, cl);
+}
+function spriteClip(g, cx, cy, widths, ink, cl) {     // `sprite()`, row by row, through the same clip
+  const h = widths.length, top = Math.round(cy) - ((h - 1) >> 1);
+  const wMax = Math.max(...widths);
+  for (let r = 0; r < h; r++) {
+    const w = widths[r]; if (!w) continue;
+    rectClip(g, Math.round(cx) - ((w - 1) >> 1), top + r, w, 1, ink, cl);
+  }
+  return clipBox(Math.round(cx) - ((wMax - 1) >> 1), top, wMax, h, cl);
+}
 const SP = {
   star7:  [3, 5, 7, 7, 7, 5, 3],
   giant5: [3, 5, 5, 5, 3],
@@ -1149,9 +1194,27 @@ function d1TwoD(g, mapW, mapY, mapH) {
   // YOU — a 1-texel frame plus a 3x3 block, no pulse
   const px = toX(D.player.x), py = toY(D.player.z);
   const cell = sq / n;
-  frame(g, Math.floor((px - ox) / cell) * cell + ox, Math.floor((py - mapY) / cell) * cell + mapY, cell, cell, INK.YOU);
-  rect(g, px - 1, py - 1, 3, 3, INK.YOU);
-  if (D.target) sprite(g, toX(D.target.wx), toY(D.target.wz), SP.diam5, INK.TARGET);
+  // ⭐⭐ AC-19 — CLIPPED TO THE PAINTED SQUARE, WHICH IS THE PICTURE AND NOT THE PANE. `ox`/`sq` are
+  // what the luminosity blit and the grid were drawn at; the columns either side of the square are
+  // inside the map REGION and outside the map, which is the same distinction the pick geometry
+  // published two paragraphs down ("a click there is a MISS, never a clamp").
+  // ⛔ THE HOST'S 2D PAN IS LIVE AT LEVELS 0-2 AND MOVES `v.cx`/`v.cz`, so these three marks are the
+  //    only things on this pane whose position a pilot can drive off it. Unclipped they painted over
+  //    the status row and the ranked rail and SURVIVED TO THE FINAL FRAME — design 1 repaints
+  //    neither (REVIEW C19). Nothing here moves while the camera is where Max ruled on it.
+  // ⚠ THE MARKS ARE GUARDED AS WELL AS CLIPPED, and against the box that LANDED. An empty
+  //   intersection is not asserted at all: a 0x0 box at a clamped corner is not a mark, and
+  //   `assertFits` would read it as one.
+  const sqPane = { x: ox, y: mapY, w: sq, h: sq };
+  const youCell = frameClip(g, Math.floor((px - ox) / cell) * cell + ox,
+                            Math.floor((py - mapY) / cell) * cell + mapY, cell, cell, INK.YOU, sqPane);
+  if (youCell.w > 0 && youCell.h > 0) assertMark('YOU cell', 'map', youCell.x, youCell.y, youCell.w, youCell.h);
+  const youDot = rectClip(g, px - 1, py - 1, 3, 3, INK.YOU, sqPane);
+  if (youDot.w > 0 && youDot.h > 0) assertMark('YOU marker', 'map', youDot.x, youDot.y, youDot.w, youDot.h);
+  if (D.target) {
+    const tg = spriteClip(g, toX(D.target.wx), toY(D.target.wz), SP.diam5, INK.TARGET, sqPane);
+    if (tg.w > 0 && tg.h > 0) assertMark('target diamond', 'map', tg.x, tg.y, tg.w, tg.h);
+  }
   // the eight ranked tiles carry a 2-char id; at 16x16 the cell is 13 texels and only the listed
   // tiles are tagged, which is the design saying so rather than the glyphs colliding
   const ids = d1TileOrder(d1TileRows(v, n)).slice(0, 8);
@@ -1335,6 +1398,54 @@ function d1Prism(g, mapW, mapY, mapH, gaugeX) {
                    cy: gaugeCy, span: gaugeSpan, halfKpc: GAUGE_HALF_KPC, base: D.player.y };
 }
 
+/**
+ * ⭐⭐ AC-20 — ONE ORDERING FOR BOTH HALVES OF THE SYSTEM SCREEN, AND ONE TAG PER BODY.
+ *
+ * ⛔ THE SCREEN USED TO SPELL THE SAME ALPHABET TWICE AND FEED IT TWO DIFFERENT INDICES. The ladder
+ * tagged `D.bodies.filter(kind !== 'moon')` by position; the rail tagged `D.bodies` — moons included
+ * — by position. `state.js` pushes each moon straight after its parent, so the two indices diverged
+ * at the FIRST MOON and every non-moon body after it carried a different letter on the two halves of
+ * one frame: Mars "4" on the ladder and "5" in the rail, Jupiter "5" and "8" (REVIEW C20). The tag is
+ * display-only — picking resolves by object — so nothing mis-targeted; what broke is the only
+ * cross-reference the screen has, from a row you are reading to the mark you are looking at.
+ *
+ * ⭐ THE ORDERING IS THE LADDER'S, BY AU, AND THE RAIL PRINTS IT WHATEVER IT IS SORTED BY. The ladder
+ * is a PICTURE of the system — the axis is sqrt(AU) — so its left-to-right order is the one that
+ * means something about the place; the rail is a LIST, and `[`/`]` re-orders it by name or
+ * temperature on the pilot's say-so. A tag that followed the list would renumber the picture every
+ * time the list was re-sorted, which is the opposite of a landmark.
+ *
+ * ⛔ AND SORTING HERE FIXES THE LADDER'S OWN ARITHMETIC UNDER A NON-AU KEY, WHICH WAS ALSO BROKEN.
+ *    The minimum-separation pass walks the list left to right and pushes any body within 8 texels of
+ *    its predecessor further RIGHT; fed a DESCENDING list (the TEMP key, which on a normal system is
+ *    AU reversed) it pushed every body past the last one and off the window — measured on a 5-planet
+ *    system at 417x240, the TEMP key drew 2 of 5 ladder tags and the rest scrolled out of `vis()`.
+ *    Under the default AU key `D.bodies` is already AU-ascending (`state.js`'s SORT_KEYS[4][0]), so
+ *    this sort is a stable no-op and the picture Max ruled on does not move a texel.
+ *
+ * ⚠ A MOON CARRIES ITS PARENT'S TAG, because a moon has no mark of its own on this ladder — it is a
+ *   pip ON its parent's stem. So `3-` in the rail reads "a moon of 3", which is where the pilot's eye
+ *   has to go anyway, and it survives a NAME sort that scatters moons away from their planets.
+ *   ⛔ MATCHED BY `au`, NOT BY `parent`. A moon row's `au` IS its parent's `orbitRadiusAU` — both
+ *      builders set it from the same field (`state.js:578`, and this lab's own `buildSystem`) —
+ *      whereas `parent` is an index into `_systemData.planets` that the lab's rows carry and the
+ *      ladder's ordering does not preserve.
+ */
+const BODY_TAGS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function d1LadderOrder() {
+  return D.bodies.filter((b) => b.kind !== 'moon').slice().sort((a, b) => (a.au ?? 0) - (b.au ?? 0));
+}
+/** The tag for any body, moons included, off one ordering. Returns a function so the map is built once. */
+function d1BodyTagger(order = d1LadderOrder()) {
+  const tags = new Map();
+  order.forEach((b, i) => tags.set(b, BODY_TAGS[i] || '?'));
+  return (b) => {
+    if (!b) return '?';
+    if (b.kind !== 'moon') return tags.get(b) || '?';
+    const parent = order.find((o) => o.kind === 'planet' && o.au === b.au);
+    return (parent && tags.get(parent)) || '?';
+  };
+}
 function d1Ladder(g, mapW, mapY, mapH) {
   // ⛔ THE ROTATABLE ORRERY IS NOT DRAWN. An ellipse at 240p is a 1-texel stroke straddling its own
   // coordinate; this design's answer is a sqrt(AU) LADDER with zero curves.
@@ -1363,7 +1474,8 @@ function d1Ladder(g, mapW, mapY, mapH) {
   const x0 = 8, x1 = mapW - 10;
   const winW = x1 - x0 - 8;
   rect(g, x0, axisY, x1 - x0, 1, INK.RULE);
-  const shown = D.bodies.filter((b) => b.kind !== 'moon');
+  const shown = d1LadderOrder();          // AC-20 — the one ordering, by AU; see `d1LadderOrder`
+  const tagOf = d1BodyTagger(shown);
   const auMax = Math.max(1e-3, ...shown.map((b) => b.au), 1e-3);
 
   // ── THE VIRTUAL AXIS ─────────────────────────────────────────────────────────────────────────
@@ -1442,7 +1554,7 @@ function d1Ladder(g, mapW, mapY, mapH) {
       for (let m = 0; m < b.moons; m++) { const my = axisY - 7 - m * 3; hits.push({ x, y: my, r: 2, ref: b, moon: m, star: false }); rect(g, x, my, 1, 1, INK.DIM); }
       if (b === D.selBody) frame(g, x - 4, axisY - 4, 9, 9, INK.TARGET);
     }
-    const tag = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || '?';
+    const tag = tagOf(b);   // AC-20 — the same letter `d1Rail` prints beside this body's row
     T(g, tag, x - 2, axisY + 8, { color: b === D.selBody ? INK.KEY : INK.DIM, rgn: 'map', what: 'ladder tag ' + tag });
   });
 
@@ -1573,8 +1685,13 @@ function d1Rail(g, x, y, w, cols, rowCount) {
       [`COMPS  ${s.mult > 1 ? 'MULTIPLE (' + s.mult + ')' : 'SINGLE'}`, INK.BODY],
       ['WARP ARMED', INK.TARGET]);
   } else {
-    lines = D.bodies.slice(off, off + listRows).map((b, i) => ({
-      txt: `${'123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[off + i] || '?'}${b.kind === 'moon' ? '-' : ' '}` +
+    // ⭐ AC-20 — THE TAG COMES OFF THE LADDER'S ORDERING, NOT OFF THIS ROW'S POSITION. `off + i` is
+    // where the body sits in a list the pilot can re-sort and page; the letter has to name where it
+    // sits in the PICTURE, or the two halves of this screen call the same planet two things. See
+    // `d1BodyTagger`. ⚠ A moon prints its parent's letter and keeps its `-`.
+    const tagOf = d1BodyTagger();
+    lines = D.bodies.slice(off, off + listRows).map((b) => ({
+      txt: `${tagOf(b)}${b.kind === 'moon' ? '-' : ' '}` +
            `${pad((b.kind === 'moon' ? ' ' : '') + b.name.toUpperCase(), cols - 14)} ` +
            `${rpad(b.au.toFixed(2), 5)} ${rpad(b.T ? Math.round(b.T) + 'K' : '—', 5)}`,
       bar: 0, sel: b === D.selBody }));
@@ -1820,9 +1937,13 @@ function drawDesign2(g, W, H) {
   // ── BOTTOM BAR: one 63-character status line, ' · '-joined so truncation eats the VERB first.
   rect(g, 0, H - BAR, W, 1, INK.RULE); rect(g, 0, H - BAR + 1, W, BAR - 1, INK.BG);
   const chipW = measurePixelText('[WARP]') + 6;
-  const clauses = d2Status();
-  const full = clauses.join(' · ') + (S.sabotage ? SAB : '');
+  // ⭐ AC-18 — THE BUDGET IS MEASURED BEFORE THE LINE IS WRITTEN, NOT AFTER. `avail` moved two lines
+  // up so `d2Status` can be handed it: the one clause whose length this design does not control is
+  // the SECTOR NAME, and a line assembled blind is a line `fit()` has to rescue from the right —
+  // where the affordance is.
   const avail = W - 8 - chipW - 4;
+  const clauses = d2Status(avail);
+  const full = clauses.join(' · ') + (S.sabotage ? SAB : '');
   if (avail < measurePixelText('PRISM')) fire('status line has no room left beside the commit chip');
   T(g, fit(full, avail), 4, H - BAR + 2, { color: INK.BODY, rgn: 'botbar', what: 'status line' });
   if (S.sabotage) assertFits('D2 status line (unclipped)', 'botbar', 4, H - BAR + 2, measurePixelText(full), FACE.h);
@@ -1836,7 +1957,7 @@ function drawDesign2(g, W, H) {
   // can WARP and BURN: one rectangle, one `armed`, one commit.
   S.chipRect = { x: chipX, y: H - BAR, w: chipW, h: BAR, armed };
 }
-function d2Status() {
+function d2Status(avail = Infinity) {
   // ⭐ THE STATUS LINE NAMES THE SEARCH'S CONTROLS WHILE IT IS OPEN — this bar is the only place
   // design 2 says anything, so a field with no legend would be a field with no keys.
   if (S.search.open) return ['SEARCH', `${(S.search.rows || []).length} MATCHES`,
@@ -1847,8 +1968,29 @@ function d2Status() {
   const ps = D.playerSector;
   if (S.level === 0) return ['GALAXY', (ps?.name || '').toUpperCase(),
     `${ps ? fmtK(estStars(ps.centerX, ps.centerZ, ps.size)) : '—'} SYSTEMS`, 'CLICK TO ENTER'];
-  if (S.level <= 2) return [LEVELS[S.level], (D.playerSector?.name || '').toUpperCase(),
-    `${rankMax(d1TileRows(levelView(S.level), levelView(S.level).n))} SYSTEMS IN BEST TILE`, 'CLICK TO ENTER'];
+  // ⭐⭐ AC-18 — THE LINE THAT ADVERTISED A CONTROL AND THEN PUSHED IT OFF THE GLASS. At Max's own
+  // 417x240 buffer this clause list measured 431 texels against a 364-texel bar, and `fit()` eats
+  // from the RIGHT, so what SECTOR and REGION actually read was "… 22124140697 SYSTEMS IN BEST TILE
+  // · CL" — the one thing on the bar a pilot can act on, truncated mid-word (REVIEW C18).
+  //
+  // ⛔ TWO CAUSES, AND `fmtK` ALONE CLOSES NEITHER. The count was the ONE number in either design not
+  //    passed through `fmtK` — compare the GALAXY clause one line up — so it spent eleven characters
+  //    saying what five say better; and the clause itself ("SYSTEMS IN BEST TILE") was the longest on
+  //    any bar in either design. Measured, `fmtK` on its own still ran 395 against 364. So the count
+  //    is formatted AND the clause loses the word the sentence can spare: the bar already says
+  //    SECTOR, and a count under a "BEST TILE" label in a level whose rail is a tile ranking is not
+  //    ambiguous about what is being counted.
+  //
+  // ⭐ AND THE SECTOR NAME — THE ONE CLAUSE WHOSE LENGTH THIS FILE DOES NOT CHOOSE — IS FITTED TO
+  // WHAT IS LEFT, so the truncation that has to happen somewhere happens in the name, where it is
+  // both visible and harmless, instead of in the affordance at the far end. `avail` is the bar's own
+  // budget, handed down by the caller that drew it rather than re-derived here.
+  if (S.level <= 2) {
+    const tile = `${fmtK(rankMax(d1TileRows(levelView(S.level), levelView(S.level).n)))} BEST TILE`;
+    const fixed = [LEVELS[S.level], '', tile, 'CLICK TO ENTER'];
+    const room = avail - measurePixelText(fixed.join(' · '));
+    return [LEVELS[S.level], fit((D.playerSector?.name || '').toUpperCase(), room), tile, 'CLICK TO ENTER'];
+  }
   // ⭐⭐ AC-12 — LIST MODE NAMES THE TWO KEYS THAT ONLY WORK IN LIST MODE. `[` `]` re-order the list
   //    and `-` `=` page it; both are bound at PRISM, both were bound at every OTHER level too (AC-5
   //    takes that away), and neither has ever been printed in this design. This bar is the only place
@@ -1896,8 +2038,17 @@ function d2TwoD(g, W, mapY, mapH) {
       rect(g, x, y, 1, 1, INK.DIM);
     }
     const px = toX(D.player.x), py = toY(D.player.z);
-    frame(g, px - 2, py - 2, 5, 5, INK.YOU);
-    for (const d of [[0, -4], [0, 4], [-4, 0], [4, 0]]) rect(g, px + d[0], py + d[1], d[0] ? 3 : 1, d[0] ? 1 : 3, INK.YOU);
+    // ⭐ AC-19 — CLIPPED TO THE PAINTED BAND, on the same rule as the picked sector forty lines below
+    // ("CLIPPED TO THE PAINTED BAND ... an unclipped frame would draw over the topbar's rule and the
+    // status bar"). The wide field is only ±(mapH/2)·kpc, so a pan puts the player outside it.
+    // ⚠ NOTHING SURVIVING THE FRAME CHANGES HERE, MEASURED: `drawDesign2` repaints the topbar and the
+    //   bottom bar AFTER this painter, so design 2's escaped marks were already overpainted (REVIEW
+    //   C19 refutes that half of the claim). The clip is here because the paint order is the only
+    //   thing that was saving it — the marks themselves were as unbounded as design 1's.
+    const bandPane = { x: 0, y: mapY, w: W, h: mapH };
+    const you0 = frameClip(g, px - 2, py - 2, 5, 5, INK.YOU, bandPane);
+    if (you0.w > 0 && you0.h > 0) assertMark('YOU marker', 'map', you0.x, you0.y, you0.w, you0.h);
+    for (const d of [[0, -4], [0, 4], [-4, 0], [4, 0]]) rectClip(g, px + d[0], py + d[1], d[0] ? 3 : 1, d[0] ? 1 : 3, INK.YOU, bandPane);
     // ⭐ THE WIDE PROJECTION, PUBLISHED. `toX`/`toY` above are isotropic — the square is rendered at
     // the WIDE extent and cropped, so one world pixel is one texel in BOTH axes — which collapses
     // the whole inverse to an origin and a scale: wx = cx + (x - ox)*kpc, wz = cz + (y - oy)*kpc.
@@ -1945,8 +2096,19 @@ function d2TwoD(g, W, mapY, mapH) {
     }
     const pi = Math.floor(((D.player.x - v.cx) / v.size + 0.5) * n);
     const pj = Math.floor(((D.player.z - v.cz) / v.size + 0.5) * n);
-    checker(g, bx + pi * cell + 1, mapY + pj * cell + 1, cell - 2, cell - 2, INK.YOU);
-    frame(g, bx + pi * cell, mapY + pj * cell, cell, cell, INK.YOU);
+    // ⭐ AC-19 — AND THE BLOCK'S OWN YOU CELL IS CLIPPED TO THE BLOCK. `pi`/`pj` are unclamped floors
+    // of the player's position in cell units, so a pan that takes the player out of the drillable
+    // square puts this cell outside it — over the checkered surround at best and over the bars at
+    // worst. ⚠ The checker's parity is shifted by the amount the clip ate, so the texels that remain
+    // are the ones it would have drawn anyway; fully inside, the shift is 0 and the call is identical.
+    const blkPane = { x: bx, y: mapY, w: blk, h: mapH };
+    const youIn = clipBox(bx + pi * cell + 1, mapY + pj * cell + 1, cell - 2, cell - 2, blkPane);
+    if (youIn.w > 0 && youIn.h > 0) {
+      checker(g, youIn.x, youIn.y, youIn.w, youIn.h, INK.YOU,
+              (youIn.x - Math.round(bx + pi * cell + 1) + youIn.y - Math.round(mapY + pj * cell + 1)) & 1);
+    }
+    const youCell2 = frameClip(g, bx + pi * cell, mapY + pj * cell, cell, cell, INK.YOU, blkPane);
+    if (youCell2.w > 0 && youCell2.h > 0) assertMark('YOU cell', 'map', youCell2.x, youCell2.y, youCell2.w, youCell2.h);
     // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5), on the block's OWN cell — over the YOU frame, because a
     // drill onto the tile you are already in must still read as a drill.
     const pk = pickCell(S.level);
