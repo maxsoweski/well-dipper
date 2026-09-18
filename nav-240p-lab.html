@@ -286,7 +286,7 @@ const INK = {
 };
 /** BURN or WARP is not "which level am I on" — it is NavComputer._isCurrentSystem() (:1098-1105), a
  *  0.1 pc identity test. Browsing a foreign system from SYSTEM still arms a WARP. */
-const isHere = () => S.level === 4 && D.sysStar && D.here && D.sysStar.seed === D.here.seed;
+const isHere = () => S.level === 4 && (D.isCurrent != null ? !!D.isCurrent : !!(D.sysStar && D.here && D.sysStar.seed === D.here.seed));   // the game publishes D.isCurrent from NavComputer._isCurrentSystem(); the seed test is only the lab's own stand-in (in Sol the two seeds are 'Sol' and a hash number, so it was false at home)
 const SPECTRAL = { O:'#9db0ff', B:'#abbfff', A:'#c9d6ff', F:'#f7f7ff', G:'#fff5ea',
                    K:'#ffd1a1', M:'#ff9f70', D:'#d9e6ff' };
 

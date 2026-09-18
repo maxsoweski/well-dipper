@@ -129,6 +129,13 @@ async function at(h, mode, level, { planets = 4 } = {}) {
   h.nav.viewMode = mode;
   if (level === 4) {
     h.nav._systemStar = h.nav._localStars.reduce((m, s) => (m == null || s.dist < m.dist ? s : m), null);
+    // ⛔ AND THE PILOT STANDS ON IT. "Home" is the HOST's `_isCurrentSystem()` — a 0.1 pc identity
+    //    test against `_playerX/Y/Z` — which the adapter now publishes as `D.isCurrent` and the
+    //    painters' `isHere()` reads (the old seed comparison was false in Sol: 'Sol' vs a hash number,
+    //    so at home the chip armed off the FOREIGN branch with nothing selected — measured live
+    //    2026-09-18). A nearest star a parsec away is a foreign system to the host, however the seeds
+    //    compare, so the no-selection cases below would pass over the wrong branch without this.
+    if (h.nav._systemStar) { h.nav._playerX = h.nav._systemStar.wx; h.nav._playerY = h.nav._systemStar.wy; h.nav._playerZ = h.nav._systemStar.wz; }
     h.nav._systemData = {
       star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
       planets: Array.from({ length: planets }, (_, i) => ({
@@ -188,6 +195,11 @@ describe('AC-11 — design 1\'s commit bar and tab band no longer share a row', 
     //    SAME row (233), where the strip is tested first and the press changes level instead. A probe
     //    aimed at the bar's middle would pass on both builds and measure nothing.
     nav._selectedNavStar = { wx: 8.4, wy: 0, wz: 0, seed: 991, name: 'Probe', spectral: 'G' };
+    // ⛔ AT HOME THE ROW ARMS OFF A SELECTED BODY (AC-2): `at()` now stands the pilot on the system
+    //    star, so an unselected row is drawn unarmed and eats its own press. Select a planet first —
+    //    the press then commits the BURN, which is the armed row this case is about.
+    nav._selectedBody = { type: 'planet', planetIndex: 0 };
+    nav._commitAction = nav._buildCommitAction();
     nav.render();
     const bar = paint(nav, 1).fills.find((f) => f.x === 0 && f.w === W && f.h === LEAD && f.y > g.tabY);
     expect(bar, 'the paint must draw a full-width commit bar below the tab row').toBeTruthy();
@@ -378,4 +390,40 @@ describe('AC-12 — every bound key is named where it works, and nothing is clip
       }
     }
   }, 180000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// AC-2, the live finding: "am I home" is the HOST's answer, not a seed comparison.
+// Measured live 2026-09-18 in Sol: `D.sysStar.seed` was the string 'Sol' and `D.here.seed` the hash
+// number 163760118, so `isHere()` was FALSE at home and both designs armed the chip / commit row off
+// the FOREIGN branch (`D.target` = Sol itself) with nothing selected, and design 2 said [WARP].
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('AC-2 — the painters take "home" from D.isCurrent, which mirrors NavComputer._isCurrentSystem()', () => {
+  it('⭐⭐ A SOL-SHAPED STRING SEED NO LONGER MAKES HOME LOOK FOREIGN: nothing selected → chip unarmed, labelled BURN', async () => {
+    const h = await loadedNav();
+    const nav = await at(h, 'bars', 4);
+    nav._systemStar = { ...nav._systemStar, seed: 'Sol' };   // the real-universe overlay's identity
+    nav._selectedBody = null; nav._commitAction = null;
+    nav.render();
+    const D = nav._viewDriverInst.D, S = nav._viewDriverInst.S;
+    expect(nav._isCurrentSystem(), 'the pilot stands on the system star').toBe(true);
+    expect(D.isCurrent, 'the adapter publishes the host\'s answer').toBe(true);
+    expect(D.sysStar.seed === (D.here && D.here.seed), 'the seeds still disagree, on purpose').toBe(false);
+    const p = paint(nav, 2);
+    expect(S.chipRect.armed, 'the chip is unarmed with nothing selected, at home').toBe(false);
+    expect(p.text.includes('[BURN]'), 'and it reads BURN, not WARP').toBe(true);
+  }, 60000);
+  it('⛔ AND A FOREIGN SYSTEM STILL ARMS THE WARP — the host says so, the seeds do not matter', async () => {
+    const h = await loadedNav();
+    const nav = await at(h, 'bars', 4);
+    nav._playerX += 0.01;   // 10 pc away: foreign by the host's 0.1 pc identity test
+    nav._selectedBody = null; nav._commitAction = null;
+    nav.render();
+    const D = nav._viewDriverInst.D, S = nav._viewDriverInst.S;
+    expect(nav._isCurrentSystem()).toBe(false);
+    expect(D.isCurrent).toBe(false);
+    const p = paint(nav, 2);
+    expect(S.chipRect.armed, 'browsing a foreign system arms a WARP to it').toBe(!!D.target);
+    expect(p.text.includes('[WARP]')).toBe(true);
+  }, 60000);
 });

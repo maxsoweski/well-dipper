@@ -433,6 +433,7 @@ export function makeViewState() {
     player: null, playerSector: null,
     sectorRows: [], stars: [], starRows: [], sys: null, bodies: [],
     target: null, selStar: null, selBody: null, sysStar: null, here: null,
+    isCurrent: false,   // the HOST's own answer to "is the system on the glass the one the ship is in"
     lumCache: new Map(),
   };
 
@@ -872,6 +873,13 @@ export function makeViewState() {
     D.sys = nav._systemData || null;
     D.sysStar = nav._systemStar
       ? { ...nav._systemStar, name: nameFor(nav._systemStar) } : null;
+    // ⛔ "AM I HOME" IS THE HOST'S QUESTION, NOT A SEED COMPARISON. The designs' `isHere()` compared
+    //    `D.sysStar.seed` with `D.here.seed`, and in Sol those are the string 'Sol' and the hash-grid
+    //    number 163760118 — so at home in Sol both designs armed the chip / commit row off the FOREIGN
+    //    branch (`D.target`, which is Sol itself) with nothing selected, and said WARP instead of BURN.
+    //    Measured live 2026-09-18 (AC-2). `_isCurrentSystem()` (:1089) is the 0.1 pc identity test
+    //    the lab's own comment names as the authority; publish it and let the paint read it.
+    D.isCurrent = !!(typeof nav._isCurrentSystem === 'function' && nav._isCurrentSystem());
     const bodyKey = sortKeyFor(S, 4);
     if (cache.sysRef !== D.sys) {
       cache.sysRef = D.sys; cache.bodySortId = null;
