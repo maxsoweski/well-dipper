@@ -7,73 +7,218 @@
     {
       "id": "AC-1",
       "statement": "\"The commit row (design 1) and the WARP chip (design 2) are drawn armed on every screen but only answer a click at SYSTEM → the click does what Enter does.\" MEASURED: NavComputer.js:4499 wraps the _commitButtonRect test inside `if (this._levelIndex === 4)`, while navViewModes/index.js:313-322 publishes the rect at every level. The driver's `commit()` (index.js:640) already does the right thing at every level (warp to the selected/external star at 0-3; the armed _commitAction at 4).",
-      "verifyVia": { "input": "In each design at GALAXY, SECTOR, REGION and PRISM with a warp target armed, click the drawn commit row / [WARP] chip. Then at SYSTEM with a body selected, click it.", "observable": "At 0-3 the click commits exactly as Enter does (the same _onCommit payload, the nav closes, the warp arms). At SYSTEM it burns as before. A click one texel outside the published rect changes nothing." },
-      "layer": "integration", "live": true
+      "verifyVia": {
+        "input": "In each design at GALAXY, SECTOR, REGION and PRISM with a warp target armed, click the drawn commit row / [WARP] chip. Then at SYSTEM with a body selected, click it.",
+        "observable": "At 0-3 the click commits exactly as Enter does (the same _onCommit payload, the nav closes, the warp arms). At SYSTEM it burns as before. A click one texel outside the published rect changes nothing."
+      },
+      "layer": "integration",
+      "live": true,
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-2",
       "statement": "\"The selection never clears: with nothing picked, both designs frame a fallback body and say BURN TO it; picking the star leaves the frame on a planet → a real no-selection state, and a star selection that the frame follows.\" MEASURED: state.js:855-862 resolves D.selBody to the first habitable planet / first planet / bodies[0] when nothing is picked, and only ever to a planet or moon; designs.js:1108 (d1Ladder frame), :1810 (d2System frame), :1246-1253 (rail detail block), :1481 (d2Status), :1454 (chip `armed`) all read it as if it were a choice.",
-      "verifyVia": { "input": "In each design at SYSTEM: (a) open with nothing selected; (b) click a planet, then click empty space; (c) click the star.", "observable": "(a) and (b): no selection frame on any body, the detail block / status line says no body is selected, the commit row / chip is drawn unarmed and Enter does nothing. (c): the frame sits on the star, the detail names the star, the commit arms for the star. D.selBody is null in (a)/(b) and a star row in (c); no painter throws on null (PanelHost freeze guard)." },
-      "layer": "integration", "live": true
+      "verifyVia": {
+        "input": "In each design at SYSTEM: (a) open with nothing selected; (b) click a planet, then click empty space; (c) click the star.",
+        "observable": "(a) and (b): no selection frame on any body, the detail block / status line says no body is selected, the commit row / chip is drawn unarmed and Enter does nothing. (c): the frame sits on the star, the detail names the star, the commit arms for the star. D.selBody is null in (a)/(b) and a star row in (c); no painter throws on null (PanelHost freeze guard)."
+      },
+      "layer": "integration",
+      "live": true,
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-3",
       "statement": "\"The 2D maps outrun the pointer when dragged: 1.35× in design 1, 1.4× and 2.6× in design 2 → scale by the drawn map.\" MEASURED (arithmetic, then live): NavComputer.js:4364 scales the pan by `_viewSize / navMapSize(w,h)` = 160 texels at 417x240, while design 1 draws a 216-texel square, design 2 a 224-texel block at 1-2 and a 417-wide band at 0 (S.mapProj publishes the drawn extent).",
-      "verifyVia": { "input": "In each design at GALAXY, SECTOR and REGION, press on a drawn cell and drag 60 texels.", "observable": "The cell under the pointer stays under the pointer (the map moves 1:1 with the drag, ±1 texel); _viewCenter moves by exactly 60 × (view size / drawn map size). Legacy is untouched and still 1:1." },
-      "layer": "integration", "live": true
+      "verifyVia": {
+        "input": "In each design at GALAXY, SECTOR and REGION, press on a drawn cell and drag 60 texels.",
+        "observable": "The cell under the pointer stays under the pointer (the map moves 1:1 with the drag, ±1 texel); _viewCenter moves by exactly 60 × (view size / drawn map size). Legacy is untouched and still 1:1."
+      },
+      "layer": "integration",
+      "live": true,
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-4",
       "statement": "\"A drag that starts on the rail, the tabs, the status line or the commit row still pans or rotates the map → only a press on the map starts a gesture.\" MEASURED: NavComputer.js:4396-4411 arms every drag on any press; no region is consulted. Under a design the paint publishes the map region (designs.regions().map / S.mapProj / the prism and orrery panes), so the driver can answer 'was this press on the map or on a handle'.",
-      "verifyVia": { "input": "In each design at every level, press on the rail / status row / hint row / tab strip / commit row / top bar and drag 40 texels; then press on the map and drag 40 texels.", "observable": "The chrome press moves nothing (no pan, no rotation, no ladder scroll, camera and view unchanged); the map press moves the picture as today. The y-gauge and the ladder counter still grab. Legacy still drags from anywhere." },
-      "layer": "integration", "live": true
+      "verifyVia": {
+        "input": "In each design at every level, press on the rail / status row / hint row / tab strip / commit row / top bar and drag 40 texels; then press on the map and drag 40 texels.",
+        "observable": "The chrome press moves nothing (no pan, no rotation, no ladder scroll, camera and view unchanged); the map press moves the picture as today. The y-gauge and the ladder counter still grab. Legacy still drags from anywhere."
+      },
+      "layer": "integration",
+      "live": true,
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-5",
       "statement": "\"Keys act on screens where nothing shows it: , . on every design-1 screen; L, [ ], - = on four of five design-2 screens; and L on a 2D screen arms invisible list rows that steal map clicks → each key bound only where it draws something.\" MEASURED: NavComputer.js:349's Comma/Period clause tests viewMode==='rail' with no level test (index.js:527 scrollLadder writes S.ladderScroll against stale stops); index.js:673 cycleSort and :699 page run at every level though design 2 draws a list only in PRISM list mode; toggleList flips S.list at every level and index.js:368's bars fallback then resolves full-width rows over the map at 0-2 (no x bound).",
-      "verifyVia": { "input": "Design 1: press , and . at GALAXY/SECTOR/REGION/PRISM. Design 2: press L, [, ], -, = at GALAXY, SECTOR, REGION and SYSTEM; then at GALAXY press L and click the map.", "observable": "Nothing changes in S (ladderScroll, sortIdx, listOffset, list) on the screens where the key draws nothing; at PRISM in design 2 L, [ ], - = still work in list mode; at SYSTEM in design 1 , . still step an overflowing ladder; a map click after L at GALAXY drills the sector under the pointer, never a phantom list row." },
-      "layer": "unit"
+      "verifyVia": {
+        "input": "Design 1: press , and . at GALAXY/SECTOR/REGION/PRISM. Design 2: press L, [, ], -, = at GALAXY, SECTOR, REGION and SYSTEM; then at GALAXY press L and click the map.",
+        "observable": "Nothing changes in S (ladderScroll, sortIdx, listOffset, list) on the screens where the key draws nothing; at PRISM in design 2 L, [ ], - = still work in list mode; at SYSTEM in design 1 , . still step an overflowing ladder; a map click after L at GALAXY drills the sector under the pointer, never a phantom list row."
+      },
+      "layer": "unit",
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-6",
       "statement": "\"After one V cycle the old nav opens its prism and orrery at the designs' angles, not its own (measured live) → restore the old defaults on the way back.\" MEASURED LIVE 2026-09-18: fresh legacy PRISM opens at _localRotX 0.5 / _localRotY 0.3 and SYSTEM at _systemRotX 0.5; after V→rail→bars→CURRENT they read 0.6521714117570698 / 0 and 0.43344532006988595 / 0 (the designs' seeds from _seedViewModeCam). The contract's 'viewMode === null is today's nav byte for byte' stops holding after one keypress.",
-      "verifyVia": { "input": "Open the nav in legacy, press V three times (rail → bars → CURRENT), then tab into PRISM and into SYSTEM.", "observable": "_localRotX/_localRotY read 0.5 / 0.3 and _systemRotX/_systemRotY 0.5 / 0 exactly as on a fresh open; a design entered afterwards still seeds its own defaults (0.652.../asin 0.42)." },
-      "layer": "integration", "live": true
+      "verifyVia": {
+        "input": "Open the nav in legacy, press V three times (rail → bars → CURRENT), then tab into PRISM and into SYSTEM.",
+        "observable": "_localRotX/_localRotY read 0.5 / 0.3 and _systemRotX/_systemRotY 0.5 / 0 exactly as on a fresh open; a design entered afterwards still seeds its own defaults (0.652.../asin 0.42)."
+      },
+      "layer": "integration",
+      "live": true,
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-7",
       "statement": "\"Right-click 'go back' is dead in every look → bind it properly.\" MEASURED: NavComputer.js:334 registers only a 'click' listener, :336 preventDefaults contextmenu, :4488 tests e.button === 2 inside _handleClick — browsers fire no 'click' for the secondary button, so handleEscape (:1441) is unreachable from a real mouse in all three looks.",
-      "verifyVia": { "input": "Right-click on the map at SECTOR, REGION, PRISM and SYSTEM (and inside legacy's planet-detail sub-view), in all three looks, with a real pointer.", "observable": "Each right-click goes back one step exactly as handleEscape defines (sub-view pops, else level-1 with the drill animation the left path uses); no context menu appears; a right-button DRAG past the 5-texel threshold does not fire it." },
-      "layer": "integration", "live": true
+      "verifyVia": {
+        "input": "Right-click on the map at SECTOR, REGION, PRISM and SYSTEM (and inside legacy's planet-detail sub-view), in all three looks, with a real pointer.",
+        "observable": "Each right-click goes back one step exactly as handleEscape defines (sub-view pops, else level-1 with the drill animation the left path uses); no context menu appears; a right-button DRAG past the 5-texel threshold does not fire it."
+      },
+      "layer": "integration",
+      "live": true,
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-8",
       "statement": "\"Under the designs the × close button is off-screen and the backdrop cannot be clicked → fix the CSS.\" MEASURED: style.css:1232 puts .overlay-close at top:-40px on a panel that .nav-lowres makes 100vw × 100vh (style.css:1273), so the button is above the viewport and the 20px backdrop band is gone; legacy's × is already half-clipped by the same rule on its calc(100vh - 40px) panel.",
-      "verifyVia": { "input": "Open the nav in each design and in legacy; look for the × and click it; click the backdrop margin if one exists.", "observable": "The × is fully inside the viewport in all three looks and closes the nav; under the designs a visible close control exists (the × inset over the glass, or an equivalent) and closes the nav; legacy's picture below the panel edge is unchanged." },
-      "layer": "integration", "live": true
+      "verifyVia": {
+        "input": "Open the nav in each design and in legacy; look for the × and click it; click the backdrop margin if one exists.",
+        "observable": "The × is fully inside the viewport in all three looks and closes the nav; under the designs a visible close control exists (the × inset over the glass, or an equivalent) and closes the nav; legacy's picture below the panel edge is unchanged."
+      },
+      "layer": "integration",
+      "live": true,
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-9",
       "statement": "\"HERE · SECTOR at SYSTEM clears the body selection instead of doing nothing → eat the click until he rules what it should do there.\" MEASURED: index.js:1007 `&& S.level !== 4` lets the press fall through to the top bar, where the level-4 empty-space branch (:4592) clears the selection. INTERFACE §8b recorded 'not eaten' as a decision; the consequence (a clear) was not what it intended.",
-      "verifyVia": { "input": "Design 2 at SYSTEM: select a body, click HERE · SECTOR.", "observable": "The selection, the frame and the chip are unchanged; nothing re-centres. At GALAXY-PRISM the locator still re-centres as before." },
-      "layer": "unit"
+      "verifyVia": {
+        "input": "Design 2 at SYSTEM: select a body, click HERE · SECTOR.",
+        "observable": "The selection, the frame and the chip are unchanged; nothing re-centres. At GALAXY-PRISM the locator still re-centres as before."
+      },
+      "layer": "unit",
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-10",
       "statement": "\"Multiple-star pips never draw and the COMPS sort does nothing, because the field they read is never filled → fill it.\" MEASURED: state.js:769-771 builds star rows by spreading _localStars entries, which carry no `mult`; state.js:798-803 fills `mult` for D.selStar only; designs.js:1582 (d2Prism pips) and the COMPS sort key / rail column read s.mult on every row and get undefined. multiplicityForSeed exists (state.js:800).",
-      "verifyVia": { "input": "Design 2 at PRISM around a known multiple (Alpha Centauri, or any procedural row whose multiplicity resolves > 1); design 1 at PRISM press [ ] to COMPS.", "observable": "The multiple system's mark carries its pips; the rail/table COMPS column shows a number; the COMPS sort re-orders by it. `mult` is filled for every drawn row without a per-frame recomputation (cached per seed, or computed once per starRowsBase build) — frame time at PRISM does not regress." },
-      "layer": "unit"
+      "verifyVia": {
+        "input": "Design 2 at PRISM around a known multiple (Alpha Centauri, or any procedural row whose multiplicity resolves > 1); design 1 at PRISM press [ ] to COMPS.",
+        "observable": "The multiple system's mark carries its pips; the rail/table COMPS column shows a number; the COMPS sort re-orders by it. `mult` is filled for every drawn row without a per-frame recomputation (cached per seed, or computed once per starRowsBase build) — frame time at PRISM does not regress."
+      },
+      "layer": "unit",
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-11",
       "statement": "\"Design 1's tab band and commit bar overlap by one texel; at SYSTEM the tab wins the commit's top row → move the bar down one texel.\" MEASURED: geometry.js:53 tabY = (rows-2)*LEAD = 228 with LEAD 6, so the band is 228-233; designs.js:690 draws the commit bar from ry(rows-1)-1 = 233. index.js:956 tests the strip first. The lab (nav-240p-lab.html) is the spec; designs.js is generated.",
-      "verifyVia": { "input": "At 417x240 in design 1, read S.tabRects / g2.tabY+LEAD and the commit bar's published rect; press at y = 233, x < 210 at SYSTEM with a body selected.", "observable": "The two rects do not share a row; a press at the commit bar's top row commits, a press at the tab band's bottom row changes level. extract-nav-designs --check exits 0 and the entry frames at every other level are byte-identical to HEAD's." },
-      "layer": "unit"
+      "verifyVia": {
+        "input": "At 417x240 in design 1, read S.tabRects / g2.tabY+LEAD and the commit bar's published rect; press at y = 233, x < 210 at SYSTEM with a body selected.",
+        "observable": "The two rects do not share a row; a press at the commit bar's top row commits, a press at the tab band's bottom row changes level. extract-nav-designs --check exits 0 and the entry frames at every other level are byte-identical to HEAD's."
+      },
+      "layer": "unit",
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
     },
     {
       "id": "AC-12",
       "statement": "\"Hidden controls with no legend: V everywhere; / on design 1's PRISM and SYSTEM; R F on design 1's PRISM; the sort key and page keys in design 2; any legend at all on design 2's SYSTEM; Shift+Tab → print them.\" MEASURED: designs.js:649-665 (design 1 hint strings per level), :1464-1483 (d2Status clauses); no look prints V. The lab is the spec.",
-      "verifyVia": { "input": "In each design, read the hint row / status line at every level (and the SYSTEM line in design 2).", "observable": "Each bound key at that level is named where it works: design 1 names / SEARCH and R/F UP at PRISM and / SEARCH at SYSTEM; design 2 names [ ] SORT <key> and - = PAGE where a list is drawn and a legend of its SYSTEM controls; both name V LOOK (or equivalent) and SHIFT+TAB somewhere the pilot sees at rest. No string overflows its row at 417 wide (fit() guard, no mark-guard violations)." },
+      "verifyVia": {
+        "input": "In each design, read the hint row / status line at every level (and the SYSTEM line in design 2).",
+        "observable": "Each bound key at that level is named where it works: design 1 names / SEARCH and R/F UP at PRISM and / SEARCH at SYSTEM; design 2 names [ ] SORT <key> and - = PAGE where a list is drawn and a legend of its SYSTEM controls; both name V LOOK (or equivalent) and SHIFT+TAB somewhere the pilot sees at rest. No string overflows its row at 417 wide (fit() guard, no mark-guard violations)."
+      },
+      "layer": "unit",
+      "progress": "✅ BUILT wave 1 (commit after 96ae10f), integrator green: src/ui 709/32, cockpit 698, extract --check 0. Live checks pending (coordinator)."
+    },
+    {
+      "id": "AC-13",
+      "statement": "REVIEW C1/C29 (reproduced headlessly): under a design every chrome control fires on the RELEASE of a drag — remapClick runs as the first statement of _handleClick (NavComputer.js:4420) while the only 'was a drag, not a click' rejection is at :4496. Measured at 417x240: a press at (20,120) dragged to the pager and released paged the rail 0→27; released on a list header re-sorted; released on a drawn-search result row it called _activateSearchHighlight → _onCommit({type:'warp'}), and main.js:5970's warp branch then closes the nav and starts the jump. A pan must never operate a control.",
+      "verifyVia": {
+        "input": "In each design: press on the map, drag 60+ texels, release over (a) the pager row, (b) a list header (design 2 list mode), (c) a drawn-search result row with the search open, (d) a ladder end cap on an overflowing ladder, (e) HERE · SECTOR.",
+        "observable": "Nothing fires: listOffset, sortLabel, ladderScroll, the search highlight and the view centre are all unchanged and no _onCommit is called. A genuine click (press and release within 5 texels) on each control still works. Legacy is unchanged."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-14",
+      "statement": "REVIEW C4/C11 + the critic: the drawn search survives closing the nav (deactivate() at NavComputer.js:620 never tells the driver), so reopening lands in the field with the old query and every key captured; the driver instance is never rebuilt, so S.levelLag (which eats every map click while set), S.levelArm, S.pick and S.listOffset also survive a close-and-reopen.",
+      "verifyVia": {
+        "input": "Open a design, press /, type 'sol', press N to close, press N to reopen; separately, Tab into PRISM and press N within the 350 ms ease, then reopen; separately page the rail to page 3, close, reopen.",
+        "observable": "On reopen the search is closed with an empty query and V/Tab work; no level lag is pending and a map click drills; the list is on page 1. The sort key, the list-mode flag and the zoom index MAY persist (they are preferences)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-15",
+      "statement": "REVIEW C8: _dragStartLadder is never cleared on mouse-up (NavComputer.js:4413-4415 clears _panStartCenter, _gaugeDrag and _counterDrag but not it), so a press taken at another level, then Tab to SYSTEM in design 1, lets the next move scrub the ladder from a stale start.",
+      "verifyVia": {
+        "input": "Design 1: press at PRISM (do not release), Tab to SYSTEM on a system whose ladder overflows, move the pointer.",
+        "observable": "The ladder does not scroll from the stale press; a fresh press on the ladder still pans it."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-16",
+      "statement": "REVIEW C9: the _systemMode pin (NavComputer.js:4585/4590) is entry-only — a 'planet' or 'component' sub-view entered in legacy survives V into a design, where the designs draw the whole system while the host's click branches (4512-4540) still think a sub-view is open, so the first click only pops the invisible mode.",
+      "verifyVia": {
+        "input": "In legacy at SYSTEM click a planet with moons (planet detail opens), press V.",
+        "observable": "Under the design _systemMode is 'system' immediately; the first click on a body selects it. V back to legacy returns to the whole-system orrery (no sub-view resurrected)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-17",
+      "statement": "REVIEW C16/C17: Math.round in search.rowAt (search.js:195) and listRowAt (index.js:365/370/374) puts the hit band half a row above the drawn row, so the bottom 2 of every 6 texels of a rail/list/search row pick the row BELOW — a click on the lower third of a search result warps to the wrong star.",
+      "verifyVia": {
+        "input": "In each design, click the top texel and the bottom texel of drawn row i in the rail (design 1, any level), the PRISM table (design 2), and the drawn search results.",
+        "observable": "Both texels resolve to row i (the band equals the drawn row: glyph rows plus the lead gap below); the texel above row 0 and below the last row resolve to nothing."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-18",
+      "statement": "REVIEW C18: design 2's SECTOR/REGION status line (designs.js:1476, from the lab) is longer than 417 texels at Max's own buffer, so 'CLICK TO ENTER' is truncated off the glass — the one control the line advertises is the part that falls off.",
+      "verifyVia": {
+        "input": "Design 2 at SECTOR and REGION at 417x240, read the status line.",
+        "observable": "The whole line fits (fit() passes, no truncation); CLICK TO ENTER is on the glass at both levels."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-19",
+      "statement": "REVIEW C19: the YOU marker and the target diamond at 2D levels (designs.js:1503, from the lab) are drawn unclipped, so once the map is panned they paint over the chrome (status row, tab strip, top/bottom bars).",
+      "verifyVia": {
+        "input": "In each design at GALAXY/SECTOR/REGION, pan until the player's cell or the target leaves the map pane.",
+        "observable": "The markers are clipped at the pane edge and never overdraw chrome texels (mark-guard clean; the chrome rows' pixels are unchanged by the pan)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-20",
+      "statement": "REVIEW C20: design 1's SYSTEM screen gives one body two different tags — the ladder's letter comes from one ordering and the rail row's from another (designs.js:1112 vs the rail rows), so whenever the sort is not AU the tag under a body on the ladder does not match the tag beside its name in the rail.",
+      "verifyVia": {
+        "input": "Design 1 at SYSTEM on Sol, press ] to sort by NAME, then TEMP.",
+        "observable": "For every body the ladder tag equals the rail tag under every sort key."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-21",
+      "statement": "REVIEW C30: the drawn search types Ctrl/Meta/Alt chords into the query and preventDefaults them (search.js:65 printable()), so there is no paste and Ctrl+R is eaten while the field is open.",
+      "verifyVia": {
+        "input": "Open the drawn search; press Ctrl+R, Ctrl+V, Alt+Tab-like chords.",
+        "observable": "No chord character enters the query and the event is not preventDefaulted (the browser keeps its shortcut); plain typing still enters the query."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-22",
+      "statement": "REVIEW C7: V pressed mid-drag leaves _dragStartX/Y in the previous canvas coordinate space (legacy viewport px vs 417x240 texels), so the gesture continues with a wild delta after the switch.",
+      "verifyVia": {
+        "input": "Press and hold on the map in legacy, press V, move the pointer.",
+        "observable": "The gesture ends on V (no pan/rotation applies from the stale start); the next press starts a clean gesture in the new space."
+      },
       "layer": "unit"
     }
   ],
@@ -85,7 +230,8 @@
       "nav-240p-lab.html → scripts/extract-nav-designs.mjs → src/ui/navViewModes/designs.js (GENERATED, never hand-edited): null-selection painting, the commit bar row, the hint/legend strings.",
       "src/ui/navViewModes/geometry.js — tabY / commitY.",
       "src/style.css — .overlay-close and .nav-lowres panel sizing.",
-      "docs/FEATURES/nav-menu-map-old-vs-new.html — the audit these items come from (items 1-12)."
+      "docs/FEATURES/nav-menu-map-old-vs-new.html — the audit these items come from (items 1-12).",
+      "docs/WORKSTREAMS/nav-defects-batch-2026-09-18/REVIEW-2026-09-18.md — the code review record; AC-13..22 cite its C-numbers."
     ],
     "outputs": [
       "Both designs' controls tell the truth: what is drawn armed commits, what is bound is printed, a drag moves 1:1, a selection can be nothing.",
