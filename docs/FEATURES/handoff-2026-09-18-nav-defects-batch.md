@@ -2,7 +2,7 @@
 
 > ⭐⭐ **HIS LAST WORDS (2026-09-18):** *"1 yes (use subagents/workflows) 2 I need to review first 3. Yes; after 1 and 3 write a handoff to a fresh session"* — on the three asks at the bottom of the comparison page: (1) go on the twelve defects, (2) the restorations wait for his review, (3) push. All three done; this is the handoff.
 
-> ⚠ **IN-REPO ON PURPOSE.** Branch `feature/world-engine-production-L1` (lane A, NOT master). Commits since the last push (`783e32b` was pushed and verified): `96ae10f` scope · `2d30b73` wave 1 · `652a9c0` review record + wave-2 scope · `b3f7737` wave 2 · `48159e6` the home-test fix · plus this handoff's NOW/handoff commit. **He has not said push for these** — ask once, as an approval, no command. ⛔ Hundreds of untracked PNGs are normal — never `git add -A`.
+> ⚠ **IN-REPO ON PURPOSE.** Branch `feature/world-engine-production-L1` (lane A, NOT master). **ALL PUSHED** — `8095239` is on the remote (ls-remote verified 2026-09-18 evening; Max: *"1 push then give the handoff"*): `96ae10f` scope · `2d30b73` wave 1 · `652a9c0` review record + wave-2 scope · `b3f7737` wave 2 · `48159e6` the home-test fix · `ca792ab` NOW + handoff · `8095239` the verdict. Only this note's own commit may be unpushed — check `git ls-remote` before assuming. "Push as needed" does NOT carry into the next session. ⛔ Hundreds of untracked PNGs are normal — never `git add -A`.
 
 ---
 
@@ -38,7 +38,7 @@ wc -l src/ui/NavComputer.js src/main.js                                         
 ## 2. ▶ THE PICKUP — in order
 
 0. **Do not build any restoration (page items 13-23).** He said *"I need to review first."* If he answers by number, each yes is its own scoped unit (most touch the lab → extractor → designs.js pipeline; hover-inspect (13) needs a hovered ref published on S first; planet detail (16) needs a design-side sub-mode before the `_systemMode` pin at NavComputer.js:4585/4590 can be lifted).
-1. **Push** — ask once.
+1. **Push** — done for everything through `8095239`; ask once for anything new.
 2. **His four pictures + two decisions** are on the page's "After the fixes" section: design 2's chip unarmed/armed, design 1's unarmed row, the legends (design 1 PRISM hint + tab-strip legend; design 2 SYSTEM legend), the pips, the ladder letters under a sort, design 2's SECTOR status, the panned GALAXY. Decisions: (a) the ladder is now sort-independent (AU order) so its letters match the rail — one line to revert (lab `:1477` / `designs.js:1201`); (b) design 1's tab-strip level counts and two hint clauses were cut to fit the legends at 417 texels (the count still prints in the rail header).
 3. **The review's confirmed items not in the batch** (§3) — offer them as the next defect batch; none blocks.
 4. Then the restorations, as he rules.
@@ -89,7 +89,7 @@ wc -l src/ui/NavComputer.js src/main.js                                         
 
 ## 6. FOR MAX (carried)
 
-1. Push the lane-A commits since `783e32b`? Recommend yes.
+1. ~~Push~~ — done through `8095239`.
 2. The "After the fixes" pictures and the two decisions (ladder sort-independence; the legend cuts) — say if either is wrong.
 3. Items 13-23 on the page: yes / no / park by number. My recommendations are on each; 13 (hover-inspect) and 14 (prism drop lines + grid) first.
 
