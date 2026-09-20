@@ -1,0 +1,189 @@
+{
+ "workstream": "nav-restorations-2026-09-20",
+ "intentRef": "intent.md",
+ "project": "well-dipper",
+ "status": "building",
+ "seamRef": "SEAM.md",
+ "tier": "shipping game UI; the 240p pictures are prototype-tier and Max judges them by eye. Bars are observable facts (a string in the text stream, a rect published, a field moved); the only numeric bars are derived — 417 texels (the buffer at his window), 3260 ly/kpc (legacy's own constant), the wheel's 1.15/0.87 and [0.3, 5.0] (legacy's own clamp).",
+ "waves": {
+  "1": [
+   "AC-1",
+   "AC-2",
+   "AC-3",
+   "AC-7",
+   "AC-8",
+   "AC-9"
+  ],
+  "2": [
+   "AC-4",
+   "AC-5",
+   "AC-6",
+   "AC-10",
+   "AC-11"
+  ]
+ },
+ "acceptanceCriteria": [
+  {
+   "id": "AC-1",
+   "pageItem": 13,
+   "wave": 1,
+   "statement": "\"Hover-inspect on every screen: sector name at GALAXY, coordinates at SECTOR and REGION, the star tooltip at PRISM, the body callout at SYSTEM.\" MEASURED: under a design the hover is ALREADY RESOLVED — navViewModes/picking.js:53 HOVER_FIELD writes nav._hoveredTile / _hoveredLocalStar / _hoveredBody from the designs' own published geometry inside resolveHover (index.js:508-532, called at the tail of render(), index.js:346) — but no painter can read it: S and D carry no hover field (state.js:283-438) and the painters close over S/D only (designs.js:66-68). Legacy's tooltip contents are the spec: GALAXY the sector name (NavComputer.js:1856-1861); SECTOR/REGION the tile centre as a kpc pair `(x.x, z.z)` (:1677-1679); PRISM name, `<spectral> class`, `<pc> pc (<ly> ly)`, `<pc> pc above|below plane` (:2200-2215); SYSTEM a planet's type · R⊕ · AU · K · moons, or the star's class · R☉ · age · planet count (:2858-2893).",
+   "verifyVia": {
+    "input": "In each design, at each of the five levels, move the pointer onto a drawn thing (a sector cell, a tile, a star mark, a planet pip / ladder stop / the star) and render; then move it onto empty map and render.",
+    "observable": "The next frame paints a callout beside the pointer, inside the map pane, with that thing's facts in the legacy content (name and class and distance and height for a star; type, R⊕, AU, K, moon count for a planet; class, R☉, Gyr, planet count for the star; the sector name; the kpc pair for a tile). On empty map no callout paints. The callout never overprints the rail, the status line, the tabs or the commit row, and the mark guard stays silent. The legacy look is untouched."
+   },
+   "layer": "unit",
+   "progress": "not started"
+  },
+  {
+   "id": "AC-2",
+   "pageItem": 14,
+   "wave": 1,
+   "statement": "\"The prism's depth cues: drop lines to the plane, the plane grid, far-first drawing; plus spectral colour and the catalogue halo in design 1.\" MEASURED (the page's prism table): legacy draws a dashed drop line per star, green above / red below the plane (NavComputer.js:2074-2079), a 1 pc plane grid (:1994-2014), sorts far-first (:2029), colours by spectral class (star.color, :2104) and rings catalogue stars (star.isReal && star.name, :2109-2113). Both designs draw none of the first three; design 1 colours catalogue-vs-procedural only and draws no halo. The page: \"every cue in the 'none' cells has its two endpoints already computed in the design pipeline (the foot dot and the mark share them), so the drop line and the plane grid are lab-side drawing, not new data\" — projectPrism (designs.js) returns both the mark and its foot.",
+   "verifyVia": {
+    "input": "Open each design at PRISM in Sol at 417x240; record the frame's fill stream. Rotate the prism (Q/E + arrows) and zoom (wheel) and record again.",
+    "observable": "For every drawn star mark there is a one-texel-wide line from its foot on the plane to the mark, in one ink above the plane and another below; a grid of plane lines at 1 pc spacing, clipped to the map pane, underneath the marks; marks are painted in far-to-near order (the recorded fill order of two overlapping marks puts the nearer one last). In design 1 each catalogue star's mark takes its spectral ink (the SPECTRAL table in designs.js) and carries a one-texel halo ring; procedural stars keep the low-fi mark. The mark cap (240 design 1 / 584 design 2) and the marks themselves are unchanged; the mark guard is silent; frame hashes at levels 0-2 and 4 are byte-identical before/after."
+   },
+   "layer": "unit",
+   "progress": "not started"
+  },
+  {
+   "id": "AC-3",
+   "pageItem": 15,
+   "wave": 1,
+   "statement": "\"Names on the prism in design 1 (in place of the eight digits), and the height numbers in both: HEIGHT with its region, PLAYER Y, Y RANGE\" → names on the marks; numbers into design 1's detail block and design 2's status line. MEASURED: legacy labels only star.isReal && star.name (NavComputer.js:2109-2133) with a placement solver (:2337-2387); design 1 prints the eight-digit seed and no name (the page's prism table: NAMES ON THE MAP 0); design 2 already prints up to ten names. Legacy's numbers (:4276-4296): HEIGHT = _localCenter.y in pc with region thin disk (<0.3 kpc) / thick disk (<1.0) / halo, above|below plane; PLAYER Y = _playerY kpc and pc; Y RANGE = playerY ± 2.0 kpc in pc. All three inputs are already mirrored: S.cam.y (state.js:394) and D.player.y (state.js:796).",
+   "verifyVia": {
+    "input": "Open design 1 at PRISM in Sol; read the text stream. Then design 2 at PRISM. Then move the camera height with R/F (or the y-gauge) and read both again.",
+    "observable": "Design 1: each catalogue star mark that had a name in legacy carries that NAME (upper-case, fitted) and the eight-digit seed is gone from the map; the selected star's name always draws; where two names would overlap, the lower-priority one (selected > current > nearest first) yields to its letter or is dropped, so the mark guard is silent. Design 1's detail block at PRISM prints three lines — `HEIGHT <n> PC ABOVE|BELOW · <THIN DISK|THICK DISK|HALO>`, `PLAYER Y <n> PC`, `Y RANGE <a> TO <b> PC` — and design 2's PRISM status line prints at least HEIGHT with its region, all fitting 417 texels without the fit() eating any existing clause. After R/F the HEIGHT number moves by the same pc the camera moved. Legacy unchanged."
+   },
+   "layer": "unit",
+   "progress": "not started"
+  },
+  {
+   "id": "AC-4",
+   "pageItem": 16,
+   "wave": 2,
+   "statement": "\"Planet detail with moons, and moons as burn targets\" — \"needs a design-side sub-view, not a switch back to the old one.\" MEASURED: legacy enters _systemMode='planet' on a click of a planet with moons (NavComputer.js:4574-4592) and draws an in-scene orrery of its moons (_renderPlanetDetail :3256-3537) where a moon click makes it the burn target (:4515-4519, _buildCommitAction :1124-1139 emits target 'moon' with planetIndex+moonIndex, which main.js:5994/5999 already consumes). Under a design the pin at :4585/:4590 is skipped by design (AC-3 of the close pass) and stays; the designs draw the whole system and a moon pip or rail row selects the PARENT (the page's ladder table). D.bodies rows already carry each planet's moon count (state.js:544-546).",
+   "verifyVia": {
+    "input": "In each design at SYSTEM in Sol: click a planet that has moons (it selects); click it AGAIN (the detail opens); hover and click a moon; press Enter. Then Esc (or right-click, or a click on empty map) from the detail. In design 1 also click a moon's rail row from the whole-system view. Repeat on a foreign system reached from the prism.",
+    "observable": "The second click opens a design-side sub-view drawn in that design's own language — design 1 a moon ladder with the parent at its head and the rail listing the moons; design 2 a moon orrery with rings and pips — with every moon on its orbit, named (the same name the rail prints). A moon click selects it: the commit row / chip arms for the MOON and Enter (or the commit click) fires _onCommit with target 'moon', planetIndex and moonIndex, which the running game turns into a burn to that moon (current system) or a warp (foreign). Esc, right-click and an empty-map click each return to the whole-system picture without closing the nav or changing level; a second Esc then behaves as before. In design 1 a moon's rail row selects the moon directly, without the sub-view. Nothing here sets nav._systemMode; the legacy look and its own planet detail are unchanged."
+   },
+   "layer": "integration",
+   "live": true,
+   "progress": "not started"
+  },
+  {
+   "id": "AC-5",
+   "pageItem": 17,
+   "wave": 2,
+   "statement": "\"The ship's real position at SYSTEM, and the trajectory line to the selected body.\" MEASURED: legacy places the ship from nav._currentFocusIndex / _currentMoonIndex (NavComputer.js:280-281, set by the game through the setter at :1174-1175) — at the star for -2/-1, else on the focused planet's orbit point (and its moon's, :2909-2929) — draws a diamond + SHIP (:2935-2956) and a dashed line to the hovered-or-selected body (:2959-3005), all gated on _isCurrentSystem() (:2905, mirrored as D.isCurrent). Neither field reaches D today; design 2 draws its diamond at a fixed offset, design 1 draws none (the page's ladder table, 'See where the ship is').",
+   "verifyVia": {
+    "input": "In the live game, in the current system (Sol), open each design at SYSTEM with the ship parked at a planet (the game's focus index set); read the frame; select another body; read again. Then open a foreign system from the prism.",
+    "observable": "The ship diamond paints AT the focused body's drawn position — on that planet's orbit point in design 2's orrery, at that planet's stop on design 1's ladder (at the star for -2/-1; offset onto the moon's ring when a moon is focused) — labelled SHIP, and a dashed trajectory runs from it to the selected body (or the hovered one while the pointer is on a body), ending in an arrowhead. In a foreign system neither draws. Design 2's fixed-offset diamond is gone. Legacy unchanged."
+   },
+   "layer": "integration",
+   "live": true,
+   "progress": "not started"
+  },
+  {
+   "id": "AC-6",
+   "pageItem": 18,
+   "wave": 2,
+   "statement": "\"Wheel zoom at SYSTEM: design 2 yes; design 1 no, its ladder is a scroll, not a zoom.\" MEASURED: NavComputer._handleWheel (:4701-4710) already scales nav._systemZoom by 1.15/0.87 in [0.3, 5.0] at level 4 with no viewMode gate, and resets it to 1.0 on open / tab / drill (:607, :4470, :4618); only the legacy orrery reads it (:2531); no design does, so 'the wheel still changes a value; nothing draws it'. The close pass's AC-9 principle: an indicator that shows a position along a range is a handle.",
+   "verifyVia": {
+    "input": "Live, design 2 at SYSTEM in Sol: send wheel events over the map (both directions, past both clamps); read the orrery's outer ring radius from the frame before and after; then drag the zoom gauge; then Tab away and back. Design 1 at SYSTEM: wheel over the ladder.",
+    "observable": "Design 2's orrery scales with nav._systemZoom (the outer ring radius grows by the wheel's factor per notch and stops at the clamps), the same picture at every zoom re-centres on the star, and a zoom gauge in design 2's SYSTEM chrome draws the value as a mark along its range; dragging the gauge sets the same zoom. Tab away and back returns to 1.0 as legacy does. In design 1 the wheel at SYSTEM changes nothing drawn (the ladder is unchanged, no gauge appears). Legacy unchanged."
+   },
+   "layer": "integration",
+   "live": true,
+   "progress": "not started"
+  },
+  {
+   "id": "AC-7",
+   "pageItem": 19,
+   "wave": 1,
+   "statement": "\"Body names on the ladder and the orrery, placed like the prism labels, in place of or beside the letter and roman tags.\" MEASURED: both SYSTEM pictures show ordinal tags only (the page's lost #4); legacy prints the generated or known name under every body (NavComputer.js:2833 via _planetDisplayName :916-920 / _moonDisplayName :923-927) and suppresses them at 240p (:2825-2832, seven names overprinted). D.bodies rows carry `name` (state.js:544). Sol has 15 stops in 226 texels on the ladder (the page's ladder table).",
+   "verifyVia": {
+    "input": "Open each design at SYSTEM in Sol; read the text stream; select a body; read again; sort the rail by name (design 1) and read again.",
+    "observable": "Every body whose name fits beside its stop / pip carries its NAME (the rail's spelling); the selected body's name always draws; where names would collide the lower-priority body (selected > current > by AU) keeps only its letter tag, so no two labels overlap and the mark guard is silent; the letter tags stay where a name is dropped, and the ladder's AU order is unchanged (the 2026-09-18 decision). Belts keep their belt label (AC-8). Legacy unchanged."
+   },
+   "layer": "unit",
+   "progress": "not started"
+  },
+  {
+   "id": "AC-8",
+   "pageItem": 20,
+   "wave": 1,
+   "statement": "\"Belt names, and a line of facts about the star\" (the wide-binary member list is PARKED). MEASURED: legacy labels each belt ASTEROID BELT / KUIPER BELT at 45° mid-radius (NavComputer.js:2644) and prints the header fact line `<class> · N planets · N.N Gyr` (:966-969; binary → `<c1>+<c2> binary`). Belts are already in D.bodies (state.js:602) as anonymous stops/annuli; D.sys carries star.type, planets, ageGyr, isBinary, star2. With nothing selected design 1's detail block prints NO BODY SELECTED and design 2's status line NOTHING SELECTED (AC-2 of the defects batch).",
+   "verifyVia": {
+    "input": "Open each design at SYSTEM in Sol with nothing selected; read the text stream; select a planet; read again. Open a system with a Kuiper belt and one with a binary star.",
+    "observable": "Each belt stop (design 1) / annulus (design 2) carries ASTEROID BELT or KUIPER BELT, fitted. With nothing selected, design 1's detail block and design 2's status line carry the star line — class (`G2`, or `G2+M4 BINARY`), planet count, age in Gyr — in place of the empty-selection text; once a body is selected the block/status show that body as before. Everything fits 417 texels with the mark guard silent. Legacy unchanged."
+   },
+   "layer": "unit",
+   "progress": "not started"
+  },
+  {
+   "id": "AC-9",
+   "pageItem": 21,
+   "wave": 1,
+   "statement": "\"One zoom readout for all three looks, same quantity and unit\" — the old nav's radius in light-years. MEASURED: legacy prints `VIEW: <n> ly` = round(_localRadius × 1000 × 3.26) (NavComputer.js:4272-4273); design 1 prints nothing; design 2 prints `VIEW n.n PC ACROSS` = radius×2×1000 (the page's prism table). _localRadius is already S.cam.radius (state.js:394).",
+   "verifyVia": {
+    "input": "Open each design at PRISM in Sol; read the text stream; zoom one wheel notch in and out; read again. Compare with legacy's number at the same radius.",
+    "observable": "Both designs print `VIEW <n> LY` where n = round(S.cam.radius × 3260), the same integer legacy prints for the same radius, in design 1's PRISM detail block and design 2's PRISM status line; design 2's PC ACROSS text is gone; the number changes with the wheel. Legacy unchanged."
+   },
+   "layer": "unit",
+   "progress": "not started"
+  },
+  {
+   "id": "AC-10",
+   "pageItem": 23,
+   "wave": 2,
+   "statement": "\"Grabbable handles in design 2 to match design 1.\" Design 1 has the prism y-gauge (drag sets the camera height) and the ladder counter scrubber; design 2 has none (the page's Gained table, row 6: 'none yet'). MEASURED: the host's gauge routing at NavComputer.js:4402 already accepts ANY design (`this.viewMode && drv.gaugeGrab(x,y)`), and the driver's gaugeGrab/gaugeDragTo (index.js:878-898) read whatever S.yGaugeRect the paint publishes — so design 2 only has to draw a gauge and publish the rect. Design 2's PRISM corner widget today shows a scale mark only (the page's prism table). The SYSTEM zoom gauge is AC-6's.",
+   "verifyVia": {
+    "input": "Design 2 at PRISM: press on the gauge, drag up/down, release; read S.cam.y / nav._localCenter.y before and after; press on the map beside the gauge and drag (must pan / rotate, not the gauge). Repeat with the pointer one texel outside the gauge rect.",
+    "observable": "Design 2's PRISM draws a y-gauge (a track with a mark at the camera's height, in design 2's chrome) and publishes S.yGaugeRect from its draw site; a press inside it arms the gauge and dragging moves nav._localCenter.y by the same mapping design 1 uses (the HEIGHT number of AC-3 follows); a press one texel outside it starts the map gesture instead. Design 1 unchanged; legacy unchanged."
+   },
+   "layer": "unit",
+   "progress": "not started"
+  },
+  {
+   "id": "AC-11",
+   "pageItem": null,
+   "wave": 2,
+   "statement": "The whole: with the old nav's information back — what a thing is on hover, the prism's height cues and names, the moons, the ship, the zoom you can see and grab — the two new menus read as one instrument. Max's walk.",
+   "verifyVia": {
+    "input": "Max opens the nav in his own browser, cycles V through both designs, and walks GALAXY → SYSTEM hovering, zooming, opening a planet's moons and burning to one.",
+    "observable": "His call: it makes sense as a whole. No agent PASSes this; the workflow marks it deferred-to-max."
+   },
+   "layer": "uat",
+   "progress": "not started"
+  }
+ ],
+ "architecturalConnections": {
+  "inputs": [
+   "nav-240p-lab.html → scripts/extract-nav-designs.mjs → src/ui/navViewModes/designs.js (GENERATED, byte-checked by --check; never hand-edited). Design 1 block from lab :887, design 2 from :1841; the painters close over S and D by identity; `fit()` :326, `plated()` :423, `assertFits` :81 (the mark guard, inside every T() draw).",
+   "src/ui/navViewModes/state.js — S (:283-429) and D (:430-438) with a default for every field a painter reads; refresh() mirrors nav._localCenter/_localRadius → S.cam, nav._playerY → D.player.y, nav._systemData → D.sys/D.bodies (buildBodies :513-…, rows carry kind, name, au, cls, moons, pd), nav._isCurrentSystem() → D.isCurrent. NEW this workstream (SEAM.md): S.hover, D.ship, S.sysCam.zoom, S.sysView/S.detailPlanet, S.zoomGaugeRect.",
+   "src/ui/navViewModes/index.js — the driver: render() (:289-348) paints then resolves hover at its tail (resolveHover :508-532 writes the HOST's legacy hover fields from the designs' published geometry via picking.js:53 HOVER_FIELD); remapClick (:1089-1297) routes chrome before the host's per-level picks; gaugeGrab/gaugeDragTo (:878-898) read S.yGaugeRect.",
+   "src/ui/NavComputer.js — the host, LINE-COUNT-FROZEN at 4711; new statements FOLD onto existing lines with /* */ comments; lines 1, 19, 255, 586, 613, 1434, 2029, 4345, 4420, 4442 end in // and are POISONED. Folds this workstream may need: handleEscape() (:1441, check for a test that source-scans the signature line before folding on it) for the sub-view's Esc/right-click; 4405 / 4355 / 4415 for the design-2 zoom gauge (mirroring the counter's three call sites); NOTHING else. _handleWheel (:4701-4710) is untouched.",
+   "src/main.js — FROZEN at 15161 and untouched: its commit consumer already handles target 'moon' (:5994 burn, :5999 focus).",
+   "docs/FEATURES/nav-menu-map-old-vs-new.html — the spec in Max's language: items 13-23, the prism table, the ladder table; his rulings are in intent.md.",
+   "docs/WORKSTREAMS/nav-screens-close-pass/INTERFACE.md (+ nav-menu-elements-functional/INTERFACE.md) — the seam conventions this workstream's SEAM.md extends: LAB publishes at the draw site, DRIVER hit-tests, HOST folds; geometry comes out of the paint; branch on a published kind; the plate rule; labelHits before prismHits/bodyHits."
+  ],
+  "outputs": [
+   "Both designs identify what the pointer is on before a click, at every level, in the legacy tooltip's content.",
+   "Design 1's prism reads height the way legacy's did (drop lines, grid, far-first, spectral ink, halo, names) while keeping its low-fi marks; both designs print the height numbers and the same VIEW radius in ly.",
+   "SYSTEM in both designs: every body and belt named on the picture, the star's fact line when nothing is selected, the ship where it really is with a trajectory to the target, and a design-side moon view from which a moon can be burned to.",
+   "Design 2 gains its handles: the prism y-gauge and a SYSTEM zoom gauge the wheel also drives."
+  ],
+  "mustStayWorking": [
+   "wc -l src/ui/NavComputer.js == 4711 and wc -l src/main.js == 15161.",
+   "node scripts/extract-nav-designs.mjs --check exits 0.",
+   "viewMode === null draws byte-for-byte what HEAD draws at every level on a fresh open AND after a V cycle (nothing in this workstream touches legacy behaviour; AC-6/AC-7/AC-8 of the defects batch are the only legacy changes on record).",
+   "Every AC of nav-defects-batch-2026-09-18 still holds — in particular AC-2 (a real no-selection state: D.selBody null must be handled by every NEW reader too), AC-4 (a press on chrome — now including a callout, a gauge or a belt label — arms no map gesture unless it is a handle), AC-12/AC-18 (every legend/status/hint string still fits 417 texels after the new clauses; the mark guard is silent across both designs × five levels × the sub-view), AC-13 (a drag released over any new rect fires nothing), AC-20 (one letter per body, the ladder in AU order).",
+   "Every AC of nav-screens-close-pass and nav-menu-elements-functional: the map is a picker at all five levels; Tab/Enter/[ ]/- =// stay bound where they draw; the y-gauge, counter and ladder drag in design 1 work as before; rings/labels/tags pick as before; S.labelHits is tested before S.prismHits/S.bodyHits.",
+   "Suites at baseline: src/ui 767 passed / 35 files (+ this workstream's new tests), src/cockpit 698, tests/ 20 failed across the same 8 files; run vitest with --root /home/ax/projects/well-dipper --exclude '**/.claude/**' --exclude '**/node_modules/**'; never overlap two vitest runs.",
+   "Hover resolves at the tail of the driver's render(); S.hover published there is read by the NEXT frame's paint (one frame of lag, as legacy's own mousemove-then-draw has). S and D are MUTATED, never replaced; every new field has a default in state.js; PanelHost freezes the glass on the first painter throw.",
+   "The cockpit panel instance (activate() gate) is untouched; nothing here reaches the ORRERY/HELM screens."
+  ]
+ }
+}
