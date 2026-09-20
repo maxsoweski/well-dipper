@@ -1322,14 +1322,45 @@ describe("design 1's prism y-gauge is grabbable", () => {
     nav._handleMouseUp();
   });
 
-  it('⛔ DESIGN 2 PUBLISHES NO GAUGE, and a drag in that column rotates as it always has', async () => {
+  it('⛔ DESIGN 2 NOW PUBLISHES THE SAME GAUGE, and a drag beside it still rotates as it always has', async () => {
+    // ⚠ REWRITTEN IN WAVE 2a: THIS CASE'S PREMISE WAS OVERTURNED ON PURPOSE. It used to assert
+    //    `S.yGaugeRect === null` for design 2, because design 2's PRISM corner carried a 24-texel
+    //    scale column — a picture of a control with nothing behind it. AC-10 (page item 23, Max
+    //    2026-09-07: *"the indicators on the prism and system screens should be grabbable"*) gives
+    //    design 2 the real gauge, drawn by the SAME `yGauge()` that draws design 1's, so the rect
+    //    the driver inverts cannot drift between the two. What survives verbatim is the half this
+    //    case was really for: the grab must not SPREAD — a press beside the strip still orbits.
+    // ⭐ THE SHAPE IS COMPARED AGAINST DESIGN 1's OWN RECT, not against a typed literal, so a
+    //    field added to one publisher and forgotten by the other fails here.
+    // ⛔ MUTANT `d2Prism-no-gauge` — delete the `yGauge(...)` call in `d2Prism`: the rect is null
+    //    and the first assertion goes red.
+    // ⛔ MUTANT `gaugeGrab-widen-skirt` — widen `gaugeGrab`'s x test past one texel: the press at
+    //    `r.x - 10` starts arming the gauge and the rotation assertion goes red.
+    const d1 = await loadedNav();
     const { nav, drv } = await loadedNav({ mode: 'bars' });
-    expect(drv.S.yGaugeRect, 'design 2 drew a y-gauge it does not have').toBe(null);
+    const r = drv.S.yGaugeRect;
+    expect(r, 'design 2 draws no y-gauge — AC-10 says it must').toBeTruthy();
+    expect(Object.keys(r).sort(), 'design 2\'s rect is not design 1\'s shape')
+      .toEqual(Object.keys(d1.drv.S.yGaugeRect).sort());
+    const map = drv.regions().map;
+    expect(r.x >= map.x && r.x + r.w <= map.x + map.w && r.y >= map.y && r.y + r.h <= map.y + map.h,
+           'the gauge is outside the map pane, so _handleMouseDown:4401 returns before it can arm').toBe(true);
+
+    // ⭐ A REAL DRAG INSIDE IT MOVES THE CAMERA HEIGHT, through the host's existing :4402 routing.
+    const yStart = nav._localCenter.y;
+    nav._handleMouseDown({ clientX: r.x + 3, clientY: r.cy, button: 0 });
+    nav._handleMouseMove({ clientX: r.x + 3, clientY: r.cy - r.span * 0.5 });
+    expect(nav._localCenter.y, 'the drag inside design 2\'s gauge moved nothing')
+      .toBeCloseTo(r.base + r.halfKpc * 0.5, 12);
+    nav._handleMouseUp();
+
+    // ⛔ AND THE CLAUSE THIS CASE ALWAYS HAD, UNCHANGED: ten texels left of the strip is the map.
+    nav._localCenter.y = yStart;
     const rotBefore = nav._localRotY, yBefore = nav._localCenter.y;
-    nav._handleMouseDown({ clientX: 400, clientY: 120, button: 0 });
-    nav._handleMouseMove({ clientX: 380, clientY: 100 });
-    expect(nav._localRotY).not.toBe(rotBefore);
-    expect(nav._localCenter.y).toBe(yBefore);
+    nav._handleMouseDown({ clientX: r.x - 10, clientY: r.cy, button: 0 });
+    nav._handleMouseMove({ clientX: r.x - 30, clientY: r.cy - 20 });
+    expect(nav._localRotY, 'the prism did not rotate').not.toBe(rotBefore);
+    expect(nav._localCenter.y, 'a press off the gauge moved the camera height').toBe(yBefore);
     nav._handleMouseUp();
   });
 

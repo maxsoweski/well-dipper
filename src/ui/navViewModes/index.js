@@ -84,6 +84,19 @@ export const NAV_VIEW_MODE_KEY = 'well-dipper-nav-view-mode';
 /** The design number `designs.js` expects for a mode name. */
 const DESIGN_OF = { rail: 1, bars: 2 };
 
+/* Function · the SYSTEM zoom's range, in log space, for the gauge's mapping.
+ * Intent · AC-6: `zoomDragTo` has to land on exactly the numbers `NavComputer._handleWheel:4708`
+ *   clamps to — `Math.max(0.3, Math.min(5.0, ...))` — or the gauge and the wheel would disagree at
+ *   the ends, and a pilot who dragged to the top could still wheel one notch further.
+ * Deliberate non-goals · not imported from the host: `_handleWheel` spells them as literals inside
+ *   an expression, there is nothing to import, and the host is LINE-FROZEN at 4711 so exporting
+ *   them from there is not on offer. They are restated here, once, with the site that owns them
+ *   named — and the driver test drives the real wheel to both clamps and asserts the gauge's ends
+ *   equal what the instrument actually holds, so a drift between these two copies is caught.
+ * ⚠ LOGGED ONCE AT MODULE LOAD rather than per drag: `Math.log` of a constant in the inner loop of
+ *   a mousemove is not the cost that matters, but the two names say what the numbers ARE. */
+const LN_ZOOM_MIN = Math.log(0.3), LN_ZOOM_MAX = Math.log(5.0);
+
 /**
  * Build the driver for one NavComputer instance.
  *
@@ -185,7 +198,7 @@ export function makeViewModeDriver(nav) {
     // selects a planet that is not on the glass. `null`, not `[]`: "this design publishes no rings"
     // is a different claim from "it published an empty set of them", and `pickOrbitRing` treats
     // either as no candidates.
-    S.orbitRings = null; S.yGaugeRect = null;
+    S.orbitRings = null; S.yGaugeRect = null; S.zoomGaugeRect = null;
     // ── ⚠⚠ AC-2's REMAINING SIX (INTERFACE §8), AND THIS LINE IS A BELT, NOT THE BRACES. MEASURED.
     //
     // The interface says the DRIVER clears them each frame, and it does — but the LAB independently
@@ -999,10 +1012,15 @@ export function makeViewModeDriver(nav) {
   /**
    * ⭐ AC-9 — IS THE POINTER ON DESIGN 1'S PRISM Y-GAUGE?
    *
-   * ⛔ THE PUBLICATION IS THE GATE, NOT A LEVEL TEST. `S.yGaugeRect` is written by `d1Prism` and by
+   * ⛔ THE PUBLICATION IS THE GATE, NOT A LEVEL TEST. `S.yGaugeRect` is written by `yGauge()` and by
    * nothing else, and `resetPicks` clears it every frame — so "there is a gauge under this pointer"
-   * and "this design, at this level, drew one" are the same question, asked once. A `S.level === 3
+   * and "a painter drew one this frame" are the same question, asked once. A `S.level === 3
    * && viewMode === 'rail'` test here would be a second copy of that condition, free to drift.
+   *
+   * ⚠ AND SINCE WAVE 2a THAT IS NOT MERELY REDUNDANT BUT WRONG: AC-10 gives design 2's PRISM the
+   * same gauge, drawn by the same `yGauge()` at `d2Prism`'s own `gx`, so a `viewMode === 'rail'`
+   * clause here would silently refuse every press on it. The one publisher is what keeps the eight
+   * fields `gaugeDragTo` inverts identical across the two designs.
    *
    * ⚠ ONE TEXEL OF SKIRT EITHER SIDE. The strip is 6 texels wide and its marks reach `gaugeX + 5`;
    * a control the pilot has to hit within six texels at 240p is a control that mostly misses.
@@ -1027,6 +1045,66 @@ export function makeViewModeDriver(nav) {
     if (!r || !Number.isFinite(py) || !(r.span > 0)) return null;
     const k = r.base + ((r.cy - py) / r.span) * r.halfKpc;
     return Math.max(r.base - r.halfKpc, Math.min(r.base + r.halfKpc, k));
+  }
+
+  /* Function · the two halves of design 2's SYSTEM zoom gauge: is the pointer on it, and what zoom
+   *   is a pointer at `py` asking for.
+   * Intent · AC-6 (SEAM §2). `NavComputer._handleWheel:4707-4708` has always scaled `_systemZoom`
+   *   by 1.15/0.87 inside [0.3, 5.0] at level 4, with no `viewMode` gate — so under a design the
+   *   wheel moved a number nothing drew. The lab draws it as a track with a mark this wave; these
+   *   two make the track a HANDLE, which is the close pass's AC-9 principle (an indicator that
+   *   shows a position along a range is grabbable) and Max's 2026-09-07 ruling that design 2 should
+   *   have handles to match design 1's.
+   * Deliberate non-goals · they do not clamp `_systemZoom` themselves beyond the range the gauge
+   *   DISPLAYS, they never touch design 1 (Max: no wheel zoom on the ladder), and they are not in
+   *   `pressStartsGesture` — the gauge is drawn INSIDE the map pane (it has to be, or the host's
+   *   `if (!onMap) return;` at `:4401` would return before `:4405` could arm the drag), so the press
+   *   is already a map press and the host's fold is what turns it into a zoom instead of a spin.
+   */
+
+  /**
+   * ⭐ AC-6 — IS THE POINTER ON DESIGN 2'S SYSTEM ZOOM GAUGE?
+   *
+   * ⚠ THREE CLAUSES WHERE `gaugeGrab` HAS ONE, ON THE SEAM'S INSTRUCTION, AND THE OTHER TWO ARE
+   *   MEASURED REDUNDANT TODAY: `d2System` is the only publisher of `S.zoomGaugeRect` and
+   *   `resetPicks()` clears it at the head of every frame, so "a rect is published" already implies
+   *   "design 2 drew one at SYSTEM this frame" — the same argument `gaugeGrab` makes for testing the
+   *   publication alone. They are written anyway because the seam fixes them and because the cost of
+   *   the drift they could hide is asymmetric: a stale rect answering a press would arm a ZOOM drag
+   *   over design 1's ladder, where the same gesture is a scrub.
+   * ⚠ ONE TEXEL OF SKIRT EITHER SIDE ON X, NONE ON Y — `gaugeGrab`'s shape exactly, for the reason
+   *   it gives: a track a handful of texels wide at 240p that the pilot must hit dead-on is a
+   *   control that mostly misses. The y bounds are the track's own, because its LENGTH is the range.
+   */
+  function zoomGrab(x, y) {
+    const r = S.zoomGaugeRect;
+    if (!r) return false;
+    if (S.design !== 2 || S.level !== 4) return false;
+    return x >= r.x - 1 && x < r.x + r.w + 1 && y >= r.y && y < r.y + r.h;
+  }
+
+  /**
+   * ⭐ AC-6 — THE ZOOM A POINTER AT `py` IS ASKING FOR, or `null` if no gauge is drawn.
+   *
+   * ⛔ LOGARITHMIC, BECAUSE THE WHEEL IS. `_handleWheel` MULTIPLIES by 1.15/0.87, so every notch is
+   * the same distance in log space and a linear track would crowd every zoom below 1.0 into its
+   * bottom seventh — 0.3..1.0 is 14% of [0.3, 5.0] linearly and 40% of it logarithmically. `t` is
+   * therefore the seam's own mapping, `t = (ln z − ln 0.3) / (ln 5 − ln 0.3)`, run backwards off the
+   * SAME two constants the mark was drawn from, so the mark lands under the pointer by construction.
+   * ⛔ `t = 0` AT THE BOTTOM (`y + h`) AND `t = 1` AT THE TOP (`y`). Up is more magnification: the
+   * gauge reads like every other vertical instrument on the glass, and it is the direction the
+   * y-gauge above already moves in.
+   * ⚠ THE CLAMP IS ON `t`, NOT ON THE RESULT, which is what makes a pointer dragged past either end
+   *   PEG there rather than fall out of the exponential — the same thing the y-gauge's mark does.
+   *   The endpoints are exact by construction (`t = 0` → `exp(ln 0.3)`), so the host's fold writes
+   *   the host's own clamp values and `_handleWheel` picks up from where the drag left off.
+   * @returns {number|null} the new `nav._systemZoom`, in [0.3, 5.0].
+   */
+  function zoomDragTo(py) {
+    const r = S.zoomGaugeRect;
+    if (!r || !Number.isFinite(py) || !(r.h > 0)) return null;
+    const t = Math.max(0, Math.min(1, (r.y + r.h - py) / r.h));
+    return Math.exp(LN_ZOOM_MIN + t * (LN_ZOOM_MAX - LN_ZOOM_MIN));
   }
 
   /**
@@ -1188,7 +1266,8 @@ export function makeViewModeDriver(nav) {
    * `drawDesign2` as they lay the frame out (`designs.js:607`, `:1385`) and is the pane the prism and
    * the orrery are drawn INSIDE, so "is this the map" is one question at all five levels and in both
    * designs, asked of the code that drew it. The three handles are published the same way and by the
-   * painters that draw them — `S.yGaugeRect` (`d1Prism`), `S.ladderCounterRect` and `S.ladderCaps`
+   * painters that draw them — `S.yGaugeRect` (`yGauge`, from `d1Prism` and `d2Prism`),
+   * `S.ladderCounterRect` and `S.ladderCaps`
    * (`d1Ladder`) — which is why `gaugeGrab`/`counterGrab` are reused here rather than restated: the
    * host must not decline a press that those two are about to accept one statement later.
    *
@@ -1431,6 +1510,12 @@ export function makeViewModeDriver(nav) {
   return {
     S, D, render, bufferFor, applySurface, hover, resolveHover, remapClick, geo, scrollLadder,
     tabLevel, commit, cycleSort, page, searchOpen, searchActive, searchKey, gaugeGrab, gaugeDragTo,
+    // ⭐ AC-6's DRIVER HALF (nav-restorations-2026-09-20). Called OPTIONALLY by the HOST's folds on
+    // the line-frozen `NavComputer.js` (`zoomGrab?.(p.x, p.y)` at :4405, `zoomDragTo?.(p.y)` at
+    // :4355), so THE NAMES ARE THE CONTRACT for the reason `counterGrab`'s is: a rename leaves the
+    // class calling `undefined?.()`, the fold falls through, and the failure is a gauge that is
+    // drawn and inert — indistinguishable from never having built the handle.
+    zoomGrab, zoomDragTo,
     // ⭐ AC-2/AC-9's REMAINING CONSUMERS (INTERFACE §8). `counterGrab` / `counterDragTo` are called
     // OPTIONALLY by the HOST's three folds in the line-frozen `NavComputer.js`, so the NAMES ARE THE
     // CONTRACT: renaming either leaves the class calling `undefined?.()`, which is an inert control

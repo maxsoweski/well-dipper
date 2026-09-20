@@ -300,6 +300,14 @@ const INK = {
   ABOVE:  '#1f6b52',   // a drop line standing a mark UP off the plane   (legacy's green)
   BELOW:  '#6b2f28',   // …and one hanging it BELOW                       (legacy's red)
   HALO:   '#6b4a18',   // the catalogue ring, design 1                    (legacy's amber glow)
+  // ── AC-5 (restorations) — THE SHIP, AND IT IS ITS OWN INK ON PURPOSE ─────────────────────────
+  // Legacy draws the diamond, the word SHIP and the trajectory in one colour, `#00ff80`
+  // (NavComputer.js:2937/2953/2977), and that colour is not `YOU`: `YOU` is *where the pilot is in
+  // the GALAXY* — the player's plane on the y-gauge, his tile, his sector — and this is *where the
+  // SHIP is in this system*, one level down. At 240p two greens a few degrees apart read as one, so
+  // the ink is legacy's own literal rather than a shade of `YOU`, and the two never share a picture:
+  // `YOU` does not appear at SYSTEM in either design.
+  SHIP:   '#00ff80',   // the ship diamond, its word and its trajectory    (legacy's own)
 };
 /** BURN or WARP is not "which level am I on" — it is NavComputer._isCurrentSystem() (:1098-1105), a
  *  0.1 pc identity test. Browsing a foreign system from SYSTEM still arms a WARP. */
@@ -410,7 +418,17 @@ function plus(g, cx, cy, ink) {           // the real-catalog star: 5 texels of 
  *
  * ⛔ STILL `fillRect` ONLY — no arc, no stroke, no dash, no ellipse(). See the PRIMITIVES banner.
  */
-function dottedEllipse(g, cx, cy, rx, ry, ink, every = 2) {
+/* ⭐ AC-6 (restorations) — AND `cl` CLIPS IT, PER DOT. The orrery's rings are the one mark on this
+ *    page whose radius is a CAMERA value: `S.sysCam.zoom` runs to 5.0, which puts the outer ring
+ *    five times outside the pane, and `rect()` clips nothing while the canvas clips only at the
+ *    buffer's edge — so without this the rings paint straight through the topbar and the status bar
+ *    (AC-19 of the defects batch, the same defect `rectClip`/`spriteClip` were written for).
+ * ⛔ PER TEXEL HERE, NOT PARAMETRIC LIKE `lineTexels`, and it is affordable for the reason the walk
+ *    is bounded: `n` is capped at 220 dots however big the ellipse gets, so the test runs at most
+ *    220 times per ring rather than once per texel of arc.
+ * ⚠ IT CANNOT MOVE THE PICTURE MAX RULED ON: at `zoom = 1` every dot of every ring is inside the
+ *   pane (`maxR` budgets it), so every test passes and the fill stream is byte-identical. */
+function dottedEllipse(g, cx, cy, rx, ry, ink, every = 2, cl = null) {
   const a = Math.abs(rx), b = Math.abs(ry);
   const s = a + b;
   const hh = s > 0 ? ((a - b) * (a - b)) / (s * s) : 0;
@@ -426,7 +444,10 @@ function dottedEllipse(g, cx, cy, rx, ry, ink, every = 2) {
   for (let m = 0; m < M && i < n; m++) {
     const t = m * dt, ct = Math.cos(t), st = Math.sin(t);
     if (acc >= next) {
-      if (!(i % every)) g.fillRect(Math.round(cx + ct * rx), Math.round(cy + st * ry), 1, 1);
+      if (!(i % every)) {
+        const dx = Math.round(cx + ct * rx), dy = Math.round(cy + st * ry);
+        if (!cl || (dx >= cl.x && dx < cl.x + cl.w && dy >= cl.y && dy < cl.y + cl.h)) g.fillRect(dx, dy, 1, 1);
+      }
       i++; next += pitch;
     }
     acc += Math.hypot(a * st, b * ct) * dt;
@@ -1614,16 +1635,11 @@ function d1Prism(g, mapW, mapY, mapH, gaugeX) {
   // ⚠ THE STRIP'S OWN SCALE IS THE DRAG'S RANGE. +/-2 pc is what the gauge DISPLAYS, so it is what
   //   the grab traverses — one scale for the readout and the handle. Beyond it the keys still go
   //   further and the mark pegs at the end, exactly as a star's mark already does.
-  const GAUGE_HALF_KPC = 0.002, gaugeCy = mapY + mapH / 2, gaugeSpan = mapH / 2;
-  const gaugeTexel = (kpc) => gaugeCy - Math.max(-gaugeSpan + 2, Math.min(gaugeSpan - 2,
-                                ((kpc - D.player.y) / GAUGE_HALF_KPC) * gaugeSpan));
-  rect(g, gaugeX + 3, mapY + 2, 1, mapH - 4, INK.RULE);
-  rect(g, gaugeX + 1, gaugeCy, 3, 1, INK.YOU);
-  if (D.selStar) rect(g, gaugeX, gaugeTexel(D.selStar.wy), 5, 1, INK.TARGET);
-  const camY = (S.cam && Number.isFinite(S.cam.y)) ? S.cam.y : D.player.y;
-  if (Math.abs(camY - D.player.y) > 1e-9) rect(g, gaugeX + 1, gaugeTexel(camY), 4, 1, INK.KEY);
-  S.yGaugeRect = { x: gaugeX, y: mapY, w: 6, h: mapH,
-                   cy: gaugeCy, span: gaugeSpan, halfKpc: GAUGE_HALF_KPC, base: D.player.y };
+  // ⭐ AC-10 (restorations) — THE STRIP ITSELF IS NOW `yGauge`, SHARED WITH DESIGN 2's PRISM. The
+  //    five draws, the mapping and the eight published fields moved there VERBATIM (see its header
+  //    for why it is one function and not two); `gy + gh/2` and `gh/2` are exactly the `mapY +
+  //    mapH/2` and `mapH/2` this site used, so design 1's PRISM is byte-identical.
+  yGauge(g, gaugeX, mapY, mapH);
 }
 
 /**
@@ -1852,6 +1868,19 @@ function d1Ladder(g, mapW, mapY, mapH) {
     S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
                                  'map', 'ladder name ' + txt), ref: q.b, kind: 'body' });
   }
+  /*  Function · AC-5 — the ship's diamond on this ladder, its word, and the dashed line to the
+   *    target. `drawShip` is design 2's too; see its header for why the position is looked up in
+   *    `hits` rather than recomputed.
+   *  Intent · page item 17, Max's ruling *"yes"*. This design drew NO ship at all — the page's
+   *    ladder table scores it 0 on *"See where the ship is"* — so on the one screen where a burn is
+   *    committed, the pilot could not see which stop he was leaving from.
+   *  ⛔ THE SHIP'S STOP IS THE LADDER'S, INCLUDING ITS SCROLL. `hits` is built under `vis()`, so a
+   *    ship whose body has scrolled off the window has no entry and NOTHING draws — which is the
+   *    honest picture: the axis does not currently show where the ship is.
+   *  ⭐ AND IT IS DRAWN AFTER THE NAMES, so `taken` already holds every body label and the word SHIP
+   *    yields to them rather than plating over one.
+   *  Deliberate non-goals · no heading, no burn time, no second diamond in the rail. */
+  drawShip(g, hits, taken);
   S.bodyHits = hits;
 }
 
@@ -2165,6 +2194,40 @@ function prismNumbers() {
     view:    `VIEW ${Math.round(rad * 3260)} LY`,
   };
 }
+/*  Function · THE PRISM Y-GAUGE, for whichever design asks for one: a 6-texel vertical strip at
+ *    `(gx, gy, 6, gh)` carrying the player's plane, the selected star's height and the camera's —
+ *    drawn, and published as `S.yGaugeRect` so the drag can invert exactly the arithmetic that drew
+ *    it (`index.js` `gaugeGrab` / `gaugeDragTo`, which read the four derived fields below).
+ *  Intent · AC-10 (restorations), page item 23: *"Grabbable handles in design 2 to match design 1."*
+ *    Max, 2026-09-07: *"The indicators on the prism and system screens should be grabbable."* Design
+ *    1 had this gauge since the close pass; design 2's PRISM corner carried a 24-texel scale column
+ *    with a fixed mark on it — a picture of a control, with nothing behind it.
+ *  ⛔ ONE FUNCTION, TWO CALLERS, BECAUSE THE SEAM SAYS "EXACTLY THE SHAPE DESIGN 1 PUBLISHES". The
+ *    host's `_handleMouseDown:4402` already arms the gauge for ANY design and the driver already
+ *    inverts whatever rect is published, so design 2 only has to draw one — and a SECOND spelling of
+ *    `cy`/`span`/`halfKpc`/`base` is two mappings free to drift, where the drift is a mark that does
+ *    not land under the pointer. Lifting it out of `d1Prism` moves no texel: `gy + gh/2` and `gh/2`
+ *    are `mapY + mapH/2` and `mapH/2` at design 1's call site, the five draws are in the same order
+ *    with the same inks, and the published object has the same eight fields.
+ *  ⚠ THE STRIP'S OWN SCALE IS THE DRAG'S RANGE (design 1's note, unchanged): ±2 pc is what the gauge
+ *    DISPLAYS, so it is what a grab traverses. R and F still go further and the mark pegs.
+ *  ⛔ AND THE CAMERA MARK IS DRAWN ONLY ONCE THE CAMERA HAS LEFT THE PLAYER'S PLANE — at entry
+ *    `_localCenter` IS the player, so the default picture gains no mark in either design.
+ *  Deliberate non-goals · no numbers on the strip (design 1's rail block and design 2's status line
+ *    both print HEIGHT — AC-3), no thumb, no ticks, and no second gauge at any other level. */
+function yGauge(g, gx, gy, gh) {
+  const GAUGE_HALF_KPC = 0.002, gaugeCy = gy + gh / 2, gaugeSpan = gh / 2;
+  const gaugeTexel = (kpc) => gaugeCy - Math.max(-gaugeSpan + 2, Math.min(gaugeSpan - 2,
+                                ((kpc - D.player.y) / GAUGE_HALF_KPC) * gaugeSpan));
+  rect(g, gx + 3, gy + 2, 1, gh - 4, INK.RULE);
+  rect(g, gx + 1, gaugeCy, 3, 1, INK.YOU);
+  if (D.selStar) rect(g, gx, gaugeTexel(D.selStar.wy), 5, 1, INK.TARGET);
+  const camY = (S.cam && Number.isFinite(S.cam.y)) ? S.cam.y : D.player.y;
+  if (Math.abs(camY - D.player.y) > 1e-9) rect(g, gx + 1, gaugeTexel(camY), 4, 1, INK.KEY);
+  S.yGaugeRect = { x: gx, y: gy, w: 6, h: gh,
+                   cy: gaugeCy, span: gaugeSpan, halfKpc: GAUGE_HALF_KPC, base: D.player.y };
+}
+
 /* ────────────────────────────────────────────────────────────────────────────────────────────────
  * AC-7, AC-8 AND AC-1 (restorations) — THE THREE THINGS BOTH SYSTEM PICTURES HAVE TO SAY, SPELLED
  * ONCE.  Design 1's ladder and design 2's orrery draw the same bodies out of the same `D.bodies`;
@@ -2263,6 +2326,157 @@ function bodyLabelOrder(queue) {
   ).map((p) => p.q);
 }
 
+/*  Function · AC-6 — design 2's SYSTEM zoom gauge: a vertical track at the pane's right edge with a
+ *    mark at the current magnification and an `X<n.n>` readout above it, published at its draw site
+ *    as `S.zoomGaugeRect` so `zoomGrab` / `zoomDragTo` can invert what was drawn.
+ *  Intent · page item 18 plus the close pass's AC-9 principle, which Max's 2026-09-07 ruling states
+ *    generally: *"The indicators on the prism and system screens should be grabbable."* An
+ *    indicator that shows a position along a range is a handle, so drawing the wheel's value and
+ *    making it draggable are one job.
+ *  ⛔ LOGARITHMIC, BECAUSE THE WHEEL IS. `_handleWheel` MULTIPLIES by 1.15 and 0.87, so a notch is a
+ *    constant distance in log space; on a linear track the whole of 0.3..1.0 — half the notches —
+ *    would be the bottom seventh of the strip. `t = (ln z − ln 0.3) / (ln 5 − ln 0.3)`, the seam's
+ *    own mapping, off the host's own two clamps.
+ *  ⛔ `t = 0` AT THE BOTTOM AND `t = 1` AT THE TOP: up is more magnification, which is the direction
+ *    every other vertical instrument on this glass reads in.
+ *  ⛔ AND IT IS INSIDE THE MAP PANE, WHICH IS NOT DECORATION. `NavComputer._handleMouseDown` returns
+ *    at `:4401` unless the press is on the map, so a gauge drawn in the bottom bar could be armed by
+ *    nothing; the six texels it stands on stop answering a body click and become a control, which is
+ *    the same trade design 1's y-gauge made (the plate rule, INTERFACE §6).
+ *  ⚠ THE MARK IS CLAMPED TO THE TRACK'S LAST ROW AT EITHER END, so at `zoom = 0.3` it is on `y+h-1`
+ *    rather than on `y+h`, one texel outside the rect. The driver's inverse therefore reads back
+ *    `t = 1/h` instead of 0 — a 0.007x difference in zoom at the very bottom of a range the host
+ *    clamps anyway, against a mark that would otherwise sit off its own track.
+ *  ⚠ `X`, NOT `×`: the shipped face has no multiplication sign (checked against `hasGlyph`, the same
+ *    test that turned legacy's `R☉` into `R SUN` in the callout).
+ *  Deliberate non-goals · no numbers at the ends of the track (the readout is the number), no notch
+ *    ticks, no gauge in design 1 (Max's ruling) and none at any other level. */
+const SYS_ZOOM_MIN = 0.3, SYS_ZOOM_MAX = 5.0;   // NavComputer._handleWheel:4707-4708's own clamp
+function zoomGauge(g, W, mapY, mapH, zoom) {
+  const gx = W - 10, gy = mapY + 10, gh = mapH - 24;
+  if (gh < 8) { S.zoomGaugeRect = null; return; }
+  const lo = Math.log(SYS_ZOOM_MIN), hi = Math.log(SYS_ZOOM_MAX);
+  const z = (Number.isFinite(zoom) && zoom > 0) ? zoom : 1;
+  const t = Math.max(0, Math.min(1, (Math.log(z) - lo) / (hi - lo)));
+  rect(g, gx + 3, gy, 1, gh, INK.RULE);                       // the track
+  rect(g, gx + 1, gy, 3, 1, INK.RULE);                        // its two ends, so the range is visible
+  rect(g, gx + 1, gy + gh - 1, 3, 1, INK.RULE);
+  rect(g, gx, Math.round(gy + (1 - t) * (gh - 1)), 6, 1, INK.KEY);
+  S.zoomGaugeRect = { x: gx, y: gy, w: 6, h: gh };
+  const txt = fit(`X${z.toFixed(1)}`, 40);
+  plated(g, txt, gx + 5 - measurePixelText(txt), mapY + 2, INK.DIM, 'map', 'zoom readout');
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⭐⭐ AC-5 (restorations) — THE SHIP, AND THE LINE FROM IT TO WHERE A BURN WOULD GO.
+ *
+ * Page item 17, Max's ruling *"yes"*, and the audit's sentence: *"You cannot see where you are in
+ * the system or where a burn would take you."* Legacy draws all of it (NavComputer.js:2905-3005):
+ * a diamond at the focused body's projected point, the word SHIP under it, and a dashed line to the
+ * hovered-or-selected body ending in an arrowhead — the whole block gated on `_isCurrentSystem()`.
+ * Design 2 drew a diamond at a FIXED screen offset (`cxp + 8`, whose own comment called it *"the ONE
+ * mark on this orrery that visibly refuses to move"*) and design 1 drew nothing at all.
+ *
+ * ⛔⛔ THE POSITION COMES OUT OF `hits`, WHICH IS THE PAINT'S OWN PUBLICATION, AND THAT IS THE WHOLE
+ *    DESIGN OF THIS FUNCTION. The two pictures place a body by completely different arithmetic — the
+ *    orrery by `rOf`, `TILT`, the real orbit angle, the azimuth and two roundings; the ladder by
+ *    `sqrt(AU)`, an unbounded minimum-separation pass and a scroll offset — and NOTHING outside
+ *    either painter can reconstruct where a planet actually landed. So this asks the array the
+ *    painter just filled, and the diamond's texel EQUALS the focused body's drawn texel by
+ *    construction rather than by two pieces of arithmetic agreeing. That is also why it is one
+ *    function for both designs: what differs between them is the geometry, and the geometry is the
+ *    part this never touches.
+ * ⛔ `D.ship` IS `null` IN A FOREIGN SYSTEM (`state.js:945`, gated on `D.isCurrent`, the host's 0.1 pc
+ *    identity test) and NOTHING here draws — the diamond, the word and the line all hang off the one
+ *    early return, exactly as legacy hangs its whole block off `isCurrent`.
+ * ⚠ `planetIndex` IS AN INDEX INTO `_systemData.planets`, NOT INTO `D.bodies`, and `pIdx` is the
+ *   correspondence the adapter rides on the rows (`state.js:618-622`). A row lookup by position in
+ *   `D.bodies` would be wrong the moment `[`/`]` re-sorts the list.
+ * ⚠ A MOON RESOLVES TO ITS PIP, which is each design's own answer to *"the moon band"*: design 2's
+ *   pip strip beside the planet, design 1's pips climbing off the stop. Legacy offsets onto a drawn
+ *   moon ring; neither design draws one at this level (the moon sub-view is AC-4, wave 2b), so the
+ *   pip IS the moon on these two pictures. With no pip for that index the ship falls back to the
+ *   planet, which is where a pilot at one of its moons is to within a texel on a ladder anyway.
+ */
+function shipHit(hits) {
+  const sh = D.ship;
+  if (!sh || !Array.isArray(hits) || !hits.length) return null;
+  const pi = Number.isFinite(sh.planetIndex) ? sh.planetIndex : -1;
+  if (pi < 0) return hits.find((z) => z.star) || null;            // -2 / -1: at the primary
+  const mine = (z) => z.ref && z.ref.kind === 'planet' && z.ref.pIdx === pi;
+  const mi = Number.isFinite(sh.moonIndex) ? sh.moonIndex : -1;
+  if (mi >= 0) { const pip = hits.find((z) => mine(z) && z.moon === mi); if (pip) return pip; }
+  return hits.find((z) => mine(z) && !(z.moon >= 0)) || null;
+}
+/** ⭐ THE TARGET IS THE HOVERED BODY IF THE POINTER IS ON ONE, ELSE THE SELECTION — legacy's own
+ *  `this._hoveredBody || this._selectedBody` (`:2960`), read off `S.hover` because that is the
+ *  published form of the same pick (SEAM §1). ⛔ BRANCHED ON `hv.kind` AND `ref.type`, NEVER ON THE
+ *  SHAPE OF `ref` — the callout's rule, for the same reason. ⚠ ONLY A PLANET OR THE PRIMARY GETS A
+ *  LINE, which is legacy's own set: its `destP` stays null for a `'moon'` target and no line draws.
+ *  A belt likewise gets none — it is a ring, not a place to burn to. */
+function trajectoryHit(hits) {
+  const hv = S.hover;
+  let want = null;
+  if (hv && hv.kind === 'body' && hv.ref && (hv.ref.type === 'planet' || hv.ref.type === 'star')) {
+    want = hv.ref.type === 'star' ? 'STAR' : (hv.ref.row || null);
+  } else if (D.selBody) {
+    want = D.selBody.kind === 'star' ? 'STAR' : (D.selBody.kind === 'planet' ? D.selBody : null);
+  }
+  if (!want) return null;
+  if (want === 'STAR') return hits.find((z) => z.star) || null;
+  return hits.find((z) => z.ref === want && !(z.moon >= 0)) || null;
+}
+/**
+ * @param {Array} hits   the SYSTEM picture's finished mark list — `S.bodyHits`, before it is published
+ * @param {Array} taken  the labels this frame has already placed, so `SHIP` yields to a body's name
+ *
+ * ⛔ THE LINE STOPS SHORT OF BOTH MARKS, AND LEGACY'S DOES NOT — a stated departure, measured. Legacy
+ *    strokes ship-centre to body-centre at `globalAlpha = 0.6` over a 1560-wide vector canvas, so the
+ *    body shows through the line. At 240p there is no alpha (the INK table's own note) and the line
+ *    is drawn AFTER the marks, so a run of solid texels through a 3-texel planet sprite ERASES the
+ *    planet. `BACK = 4` is the largest drawn body's half-extent, so the dashes start and end on clear
+ *    glass and both ends of the line still say exactly which two things it joins.
+ * ⛔ EVERY OTHER TEXEL, WHICH IS WHAT `setLineDash([6, 4])` BECOMES HERE. `lineTexels`' `every`
+ *    parameter is the same mechanism the plane lattice uses; a 6-on-4-off pattern at this length is
+ *    two dashes and reads as a broken line rather than a dashed one.
+ * ⭐ THE ARROWHEAD IS THREE TEXELS — a tip and two flanks a texel back on the perpendicular. Legacy's
+ *    filled triangle is 8x4 px on a canvas 3.7x this one's width; the same shape here is a blob.
+ * ⛔ AND NOTHING DRAWS WHEN THE TARGET IS THE SHIP'S OWN BODY. Legacy has the same case and draws a
+ *    zero-length line nobody sees; here it would be an arrowhead on top of the diamond, claiming a
+ *    burn to where the ship already is.
+ * ⚠ `SHIP` GOES THROUGH `placeLabel` AGAINST THE LABELS ALREADY PLACED, so the word yields to a
+ *   body's NAME rather than the other way round — AC-5's own rule, and `taken` is why this has to be
+ *   called after each design's label pass. It is NOT pushed into `S.labelHits`: the word names the
+ *   ship, the ship is not a pickable body, and a hit that resolves to nothing is worse than none.
+ */
+function drawShip(g, hits, taken) {
+  const sp = shipHit(hits);
+  if (!sp) return;
+  const cl = REGIONS.map;
+  const tp = trajectoryHit(hits);
+  if (tp && tp !== sp) {
+    const dx = tp.x - sp.x, dy = tp.y - sp.y, len = Math.hypot(dx, dy);
+    const BACK = 4;
+    if (len > BACK * 2 + 2) {
+      const ux = dx / len, uy = dy / len;
+      const bx = tp.x - ux * BACK, by = tp.y - uy * BACK;
+      lineTexels(g, sp.x + ux * BACK, sp.y + uy * BACK, bx, by, INK.SHIP, cl, 2);
+      rectClip(g, bx, by, 1, 1, INK.SHIP, cl);
+      rectClip(g, bx - ux * 2 + uy * 2, by - uy * 2 - ux * 2, 1, 1, INK.SHIP, cl);
+      rectClip(g, bx - ux * 2 - uy * 2, by - uy * 2 + ux * 2, 1, 1, INK.SHIP, cl);
+    }
+  }
+  const box = spriteClip(g, sp.x, sp.y, SP.diam5, INK.SHIP, cl);
+  if (box.w > 0 && box.h > 0) assertMark('ship diamond', 'map', box.x, box.y, box.w, box.h);
+  if (!cl) return;
+  const txt = fit('SHIP', cl.w - 8);
+  // ⛔ `self` IS `null`, SO THE WORD IS FOREIGN TO EVERY MARK INCLUDING THE ONE IT STANDS ON. The
+  //    diamond is drawn OVER a body's own sprite, and a plate allowed to touch "its own object"
+  //    would knock that body out of the picture to name the ship sitting on it.
+  const pos = placeLabel(taken, hits, sp.x, sp.y, 4, -10, measurePixelText(txt), cl, null);
+  if (pos) plated(g, txt, pos.x, pos.y, INK.SHIP, 'map', 'ship label');
+}
+
 // ── ⭐⭐ AC-1 — THE HOVER CALLOUT, ONE BLOCK FOR TEN SCREENS ───────────────────────────────────────
 //
 // Page item 13, Max's ruling *"yes, PRISM and SYSTEM first"*, and the audit's own sentence: *"It is
@@ -2290,6 +2504,24 @@ function hoverCallout(g) {
   S.hoverCalloutRect = null;
   const hv = S.hover, rgn = REGIONS.map;
   if (!hv || !rgn) return;
+  /*  Function · the callout draws only for a pointer that is ON THE MAP.
+   *  Intent · the wave 1b finding, measured live by the integrator: design 1's call site is gated
+   *    only on `!S.search.open`, so hovering a RAIL ROW — which resolves a real pick and publishes a
+   *    real `S.hover` (`picking.js` answers for rows as well as marks) — painted a callout whose
+   *    anchor `(sx, sy)` is inside the rail. Every candidate below is CLAMPED into the map pane, so
+   *    the plate landed ~35 texels away in the map's corner, naming a row the pointer is nowhere
+   *    near. Design 2 never showed it because its call already sits inside the legend gate and its
+   *    list mode replaces the pane.
+   *  ⛔ THE GATE IS HERE, NOT AT THE TWO CALL SITES, because it is one rule about one input: the
+   *    plate is placed off `(hv.sx, hv.sy)` and is meaningless when that point is not in the pane
+   *    the plate is clamped into. Spelling it twice is two copies of one condition, free to drift —
+   *    and the second copy would be the one a third design forgets.
+   *  ⚠ IT COSTS THE MAP NOTHING. Every pick the map itself resolves carries a point inside
+   *    `REGIONS.map` by construction, so the ten screens AC-1 swept are unchanged texel for texel;
+   *    what stops drawing is exactly the row hover.
+   *  Deliberate non-goals · the ROW keeps its own highlight and its own click; nothing here changes
+   *    what a row hover resolves to, only whether the map paints a plate about it. */
+  if (!(hv.sx >= rgn.x && hv.sx < rgn.x + rgn.w && hv.sy >= rgn.y && hv.sy < rgn.y + rgn.h)) return;
   const lines = [];
   for (const raw of calloutLines(hv)) {
     const s = fit(String(raw == null ? '' : raw).toUpperCase(), rgn.w - 8);
@@ -2809,8 +3041,29 @@ function d2Prism(g, W, mapY, mapH) {
   const mw = 24, mh = 24, mx = W - 44, my = mapY + mapH - mh - 5;
   for (const d of [[0,0],[mw-3,0],[0,mh-3],[mw-3,mh-3]]) { rect(g, mx+d[0], my+d[1], 3, 1, INK.DIM); rect(g, mx+d[0], my+d[1], 1, 3, INK.DIM); }
   rect(g, mx + mw / 2, my + mh / 2, 1, 1, INK.YOU);
-  rect(g, W - 17, my, 1, mh, INK.DIM);
-  rect(g, W - 19, my + mh / 2, 5, 1, INK.YOU);
+  /*  Function · AC-10 — the 24-texel scale column beside the minimap becomes a REAL y-gauge,
+   *    spanning the pane and published as `S.yGaugeRect`.
+   *  Intent · page item 23, Max's ruling *"yes"*: design 1 has two handles at these two levels and
+   *    design 2 had none. *"Your ruling was look-agnostic; only design 1 has them."* What was drawn
+   *    here was a 1-texel column 24 texels tall with a fixed mark at its middle — it moved with
+   *    nothing, it reported nothing, and a press on it rotated the prism.
+   *  ⛔ IT IS THE PANE'S HEIGHT, NOT THE WIDGET'S, AND THAT IS THE DIFFERENCE BETWEEN A READOUT AND A
+   *    HANDLE. The mapping is ±2 pc across `span = h/2`; over the old 24-texel column that is 0.17 pc
+   *    per texel, so the entire thin disk lived in three texels and a drag could not resolve a
+   *    height at all. Across the pane it is design 1's own resolution, because it is design 1's own
+   *    strip — the ONE difference between the two designs' gauges is where it stands: design 1 has a
+   *    dedicated 6-texel column between map and rail, design 2 is full-bleed, so its gauge stands
+   *    INSIDE the map at the right edge, which it must anyway — the host returns at `:4401` unless
+   *    the press is on the map, so a gauge outside the pane could never be grabbed.
+   *  ⛔ AND IT EATS THE PRESSES ON ITS OWN SIX TEXELS. That is the plate rule (INTERFACE §6) and the
+   *    trade design 1 already made: six columns of starfield stop answering a click and become a
+   *    control. It is drawn over the starfield rather than knocked out of it, exactly as the minimap
+   *    beside it is, so what is behind the gauge stays visible — only the press changes hands.
+   *  ⚠ NOT DRAWN IN LIST MODE: `d2Prism` returns into `d2List` above this line, and `resetPicks()`
+   *    clears the rect every frame, so the list's pane publishes no gauge and grabs nothing.
+   *  Deliberate non-goals · the minimap is untouched (it still publishes no rectangle and eats no
+   *    press — see the note below), and design 1 is untouched. */
+  yGauge(g, W - 20, mapY, mapH);
   // ⛔ AC-2 — THIS WIDGET PUBLISHES NO RECTANGLE AND EATS NO PRESS, AND FOR HALF A DAY IT DID BOTH.
   //    The first build (88510cb) published `S.minimapRect` and the driver swallowed every click inside
   //    it, on the plate rule (INTERFACE §6): texels belong to the thing drawn on them. The adversarial
@@ -2956,7 +3209,40 @@ function d2System(g, W, mapY, mapH) {
   // ⚠ IT CANNOT MOVE THE PICTURE MAX RULED ON. At the default tilt this computes 108/0.42 = 257.14
   //   against the width term's 205.5, so `Math.min` still returns the width term, unchanged.
   const maxR = Math.min(W / 2 - 8, (mapH / 2 - 4) / Math.max(TILT, SYS_MIN_SIN));
-  const rOf = (au) => 8 + (maxR - 8) * Math.sqrt(Math.max(0, au) / auMax);
+  /*  Function · AC-6 — the orrery's magnification. Every radius on this picture is `rOf`, so one
+   *    multiplier here scales the orbits, the bodies, the belts and (because their slots are placed
+   *    off the body points) the labels, together.
+   *  Intent · page item 18, Max's ruling *"design 2 yes; design 1 no — its ladder is a scroll, not a
+   *    zoom."* `NavComputer._handleWheel:4701-4710` has ALWAYS scaled `_systemZoom` by 1.15/0.87
+   *    inside [0.3, 5.0] at level 4 with no `viewMode` gate, and only the legacy orrery read it
+   *    (`:2531`) — so under a design the wheel moved a number and nothing drew it. The audit's
+   *    sentence: *"The wheel still changes a value; nothing draws it."*
+   *  ⛔ IT MULTIPLIES THE RADIUS, WHICH IS WHY THE STAR DOES NOT MOVE. `rOf` is a distance FROM
+   *    `(cxp, cyp)` and the primary is drawn AT `(cxp, cyp)`, so scaling the radius re-centres the
+   *    zoom on the star by construction — no pan term, no second centre, nothing to keep in step.
+   *    Legacy's own orrery does exactly this (`projScale * _systemZoom`, `:2531`).
+   *  ⛔ AND DESIGN 1 NEVER READS IT — `d1Ladder` has no `S.sysCam` reference at all, which is Max's
+   *    ruling spelled as an absence rather than as a gate that could be flipped.
+   *  ⚠ THE `8` INNER RADIUS SCALES TOO. It is the star sprite's own clearance, not a constant of the
+   *    picture: leaving it fixed would make the inner planets pile onto the primary at 0.3 and float
+   *    off it at 5.0, i.e. the orrery would not be the same picture magnified.
+   *  ⚠ A DEFAULT IS MANDATORY (`state.js`'s own note): an `undefined` multiplier does not draw a
+   *    small orrery, it draws `NaN` radii, and `PanelHost` freezes the glass on the first throw. The
+   *    lab page never sets it, so the lab draws at 1.
+   *  Deliberate non-goals · no clamp here (the host owns [0.3, 5.0] and a second copy would be free
+   *    to drift), no zoom at any other level, no zoom for the ladder. */
+  const zoom = (sc && Number.isFinite(sc.zoom) && sc.zoom > 0) ? sc.zoom : 1;
+  const rOf = (au) => (8 + (maxR - 8) * Math.sqrt(Math.max(0, au) / auMax)) * zoom;
+  // ⭐ AC-19 — AND EVERYTHING BELOW IS DRAWN THROUGH THE PANE. At `zoom > 1` a ring, a body, its
+  //    rings, its pips and its habitability cross can all legitimately land outside the map, and
+  //    every primitive this file owns paints wherever it is told. `pane` is the clip every draw
+  //    below is handed; `onPane` is the CULL for a body whose own centre has left the picture, and
+  //    it gates the `hits` entry as well as the draw, on `d1Ladder`'s `vis()` rule: a mark that is
+  //    not on the glass must not be offered to the picker.
+  // ⚠ AT `zoom = 1` NEITHER FIRES. `maxR` budgets the widest ring into the pane in both axes, so no
+  //   body's centre leaves it and every clipped draw is byte-for-byte its unclipped form.
+  const pane = REGIONS.map;
+  const onPane = (x, y) => !pane || (x >= pane.x && x < pane.x + pane.w && y >= pane.y && y < pane.y + pane.h);
   // ⭐ AC-2 — THE ORBIT ELLIPSES ANSWER A CLICK, AND THE GEOMETRY COMES OUT OF THE PAINT.
   // A ring is the ONE mark on this orrery that is large, unambiguous and completely inert: it is
   // drawn per body, it names that body by construction, and until now clicking anywhere on it
@@ -2972,9 +3258,14 @@ function d2System(g, W, mapY, mapH) {
   for (const b of D.bodies) {
     if (b.kind === 'moon') continue;
     const r = rOf(b.au);
-    dottedEllipse(g, cxp, cyp, r, r * TILT, INK.RULE, b.kind === 'belt' ? 5 : 2);
+    dottedEllipse(g, cxp, cyp, r, r * TILT, INK.RULE, b.kind === 'belt' ? 5 : 2, pane);
     S.orbitRings.push({ cx: cxp, cy: cyp, rx: r, ry: r * TILT, ref: b });
-    assertMark('orbit ring ' + b.name, 'map', cxp - r, cyp - r * TILT, 2 * r, 2 * r * TILT);
+    // ⭐ THE GUARD IS FED WHAT LANDED, NOT WHAT WAS ASKED FOR (AC-19's own rule). A ring past the
+    //    pane's edge at `zoom > 1` is CLIPPED, so handing `assertMark` the unclipped box would fire
+    //    on every notch of the wheel — which is a guard that gets switched off. At `zoom = 1` the
+    //    box is wholly inside and `clipBox` returns exactly the four numbers this line passed before.
+    const rb = clipBox(cxp - r, cyp - r * TILT, 2 * r, 2 * r * TILT, pane);
+    if (rb.w > 0 && rb.h > 0) assertMark('orbit ring ' + b.name, 'map', rb.x, rb.y, rb.w, rb.h);
   }
   sprite(g, cxp, cyp, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
   hits.push({ x: cxp, y: cyp, r: 4, ref: null, moon: -1, star: true });
@@ -2997,18 +3288,27 @@ function d2System(g, W, mapY, mapH) {
     const a = (Number(b.ang) || 0) + sysRotY;
     const r = rOf(b.au);
     const x = Math.round(cxp + Math.cos(a) * r), y = Math.round(cyp + Math.sin(a) * r * TILT);
+    // ⭐ AC-6/AC-19 — A BODY THE ZOOM HAS PUSHED OFF THE PICTURE IS NOT DRAWN AND NOT PICKABLE.
+    //    `d1Ladder`'s `vis()` rule, at the one site on this design that can now need it. Returning
+    //    before `hits.push` is the load-bearing half: a hit left behind for a mark nobody drew is
+    //    the stale-pick defect `drawDesign2`'s clear block exists to prevent, arriving by a new road.
+    if (!onPane(x, y)) return;
     // ⭐ AC-8 (restorations) — A BELT IS QUEUED FOR A LABEL, AND UNCONDITIONALLY. The `r > 24` gate
     //    below is for ORDINAL tags, which say nothing worth crowding an inner orbit for; ASTEROID
     //    BELT / KUIPER BELT is the belt's whole identity on this picture, and `placeLabel` is what
     //    decides whether there is room for it. `tag: ''` so the fallback below has nothing to fall
     //    back TO: a belt gets its name or it gets nothing — it has no ordinal.
-    if (b.kind === 'belt') { hits.push({ x, y, r: 3, ref: b, moon: -1, star: false }); rect(g, x, y, 1, 1, INK.DIM);
+    if (b.kind === 'belt') { hits.push({ x, y, r: 3, ref: b, moon: -1, star: false }); rectClip(g, x, y, 1, 1, INK.DIM, pane);
                              tagQueue.push({ b, tag: '', x, y }); return; }
     hits.push({ x, y, r: 4, ref: b, moon: -1, star: false });
-    sprite(g, x, y, b.rE > 4 ? SP.giant5 : SP.terr3, INK.BODY);
-    if (b.rings) { rect(g, x - 3, y - 2, 7, 1, INK.DIM); rect(g, x - 3, y + 2, 7, 1, INK.DIM); }
-    if (b.hab > 0.5) for (const d of [[-2,0],[2,0],[0,-2],[0,2]]) rect(g, x + d[0], y + d[1], 1, 1, INK.TARGET);
-    if (b === D.selBody) frame(g, x - 4, y - 4, 9, 9, INK.KEY);
+    // ⛔ THE CLIPPED FORMS, UNCONDITIONALLY — not "when zoomed", which would be a second picture with
+    //    its own bugs. `rectClip`/`spriteClip`/`frameClip` round exactly as `rect` rounds and then
+    //    intersect, so a mark wholly inside its pane is byte-for-byte the unclipped draw (AC-19's own
+    //    note); the branch that never taken is the one that cannot rot.
+    spriteClip(g, x, y, b.rE > 4 ? SP.giant5 : SP.terr3, INK.BODY, pane);
+    if (b.rings) { rectClip(g, x - 3, y - 2, 7, 1, INK.DIM, pane); rectClip(g, x - 3, y + 2, 7, 1, INK.DIM, pane); }
+    if (b.hab > 0.5) for (const d of [[-2,0],[2,0],[0,-2],[0,2]]) rectClip(g, x + d[0], y + d[1], 1, 1, INK.TARGET, pane);
+    if (b === D.selBody) frameClip(g, x - 4, y - 4, 9, 9, INK.KEY, pane);
     // ⭐ THE MARK GUARD, ONE CALL PER BODY (see `assertMark`) — the union of what the four branches
     // ABOVE actually drew, off the same `x`/`y` they drew it from, never a worst-case box. A fixed
     // 9x9 would report the selection frame on bodies that never draw one, which is the guard crying
@@ -3018,7 +3318,11 @@ function d2System(g, W, mapY, mapH) {
     if (b.rings)     { l = Math.min(l, x - 3); rr = Math.max(rr, x + 3); t = Math.min(t, y - 2); bb = Math.max(bb, y + 2); }
     if (b.hab > 0.5) { l = Math.min(l, x - 2); rr = Math.max(rr, x + 2); t = Math.min(t, y - 2); bb = Math.max(bb, y + 2); }
     if (b === D.selBody) { l = x - 4; t = Math.min(t, y - 4); rr = Math.max(rr, x + 4); bb = Math.max(bb, y + 4); }
-    assertMark('body mark ' + b.name, 'map', l, t, rr - l + 1, bb - t + 1);
+    // ⭐ AC-6/AC-19 — THE CLIPPED UNION, for the reason the orbit ring's guard gives: the draws above
+    //    are clipped now, so the box handed over has to be what LANDED. Inside the pane `clipBox`
+    //    returns these same four numbers and the call is unchanged.
+    const mb = clipBox(l, t, rr - l + 1, bb - t + 1, pane);
+    if (mb.w > 0 && mb.h > 0) assertMark('body mark ' + b.name, 'map', mb.x, mb.y, mb.w, mb.h);
     // ⭐⭐ THE PIP STRIP GOES ON WHICHEVER SIDE OF THE BODY HAS ROOM — AC-15, AND THE MARK GUARD
     //   ABOVE IS THE ONLY THING THAT COULD HAVE FOUND IT. `rect` was unguarded until this pass, so a
     //   moon-rich planet on an outer orbit near `cos(a) ≈ 1` ran its pips off the right edge and the
@@ -3056,7 +3360,7 @@ function d2System(g, W, mapY, mapH) {
       if (my < tLim) { if (y + 4 <= bLim) my = y + 4; else { my = tLim; tight = true; } }
       if (tight) fire(`moon pips ${b.name}: ${b.moons} pips need ${span + 1}x1 texels and fit on no side of the ` +
                       `body at (${x},${y}) inside map [${lLim}..${rLim}]x[${tLim}..${bLim}] — clamped onto its own planet.`);
-      for (let m = 0; m < b.moons; m++) { const mx = px + m * step; hits.push({ x: mx, y: my, r: 2, ref: b, moon: m, star: false }); rect(g, mx, my, 1, 1, INK.DIM); }
+      for (let m = 0; m < b.moons; m++) { const mx = px + m * step; hits.push({ x: mx, y: my, r: 2, ref: b, moon: m, star: false }); rectClip(g, mx, my, 1, 1, INK.DIM, pane); }
       assertMark('moon pips ' + b.name, 'map', Math.min(px, px + span * step / 2), my, span + 1, 1);
     }
     // ⛔⛔ THE TAG IS QUEUED, NOT DRAWN — because a placer that can see the marks has to be run AFTER
@@ -3093,13 +3397,21 @@ function d2System(g, W, mapY, mapH) {
     S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.DIM, 'map', 'body label ' + txt),
                        ref: q.b, kind: 'body' });
   }
-  // ⚠ THE SHIP DIAMOND HAS NO WORLD POSITION AT ALL — a bare `cxp + 8` screen offset — so under
-  //   rotation it is the ONE mark on this orrery that visibly refuses to move. Logged, not invented:
-  //   giving it a position would be this page guessing where the ship is in the system, and there is
-  //   no such number in the pipeline to guess from.
+  // ⭐⭐ AC-5 (restorations) — AND THE NUMBER TO GUESS FROM NOW EXISTS, SO THE DIAMOND MOVED.
+  //   What stood here was `sprite(g, cxp + 8, cyp, SP.diam5, INK.TARGET)` — a bare screen offset
+  //   whose own note read *"the ONE mark on this orrery that visibly refuses to move… giving it a
+  //   position would be this page guessing where the ship is, and there is no such number in the
+  //   pipeline to guess from."* `D.ship` (SEAM §2, `state.js:945`) IS that number: the game's
+  //   `_currentFocusIndex` / `_currentMoonIndex`, the same pair legacy places its diamond from. So
+  //   the fixed offset is GONE and the diamond stands on the focused body's own drawn point, out of
+  //   `hits`. ⛔ It is drawn AFTER the labels because the word `SHIP` has to yield to a body's name,
+  //   and the dashed line crossing a label plate is legacy's own order too (`:2959`, after `:2833`).
   // ⚠ The ring bars, the moon pips and the habitability cross above are SCREEN-SPACE BADGES and stay
   //   that way, as do the selection frames. That is the low-fi idiom, not a mark that failed to turn.
-  sprite(g, cxp + 8, cyp, SP.diam5, INK.TARGET);
+  drawShip(g, hits, tagsTaken);
+  // ⭐ AC-6 — THE ZOOM GAUGE, LAST ON THE MAP AND ONLY ON THIS DESIGN'S SYSTEM SCREEN. Drawn after
+  //    everything it reports on, so its plate wins where it meets a ring or a label.
+  zoomGauge(g, W, mapY, mapH, zoom);
   const far = (D.sys?.binarySeparationAU > 100) ? [`» ${(D.sysStar?.name || '').toUpperCase()} B ${Math.round(D.sys.binarySeparationAU)}AU`] : [];
   // ⭐ AC-2 — THE COMPANION STRIP, AND IT IS EATEN RATHER THAN ACTED ON. `» STAR B nnAU` names a
   // star this nav cannot reach: nothing in the pipeline resolves a companion to a system, so an

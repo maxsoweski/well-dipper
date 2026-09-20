@@ -324,6 +324,32 @@ export function makeViewState() {
      *  not decoration: they are what lets the drag INVERT the paint's own arithmetic instead of
      *  restating it, which is the AC-4 defect shape. `null` everywhere else. */
     yGaugeRect: null,   // {x,y,w,h,cy,span,halfKpc,base} — level 3, design 1
+    /* Function · design 2's SYSTEM zoom gauge, the rect the paint drew the track at.
+     * Intent · AC-6 (SEAM §2): the wheel already moved `nav._systemZoom` and nothing drew it, so
+     *   there was no handle to grab either. `d2System` publishes `{x,y,w,h}` — the VERTICAL track in
+     *   texels — at its draw site, and `zoomGrab`/`zoomDragTo` (index.js) invert the mapping the
+     *   paint used rather than restating it, exactly as the y-gauge above does.
+     * Deliberate non-goals · no `cy`/`span`, because unlike the y-gauge the range is FIXED (the
+     *   host's own [0.3, 5.0] clamp at `NavComputer.js:4708`) and logarithmic, so the rect is all the
+     *   drag needs; design 1 publishes none (Max's ruling: no wheel zoom on the ladder) and neither
+     *   design publishes one at levels 0-3.
+     * ⛔ `null` IS THE DEFAULT AND IT HAS TO BE DECLARED, for the reason every rect above gives:
+     *   `zoomGrab` runs on a mousedown that can land before the first frame of a design has painted,
+     *   and an undefined field there reads as "no gauge" only by luck of `!r` — the declared `null`
+     *   is what makes it a stated answer. Cleared by `resetPicks()` like the other paint rects. */
+    zoomGaugeRect: null,  // {x,y,w,h}              — level 4, design 2
+    /* Function · the hover callout's plate, where the paint put it.
+     * Intent · AC-1 (wave 1b): `hoverCallout` (designs.js:1998) publishes the plate it drew so the
+     *   glass can be asked where the callout is — the plate rule (INTERFACE §6), stated at the draw
+     *   site like every other rect here.
+     * Deliberate non-goals · nothing reads it yet and nothing eats a press inside it: the callout is
+     *   never under the pointer that summoned it, so no press can land on it (SEAM §2).
+     * ⛔ NOT IN `resetPicks()`, AND THAT IS NOT AN OVERSIGHT. The PAINT clears it itself at the head
+     *   of both `drawDesign1` and `drawDesign2` (designs.js:796 / :2149) and again at the head of
+     *   `hoverCallout` (:1999), so the driver clearing it a fourth time would be a courtesy copy of a
+     *   guarantee the generated file already makes for itself. What this line buys is the window the
+     *   other rects' defaults buy: the frames between `makeViewState()` and the first paint. */
+    hoverCalloutRect: null,   // {x,y,w,h}          — levels 0-4, both designs, published by the paint
     /** ⭐ AC-2 — DESIGN 1'S PAGER ROW, THE `- = PAGE` LINE THAT HAS NEVER ANSWERED A CLICK.
      *  `mid` is published rather than left to the picker: `x0 + (x1 - x0) / 2` computed in the
      *  hit-test would be a second copy of the rail's own geometry, free to drift the moment the rail
@@ -646,7 +672,19 @@ export function makeViewState() {
       // ⚠ NO `ang` ON A BELT, AND THAT IS CORRECT RATHER THAN AN OMISSION (INTERFACE §2): a belt is
       // drawn as a FULL RING, so it has no phase to be at. A `0` here would be a real angle that
       // happens to mean "nothing", which is the shape of the defect this whole field fixes.
+      // ⭐ AC-8 — `isKuiper` IS THE GENERATOR'S OWN ANSWER AND IT WAS THE ONE FIELD THIS ROW DROPPED.
+      // `StarSystemGenerator.js:769` and `SolarSystemData.js:875` set it on the belt, and the LEGACY
+      // orrery has always read it (`NavComputer.js:2590/2593/2596/2644`, `belt.isKuiper ? 'KUIPER
+      // BELT' : 'ASTEROID BELT'`). Without it the designs' `beltLabel` (designs.js:1901) had to fall
+      // back to GEOMETRY — "the belt beyond every planet is the Kuiper belt" — which agrees on Sol
+      // and on every system `shouldOuterBeltExist` placed, and is a guess on anything else.
+      // ⚠ `!!` RATHER THAN A RAW COPY, AND THE COERCION IS LOAD-BEARING IN ONE DIRECTION ONLY:
+      //   upstream the flag is either `true` or ABSENT, never `false`, so `beltLabel` tests
+      //   `b.isKuiper != null` to tell "the builder told me" from "the builder is silent". Copying
+      //   the raw value would leave an inner belt's flag `undefined` and send it back to the
+      //   geometry path; `!!` makes the silence an explicit `false` that the flag branch answers.
       rows.push({ kind: 'belt', name: 'BELT ' + ('ABC'[i] || (i + 1)), au: Number(b.centerRadiusAU) || 0, cls: 'belt',
+                  isKuiper: !!b.isKuiper,
                   rE: null, T: null, hab: null, rings: false, moons: 0, widthAU: b.widthAU });
     });
     if (nameFail.n) {

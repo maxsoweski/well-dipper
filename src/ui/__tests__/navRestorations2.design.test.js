@@ -254,15 +254,24 @@ describe('AC-8 — belt names and the star line', () => {
     // ⭐ DRIVEN THROUGH THE ROW, because that is the seam: `beltLabel` reads a `D.bodies` row, and the
     //    flag's whole purpose is to answer for a belt the geometry would call wrong — an INNER belt
     //    the generator tagged Kuiper. Mutating the row the painter is handed is the only way to put
-    //    that case on the glass at all (the game's builder drops the flag; reported).
+    //    that case on the glass at all: this fixture's generator flags no inner belt.
+    // ⚠ REWRITTEN IN WAVE 2a, AND THE CHANGE IS THE POINT. When wave 1b wrote this case the builder
+    //    DROPPED the flag, so an unflagged belt arrived `undefined` and every belt fell through to the
+    //    geometry fallback. AC-8's carry-over (state.js:687, `isKuiper: !!b.isKuiper`) now carries it,
+    //    and the `!!` makes the builder's silence an explicit `false` — which is exactly what
+    //    `beltLabel`'s `b.isKuiper != null` test needs to tell "the builder said no" from "the builder
+    //    never spoke". So the absolute fact here moved from `undefined` to `false`; the case's own
+    //    subject — a flag set true beats the geometry — is untouched below.
     // ⛔ MUTANT `beltLabel-ignore-flag` — drop the `isKuiper != null` branch: the inner belt reads
-    //    ASTEROID BELT off the geometry and this case goes red.
+    //    ASTEROID BELT off the geometry and the two-label assertion goes red.
+    // ⛔ MUTANT `buildBodies-drop-isKuiper` — delete the field at state.js:687: the row arrives
+    //    `undefined` and the `false` assertion goes red (this is the wave-1b behaviour, pinned as gone).
     const h = await loadedNav();
     const nav = await at(h, 'rail', 4);
     const { D } = nav._viewDriverInst;
     const inner = D.bodies.find((b) => b.kind === 'belt');
     expect(inner, 'the fixture must put a belt in D.bodies').toBeTruthy();
-    expect(inner.isKuiper, 'state.js:645 drops the flag today — the fallback is what draws').toBeUndefined();
+    expect(inner.isKuiper, 'the builder carries the flag as a real boolean: an unflagged belt is false, not absent').toBe(false);
     inner.isKuiper = true;
     const p = paint(nav, 1);
     expect(inRegion(p, 'map').map((l) => l.s).filter((s) => s === 'KUIPER BELT').length,
