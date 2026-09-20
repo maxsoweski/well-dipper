@@ -42,6 +42,14 @@
       arithmetic NavComputer._computeTileSize inverts and _estimateBlockStarCount performs. Those are
       private methods; the two constants and the formula are reproduced below, cited.
     · a VISITED flag does not exist anywhere in the pipeline. Design 1 wanted one. It draws blank.
+    · the prism's plane lattice (AC-2 of nav-restorations-2026-09-20) is legacy's own 1 pc cell
+      (`NavComputer._localGridCell`, :1191) — but the CELL DOUBLES (2, 4, 8 pc) once its tighter
+      on-screen spacing would fall under 8 texels. Measured at 417x240: at the widest zoom stop a
+      true 1 pc lattice puts its z-lines 3.6 texels apart and draws 13,093 texels, which is a wash,
+      not a floor. At the default camera the multiplier is 1 and the lattice is exactly legacy's.
+      The drop lines are solid under 10 texels and every-second-texel above, against legacy's [2,5]
+      dash — at 240p a five-texel stem drawn dashed is two dots. Both numbers are in `prismPlane` /
+      `prismDrop` with the measurement beside them.
     · the density image above 448 texels is rendered at 448 and magnified with nearest-neighbour —
       a LAB COMPUTE CAP (the CPU renderer is ~1.35 s at 427², ~12 s at 1280²), not a design property.
       At 240p every design is under the cap and the image is exact.
@@ -283,6 +291,15 @@ const INK = {
   YOU:    '#2ee6c0',
   TARGET: '#ffb03a',
   WARN:   '#e8674f',
+  // ── AC-2 (restorations) — THE PRISM'S DEPTH CUES GET INKS, NOT LITERALS ───────────────────────
+  // Legacy drew all three in `rgba(...)` at 0.12-0.18 alpha over a 1560x860 vector canvas
+  // (NavComputer.js:1997 the grid, :2078 the drop line, :2110 the catalogue ring). At 240p alpha is
+  // not representable (see this table's own note), so each one becomes a literal dark tone that sits
+  // BELOW `RULE` — the dimmest ink the designs already own — so the marks still win the eye.
+  GRID:   '#0f2430',   // the 1 pc plane lattice, under everything
+  ABOVE:  '#1f6b52',   // a drop line standing a mark UP off the plane   (legacy's green)
+  BELOW:  '#6b2f28',   // …and one hanging it BELOW                       (legacy's red)
+  HALO:   '#6b4a18',   // the catalogue ring, design 1                    (legacy's amber glow)
 };
 /** BURN or WARP is not "which level am I on" — it is NavComputer._isCurrentSystem() (:1098-1105), a
  *  0.1 pc identity test. Browsing a foreign system from SYSTEM still arms a WARP. */
@@ -413,6 +430,44 @@ function dottedEllipse(g, cx, cy, rx, ry, ink, every = 2) {
       i++; next += pitch;
     }
     acc += Math.hypot(a * st, b * ct) * dt;
+  }
+}
+
+/*  Function · a one-texel line between two points, laid down as `fillRect`s and clipped to a box.
+ *  Intent · AC-2 (restorations). The prism's plane grid and its per-mark drop lines are LINES, and
+ *    this file owns no `stroke`, no `lineTo` and no `setLineDash` — the PRIMITIVES banner above says
+ *    why: a 1-px stroke at an integer coordinate straddles it and lands as a nine-screen-pixel grey
+ *    smear at 3.75x. So a line here is what a line is in pixel art: a run of single texels stepped
+ *    along the longer axis, which is the same thing `dottedEllipse` already does around a curve.
+ *  ⛔ THE CLIP IS PARAMETRIC (Liang-Barsky), NOT PER-TEXEL. The callers hand in segments spanning the
+ *    pane's WORLD bounding box, which under rotation is a good deal longer than the pane; walking
+ *    that and throwing texels away would put tens of thousands of dead iterations in every frame.
+ *    Clipping first makes the walk's length the PANE's, whatever the caller asked for.
+ *  ⚠ `every` drops texels for a dotted line. The grid uses 2; a drop line is a stem and uses 1.
+ *  Deliberate non-goals · no anti-aliasing, no width, no dash PATTERN, no end caps, no depth fade. */
+function lineTexels(g, x0, y0, x1, y1, ink, cl, every = 1) {
+  if (![x0, y0, x1, y1].every(Number.isFinite)) return;
+  let ax = x0, ay = y0, bx = x1, by = y1;
+  if (cl) {
+    const dx = bx - ax, dy = by - ay;
+    let t0 = 0, t1 = 1;
+    const ps = [-dx, dx, -dy, dy];
+    const qs = [ax - cl.x, cl.x + cl.w - 1 - ax, ay - cl.y, cl.y + cl.h - 1 - ay];
+    for (let i = 0; i < 4; i++) {
+      const pp = ps[i], qq = qs[i];
+      if (pp === 0) { if (qq < 0) return; continue; }        // parallel and outside → nothing to draw
+      const t = qq / pp;
+      if (pp < 0) { if (t > t1) return; if (t > t0) t0 = t; }
+      else { if (t < t0) return; if (t < t1) t1 = t; }
+    }
+    ax = x0 + t0 * dx; ay = y0 + t0 * dy; bx = x0 + t1 * dx; by = y0 + t1 * dy;
+  }
+  const span = Math.max(Math.abs(bx - ax), Math.abs(by - ay));
+  const steps = Math.min(2048, Math.max(0, Math.round(span)));
+  g.fillStyle = ink;
+  for (let i = 0; i <= steps; i += every) {
+    const t = steps === 0 ? 0 : i / steps;
+    g.fillRect(Math.round(ax + (bx - ax) * t), Math.round(ay + (by - ay) * t), 1, 1);
   }
 }
 
@@ -836,6 +891,111 @@ function projectPrism(s, cx, cy, halfW, halfH) {
   const tilt = PRISM_K * Math.sin(rotX), rise = PRISM_K * Math.cos(rotX);
   return { x: cx + ax * halfW * rx, y: cy + az * halfH * tilt - dy * halfH * rise,
            py: cy + az * halfH * tilt, depth: az };
+}
+
+/*  Function · the 1 pc lattice on the prism's plane, drawn UNDER the marks and clipped to the pane.
+ *  Intent · AC-2 (restorations), the page's prism table: legacy draws a plane grid at
+ *    `_localGridCell` (NavComputer.js:1191 = 0.001 kpc = 1 pc) across the whole view
+ *    (:1994-2014); neither design draws one, and without it a field of bare dots has no surface to
+ *    be above or below. Max: *"height above the plane is the prism's whole point."*
+ *  ⛔ IT IS DRAWN ON THE PLANE THE FEET ARE ON, WHICH IS THE CAMERA'S, NOT LEGACY'S y = 0.
+ *    `projectPrism`'s `py` is the star projected with `dy` zeroed — i.e. at `S.cam.y` — so every
+ *    plane dot in both designs already sits on the camera's plane. A lattice drawn at the GALACTIC
+ *    plane would be a second, contradictory horizon that the feet visibly did not touch, and the
+ *    drop line (below) would end nowhere. One plane, and it is the one the picture already uses.
+ *  ⛔ AND THE INVERSE PROJECTION IS USED ONLY TO CHOOSE WHICH LINES CAN REACH THE PANE. The line
+ *    itself is drawn through the SAME forward arithmetic `projectPrism` uses, spelled once here, so
+ *    a grid line through a star's foot passes through that foot.
+ *  ⚠ EDGE-ON IS A REAL STATE AND IT DIVIDES BY ZERO. The game clamps the prism's elevation to
+ *    [0, pi/2] and at 0 the tilt is `K*sin(0)` = 0: the plane collapses to a horizontal line and the
+ *    inverse's `az` term goes to Infinity. There is no lattice to draw there, so there is none.
+ *  Deliberate non-goals · no player-cell highlight (legacy's is debug-mode only, :1938-1950), no
+ *    horizon fade, no axis labels, no second cell size at zoom — 1 pc is legacy's own constant. */
+const PLANE_CELL_KPC = 0.001;    // NavComputer.js:1191 `_localGridCell`, verbatim — 1 pc
+const PLANE_MAX_LINES = 48;      // a bound on the loop at the widest zoom stop, not a picture choice
+const PLANE_MIN_TEXELS = 8;      // ⛔ below this a lattice is a FILL — see `prismPlane`'s doubling
+const PLANE_DOT = 3;             // the lattice's dot pitch; the drop line's is 1 or 2 (`prismDrop`)
+function prismPlane(g, cxp, cyp, halfW, halfH, cl) {
+  const cam = S.cam, r = Math.max(cam.radius, 1e-9);
+  if (!cl || !(halfW > 0) || !(halfH > 0) || !Number.isFinite(cam.x) || !Number.isFinite(cam.z)) return;
+  const rx = 0.92;                                   // the horizontal gain, as in `projectPrism`
+  const rotX = cam.rotX === undefined ? PRISM_ROTX0 : cam.rotX;
+  const rotY = cam.rotY === undefined ? PRISM_ROTY0 : cam.rotY;
+  const def = (rotX === PRISM_ROTX0 && rotY === PRISM_ROTY0);
+  const tilt = def ? PRISM_TILT0 : PRISM_K * Math.sin(rotX);
+  if (!(Math.abs(tilt) > 1e-6)) return;              // edge-on: the plane IS a line
+  const ca = def ? 1 : Math.cos(rotY), sa = def ? 0 : Math.sin(rotY);
+  const fx = (dx, dz) => cxp + (dx * ca - dz * sa) * halfW * rx;
+  const fy = (dx, dz) => cyp + (dx * sa + dz * ca) * halfH * tilt;
+  // …and the inverse, for the pane's four corners only.
+  const back = (x, y) => { const ax = (x - cxp) / (halfW * rx), az = (y - cyp) / (halfH * tilt);
+                           return { dx: ax * ca + az * sa, dz: -ax * sa + az * ca }; };
+  let dxMin = Infinity, dxMax = -Infinity, dzMin = Infinity, dzMax = -Infinity;
+  for (const [x, y] of [[cl.x, cl.y], [cl.x + cl.w, cl.y], [cl.x, cl.y + cl.h], [cl.x + cl.w, cl.y + cl.h]]) {
+    const b = back(x, y);
+    if (!Number.isFinite(b.dx) || !Number.isFinite(b.dz)) return;
+    dxMin = Math.min(dxMin, b.dx); dxMax = Math.max(dxMax, b.dx);
+    dzMin = Math.min(dzMin, b.dz); dzMax = Math.max(dzMax, b.dz);
+  }
+  /*  ⛔ THE CELL IS 1 pc AT THE DEFAULT ZOOM AND DOUBLES AS THE CAMERA PULLS BACK, AND THAT IS A
+   *  MEASUREMENT, NOT A PREFERENCE. The prism's vertical gain is the tilt, so a cell that is 128
+   *  texels wide is only ~30 tall at the default stop — and at the widest stop (`ZOOM_STOPS[3]`,
+   *  0.01034 kpc) it is 3.6 texels tall. Measured at 417x240: a true 1 pc lattice there draws 13,093
+   *  texels of z-lines about seven texels apart, which at 240p is not a grid, it is a wash over the
+   *  starfield the grid exists to give a floor to — and it is 13x the fill count the whole frame had.
+   *  So the cell steps up in POWERS OF TWO (1, 2, 4, 8 pc) until the tighter of its two on-screen
+   *  spacings clears `PLANE_MIN_TEXELS`. ⭐ AT THE DEFAULT CAMERA THE MULTIPLIER IS 1 and the lattice
+   *  is exactly legacy's 1 pc; nothing about the picture Max will look at first is approximate.
+   *  ⚠ THE TWO SPACINGS ARE THE AXIS-ALIGNED ONES, USED AS A PROXY. Under a rotated azimuth the
+   *    lines are slanted and their true perpendicular spacing mixes both terms; the proxy is within a
+   *    factor of sqrt(2) of it, which is inside the doubling's own granularity. */
+  const unit = PLANE_CELL_KPC / r;                   // one 1 pc cell, in camera radii
+  if (!(unit > 0)) return;
+  const spX = unit * halfW * rx, spZ = unit * halfH * Math.abs(tilt);
+  let mult = 1;
+  while (mult < 64 && Math.min(spX, spZ) * mult < PLANE_MIN_TEXELS) mult *= 2;
+  const cell = unit * mult;
+  if ((dxMax - dxMin) / cell > PLANE_MAX_LINES * 4) return;   // absurd zoom: no lattice
+  const run = (lo, hi, draw) => {
+    const i0 = Math.ceil(lo / cell), i1 = Math.floor(hi / cell);
+    for (let i = i0; i <= i1 && i - i0 < PLANE_MAX_LINES; i++) draw(i * cell);
+  };
+  // the grid is anchored to the WORLD, not to the camera, so it slides under a pan instead of with it
+  const offX = cam.x / r, offZ = cam.z / r;
+  run(dxMin + offX, dxMax + offX, (wx) => {
+    const dx = wx - offX;
+    lineTexels(g, fx(dx, dzMin), fy(dx, dzMin), fx(dx, dzMax), fy(dx, dzMax), INK.GRID, cl, PLANE_DOT);
+  });
+  run(dzMin + offZ, dzMax + offZ, (wz) => {
+    const dz = wz - offZ;
+    lineTexels(g, fx(dxMin, dz), fy(dxMin, dz), fx(dxMax, dz), fy(dxMax, dz), INK.GRID, cl, PLANE_DOT);
+  });
+}
+
+/*  Function · the one-texel stem from a mark's foot on the plane to the mark itself.
+ *  Intent · AC-2 (restorations). Legacy draws a dashed vertical reference line per on-screen star,
+ *    green when the star is above the plane and red when it is below (NavComputer.js:2074-2079).
+ *    Both designs already draw the FOOT (the `INK.RULE` plane dot) and the MARK; the line between
+ *    them is the cue that says the two belong to one star, and it is the only thing on the glass
+ *    that gives a dot a height. Both endpoints are already computed — `projectPrism` returns `y`
+ *    and `py` — so this is drawing, not new data.
+ *  ⛔ ABOVE/BELOW IS READ OFF THE DRAWN POINTS, NOT OFF `wy`. The two inks have to agree with the
+ *    direction the stem visibly runs, and under a rotated camera the sign of `y - py` is the only
+ *    thing that knows it. `py` is the star at the camera's height, so `y < py` IS "above".
+ *  ⚠ SOLID WHILE IT IS SHORT, DOTTED ONCE IT IS LONG, AND BOTH HALVES ARE MEASURED. Legacy's dash
+ *    is [2,5] — 28% of the texels — on a canvas 3.6x this one's line count. At 240p a stem at the
+ *    default zoom averages five texels, and a dash there renders as two dots that cannot be told
+ *    from the foot and the mark; at the widest zoom stop the 584 stems of design 2 average
+ *    seventeen and, drawn solid, are 10,796 texels in one frame. So: solid under `DROP_SOLID`,
+ *    every second texel above it, which is still denser than legacy's dash.
+ *  Deliberate non-goals · no tether lines to co-members and no pulsing rings (intent.md's non-goals),
+ *    no depth fade, and no cap on the stem's LENGTH — the length is the reading. */
+const DROP_SOLID = 10;
+function prismDrop(g, p, cl) {
+  if (!p || !Number.isFinite(p.y) || !Number.isFinite(p.py)) return;
+  if (Math.round(p.y) === Math.round(p.py)) return;            // on the plane: the foot dot says it
+  lineTexels(g, p.x, p.py, p.x, p.y, p.y < p.py ? INK.ABOVE : INK.BELOW, cl,
+             Math.abs(p.y - p.py) > DROP_SOLID ? 2 : 1);
 }
 
 /**
@@ -1329,11 +1489,36 @@ function d1Prism(g, mapW, mapY, mapH, gaugeX) {
     shown.push({ s, p });                                                       // (there is none today)
     if (shown.length >= 240) break;                                             // and the draw cap
   }
+  /*  Function · the three depth cues, in the order they have to be painted.
+   *  Intent · AC-2 (restorations). Legacy sorts the on-screen set far-first (NavComputer.js:2029,
+   *    `b.starP.depth - a.starP.depth`) so a near star's glyph lands ON TOP of a far one's; draws a
+   *    plane grid under everything (:1994-2014); and hangs a drop line off each mark (:2074-2079).
+   *    This design drew none of the three: 240 identical dots with no depth order and no horizon.
+   *  ⛔ THE SORT IS OVER THE CAPPED SET, AND THE CAP AND THE CULL ARE UNTOUCHED. The loop above
+   *    still decides WHICH marks exist; this only decides the ORDER they are painted in — and
+   *    `S.prismHits` is published off the same array afterwards, so it stays exactly "in DRAW
+   *    ORDER" as its own note requires. `Array.prototype.sort` is stable, so equal depths keep the
+   *    catalogue's order. ⚠ `depth` is `projectPrism`'s own third return, the rotated z; legacy's
+   *    descending sort is reproduced sign for sign.
+   *  Deliberate non-goals · no per-mark size or brightness by depth (the low-fi mark is Max's
+   *    ruling on item 14: *"keep the low-fi marks"*), no z-buffer, no occlusion test. */
+  shown.sort((a, b) => b.p.depth - a.p.depth);
+  prismPlane(g, cxp, cyp, mapW / 2, mapH / 2, REGIONS.map);
   for (const { s, p } of shown) {
+    prismDrop(g, p, REGIONS.map);                                                // the stem, under the mark
     rect(g, p.x, p.py, 1, 1, INK.RULE);                                          // the plane dot
     if (s === D.selStar) { frame(g, p.x - 2, p.y - 2, 5, 5, INK.TARGET); continue; }
     if (s.dist < 1e-6)   { frame(g, p.x - 2, p.y - 2, 5, 5, INK.YOU); continue; }
-    if (s.isReal) plus(g, p.x, p.y, INK.BODY);
+    // ⭐ AC-2 — A CATALOGUE STAR TAKES ITS SPECTRAL INK AND A RING; A PROCEDURAL ONE KEEPS THE DOT.
+    //    Legacy colours every marker by `star.color` and rings the catalogue ones in amber
+    //    (NavComputer.js:2104/2109-2113). Design 2 already spends the SPECTRAL table; design 1 spent
+    //    exactly one bit — `plus` or dot — so its prism could not say what KIND of star anything
+    //    was. The ring is `frame`'s four one-texel rects, the only ring this file can draw.
+    // ⚠ THE RING IS 5x5, OUTSIDE `plus`'s 3 texels and inside the picker's r = 3, so it adds no
+    //   pickable area and cannot be confused with the 5x5 SELECTED/YOU frames — both of those
+    //   `continue` above and are drawn in their own inks.
+    if (s.isReal) { plus(g, p.x, p.y, SPECTRAL[s.spectral] || INK.BODY);
+                    frame(g, p.x - 2, p.y - 2, 5, 5, INK.HALO); }
     else rect(g, p.x, p.y, 1, 1, INK.DIM);
   }
   // ⭐ EVERY STAR MARK, IN DRAW ORDER, OUT OF THE ARRAY THE CULL AND THE CAP BUILT. `shown` IS the
@@ -1343,7 +1528,10 @@ function d1Prism(g, mapW, mapY, mapH, gaugeX) {
   // and `plus` is 5 texels across — and the picker takes the NEAREST inside r, so marks that
   // overlap at this radius resolve to the near one instead of to whichever was tested first.
   S.prismHits = shown.map(({ s, p }) => ({ x: p.x, y: p.y, r: 3, ref: s }));
-  // ⭐ EIGHT SINGLE-CHARACTER INDEX TAGS instead of 139 labels of which 100 are already faded
+  // ⭐ THE MAP'S LABELS. Until AC-3 (restorations) these were EIGHT SINGLE-CHARACTER INDEX TAGS —
+  //    chosen over 139 labels of which 100 were already faded, and replaced now by the NAMES of the
+  //    catalogue stars, which is what legacy put here. The placer's history below still holds: it is
+  //    the same call, at the same site, with a longer string.
   // ⛔⛔ AND THIS IS THE SITE THAT NEVER CALLED THE PLACER AT ALL — a bare `p.x + 3, p.y - 6` over a
   //    field of up to 240 marks. It is the only one of the four that could actually DESTROY a label:
   //    measured over 120 frames before this change, 507 texels of one tag's glyphs erased by a later
@@ -1353,16 +1541,40 @@ function d1Prism(g, mapW, mapY, mapH, gaugeX) {
   // ⚠ THE MANUAL BOUNDS TEST IS GONE, NOT LOST: `placeLabel` makes the same test against the declared
   //   region and then tries thirteen more slots, so a tag that used to be skipped for being 3 texels
   //   from the right edge now goes on the star's left instead.
-  const top = D.starRows.slice(0, 9).filter((s) => s.dist > 1e-6).slice(0, 8);
-  const tagTaken = [];
-  top.forEach((s, i) => {
-    const p = projectPrism(s, cxp, cyp, mapW / 2, mapH / 2);
-    const txt = String(i + 1);
-    const pos = placeLabel(tagTaken, S.prismHits, p.x, p.y, 3, 6, measurePixelText(txt), REGIONS.map, s);
-    if (!pos) return;
-    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.TARGET, 'map', 'index tag ' + txt),
-                       ref: s, kind: 'index' });
-  });
+  /*  Function · the NAME of every catalogue star that can find a slot, in place of the eight digits.
+   *  Intent · AC-3 (restorations), page item 15. Max: *"names yes"*. Legacy labels exactly the rows
+   *    this one does — `star.isReal && star.name` (NavComputer.js:2109-2133) through a placement
+   *    solver (:2337-2387) — and the page's prism table scores this design NAMES ON THE MAP 0: eight
+   *    digits that are a cross-reference to the rail and say nothing about the thing under them.
+   *  ⛔ THE PRIORITY IS SELECTED > CURRENT > NEAREST, AND IT IS THE DRAW ORDER, NOT A SCORE.
+   *    `placeLabel` gives the first caller first pick of fourteen slots and refuses anything that
+   *    would overlap a placed label or cover a foreign mark, so ordering the callers IS the
+   *    priority: the selected star is asked first and therefore always gets a slot if one exists,
+   *    and a lower-priority name with nowhere to go is DROPPED rather than overprinted. The guard
+   *    stays silent because a dropped label draws nothing.
+   *  ⚠ THE STAR KEEPS ITS ENTRY IN `S.prismHits` EITHER WAY — a dropped label leaves a star
+   *    UNNAMED, never UNPICKABLE (`placeLabel`'s own note).
+   *  ⚠ AND THE CAP IS DESIGN 2'S, SPELLED THE SAME WAY (`mapH / 22`), because the question it
+   *    answers — how many names a pane this tall can carry before it is a wall of type — is a
+   *    property of the pane, not of the design.
+   *  Deliberate non-goals · the eight index tags are GONE, so the rail's leading 1-8 column now
+   *    cross-references a mark that carries its own name instead of a digit; no membership suffix
+   *    (legacy's `Proxima · Alpha Centauri`, NavComputer.js:2115-2130) — not in item 15. */
+  const nameCap = Math.max(4, Math.floor(mapH / 22));
+  const rank = (s) => (s === D.selStar ? 0 : s.dist < 1e-6 ? 1 : 2);
+  const named = shown.filter(({ s }) => s.isReal && s.name)
+                     .sort((a, b) => (rank(a.s) - rank(b.s)) || ((a.s.dist ?? 0) - (b.s.dist ?? 0)));
+  const nameTaken = [];
+  let namesDrawn = 0;
+  for (const { s, p } of named) {
+    if (namesDrawn >= nameCap) break;
+    const txt = fit(String(s.name).toUpperCase(), mapW - 8);
+    const pos = placeLabel(nameTaken, S.prismHits, p.x, p.y, 3, 6, measurePixelText(txt), REGIONS.map, s);
+    if (!pos) continue;                                                        // dropped, never faded
+    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.KEY, 'map', 'prism label ' + txt),
+                       ref: s, kind: 'star' });
+    namesDrawn++;
+  }
   // the Y-gauge: 6 texels carrying the whole 60x160 minimap
   //
   // ── ⭐ AC-9 — IT IS A HANDLE, AND WHAT IT HANDLES IS A CONTROL MAX ALREADY ASKED FOR ──────────
@@ -1606,7 +1818,16 @@ function d1Rail(g, x, y, w, cols, rowCount) {
   T(g, cnt, x + w, y, { color: INK.DIM, align: 'right', rgn: 'rail', what: 'rail count' });
   rect(g, x, y + LEAD - 1, w, 1, INK.RULE);
 
-  const listRows = Math.max(2, rowCount - 9);
+  // ⭐ AC-3/AC-9 (restorations) — THE DETAIL BLOCK'S HEIGHT IS NOW A NUMBER, NOT A `9` IN A SUM.
+  //    `rowCount - 9` was 1 header + 1 pager + a SEVEN-line detail block, and the 9 said so nowhere.
+  //    PRISM's block gains five lines — HEIGHT, its region, PLAYER Y, Y RANGE and VIEW — so the
+  //    budget has to be named to be spent. ⛔ EVERY OTHER LEVEL KEEPS SEVEN and therefore keeps
+  //    `rowCount - 9` exactly: levels 0, 1, 2 and 4 are byte-identical, which is the AC's own bar.
+  //    ⚠ THE COST IS FIVE PRISM LIST ROWS, 27 → 22 at Max's 417x240. The rail is full: the seventh
+  //      detail line already lands on the last row above the hint rule, so the only place five lines
+  //      can come from is the list — and the list is paged (`- = PAGE`) while the numbers are not.
+  const detailRows = S.level === 3 ? 12 : 7;
+  const listRows = Math.max(2, rowCount - 2 - detailRows);
   // ⭐ PAGING, AND THE SPLIT IT OBEYS. The pager reads `1-27 OF 27524` and there has never been a way
   // to see the 28th. The CONTROL writes `S.listOffset`; THIS is the code that slices by it, and it
   // publishes what it actually sliced as `S.listGeom` so the pager label, the drawn rows and the row
@@ -1678,6 +1899,24 @@ function d1Rail(g, x, y, w, cols, rowCount) {
       txt: `${off + i < 8 && s.dist > 1e-6 ? off + i + 1 : '·'} ${pad(s.name.toUpperCase() || 'UNNAMED', cols - 13)} ` +
            `${rpad(s.pc.toFixed(1), 5)} ${pad(s.spectral, 2)} ${s.mult > 1 ? s.mult : '·'}`,
       bar: 0, sel: s === D.selStar }));
+    /*  Function · the camera block — where the eye is, in the units legacy used.
+     *  Intent · AC-3 and AC-9 (restorations). Max, UAT 2026-08-01, on this very screen: *"I still
+     *    can't use the up/down controls to rise and lower below the galactic plane."* R and F move
+     *    `_localCenter.y` and legacy printed the result in three lines; this design printed none, so
+     *    the key moved a picture with no number attached to it. The y-gauge (`d1Prism`) draws the
+     *    same fact as a MARK; this is the READOUT, and the two come off the same `S.cam.y`.
+     *  ⛔ DRAWN WHETHER OR NOT A STAR IS SELECTED, AND FIRST. It is a fact about the level, not
+     *    about a selection, so it holds the top of the block at a fixed row the way legacy's
+     *    fixed-y HUD block did — and it is the only thing this block says at all when nothing is
+     *    selected, which was seven blank rows before.
+     *  ⚠ THE REGION TAKES ITS OWN LINE. The rail is `railC * CELL - 1` = 149 texels = 25 characters
+     *    at Max's window, and `HEIGHT 0 PC ABOVE · THIN DISK` measures 179 — `fit()` would eat
+     *    ` DISK`. Nothing is CUT: the clause is split at the `·` onto a continuation line, which is
+     *    the idiom this same block already uses for `DIST … PC` / `      … LY`.
+     *  Deliberate non-goals · no kpc, no gauge duplication, no plane-crossing alarm. */
+    const pn = prismNumbers();
+    detail.push([pn.height, INK.BODY], [`       ${pn.region}`, INK.DIM],
+      [pn.playerY, INK.BODY], [pn.yRange, INK.DIM], [pn.view, INK.BODY]);
     const s = D.selStar;
     if (s) detail.push([fit(s.name.toUpperCase(), w), INK.KEY], [`${s.spectral}   ${s.isReal ? 'CATALOG' : 'PROCEDURAL'}`, INK.BODY],
       [`DIST   ${s.pc.toFixed(2)} PC`, INK.BODY], [`       ${s.ly.toFixed(1)} LY`, INK.BODY],
@@ -1830,6 +2069,35 @@ function d1PlayerTile(v) {
   const j = Math.floor(((D.player.z - v.cz) / v.size + 0.5) * v.n);
   return (AZ[Math.max(0, Math.min(v.n - 1, i))] || '?') + (Math.max(0, Math.min(v.n - 1, j)) + 1);
 }
+/*  Function · the four camera numbers legacy printed at PRISM and neither design did, spelled once.
+ *  Intent · AC-3 and AC-9 (restorations), page items 15 and 21. Legacy's own block
+ *    (NavComputer.js:4272-4296): `VIEW: <n> ly` = round(_localRadius * 1000 * 3.26); `HEIGHT: <n> pc
+ *    above|below plane (<region>)` off `_localCenter.y` with thin disk < 0.3 kpc / thick disk < 1.0 /
+ *    halo; `PLAYER Y: <n> pc`; `Y RANGE: <a> to <b> pc` at _playerY +/- 2.0 kpc. Max ruled the numbers
+ *    go into design 1's detail block and design 2's status line, and that all three looks print ONE
+ *    zoom readout in ONE unit — the old nav's radius in light-years.
+ *  ⛔ ONE COPY FOR TWO DESIGNS, BECAUSE THE WHOLE OF ITEM 21 IS THAT THE THREE LOOKS AGREE. Two
+ *    spellings of `round(radius * 3260)` is two numbers that can drift apart by a rounding mode, and
+ *    the defect being closed is literally that design 2 said `10.0 PC ACROSS` where legacy said
+ *    `16 ly` about the same camera.
+ *  ⚠ EVERY INPUT IS GUARDED. `S.cam` and `D.player` both have defaults in `state.js`, but `D.player`
+ *    is `null` until the first `refresh()` (`state.js:466`) and a painter that throws freezes the
+ *    glass on the last good frame — so a missing number reads 0 rather than taking the screen down.
+ *  Deliberate non-goals · no kpc form beside the pc one (legacy prints both; the rail is 25
+ *    characters wide), no plane-crossing warning, no per-level variant — this is PRISM's block. */
+function prismNumbers() {
+  const camY = (S.cam && Number.isFinite(S.cam.y)) ? S.cam.y : 0;
+  const rad  = (S.cam && Number.isFinite(S.cam.radius)) ? S.cam.radius : 0;
+  const pY   = (D.player && Number.isFinite(D.player.y)) ? D.player.y : 0;
+  const a = Math.abs(camY);
+  return {
+    height:  `HEIGHT ${Math.round(camY * 1000)} PC ${camY >= 0 ? 'ABOVE' : 'BELOW'}`,
+    region:  a < 0.3 ? 'THIN DISK' : a < 1.0 ? 'THICK DISK' : 'HALO',
+    playerY: `PLAYER Y ${Math.round(pY * 1000)} PC`,
+    yRange:  `Y RANGE ${Math.round((pY - 2.0) * 1000)} TO ${Math.round((pY + 2.0) * 1000)} PC`,
+    view:    `VIEW ${Math.round(rad * 3260)} LY`,
+  };
+}
 function fmtK(n) {
   if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -1902,6 +2170,25 @@ function drawDesign2(g, W, H) {
     const legY = mapY + mapH - FACE.h - 1;
     if (S.level === 4) T(g, fit('SELECT A BODY  DRAG ROTATE  ENTER', W - 8), 4, legY - (FACE.h + 1),
                          { color: INK.RULE, rgn: 'map', what: 'system legend' });
+    /*  Function · PRISM's own legend row: the loaded-star count and the three keys this level owns.
+     *  Intent · AC-3/AC-9 (restorations) took the bar for HEIGHT and VIEW (see `d2Status`). These
+     *    four clauses were on the bar; two of them were already being eaten by `fit()` there, and
+     *    `R/F UP` was invisible at every buffer. This row is the same slot, the same ink and the same
+     *    corner SYSTEM's legend already uses, and it is 33 characters against 68 of room.
+     *  ⛔ THE COUNT IS DRAWN IN `DIM`, NOT IN `RULE`, AND SEPARATELY. The legend rows are deliberately
+     *    structure-ink so *"no word could be mistaken for a readout"* — and a star count IS a
+     *    readout. Two draws on one row, each in the ink its content earns; `cw` is the measured width
+     *    the first draw returned, so the second starts where the first actually ended.
+     *  ⚠ `fmtK`, LIKE EVERY OTHER COUNT IN EITHER DESIGN. This was the last raw `.length` on a bar
+     *    (AC-18 of the defects batch caught the other one) and in a loaded prism it is five digits.
+     *  Deliberate non-goals · no sort key here (the bar has no room and PRISM's list mode names it),
+     *    no pager, and nothing at all in list mode or under the search — both replace the pane. */
+    if (S.level === 3) {
+      const cw = T(g, `${fmtK(D.stars.length)} STARS`, 4, legY - (FACE.h + 1),
+                   { color: INK.DIM, rgn: 'map', what: 'prism count' });
+      T(g, fit('L=LIST  WASD PAN  R/F UP', W - 10 - cw - 6), 4 + cw + 6, legY - (FACE.h + 1),
+        { color: INK.RULE, rgn: 'map', what: 'prism legend' });
+    }
     T(g, fit(LEG, W - 8), 4, legY, { color: INK.RULE, rgn: 'map', what: 'global legend' });
   }
 
@@ -2004,10 +2291,29 @@ function d2Status(avail = Infinity) {
   // ⛔ AND `PRISM LIST` LOST ITS FIRST WORD FOR THE LAST 6 CHARACTERS: 58 of 60 at the worst key, and
   //    the tab strip is drawn across the top of this same frame with PRISM filled, which is where
   //    this design says which level is on the glass in the first place.
-  if (S.level === 3) return S.list
-    ? ['LIST', `NEAREST ${D.starRows.length}`, 'L=MAP', d2SortHint(), '- = PAGE']
-    : ['PRISM', `VIEW ${(S.cam.radius * 2000).toFixed(1)} PC ACROSS`, `${D.stars.length} STARS`,
-       'L=LIST', 'WASD PAN', 'R/F UP'];
+  /*  Function · PRISM's bar, rebuilt around the two numbers item 21 and item 15 ask every look to say.
+   *  Intent · AC-9 — one zoom readout for all three looks, same quantity and unit, which is the old
+   *    nav's radius in light-years: `VIEW 16 LY` where this bar said `VIEW 10.0 PC ACROSS` about the
+   *    same camera. AC-3 — design 2's status line prints HEIGHT with its region.
+   *  ⛔ THE BAR IS 364 TEXELS = 60 CHARACTERS AND IT WAS ALREADY OVERFLOWING — MEASURED, before any
+   *    of this: `PRISM · VIEW 10.0 PC ACROSS · 212 STARS · L=LIST · WASD PAN · R/F UP` is 69, and
+   *    what the glass actually read was `… · L=LIST · WASD PAN ` with `R/F UP` gone entirely. So the
+   *    numbers could not simply be added: anything appended would have been invisible, and anything
+   *    inserted would have pushed a clause that IS drawn off the right-hand end.
+   *  ⭐ SO THE THREE KEYS AND THE COUNT MOVE TO THE SKY, which is the surface AC-12 of the defects
+   *    batch established for exactly this overflow (*"There is no third bar to add without moving the
+   *    picture Max ruled on, so the only surface left is the sky"*) and which SYSTEM's own legend row
+   *    already uses. NOTHING IS CUT — `R/F UP`, which no pilot has ever seen at PRISM, is drawn for
+   *    the first time. See `drawDesign2`'s legend block for the row.
+   *  ⚠ WHAT IS LEFT MEASURES 50 CHARACTERS at Max's window, which leaves ten for a HEIGHT number
+   *    out in the halo (`HEIGHT -12345 PC BELOW · THICK DISK` is 56).
+   *  Deliberate non-goals · no kpc, no `PC ACROSS` kept beside the ly (item 21 is that there is ONE
+   *    readout), and list mode's clause set is untouched — it names its own keys and has no camera. */
+  if (S.level === 3) {
+    if (S.list) return ['LIST', `NEAREST ${D.starRows.length}`, 'L=MAP', d2SortHint(), '- = PAGE'];
+    const pn = prismNumbers();
+    return ['PRISM', pn.view, pn.height, pn.region];
+  }
   const b = D.selBody;
   // ⭐ AC-2 — THREE STATES, NOT ONE. `null` already had its clause pair and was unreachable until
   // `state.js` stopped inventing a fallback; the STAR is new, and it is not run through the planet
@@ -2133,7 +2439,21 @@ function d2Prism(g, W, mapY, mapH) {
     onScreen.push({ s, p });
     if (++drawn >= cap) break;
   }
+  // ⭐ AC-2 (restorations) — THE SAME THREE CUES DESIGN 1 GAINS, AND THE SAME TWO LINES OF CODE.
+  //    Far-first (legacy NavComputer.js:2029), the 1 pc plane lattice under the marks (:1994-2014)
+  //    and a drop line per mark (:2074-2079). ⛔ THE CULL AND THE CAP ARE THIS DESIGN'S OWN and are
+  //    untouched — see the `S.prismHits` note below for why they must not be unified with design 1's.
+  //    ⛔ AND NO HALO AND NO NEW INK FOR THE MARKS HERE: design 2 already spends SPECTRAL on every
+  //    mark and rings nothing, which is the picture Max ruled on; item 14's halo clause is design 1's.
+  // ⚠ THE LABEL LOOP KEEPS THE CULL'S ORDER, WHICH IS THE ACTIVE SORT KEY'S. Sorting `onScreen`
+  //   far-first would hand the label cap to the FARTHEST stars — the depth order is about which
+  //   glyph lands on top, not about which star is worth naming — so the names are placed off a
+  //   snapshot taken before the sort and the picture Max ruled on keeps naming the nearest.
+  const byRank = onScreen.slice();
+  onScreen.sort((a, b) => b.p.depth - a.p.depth);
+  prismPlane(g, cxp, cyp, W / 2, mapH / 2, REGIONS.map);
   for (const { s, p } of onScreen) {
+    prismDrop(g, p, REGIONS.map);                             // the stem — the dashed line, restored
     rect(g, p.x, p.py, 1, 1, INK.RULE);                       // plane dot, not a dashed line
     if (s.dist < 1e-6) { for (const d of [[-4,-4],[2,-4],[-4,2],[2,2]]) { rect(g, p.x+d[0], p.y+d[1], 3, 1, INK.YOU); rect(g, p.x+d[0], p.y+d[1], 1, 3, INK.YOU); } continue; }
     if (s === D.selStar) { frame(g, p.x - 3, p.y - 3, 7, 7, INK.KEY); continue; }
@@ -2150,7 +2470,7 @@ function d2Prism(g, W, mapY, mapH) {
   const capN = Math.max(4, Math.floor(mapH / 22));
   const taken = [];
   let placed = 0;
-  for (const { s, p } of onScreen) {
+  for (const { s, p } of byRank) {
     if (placed >= capN) break;
     if (!s.name || !s.isReal) continue;
     const txt = s.name.toUpperCase(), w = measurePixelText(txt);

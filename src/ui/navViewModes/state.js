@@ -392,8 +392,41 @@ export function makeViewState() {
      *  a frame drawn before the first `refresh()` — the lab's case, and the first paint's — is the
      *  picture Max ruled on rather than a top-down one. */
     cam:  { x: 0, y: 0, z: 0, radius: 0.0015, rotX: PRISM_ROT_X0, rotY: 0 },
-    sysCam: { rotX: SYSTEM_ROT_X0, rotY: 0 },
+    /* Function · the orrery camera, now including the wheel's own magnification.
+     * Intent · AC-6 (SEAM §2): `_handleWheel` (NavComputer:4701-4710) has always scaled
+     *   `nav._systemZoom` by 1.15/0.87 inside [0.3, 5.0] at SYSTEM with no `viewMode` gate, and only
+     *   the LEGACY orrery ever read it (:2531) — so under a design the wheel moved a number nothing
+     *   drew. `refresh()` mirrors it here so design 2's orrery can scale by it.
+     * Deliberate non-goals · no clamping, no easing and no reset here: the host owns all three
+     *   (:607 / :4470 / :4618 set it back to 1.0 on open, tab and drill) and a second clamp on this
+     *   side would be a copy of the instrument's own range, free to drift. Design 1 ignores it by
+     *   Max's ruling (its ladder is a scroll, not a zoom).
+     * ⛔ A DEFAULT IS MANDATORY, like every other field here: an `undefined` multiplier does not draw
+     *   a small orrery, it draws `NaN` radii — and `PanelHost` catches a painter throw ONCE and then
+     *   freezes the glass on the last good frame, which looks alive. */
+    sysCam: { rotX: SYSTEM_ROT_X0, rotY: 0, zoom: 1 },
     view: { cx: 8, cz: 0, size: 44 },
+
+    /* Function · WHAT THE POINTER IS ON, published once a frame from the pick the driver has just
+     *   resolved into the host's own `_hoveredTile` / `_hoveredLocalStar` / `_hoveredBody`.
+     * Intent · AC-1 (SEAM §1). The hover was ALREADY resolved under a design — `resolveHover` writes
+     *   those three host fields at the tail of `render()` — but no painter could read it: `S` and `D`
+     *   carried no hover field and the painters close over `S`/`D` only. This is that one field, so
+     *   the NEXT frame's paint can draw the callout legacy drew.
+     *   Shape: `null`, or `{ level, kind:'sector'|'tile'|'star'|'body', sx, sy, ref }` —
+     *     sector → the sector row (has `.name`);
+     *     tile   → `{ col, row, kx, kz }`, `kx`/`kz` the tile CENTRE in kpc;
+     *     star   → the `D.stars` row (`name, spectral, dist, distPc, wy, isReal, seed, color`);
+     *     body   → `{ type:'planet'|'star'|'moon'|'belt', index, planetIndex?, moonIndex?, row }`.
+     * Deliberate non-goals · it is NOT a second pick. It is built from the very object `resolveHover`
+     *   just wrote to the host, so the callout and the click can never name different things; and no
+     *   painter reads it this wave (the callout is wave 1b).
+     * ⛔ NOT IN `resetPicks()`. Everything the PAINT publishes is one frame's worth by construction;
+     *   this is published by the DRIVER at the tail of the frame and is read by the NEXT frame's
+     *   paint — exactly `S.pick`'s lifetime, and clearing it with the paint's fields would erase it
+     *   before anything could draw it. It is cleared instead on a LEVEL CHANGE (below, in `refresh`)
+     *   and by `onDeactivate()`. */
+    hover: null,      // { level, kind, sx, sy, ref } | null
 
     /** ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5). Max: *"clicking on a cell from the grid should
      *  highlight it, then zoom into it"* — so it is written on a committed map click BEFORE the
@@ -434,6 +467,21 @@ export function makeViewState() {
     sectorRows: [], stars: [], starRows: [], sys: null, bodies: [],
     target: null, selStar: null, selBody: null, sysStar: null, here: null,
     isCurrent: false,   // the HOST's own answer to "is the system on the glass the one the ship is in"
+    /* Function · WHERE THE SHIP ACTUALLY IS in the system on the glass, or `null` when it is not in
+     *   that system at all.
+     * Intent · AC-5 (SEAM §2). Legacy places its diamond from `nav._currentFocusIndex` /
+     *   `_currentMoonIndex` (NavComputer:280-281, written by the game through the setter at
+     *   :1174-1175) and gates the whole drawing on `_isCurrentSystem()` (:2905). Neither index
+     *   reached `D`, so design 2 drew its diamond at a FIXED offset and design 1 drew none.
+     *   `{ planetIndex, moonIndex }`; `planetIndex < 0` means the ship is at the star (legacy's -2
+     *   and -1 both land there, :2909), `moonIndex < 0` means it is on the planet, not a moon.
+     * Deliberate non-goals · no screen position: the DESIGN owns the projection and already draws
+     *   every body's point, so a position computed here would be a second copy of the paint's own
+     *   geometry — the AC-4 defect shape. This publishes the IDENTITY; the paint answers where.
+     * ⛔ `null` UNLESS `D.isCurrent`, and that is the host's 0.1 pc identity test, never a seed
+     *   comparison (`D.sysStar.seed` is the string 'Sol' in Sol). A stale focus index from the system
+     *   the ship really is in would paint SHIP onto a foreign planet. */
+    ship: null,         // { planetIndex, moonIndex } | null
     lumCache: new Map(),
   };
 
@@ -754,7 +802,12 @@ export function makeViewState() {
     //    27,524-row star list is meaningless against 64 tiles. Same shape as `S.ladderScroll`'s
     //    reset on a new system, and for the same reason: inheriting an offset opens the new list
     //    scrolled past everything it has.
-    if (cache.level !== S.level) { cache.level = S.level; S.sortIdx = 0; S.listOffset = 0; }
+    // ⛔ AND `S.hover` DIES WITH THE LEVEL (SEAM §1). It is not one of the paint's fields, so
+    //    `resetPicks()` deliberately leaves it alone — which means that without this line a callout
+    //    resolved at PRISM would still be on `S` when SECTOR painted, naming a star that is not on
+    //    the glass. Cleared HERE, before the paint that reads it, and republished at the tail of the
+    //    same frame by `resolveHover` if the pointer is on something at the new level.
+    if (cache.level !== S.level) { cache.level = S.level; S.sortIdx = 0; S.listOffset = 0; S.hover = null; }
     const keys = SORT_KEYS[S.level] || [];
     if (keys.length) S.sortIdx = Math.max(0, Math.min(keys.length - 1, S.sortIdx | 0));
     S.sortLabel = keys[S.sortIdx | 0]?.label || '';
@@ -779,6 +832,11 @@ export function makeViewState() {
     S.cam.rotY = wrapTau(nav._localRotY);
     S.sysCam.rotX = Number.isFinite(nav._systemRotX) ? nav._systemRotX : SYSTEM_ROT_X0;
     S.sysCam.rotY = wrapTau(nav._systemRotY);
+    // ⭐ AC-6 — AND THE ORRERY'S MAGNIFICATION, the third number on the same camera. `_handleWheel`
+    //    already clamps it into [0.3, 5.0] and resets it to 1.0 on open/tab/drill, so this is a plain
+    //    mirror with a default for the frames before the instrument has one. Same shape as the two
+    //    rotations above and for the same reason: the game's field stays the single source of truth.
+    S.sysCam.zoom = Number.isFinite(nav._systemZoom) ? nav._systemZoom : 1;
     const vc = nav._viewCenter || { x: 8, z: 0 };
     S.view.cx = vc.x; S.view.cz = vc.z;
     S.view.size = Number.isFinite(nav._viewSize) ? nav._viewSize : 44;
@@ -880,6 +938,14 @@ export function makeViewState() {
     //    Measured live 2026-09-18 (AC-2). `_isCurrentSystem()` (:1089) is the 0.1 pc identity test
     //    the lab's own comment names as the authority; publish it and let the paint read it.
     D.isCurrent = !!(typeof nav._isCurrentSystem === 'function' && nav._isCurrentSystem());
+    // ⭐ AC-5 — THE SHIP, GATED ON THAT SAME ANSWER AND ON NOTHING ELSE (SEAM §2). One expression,
+    //    immediately under the test it depends on, so "am I home" cannot be asked twice and answered
+    //    differently. ⚠ The two indices are copied, not aliased: they are plain numbers, and a design
+    //    that captured the object would keep last frame's pair after a burn moved the ship.
+    D.ship = D.isCurrent
+      ? { planetIndex: Number.isFinite(nav._currentFocusIndex) ? nav._currentFocusIndex : -1,
+          moonIndex: Number.isFinite(nav._currentMoonIndex) ? nav._currentMoonIndex : -1 }
+      : null;
     const bodyKey = sortKeyFor(S, 4);
     if (cache.sysRef !== D.sys) {
       cache.sysRef = D.sys; cache.bodySortId = null;

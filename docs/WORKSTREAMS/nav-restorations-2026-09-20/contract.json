@@ -33,7 +33,7 @@
     "observable": "The next frame paints a callout beside the pointer, inside the map pane, with that thing's facts in the legacy content (name and class and distance and height for a star; type, R⊕, AU, K, moon count for a planet; class, R☉, Gyr, planet count for the star; the sector name; the kpc pair for a tile). On empty map no callout paints. The callout never overprints the rail, the status line, the tabs or the commit row, and the mark guard stays silent. The legacy look is untouched."
    },
    "layer": "unit",
-   "progress": "not started"
+   "progress": "◐ DRIVER half built wave 1a: S.hover published at index.js:369 right after resolveHover (hoverPick :117/:541/:569, shapeHover :596, tileCentreKpc :648 — asserted to 1e-9 against the host's own drill target); default state.js:429; cleared on level change state.js:810 and by onDeactivate index.js:995; NOT in resetPicks (proved by a probe context sampling S.hover on the frame's first fillRect). picking.js pickBody gained an optional `out` arg (:356) so a BELT hover publishes { type:'belt', index, row } while nav._hoveredBody stays null; a moon pip collapses to its parent's identity, so S.hover.type is 'planet' there (the callout never names what a click would not select). 19/19; 9 of 10 mutants killed, the tenth equivalent. LAB half (the callout paint) = wave 1b."
   },
   {
    "id": "AC-2",
@@ -45,7 +45,7 @@
     "observable": "For every drawn star mark there is a one-texel-wide line from its foot on the plane to the mark, in one ink above the plane and another below; a grid of plane lines at 1 pc spacing, clipped to the map pane, underneath the marks; marks are painted in far-to-near order (the recorded fill order of two overlapping marks puts the nearer one last). In design 1 each catalogue star's mark takes its spectral ink (the SPECTRAL table in designs.js) and carries a one-texel halo ring; procedural stars keep the low-fi mark. The mark cap (240 design 1 / 584 design 2) and the marks themselves are unchanged; the mark guard is silent; frame hashes at levels 0-2 and 4 are byte-identical before/after."
    },
    "layer": "unit",
-   "progress": "not started"
+   "progress": "✅ BUILT wave 1a (LAB, lab → extract). Four INK entries GRID/ABOVE/BELOW/HALO (designs.js:186-189); lineTexels :334; prismPlane :635 (PLANE_CELL_KPC 0.001 = NavComputer.js:1191); prismDrop :711; d1Prism far-to-near sort + plane + stems + spectral/halo (lab :1505-1521); d2Prism (lab :2452-2456). Tests red on mutants: stem ink swapped, plane call deleted/moved, sort removed, spectral dropped. ⚠ DEPARTURE (measured): the lattice is 1 pc at the default camera and doubles (2/4/8 pc) as the camera pulls back — a true 1 pc lattice at the widest stop draws 13,093 texels, a wash. ⚠ LIVE CHECK PENDING: frame time at design 2 PRISM zoomed fully out (the cues multiply the drawing ~5×); headless the two 5 s-budget cases are unchanged (2928 vs 2968 ms). Frame hashes at levels 0/1/2/4 byte-identical."
   },
   {
    "id": "AC-3",
@@ -57,7 +57,7 @@
     "observable": "Design 1: each catalogue star mark that had a name in legacy carries that NAME (upper-case, fitted) and the eight-digit seed is gone from the map; the selected star's name always draws; where two names would overlap, the lower-priority one (selected > current > nearest first) yields to its letter or is dropped, so the mark guard is silent. Design 1's detail block at PRISM prints three lines — `HEIGHT <n> PC ABOVE|BELOW · <THIN DISK|THICK DISK|HALO>`, `PLAYER Y <n> PC`, `Y RANGE <a> TO <b> PC` — and design 2's PRISM status line prints at least HEIGHT with its region, all fitting 417 texels without the fit() eating any existing clause. After R/F the HEIGHT number moves by the same pc the camera moved. Legacy unchanged."
    },
    "layer": "unit",
-   "progress": "not started"
+   "progress": "✅ BUILT wave 1a (LAB). Names replace the eight index digits on design 1's marks, selected > current > nearest (lab :1546-1577); prismNumbers() serves both designs (designs.js:1804); design 1's PRISM detail block (lab :1905-1919); design 2's PRISM status (lab :2312-2316). Mutants: rank sort removed → 'expected ALTAIR to be SIRIUS'; height from D.player.y → red at 450 pc. ⚠ DEPARTURE 1: design 1's HEIGHT clause is split over two rail rows (HEIGHT 0 PC ABOVE / THIN DISK) — the joined form is 179 texels in a 149-texel rail (the guard fires on it). ⚠ DEPARTURE 2: design 2's PRISM bar was ALREADY overflowing (69 chars in 60; R/F UP had never been visible) — its star count and three key hints moved to a legend row on the map (designs.js:1886-1900); the bar reads PRISM · VIEW n LY · HEIGHT n PC ABOVE · REGION. CONSEQUENCE: design 1's PRISM rail list is 22 rows (was 27); navDefects2026w2.driver.test.js:85-95 now reads the page size off S.listGeom.rows (integrator; red on a paging mutant). Loose thread, no AC: the rail's 1-8 digit column at PRISM while marks carry names."
   },
   {
    "id": "AC-4",
@@ -83,7 +83,7 @@
    },
    "layer": "integration",
    "live": true,
-   "progress": "not started"
+   "progress": "◐ DRIVER half built wave 1a: D.ship at state.js:945 (null unless D.isCurrent; else { planetIndex: nav._currentFocusIndex, moonIndex: nav._currentMoonIndex }, copied as numbers; default :484). Painter = wave 2a."
   },
   {
    "id": "AC-6",
@@ -96,7 +96,7 @@
    },
    "layer": "integration",
    "live": true,
-   "progress": "not started"
+   "progress": "◐ DRIVER half built wave 1a: S.sysCam.zoom at state.js:839 mirrors nav._systemZoom (default 1, state.js:407); test drives the real wheel path notch for notch and the host's clamps. Painter + gauge + host folds = wave 2a."
   },
   {
    "id": "AC-7",
@@ -132,7 +132,7 @@
     "observable": "Both designs print `VIEW <n> LY` where n = round(S.cam.radius × 3260), the same integer legacy prints for the same radius, in design 1's PRISM detail block and design 2's PRISM status line; design 2's PC ACROSS text is gone; the number changes with the wheel. Legacy unchanged."
    },
    "layer": "unit",
-   "progress": "not started"
+   "progress": "✅ BUILT wave 1a (LAB). VIEW <n> LY, n = round(S.cam.radius × 3260) (designs.js:1814) in design 1's PRISM block and design 2's PRISM status; PC ACROSS gone from every drawn string. Test drives nav._handleWheel and asserts against legacy's own integer before and after; mutant (PC ACROSS kept) red."
   },
   {
    "id": "AC-10",
@@ -185,5 +185,6 @@
    "Hover resolves at the tail of the driver's render(); S.hover published there is read by the NEXT frame's paint (one frame of lag, as legacy's own mousemove-then-draw has). S and D are MUTATED, never replaced; every new field has a default in state.js; PanelHost freezes the glass on the first painter throw.",
    "The cockpit panel instance (activate() gate) is untouched; nothing here reaches the ORRERY/HELM screens."
   ]
- }
+ },
+ "baselineAfterWave1a": "src/ui 797 passed / 37 files (2 navViewModes load flakes green alone), src/cockpit 698, extract --check 0, NavComputer.js 4711, main.js 15161"
 }

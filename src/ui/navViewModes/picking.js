@@ -341,7 +341,19 @@ export function pickOrbitRing(S, x, y, grab = 3) {
   return best;
 }
 
-export function pickBody(nav, S, x, y, mapRegion) {
+/* Function · `pickBody`'s optional sixth argument, `out`, is a caller-supplied object the picker
+ *   fills with the RAW candidate it found — `{ ref, moon, star, x, y }` — alongside the collapsed
+ *   identity it returns.
+ * Intent · AC-1 (SEAM §1). `S.hover` must carry the `D.bodies` ROW so a callout can print the
+ *   planet's type, radius, AU, temperature and moon count; `bodyIdentity` deliberately throws all of
+ *   that away, and answers `null` for a belt — which is right for a CLICK (a belt has no downstream
+ *   identity and the selection must clear) and wrong for a HOVER, where the belt is plainly the
+ *   thing under the pointer.
+ * Deliberate non-goals · this is NOT a second picker. It is the same scan, the same candidate, the
+ *   same order — a second entry point would be two copies of one hit test, which is the AC-4 defect
+ *   shape this file exists to refuse. The returned identity is byte-identical with or without `out`.
+ */
+export function pickBody(nav, S, x, y, mapRegion, out) {
   if (!inRegion(mapRegion, x, y)) return null;
   // ⛔ THE LABEL FIRST — see `pickLabel`. A numeral's plate has erased the mark beneath it, so the
   //    pilot cannot be clicking that mark. ⚠ A body tag names the BODY, never one of its moon pips:
@@ -358,8 +370,11 @@ export function pickBody(nav, S, x, y, mapRegion) {
   //    decides what a belt means, and the ring cannot drift from the mark.
   if (!hp) {
     const ring = pickOrbitRing(S, x, y);
+    if (ring && out) { out.ref = ring.ref; out.moon = -1; out.star = false; out.x = x; out.y = y; }
     return ring ? bodyIdentity(nav, ring.ref, -1) : null;
   }
+  if (out) { out.ref = hp.ref || null; out.moon = Number.isFinite(hp.moon) ? hp.moon : -1;
+             out.star = !!hp.star; out.x = hp.x; out.y = hp.y; }
   if (hp.star) return { type: 'star', index: 0 };
   return bodyIdentity(nav, hp.ref, hp.moon);
 }

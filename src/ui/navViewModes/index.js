@@ -104,6 +104,17 @@ export function makeViewModeDriver(nav) {
    * source, with the canvas as a fallback for a key pressed before the first frame.
    */
   let lastW = 0, lastH = 0;
+  /* Function · the pick `resolveHover` made on its LAST call, already shaped for `S.hover`, or `null`.
+   * Intent · AC-1 (SEAM §1) says `S.hover` is published "from the SAME pick" the driver writes into
+   *   the host's `_hoveredTile` / `_hoveredLocalStar` / `_hoveredBody`. Carrying the shaped pick out
+   *   of `resolveHover` on a closure variable is what makes that literally true: there is one scan,
+   *   one candidate, one answer, and the callout cannot name a different thing from the one a click
+   *   would select.
+   * Deliberate non-goals · `resolveHover` does NOT assign `S.hover` itself. It is also the entry
+   *   `_handleMouseMove` calls between frames, and a field the paint reads must change exactly once
+   *   per frame, at a known point — the tail of `render()` — or the callout could move without the
+   *   picture under it moving. */
+  let hoverPick = null;
   /**
    * Is the click `remapClick` is looking at one THIS FILE synthesised from a key?
    *
@@ -344,6 +355,18 @@ export function makeViewModeDriver(nav) {
     // highest-value change: the legacy painters ran ten calls ago and rewrote all three hover fields
     // from the LEGACY projection, so anything resolved before now has already been overwritten.
     resolveHover(nav._mouseX, nav._mouseY, w, h);
+    /* Function · publish what the pointer is on, for the NEXT frame's paint.
+     * Intent · AC-1 (SEAM §1). `resolveHover` has just written the host's hover field from this
+     *   frame's published geometry; `hoverPick` is that same answer in the shape a painter can read,
+     *   so the callout legacy drew has its data without any painter re-running a hit test.
+     * Deliberate non-goals · nothing here changes a pixel and no painter reads it this wave (the
+     *   callout is wave 1b) — it is published now so the two halves land independently, which is the
+     *   seam this workstream is built on.
+     * ⛔ AFTER `resolveHover`, NEVER BEFORE. The legacy painters run first under every mode frame and
+     *   rewrite all three hover fields on their way past (`_renderLocal` NULLS `_hoveredLocalStar`
+     *   and re-derives it from the LEGACY projection); anything published before this line would be
+     *   a pick against a projection that is not on the glass. */
+    S.hover = hoverPick;
     return true;
   }
 
@@ -430,7 +453,7 @@ export function makeViewModeDriver(nav) {
   }
 
   /** The pick a DRAWN list row resolves to, in the shape `_handleClick` reads. `null` for none. */
-  function pickFromRow(row) {
+  function pickFromRow(row, detail) {
     const i = rowBase() + row;
     if (S.level === 0) {
       const r = D.sectorRows[i];
@@ -455,16 +478,21 @@ export function makeViewModeDriver(nav) {
       const live = (nav._localStars || []).find((t) => t && t.seed === s.seed) || s;
       return { star: live, sx: 0, sy: 0 };
     }
-    return bodyIdentity(nav, D.bodies[i]);
+    // ⭐ AC-1 — AND THE ROW ITSELF GOES OUT WITH IT, for the reason `pickBody`'s `out` exists:
+    //    `bodyIdentity` keeps only `{type,index}`, and a callout needs the row's facts. Same object
+    //    the map picker reports, so a rail hover and a pip hover on one body are one answer.
+    const b = D.bodies[i] || null;
+    if (detail && b) { detail.ref = b; detail.moon = -1; detail.star = false; }
+    return bodyIdentity(nav, b);
   }
 
   /** The pick the MAP PANE resolves to at this level. Every one reads geometry the paint published. */
-  function pickFromMap(x, y) {
+  function pickFromMap(x, y, detail) {
     const mapR = designs.regions().map;
     if (S.level === 0) return pickSector(nav, S, x, y);
     if (S.level === 1 || S.level === 2) return pickTile(S, x, y);
     if (S.level === 3) return pickPrismStar(nav, S, x, y, mapR);
-    return pickBody(nav, S, x, y, mapR);
+    return pickBody(nav, S, x, y, mapR, detail);
   }
 
   /**
@@ -506,6 +534,11 @@ export function makeViewModeDriver(nav) {
    * @returns {boolean} true if something was picked (the shape `_handleMouseMove` consumes).
    */
   function resolveHover(x, y, w, h) {
+    // ⭐ AC-1 — EVERY EXIT BELOW LEAVES `hoverPick` HOLDING THIS CALL'S ANSWER, INCLUDING `null`.
+    //    The three early returns are all "there is nothing the pilot can act on here", and a stale
+    //    callout surviving a search overlay or a level ease is the same defect as a stale hover
+    //    field surviving them — a thing on the glass naming something that is not under the pointer.
+    hoverPick = null;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     // ⛔ WHILE THE DRAWN FIELD IS OPEN THE LEVEL'S HOVER FIELD IS NULL, NOT STALE. The field covers
     //    the rail in design 1 and the whole map in design 2, and `remapClick` consumes every click
@@ -524,11 +557,103 @@ export function makeViewModeDriver(nav) {
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
     const row = listRowAt(g2, x, y, bars);
-    let hit = row >= 0 ? pickFromRow(row) : null;
+    // ⭐ AC-1 — THE RAW CANDIDATE, ALONGSIDE THE IDENTITY. `bodyIdentity` keeps `{type,index}` and
+    //    throws the `D.bodies` row away; a callout needs the row. The pickers fill this as they go,
+    //    on the same scan, so there is no second hit test. Untouched at levels 0-3, which publish
+    //    everything the callout needs in the pick itself.
+    const detail = { ref: null, moon: -1, star: false, x: undefined, y: undefined };
+    let hit = row >= 0 ? pickFromRow(row, detail) : null;
     if (hit && S.level === 3) { hit.sx = x; hit.sy = y; }
-    if (!hit) hit = pickFromMap(x, y);
+    if (!hit) hit = pickFromMap(x, y, detail);
     nav[HOVER_FIELD[S.level] || '_hoveredTile'] = hit || null;
+    hoverPick = shapeHover(hit, detail, x, y);
     return !!hit;
+  }
+
+  /**
+   * ⭐ AC-1 — THE PICK, IN THE SHAPE A PAINTER CAN READ (SEAM §1). `null` for nothing under the
+   * pointer.
+   *
+   * Function · turn `resolveHover`'s answer into `{ level, kind, sx, sy, ref }`.
+   * Intent · the callout legacy drew needs FACTS about the thing, and the three host hover fields
+   *   are three different shapes chosen for `_handleClick`'s convenience, not for a painter's. One
+   *   translation, at one place, off the pick that was just made.
+   * Deliberate non-goals · it invents nothing and it re-picks nothing. Where the pick carries its own
+   *   texel point (level 3's mark) that point is used; everywhere else the POINTER is the anchor,
+   *   because that is the only point the driver honestly knows for a tile or a sector.
+   *
+   * ⛔ THE IDENTITY GOVERNS `type`, NOT THE RAW CANDIDATE, AND THAT IS THE POINT OF "THE SAME PICK".
+   *   In whole-system mode `bodyIdentity` maps a moon pip onto its PARENT (a moon click in that mode
+   *   would otherwise clear the selection), so the click selects the planet — and a callout that
+   *   named the moon would be the glass promising something the click does not do. `moonIndex` is
+   *   therefore present only where the identity itself is a moon.
+   * ⛔ A BELT IS A HOVER BUT NOT A PICK. `bodyIdentity` answers `null` for a belt because a belt has
+   *   no downstream identity and a click on one must CLEAR the selection — but it is plainly the
+   *   thing under the pointer and AC-8 gives it a name, so it is published here with the host's
+   *   hover field still `null`. That asymmetry is deliberate and is why `detail` is read even when
+   *   `hit` is not.
+   */
+  function shapeHover(hit, detail, x, y) {
+    const level = S.level;
+    const sx = (hit && Number.isFinite(hit.sx)) ? hit.sx : x;
+    const sy = (hit && Number.isFinite(hit.sy)) ? hit.sy : y;
+    if (level === 0) {
+      return (hit && hit.sector) ? { level, kind: 'sector', sx, sy, ref: hit.sector } : null;
+    }
+    if (level === 1 || level === 2) {
+      if (!hit || !Number.isFinite(hit.col) || !Number.isFinite(hit.row)) return null;
+      const c = tileCentreKpc(hit.col, hit.row);
+      return c ? { level, kind: 'tile', sx, sy,
+                   ref: { col: hit.col, row: hit.row, kx: c.kx, kz: c.kz } } : null;
+    }
+    if (level === 3) {
+      return (hit && hit.star) ? { level, kind: 'star', sx, sy, ref: hit.star } : null;
+    }
+    const rowRef = detail && detail.ref ? detail.ref : null;
+    if (!hit && !rowRef) return null;
+    let ref = null;
+    if (hit && hit.type === 'star') {
+      ref = { type: 'star', index: 0, row: rowRef || D.sysStar || null };
+    } else if (hit && hit.type === 'moon') {
+      ref = { type: 'moon', index: hit.index,
+              planetIndex: Number.isFinite(rowRef && rowRef.pIdx) ? rowRef.pIdx : nav._selectedPlanetIdx,
+              moonIndex: hit.index, row: rowRef };
+    } else if (hit && hit.type === 'planet') {
+      ref = { type: 'planet', index: hit.index, planetIndex: hit.index, row: rowRef };
+    } else if (rowRef && rowRef.kind === 'belt') {
+      // ⚠ A BELT'S `index` IS ITS POSITION IN `D.bodies`, because it has no host index to carry —
+      //   and `D.bodies` is what the paint drew it from, so the two cannot disagree this frame.
+      ref = { type: 'belt', index: D.bodies.indexOf(rowRef), row: rowRef };
+    } else return null;
+    return { level, kind: 'body', sx: Number.isFinite(detail.x) ? detail.x : sx,
+             sy: Number.isFinite(detail.y) ? detail.y : sy, ref };
+  }
+
+  /**
+   * ⭐ AC-1 — THE CENTRE OF A DRAWN TILE, IN KPC (SEAM §1).
+   *
+   * Function · invert the driver's own tile pick: `{col,row}` back to a world point.
+   * Intent · legacy's SECTOR/REGION tooltip is the tile centre as a kpc pair, so the callout needs
+   *   one. This is `picking.tileOf` run backwards over the SAME projection the pick inverted
+   *   (`S.mapProj`, whose `cx`/`cz`/`size` are `S.view`'s own numbers, published at the draw site),
+   *   which is the one arithmetic `NavComputer._handleClick:4652-4657` uses to fly there.
+   * Deliberate non-goals · no clamping and no fallback centre: a `col`/`row` that came from a pick
+   *   is inside the grid by construction, and a projection this frame did not publish answers `null`
+   *   rather than a plausible wrong point.
+   *
+   * ⛔ THE Z-FLIP IS THE WHOLE OF IT. `row = n - 1 - j` on the way in (`tileOf`), so `j = n - 1 - row`
+   *   on the way out; handing `row` straight to the `j` formula returns the MIRRORED tile's centre,
+   *   which looks like a plausible coordinate and is the wrong one.
+   */
+  function tileCentreKpc(col, row) {
+    const p = usableProj(S);
+    if (!p) return null;
+    const n = (p.n | 0) > 0 ? (p.n | 0) : gridNFallback(S.level);
+    const size = Number.isFinite(p.size) ? p.size : null;
+    if (!n || size == null) return null;
+    const j = n - 1 - row;
+    return { kx: p.cx + ((col + 0.5) / n - 0.5) * size,
+             kz: p.cz + ((j + 0.5) / n - 0.5) * size };
   }
 
   /** The entry `NavComputer._handleMouseMove` calls. Kept working; the render tail is the authority. */
@@ -862,6 +987,13 @@ export function makeViewModeDriver(nav) {
     S.levelArm = null;
     S.pick = null;
     S.listOffset = 0;
+    // ⭐ AC-1 (SEAM §1) — AND THE CALLOUT'S SUBJECT, WHICH IS A TRANSIENT BY THE SAME TEST. It is
+    //    something the pilot is in the MIDDLE of, not a setting he chose: the nav closed with the
+    //    pointer over a star, and reopening would draw that star's callout beside a cursor that has
+    //    been somewhere else for minutes. `hoverPick` goes with it, so the first frame after a
+    //    reopen cannot republish the stale answer before the pointer has moved.
+    S.hover = null;
+    hoverPick = null;
   }
 
   /**

@@ -83,8 +83,16 @@ describe('AC-13 — a control fires on a CLICK, never on the release of a drag',
       .toBe(0);
 
     // ⭐ THE CONTROL, ON THE SAME TEXEL: the guard must reject the DRAG, not the pager.
+    //
+    // ⛔ THE PAGE SIZE COMES OUT OF THE PAINT — this file's own rule, applied to itself. `page()`
+    //    (index.js:909) steps by `S.listGeom.rows`, the rows `d1Rail` says it DREW. A literal here
+    //    restated the 417x240 layout and went stale the day the rail's PRISM detail block grew
+    //    (nav-restorations-2026-09-20 AC-3/AC-9 took the drawn rows 27 → 22). What this case is
+    //    about is that ONE genuine click pages ONCE, by whatever a page is.
+    const page = drv.S.listGeom.rows;
     clickAt(nav, fwd.x, fwd.y);
-    expect(drv.S.listOffset, 'a genuine click on the pager stopped paging').toBe(27);
+    expect(page, 'design 1 at PRISM drew no rail rows, so the case is vacuous').toBeGreaterThan(0);
+    expect(drv.S.listOffset, 'a genuine click on the pager stopped paging').toBe(page);
   }, 60000);
 
   it('⭐⭐ A PAN RELEASED ON DESIGN 2\'S `HERE · SECTOR` RE-CENTRES NOTHING', async () => {
