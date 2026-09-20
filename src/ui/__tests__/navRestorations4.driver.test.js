@@ -50,6 +50,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { createHash } from 'node:crypto';
 import { makeHeadlessNav, clickAt } from './helpers/headlessNav.mjs';
 
 const W = 417, H = 240;   // ⭐ MAX'S OWN BUFFER — the size every number below is measured at.
@@ -140,6 +141,51 @@ function emptyMapPoint(h) {
 /** The recorded text stream since `from`, as one comparable string. */
 const frameSince = (h, from) =>
   h.rec.text.slice(from).map((t) => `${t.op}|${t.text}|${t.x}|${t.y}`).join('\n');
+
+/** Hash exactly one frame: clear the recorder, render, hash what that render emitted.
+ *  (`navRestorations4.host.test.js:339` — the same harness, the same two streams.) */
+const sha = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0, 16);
+function frameHash(h) {
+  h.rec.text.length = 0; h.rec.calls.length = 0;
+  h.nav.render();
+  return { text: sha(h.rec.text), calls: sha(h.rec.calls) };
+}
+
+/**
+ * HEAD's legacy TEXT streams on a bare 417x240 nav — the same five numbers
+ * `navRestorations4.host.test.js:364-370` and `navRestorations3.host.test.js` pin. Two wave files
+ * agreeing on one set of frames is the point: a fold that moved legacy would have to move both.
+ *
+ * ⛔ THE CALL STREAM IS NOT PINNED TO A LITERAL HERE, AND THAT IS A MEASUREMENT, NOT AN OMISSION.
+ *    Measured 2026-09-20, this harness, in isolation (`-t` on this one case) and in a full-file run,
+ *    the same value both times: GALAXY's call stream hashes to `07a6abbd19f67081` where the host
+ *    file's literal is `df3025c11613b1b5`, while all five TEXT hashes reproduce exactly. The streams
+ *    are per-file reproducible but not portable between files (the host file's own fixtures run
+ *    ahead of its byte-identity block), so a transplanted call literal would be pinning that file's
+ *    ordering rather than legacy's frame. What the call stream is held to here is the only thing it
+ *    can honestly be held to in this file: BEFORE the V cycle equals AFTER it.
+ */
+const LEGACY_TEXT = {
+  0: '47d6cec9a9b899c1',
+  1: 'e63f073b4e55394d',
+  2: '9790b13f56eb7849',
+  3: 'e0159ebab2298b53',
+  4: 'd9934e059a736f56',
+};
+
+/**
+ * Press a key through `_onKeyDown` — the very function `document.addEventListener('keydown', …,
+ * true)` is handed at `NavComputer.js:565`, and the shape `navKeys.test.js:71` and
+ * `navRestorations4.host.test.js:57` both press with.
+ *
+ * ⛔ THE KEY, NOT `nav.viewMode = …`. The V clause is folded onto `NavComputer.js:349` with every
+ *    other view-mode binding, and a fold on that line is exactly the thing that can be present,
+ *    parsed and unreachable (the 2026-09-07 dead-V, `navKeys.test.js`'s whole header). A case that
+ *    assigned `viewMode` would pass over a fold that never runs.
+ */
+const press = (nav, code, extra = {}) =>
+  nav._onKeyDown({ code, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, key: '',
+    preventDefault() {}, stopPropagation() {}, ...extra });
 
 /** Walk into the sub-view the way the pilot does: select the planet, then click it again. */
 function enterDetail(h, planetIndex = 1) {
@@ -514,6 +560,72 @@ describe('AC-4 STATE — the sub-view dies with the picture it is drawn in', () 
   }, 120000);
 
   /**
+   * ⭐⭐ THE WAVE-2b FOLLOW-ON (AC-4 progress note, OPEN (3)): `V` OUT TO CURRENT AND BACK INTO A
+   *    DESIGN REOPENS THE WHOLE SYSTEM, NOT THE SUB-VIEW THE PILOT LEFT.
+   *
+   * `refresh()`'s design-change reset (`state.js:906`) cannot see this walk: the driver paints no
+   * frame while `viewMode === null` (`NavComputer.js:1434` calls `render()` only under a design), so
+   * a round trip that STARTS and ENDS in the same design leaves `cache.design` exactly where it was
+   * and the clause never fires. Measured at HEAD, both designs, by this case: design 1 reopened on
+   * planet 1's moons. The close is one statement folded onto the host's V clause (:349), inside the
+   * `if (this.viewMode)` branch AC-16 already owns, calling the driver's `onLookChange()`.
+   *
+   * ⛔ MUTANT: `host-fold-removed` — delete `this._viewDriverInst?.onLookChange?.();` from :349.
+   *    Measured 2026-09-20: `expected 'planet' to be 'system'` at the first assertion below, for
+   *    both `rail` and `bars`, while every other case in this file stays green.
+   * ⚠ NO RENDER BETWEEN THE PRESSES, AND THAT IS THE POINT — a frame painted under the OTHER design
+   *   on the way round would reset the sub-view through `refresh()` and the case would pass for a
+   *   reason that has nothing to do with the fold.
+   * ⭐ THE LEVEL AND THE SELECTION ARE THE CONTROLS: the fold closes the PICTURE, not the target,
+   *   so `V` may not walk the pilot back a level or drop what he armed.
+   */
+  it.each(['rail', 'bars'])('⭐ %s: V through CURRENT and back into the same design closes it',
+    async (mode) => {
+      const h = await atSystem(mode);
+      enterDetail(h, 1);
+      expect(h.drv.S.sysView, 'the fixture never opened the sub-view').toBe('planet');
+      expect(h.drv.S.detailPlanet).toBe(1);
+      const armed = h.nav._selectedBody;
+
+      // V all the way round: <mode> -> … -> null -> … -> <mode>, driven through the real handler.
+      let hops = 0, sawLegacy = false;
+      do { press(h.nav, 'KeyV'); hops++; if (h.nav.viewMode === null) sawLegacy = true; }
+      while (h.nav.viewMode !== mode && hops < 8);
+      expect(h.nav.viewMode, `V came back to ${mode} in ${hops} hops`).toBe(mode);
+      expect(sawLegacy, 'the walk never passed through CURRENT, so it proves nothing').toBe(true);
+
+      h.nav.render();
+      expect(h.drv.S.sysView, 'the design reopened inside a planet after a detour through CURRENT').toBe('system');
+      expect(h.drv.S.detailPlanet).toBe(-1);
+      expect(h.nav._levelIndex, 'V walked the pilot out of SYSTEM').toBe(4);
+      expect(h.drv.S.level).toBe(4);
+      expect(h.nav._selectedBody, 'V threw the armed target away').toEqual(armed);
+    }, 120000);
+
+  /**
+   * ⭐ REGRESSION GUARD — the RAIL -> BARS hop still closes it, now driven by the real `V` key
+   *    rather than by assigning `nav.viewMode`. This is the path `refresh()`'s `cache.design` clause
+   *    has always covered, and the new fold must not be what is doing the work here.
+   * ⛔ MUTANT: `no-design-reset` (drop `cache.design !== S.design` in `refresh()`) with the host fold
+   *    ALSO removed — both halves gone, `'planet'` survives the hop. With either half present this
+   *    is green, which is the belt-and-braces the seam asks for.
+   */
+  it('⭐ and the RAIL -> BARS hop closes it too, through the real key', async () => {
+    const h = await atSystem('rail');
+    enterDetail(h, 1);
+    expect(h.drv.S.design, 'the fixture is not in design 1').toBe(1);
+    expect(h.drv.S.sysView).toBe('planet');
+
+    press(h.nav, 'KeyV');
+    expect(h.nav.viewMode, 'V did not hop to design 2').toBe('bars');
+    h.nav.render();
+    expect(h.drv.S.design, 'V did not reach the driver at all').toBe(2);
+    expect(h.drv.S.sysView, 'design 2 inherited design 1\'s sub-view across a real keypress').toBe('system');
+    expect(h.drv.S.detailPlanet).toBe(-1);
+    expect(h.nav._levelIndex).toBe(4);
+  }, 120000);
+
+  /**
    * ⛔ MUTANT: `onDeactivate-keeps-subview` — drop the two assignments. `_viewDriverInst` is built
    *    once and never rebuilt (NavComputer.js:255), so the nav reopens at SYSTEM inside whichever
    *    planet was last drilled — of whichever system the pilot was in minutes ago.
@@ -597,5 +709,52 @@ describe('AC-4 — what this wave must NOT have touched', () => {
     expect(h.nav._systemMode, 'a design armed the legacy sub-mode').toBe('system');
     h.drv.onEscape();
     expect(h.nav._systemMode).toBe('system');
+  }, 120000);
+
+  /**
+   * ⭐⭐ AND THE V FOLD CHANGES NOTHING UNDER `viewMode === null`, AT ANY LEVEL, FRESH OR AFTER A
+   *    FULL CYCLE — intent.md's first non-goal: *"Any change to the legacy look — it stays
+   *    byte-identical at every level"*.
+   *
+   * ⛔ THE TEXT HASHES ARE HEAD'S, the same five numbers `navRestorations4.host.test.js:364-370`
+   *    and `navRestorations3.host.test.js` pin on this same 417×240 harness; the call streams are
+   *    held to before-equals-after for the reason `LEGACY_TEXT`'s note gives.
+   * ⛔ LEVEL 3's CALL STREAM IS COMPARED TO NOTHING — the prism's background star load makes it
+   *    non-deterministic in HEAD itself (the host file excludes it for the same reason).
+   * ⚠ THE CYCLE PAINTS A FRAME UNDER EACH DESIGN ON THE WAY ROUND, which the host file's own cycle
+   *   case does not: `V` never builds `_viewDriverInst` by itself (no `||=` in its clause), so
+   *   without a paint the new `onLookChange?.()` fold would short-circuit on `undefined` and this
+   *   case would be measuring a statement that never ran. `_viewDriverInst` is asserted below.
+   */
+  it('⭐⭐ legacy hashes to HEAD at every level, fresh and after a full V cycle', async () => {
+    const h = await makeHeadlessNav({ width: W, height: H });
+    h.nav._viewModesEnabled = true;
+    h.nav.viewMode = null;
+
+    const before = {};
+    for (const L of [0, 1, 2, 3, 4]) {
+      h.nav._levelIndex = L;
+      frameHash(h);                       // warm the level (star loads, tween settle)
+      before[L] = frameHash(h);
+      expect(before[L].text, `fresh legacy level ${L} text is not HEAD's`).toBe(LEGACY_TEXT[L]);
+    }
+
+    h.nav._levelIndex = 3;                // the level both designs paint without a system fixture
+    let hops = 0;
+    do { press(h.nav, 'KeyV'); hops++; if (h.nav.viewMode) h.nav.render(); }
+    while (h.nav.viewMode !== null && hops < 8);
+    expect(h.nav.viewMode, `V came back to legacy in ${hops} hops`).toBe(null);
+    expect(hops).toBeGreaterThan(1);
+    expect(h.nav._viewDriverInst, 'the cycle never built a driver, so the fold was never exercised').toBeTruthy();
+    expect([h.nav._canvas.width, h.nav._canvas.height], 'the buffer came back too').toEqual([W, H]);
+
+    for (const L of [0, 1, 2, 3, 4]) {
+      h.nav._levelIndex = L;
+      frameHash(h);
+      const after = frameHash(h);
+      expect(after.text, `level ${L} text moved across the V cycle`).toBe(before[L].text);
+      expect(after.text, `level ${L} text is no longer HEAD's`).toBe(LEGACY_TEXT[L]);
+      if (L !== 3) expect(after.calls, `level ${L} calls moved across the V cycle`).toBe(before[L].calls);
+    }
   }, 120000);
 });

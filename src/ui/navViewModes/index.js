@@ -1063,6 +1063,33 @@ export function makeViewModeDriver(nav) {
     return true;
   }
 
+  /* Function · AC-4 follow-on (the wave-2b progress note, OPEN (3)) — THE LOOK CHANGED, SO THE MOON
+   *   SUB-VIEW CLOSES. Resets `S.sysView` to `'system'` and `S.detailPlanet` to `-1`, and answers
+   *   nothing: the host calls it for effect, not for a verdict.
+   * Intent · `refresh()` already closes the sub-view when the design changes under it
+   *   (`state.js:906`, `cache.design !== S.design`), and that clause is blind to exactly one walk:
+   *   `V` out to LEGACY and back. The driver paints no frame while `viewMode === null`
+   *   (`NavComputer.js:1434` calls `render()` only under a design, `:613` skips `bufferFor`), so a
+   *   round trip that starts and ends in the same design leaves `cache.design` where it was and
+   *   `refresh()` never sees a change to react to — design 1 reopened on planet 1's moons, measured
+   *   2026-09-20. The host is the only side that can see that transition, so it tells us:
+   *   `this._viewDriverInst?.onLookChange?.();`, folded onto its `V` clause (`NavComputer.js:349`)
+   *   inside the `if (this.viewMode)` branch AC-16 already owns.
+   * Deliberate non-goals · it closes the PICTURE and nothing else. Not the SELECTION (`V` has never
+   *   thrown the armed target away, and AC-4's own Esc keeps it deliberately); not the SEARCH
+   *   (`onDeactivate` closes that because the overlay went away, which `V` does not); not
+   *   `S.levelLag` / `S.levelArm` (the level did not move, and cancelling an in-flight arm on a look
+   *   change would be a second, invisible consequence of one key); not `S.list`, `S.sortIdx` or
+   *   `S.zoomIdx`, which are settings rather than transients. It is idempotent and safe on the hop
+   *   that `refresh()` already covers (RAIL -> BARS), so the two halves are belt and braces.
+   * ⛔ THE NAME IS THE CONTRACT, for the reason `onEscape`'s and `onDeactivate`'s are: the host's
+   *   fold is optional (`?.()`), so a rename leaves the class calling `undefined?.()` — no throw,
+   *   no failure, just a sub-view that quietly survives `V` again. */
+  function onLookChange() {
+    S.sysView = 'system';
+    S.detailPlanet = -1;
+  }
+
   /**
    * ⭐ AC-9 — IS THE POINTER ON DESIGN 1'S PRISM Y-GAUGE?
    *
@@ -1724,6 +1751,11 @@ export function makeViewModeDriver(nav) {
     // THE NAME IS THE CONTRACT for the reason `onDeactivate`'s is — rename it and the class calls
     // `undefined?.()`, the fold falls through, and Esc closes the whole nav instead of the sub-view.
     onEscape,
+    // ⭐ AC-4's FOLLOW-ON EXIT (the wave-2b progress note, OPEN (3)), called OPTIONALLY by the HOST's
+    // fold on its `V` clause (`NavComputer.js:349`): `this._viewDriverInst?.onLookChange?.();`.
+    // THE NAME IS THE CONTRACT for the reason `onEscape`'s is — rename it and the class calls
+    // `undefined?.()`, the fold falls through, and a sub-view survives a detour through LEGACY.
+    onLookChange,
     regions: designs.regions,
     violations: () => violations.slice(),
     /**
