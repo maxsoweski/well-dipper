@@ -33,7 +33,7 @@
     "observable": "The next frame paints a callout beside the pointer, inside the map pane, with that thing's facts in the legacy content (name and class and distance and height for a star; type, R⊕, AU, K, moon count for a planet; class, R☉, Gyr, planet count for the star; the sector name; the kpc pair for a tile). On empty map no callout paints. The callout never overprints the rail, the status line, the tabs or the commit row, and the mark guard stays silent. The legacy look is untouched."
    },
    "layer": "unit",
-   "progress": "◐ DRIVER half built wave 1a: S.hover published at index.js:369 right after resolveHover (hoverPick :117/:541/:569, shapeHover :596, tileCentreKpc :648 — asserted to 1e-9 against the host's own drill target); default state.js:429; cleared on level change state.js:810 and by onDeactivate index.js:995; NOT in resetPicks (proved by a probe context sampling S.hover on the frame's first fillRect). picking.js pickBody gained an optional `out` arg (:356) so a BELT hover publishes { type:'belt', index, row } while nav._hoveredBody stays null; a moon pip collapses to its parent's identity, so S.hover.type is 'planet' there (the callout never names what a click would not select). 19/19; 9 of 10 mutants killed, the tenth equivalent. LAB half (the callout paint) = wave 1b."
+   "progress": "✅ BUILT wave 1b (LAB half; the DRIVER half landed wave 1a). hoverCallout (designs.js:1998-2050), calloutLines :2064-2110 (branches on hv.kind then ref.type), CALLOUT_GAP = 7 (:1996 — the 6 first tried was a real bug: the plate's edge sat on the mark's half-extent, so every 2D callout silently drew nothing), S.hoverCalloutRect published by the paint (cleared :796/:2149), design 1's call :839 gated on !S.search.open, design 2's :2216 inside the legend gate. R☉ is not in the face → the star callout prints R SUN (R⊕ is). 13 cases: 10 screens swept with real hoverAt, the rect inside the pane and disjoint from the mark and every chrome region, the empty-map frame byte-identical to the pointer-less frame, legacy's four PRISM lines and the SYSTEM body block read off the callout's rows; mutants noop/unclamped/on-null/name-only all red. Guard silent. ⚠ FINDING (integrator, measured live-visible): design 1 paints a callout for a RAIL-ROW hover — the hover point is in the rail, so the plate clamps into the map's corner ~35 texels from the pointer (design 2 already suppresses it in list mode). FIX = gate the call on the hover point lying inside REGIONS.map → wave 2a LAB. ⚠ S.hoverCalloutRect has no state.js default → wave 2a DRIVER."
   },
   {
    "id": "AC-2",
@@ -108,7 +108,7 @@
     "observable": "Every body whose name fits beside its stop / pip carries its NAME (the rail's spelling); the selected body's name always draws; where names would collide the lower-priority body (selected > current > by AU) keeps only its letter tag, so no two labels overlap and the mark guard is silent; the letter tags stay where a name is dropped, and the ladder's AU order is unchanged (the 2026-09-18 decision). Belts keep their belt label (AC-8). Legacy unchanged."
    },
    "layer": "unit",
-   "progress": "not started"
+   "progress": "✅ BUILT wave 1b (LAB). bodyLabelText :1935, bodyLabelOrder :1957 (selected > ship > BELT > by AU — belts outrank planets because a belt has no rail row and no sprite; without it ASTEROID BELT was refused every slot on an eight-planet system), d1Ladder's label pass :1556-1563 (the NAME beside the letter — the letter is load-bearing for AC-20), d2System :2796-2803 (the name IN PLACE of the roman numeral, the numeral as the fallback when no slot fits). A 15-character cap was tried and reverted (procedural names differ only in their last character; fit() truncates from the right). Tests: names in the map text, S.ladderStops non-decreasing, one single-character tag per stop (AC-20), pairwise plate-vs-glyph overlap and plate-vs-foreign-mark, the outermost planet named once selected, a name plate selects the body it names (kind 'body' in S.labelHits). Mutants red ×11. Departure, declared: the overlap test is plate-against-GLYPHS (plated() pads 7 rows for 5 rows of glyphs; adjacent plates abut on padding without erasing a word)."
   },
   {
    "id": "AC-8",
@@ -120,7 +120,7 @@
     "observable": "Each belt stop (design 1) / annulus (design 2) carries ASTEROID BELT or KUIPER BELT, fitted. With nothing selected, design 1's detail block and design 2's status line carry the star line — class (`G2`, or `G2+M4 BINARY`), planet count, age in Gyr — in place of the empty-selection text; once a body is selected the block/status show that body as before. Everything fits 417 texels with the mark guard silent. Legacy unchanged."
    },
    "layer": "unit",
-   "progress": "not started"
+   "progress": "✅ BUILT wave 1b (LAB). beltLabel :1901 (the generator's isKuiper when the row carries it, else geometry: the belt beyond every planet is the Kuiper belt — exactly how shouldOuterBeltExist places it), sysStarClauses :1921 (design 2's bar gets legacy's sentence verbatim; design 1's rail prints the class on the KEY row and the two numbers on the next — G2+M4 BINARY · 8 PLANETS · 4.6 GYR is 34 characters in a 25-character rail), d1Rail :1720-1723, d2Status :2351. Tests: two belts named with the outer one Kuiper, the flag winning over geometry, the star line with nothing selected in both designs, a binary fitting the rail, the selected body shown exactly as before. Integrator: navDefects2026.design's two AC-2 no-selection cases (:235-244, :258-259) now assert the star line in place of NO BODY SELECTED (0.0 GYR is legacy's own (ageGyr||0).toFixed(1) for that fixture). ⚠ state.js buildBodies belt rows do not carry isKuiper (the generator sets it; legacy reads it) → wave 2a DRIVER adds `isKuiper: !!b.isKuiper`; until then the geometry path runs in the game and agrees on Sol."
   },
   {
    "id": "AC-9",
@@ -186,5 +186,6 @@
    "The cockpit panel instance (activate() gate) is untouched; nothing here reaches the ORRERY/HELM screens."
   ]
  },
- "baselineAfterWave1a": "src/ui 797 passed / 37 files (2 navViewModes load flakes green alone), src/cockpit 698, extract --check 0, NavComputer.js 4711, main.js 15161"
+ "baselineAfterWave1a": "src/ui 797 passed / 37 files (2 navViewModes load flakes green alone), src/cockpit 698, extract --check 0, NavComputer.js 4711, main.js 15161",
+ "baselineAfterWave1b": "src/ui 810 passed / 38 files (six 5 s-budget timeouts under whole-suite contention, all green alone — navPicking alone takes ~243 s), src/cockpit 698, extract --check 0, NavComputer.js 4711, main.js 15161"
 }

@@ -232,7 +232,16 @@ describe('AC-2 — a selection can be nothing, and it can be the star', () => {
     const { fills, lines, atY } = paint(nav, 1);
     expect(nav._viewDriverInst.D.selBody, 'the adapter must publish null').toBe(null);
     expect(frames9(fills), 'no 9x9 selection frame may be drawn').toEqual([]);
-    expect(lines.map((l) => l.s)).toContain('NO BODY SELECTED');
+    // ⭐ SUPERSEDED BY AC-8 of nav-restorations-2026-09-20: the empty-selection text is GONE — with
+    //    nothing selected the detail block now carries legacy's star line (NavComputer.js:966-969),
+    //    which is what "says so" means from this wave on. This fixture has 4 planets and no ageGyr,
+    //    and legacy's own `(sys.ageGyr || 0).toFixed(1)` is why the age reads 0.0. The star line's
+    //    full shape (class row + binary form + the 149-texel rail fit) is owned by
+    //    navRestorations2.design.test.js; this case asserts only that the block speaks, and that the
+    //    string it used to print is no longer drawn anywhere.
+    const said = lines.map((l) => l.s);
+    expect(said, 'the retired empty-selection text must not be drawn').not.toContain('NO BODY SELECTED');
+    expect(said, 'the detail block must carry the star line instead').toContain('4 PLANETS · 0.0 GYR');
     // the commit row: the rule's ink, the prompt, and NOT the armed fill
     const bar = fills.find((f) => f.x === 0 && f.w === W && f.h === LEAD && f.y === 234);
     expect(bar.ink, 'an unarmed commit row is drawn in the rule\'s ink').toBe(INK.RULE);
@@ -246,7 +255,8 @@ describe('AC-2 — a selection can be nothing, and it can be the star', () => {
     nav.render();
     const { fills, atY } = paint(nav, 2);
     expect(frames9(fills), 'no 9x9 selection frame may be drawn').toEqual([]);
-    expect(atY(H - 8 + 2).join(' ')).toContain('SYSTEM · NO BODY SELECTED');
+    // ⭐ SUPERSEDED BY AC-8 (see the design 1 case above): the status line now prints the star line.
+    expect(atY(H - 8 + 2).join(' ')).toContain('SYSTEM · G · 4 PLANETS · 0.0 GYR');
     expect(nav._viewDriverInst.S.chipRect.armed, 'the chip must be drawn unarmed').toBe(false);
   }, 60000);
 

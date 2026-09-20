@@ -790,7 +790,10 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    picker dereferencing a field that is not there freezes the glass, and it freezes it LOOKING
     //    ALIVE — `PanelHost` catches a painter throw once and then stops uploading frames.
     S.pagerRect = null; S.ladderCounterRect = null;
-    S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null;
+    // ⛔ AC-1's RECTANGLE IS CLEARED HERE TOO. `hoverCallout` nulls it on every path, but a frame
+    //    that never reaches the map painter (there is none today) would otherwise leave last frame's
+    //    plate live for the driver's press guard to find.
+    S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null; S.hoverCalloutRect = null;
     const CELL = FACE.advance, LEAD = FACE.h + 1;
     const cols = Math.floor((W + 1) / CELL), rows = Math.floor(H / LEAD);
     const cx = (c) => c * CELL, ry = (r) => r * LEAD;
@@ -828,6 +831,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (S.level <= 2) d1TwoD(g, mapW, mapY, mapH);
     else if (S.level === 3) d1Prism(g, mapW, mapY, mapH, gaugeX);
     else d1Ladder(g, mapW, mapY, mapH);
+    // ⭐ AC-1 (restorations) — THE HOVER CALLOUT, LAST THING ON THE MAP AND ONLY ON THE MAP. It is
+    // placed off `S.hover`'s own texel point and clamped into `REGIONS.map`, so it can never reach the
+    // rail, the hint row, the tabs or the commit row. ⛔ NOT DRAWN UNDER THE DRAWN SEARCH: the driver
+    // already nulls the hover while the field is open (`index.js:551`), and this page's own `labSearch`
+    // does not — so the gate is stated here rather than inherited from a caller.
+    if (!S.search.open) hoverCallout(g);
 
     // ── THE RAIL ─────────────────────────────────────────────────────────────────────────────────
     d1Rail(g, railX, mapY, railW, railC, rows - 4);
@@ -1445,6 +1454,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // that makes its mark and under the SAME `vis()` test, so a body that has scrolled off the axis
     // is not offered to the picker — which is the one thing a restated layout could never get right.
     const hits = [];
+    const nameQ = [], tagPlates = [];   // AC-7/AC-8 — filled at the tag's draw site, drained below
 
     // the star sits at virtual 0 and scrolls off with everything else
     if (vis(sx(0))) sprite(g, sx(0), axisY, SP.star7, SPECTRAL[D.sys?.star?.type] || '#fff');
@@ -1483,7 +1493,17 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         if (b === D.selBody) frame(g, x - 4, axisY - 4, 9, 9, INK.TARGET);
       }
       const tag = tagOf(b);   // AC-20 — the same letter `d1Rail` prints beside this body's row
-      T(g, tag, x - 2, axisY + 8, { color: b === D.selBody ? INK.KEY : INK.DIM, rgn: 'map', what: 'ladder tag ' + tag });
+      const tw = T(g, tag, x - 2, axisY + 8, { color: b === D.selBody ? INK.KEY : INK.DIM, rgn: 'map', what: 'ladder tag ' + tag });
+      // ⭐ AC-7/AC-8 (restorations) — THE NAME IS QUEUED HERE AND PLACED BELOW, for the reason
+      //    `d2System`'s tag queue gives: a placer that refuses a slot covering a foreign mark can only
+      //    run once `hits` is COMPLETE, and inside this loop it holds only the bodies drawn so far.
+      // ⛔ THE LETTER IS NOT REPLACED. AC-20 of the defects batch is that the ladder prints ONE letter
+      //    per body and the rail prints the same letter beside that body's row; dropping it for a name
+      //    would leave the two halves of this screen unable to refer to each other. The name goes
+      //    BESIDE it, which is the half of item 19's wording this design takes. Its own plate is put
+      //    into `taken` so a name cannot land on a letter.
+      nameQ.push({ b, x, tag });
+      tagPlates.push({ x: Math.round(x - 2) - 2, y: axisY + 8, w: tw + 4 });
     });
 
     // ── ⭐ THE LINE ENDS IN "..." WHERE THERE IS MORE, AND ONLY WHERE THERE IS ────────────────────
@@ -1515,6 +1535,32 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       S.ladderCounterRect = { x: x1 - 4 - cW, y: axisY + 16, w: cW, h: FACE.h };
     }
     if (vis(sx(0))) rect(g, sx(0) - 1, axisY - 1, 3, 3, INK.YOU);
+    /*  Function · AC-7 and AC-8 — every body and belt on this ladder that has room carries its NAME.
+     *  Intent · page items 19 and 20, Max's ruling *"yes"* on both: *"The name is one click away in a
+     *    list, not on the thing"*, and *"belts are anonymous dots."* Legacy printed a name under every
+     *    body (`NavComputer.js:2833`) and a belt's own label at mid-radius (`:2644`); this design drew
+     *    a letter and a run of grey texels.
+     *  ⛔ PLACED BY `placeLabel`, SO A NAME NEVER COVERS A BODY IT DOES NOT NAME. Fourteen candidate
+     *    slots off each stop, tested against both the labels already placed and every mark in `hits`;
+     *    a name with nowhere to go is DROPPED and the body keeps its letter, which is AC-7's own rule
+     *    (*"a name that would collide yields to its tag"*) and leaves that body unnamed, never
+     *    unpickable — its `hits` entry is untouched.
+     *  ⭐ `gy = -14` PUTS THE LADDER'S NAMES BELOW THE AXIS, under the letter row: the moon pips climb
+     *    UPWARD from every stop (`axisY - 7 - m*3`), so the room on this picture is downward.
+     *  ⭐ AND THE PLATES GO INTO `S.labelHits` WITH `kind: 'body'`, which `picking.pickBody` already
+     *    tests before the mark list — so clicking a name selects the body it names, and a belt's label
+     *    routes through `bodyIdentity` to the same "no identity, clear the selection" its dots give.
+     *  Deliberate non-goals · no leader lines, no second tag, no re-ordering of the axis (AC-20's AU
+     *    order is untouched), and no name on the system star — AC-8 gives the star a LINE, not a label. */
+    const taken = tagPlates.slice();
+    for (const q of bodyLabelOrder(nameQ)) {
+      const txt = fit(bodyLabelText(q.b), mapW - 8);
+      if (!txt) continue;
+      const pos = placeLabel(taken, hits, q.x, axisY, 4, -14, measurePixelText(txt), REGIONS.map, q.b);
+      if (!pos) continue;
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
+                                   'map', 'ladder name ' + txt), ref: q.b, kind: 'body' });
+    }
     S.bodyHits = hits;
   }
 
@@ -1660,7 +1706,21 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       //    of a body that does not exist, which is the failure `d1Rail`'s sector branch already names.
       // ⭐ AND A STAR GETS ITS OWN THREE ROWS. Fed through the planet form it would print `ORBIT 0.00
       //   AU` and `MOONS 0` — four plausible numbers about the thing every orbit is measured FROM.
-      if (!b) detail.push(['NO BODY SELECTED', INK.DIM]);
+      /*  Function · with nothing selected this block prints the STAR's line instead of saying nothing
+       *    is selected. Intent · AC-8 (restorations), page item 20 — *"the star has no line of text."*
+       *  ⛔ TWO ROWS, NOT ONE, AND THE SPLIT IS MEASURED. The rail is `railC * CELL - 1` = 149 texels =
+       *    25 characters at Max's window; `G2 · 8 PLANETS · 4.6 GYR` is 24 and fits, but a binary's
+       *    `G2+M4 BINARY · 8 PLANETS · 4.6 GYR` is 34 and `fit()` would eat ` GYR`. Nothing is cut: the
+       *    class takes the KEY row this block gives every title and the two numbers take the next, which
+       *    is the same continuation idiom the camera block above uses for `HEIGHT` / its region.
+       *  ⚠ AND THE OLD STRING SURVIVES FOR THE ONE STATE THAT HAS NO STAR EITHER. `sysStarClauses()`
+       *    answers `[]` when `D.sys` is null, and AC-2 of the defects batch is that this block SAYS the
+       *    no-selection state rather than drawing seven blank rows. */
+      if (!b) {
+        const sc = sysStarClauses();
+        if (sc.length) detail.push([fit(sc[0], w), INK.KEY], [fit(sc.slice(1).join(' · '), w), INK.BODY]);
+        else detail.push(['NO BODY SELECTED', INK.DIM]);
+      }
       else if (b.kind === 'star') detail.push([fit((b.name || '—').toUpperCase(), w), INK.KEY],
         [(b.cls || '').toUpperCase(), INK.BODY], ['PRIMARY', INK.DIM]);
       else if (b) detail.push([fit(b.name.toUpperCase(), w), INK.KEY], [b.cls.toUpperCase(), INK.BODY],
@@ -1814,6 +1874,248 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       view:    `VIEW ${Math.round(rad * 3260)} LY`,
     };
   }
+  /* ────────────────────────────────────────────────────────────────────────────────────────────────
+   * AC-7, AC-8 AND AC-1 (restorations) — THE THREE THINGS BOTH SYSTEM PICTURES HAVE TO SAY, SPELLED
+   * ONCE.  Design 1's ladder and design 2's orrery draw the same bodies out of the same `D.bodies`;
+   * two spellings of "what is this belt called" or "what does the star's line read" is two answers
+   * that drift, which is the defect `prismNumbers()` above was written against for the camera numbers.
+   * ──────────────────────────────────────────────────────────────────────────────────────────────── */
+
+  /*  Function · ASTEROID BELT or KUIPER BELT for a `D.bodies` belt row.
+   *  Intent · AC-8 (restorations), page item 20: *"Belts are anonymous dots."* Legacy names every belt
+   *    at 45° mid-radius off the generator's own flag (NavComputer.js:2644,
+   *    `belt.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT'`), and that flag is set in exactly two places —
+   *    `StarSystemGenerator.js:769` for the outer belt and `SolarSystemData.js:875` for Sol's.
+   *  ⛔ THE FLAG IS READ FIRST AND THE FALLBACK IS GEOMETRY, NOT A GUESS AT THE NAME. Neither body-list
+   *    builder copies `isKuiper` across today — this page's `buildSystem` now does, the game's
+   *    `state.js:645` does not (reported to the coordinator; one field on one row closes it). Until it
+   *    does, a belt beyond EVERY planet is the outer belt by the generator's own construction
+   *    (`shouldOuterBeltExist` places it past the last planet, `StarSystemGenerator.js:759`), so the
+   *    fallback answers the same question from the same data rather than defaulting to one label and
+   *    silently mis-naming Sol's Kuiper belt.
+   *  ⚠ `isKuiper` IS EITHER `true` OR ABSENT upstream, never `false`, so an absent flag cannot be told
+   *    from a negative one — hence `!= null` rather than a truth test: once the driver publishes
+   *    `isKuiper: !!b.isKuiper` the explicit `false` wins over the geometry, which is what we want.
+   *  Deliberate non-goals · no trojan/shepherd belts (the flat list carries none), no per-belt ordinal
+   *    (`BELT A` is the row's internal name and is not drawn anywhere). */
+  function beltLabel(b) {
+    if (b && b.isKuiper != null) return b.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT';
+    let maxAu = 0;
+    for (const r of D.bodies) if (r && r.kind === 'planet' && (Number(r.au) || 0) > maxAu) maxAu = Number(r.au) || 0;
+    return (maxAu > 0 && (Number(b && b.au) || 0) > maxAu) ? 'KUIPER BELT' : 'ASTEROID BELT';
+  }
+
+  /*  Function · the star's fact line as CLAUSES — `['G2', '8 PLANETS', '4.6 GYR']`, or
+   *    `['G2+M4 BINARY', …]` — for the two places AC-8 puts it. Empty when there is no system.
+   *  Intent · AC-8 (restorations), page item 20: *"the star has no line of text."* Legacy prints it in
+   *    the SYSTEM header (NavComputer.js:966-969) and both designs print an empty-selection string
+   *    where it should be. ⛔ CLAUSES, NOT A JOINED STRING, because the two consumers have different
+   *    room: design 2's bar already joins with ` · ` (so it gets legacy's exact sentence for free) and
+   *    design 1's rail is 25 characters, where `G2+M4 BINARY · 8 PLANETS · 4.6 GYR` is 34 — see the
+   *    split in `d1Rail`'s SYSTEM branch.
+   *  ⚠ THE PLANET COUNT IS `D.bodies`', NOT `sys.planets`'. `buildBodies` drops a planet with no
+   *    `planetData` (state.js:583), so the two can differ — and the number on the glass has to be the
+   *    number of things the glass DREW, or the line contradicts the picture beside it.
+   *  Deliberate non-goals · the wide-binary member list (item 20's third clause) is PARKED; no
+   *    metallicity, no luminosity class, no separation. */
+  function sysStarClauses() {
+    const sys = D.sys;
+    if (!sys) return [];
+    const c1 = String((sys.star && sys.star.type) || '?').toUpperCase();
+    const c2 = sys.star2 ? String(sys.star2.type || '?').toUpperCase() : '';
+    const cls = (sys.isBinary && c2) ? `${c1}+${c2} BINARY` : c1;
+    const n = D.bodies.filter((b) => b && b.kind === 'planet').length;
+    return [cls, `${n} PLANET${n === 1 ? '' : 'S'}`, `${(Number(sys.ageGyr) || 0).toFixed(1)} GYR`];
+  }
+
+  /*  Function · the words that go beside one SYSTEM body's mark — its NAME, or, for a belt, its kind.
+   *  Intent · AC-7 and AC-8 (restorations), page items 19 and 20: *"The name is one click away in a
+   *    list, not on the thing."* The rail's spelling, upper-cased, so the two halves of design 1's
+   *    SYSTEM screen call the same planet the same thing. */
+  function bodyLabelText(b) {
+    if (!b) return '';
+    return (b.kind === 'belt') ? beltLabel(b) : String(b.name || '').toUpperCase();
+  }
+  /** ⛔ NO CHARACTER CAP ON A BODY NAME, AND THE FIRST DRAFT HAD ONE — 15 characters, which MEASURED
+   *  WORSE THAN NO CAP AT ALL. Procedural names are `<system> b`, `<system> c`, `<system> d`
+   *  (`state.js:583`), so the one character that tells four planets apart is the LAST one, and `fit()`
+   *  truncates from the right: the ladder read `WANVEB-4OQSLX96` four times over. A label either fits
+   *  the pane and is placed, or it is refused a slot and the body keeps its tag — which is AC-7's own
+   *  rule and needs no second rule beside it. The cap that remains is the PANE's.
+   *  ⚠ The cost is measured and stated in the test header: fewer names placed on a system with long
+   *    names, and the full spelling is in design 1's rail row either way. */
+
+  /*  Function · the order names are OFFERED slots in: selected first, then the body the ship is at,
+   *    then by AU outward. Returns a re-ordered copy of the queue; ties keep queue order.
+   *  Intent · AC-7's own rule (*"selected > current > by AU"*). `placeLabel` is first-come-first-served
+   *    against the slots already taken, so the ORDER of the queue IS the priority — which is why this
+   *    is a sort and not a scoring pass inside the placer.
+   *  ⚠ `D.ship` IS WAVE 2's FIELD AND IT IS ALREADY PUBLISHED (state.js:484/945, `null` unless the
+   *    pilot is in this system). Reading it here costs nothing and means the priority does not have to
+   *    change when wave 2 draws the diamond. This page never sets it, so on the lab the rank collapses
+   *    to selected-then-AU, which is the lab's honest state: it has no ship. */
+  function bodyLabelOrder(queue) {
+    const rank = (b) => {
+      if (b && b === D.selBody) return 0;
+      if (b && D.ship && b.kind !== 'moon' && Number.isFinite(b.pIdx) && b.pIdx === D.ship.planetIndex) return 1;
+      // ⭐ A BELT OUTRANKS A PLANET, AND AC-8 IS WHY — MEASURED. On an eight-planet system with two
+      //    belts, AU order alone put the main belt seventh in the queue and it was refused every slot:
+      //    the picture kept ASTEROID BELT off the glass while naming four planets whose names are ALSO
+      //    printed in the rail beside them. A belt has no rail row and no sprite — it is the *"anonymous
+      //    dot"* item 20 names — so its label is the only thing that identifies it at all, which buys
+      //    more per slot than a fifth planet name does.
+      if (b && b.kind === 'belt') return 2;
+      return 3;
+    };
+    return queue.map((q, i) => ({ q, i })).sort((p, r) =>
+      rank(p.q.b) - rank(r.q.b) || ((Number(p.q.b && p.q.b.au) || 0) - (Number(r.q.b && r.q.b.au) || 0)) || p.i - r.i
+    ).map((p) => p.q);
+  }
+
+  // ── ⭐⭐ AC-1 — THE HOVER CALLOUT, ONE BLOCK FOR TEN SCREENS ───────────────────────────────────────
+  //
+  // Page item 13, Max's ruling *"yes, PRISM and SYSTEM first"*, and the audit's own sentence: *"It is
+  // the only way to learn what a thing is without selecting it."* Legacy draws four different tooltips
+  // at four levels (NavComputer.js:1856 the sector name, :1677 the tile's kpc pair, :2200 the star
+  // block, :2858 the body callout) and the two designs draw none. `S.hover` — published by the DRIVER
+  // at the tail of `render()` from the SAME pick a click would consume (SEAM §1) — is the one input.
+  //
+  // ⛔ IT BRANCHES ON `hv.kind`, NEVER ON THE SHAPE OF `hv.ref`. Guessing "it has a `seed`, so it is a
+  //    star" is a second copy of the driver's classification and the AC-4 defect shape; the kind is
+  //    published for exactly this reason.
+  // ⛔ NOTHING HERE IS A SECOND HIT TEST. The plate is placed off `(hv.sx, hv.sy)`, which the pick
+  //    itself carries, and it is REFUSED any position that would cover the mark it names — so the
+  //    pointer that summoned the callout is never inside it, and a click always reaches the thing
+  //    underneath. That is also why it needs no entry in `S.labelHits`: it cannot be clicked.
+  // ⚠ ONE FRAME OF LAG, DELIBERATELY. `S.hover` is written at the tail of `render()` and read by the
+  //   NEXT paint, which is the same lag legacy's own mousemove-then-draw has.
+  // ⛔ `GAP` MUST EXCEED `MARK + 1`, AND AT 6 IT DID NOT — MEASURED. `plated`'s box starts one texel
+  //    left of the glyphs, so a plate offered at `ax + 6` has its edge on `ax + 5`, which is exactly
+  //    the mark's own half-extent: every candidate at every 2D level tested as "covers the mark" and
+  //    the callout silently drew nothing at levels 0-3 in both designs. 7 leaves one clear texel.
+  const CALLOUT_GAP = 7;    // texels between the mark's edge and the plate's own
+  const CALLOUT_MARK = 5;   // the half-extent of the hovered mark the plate must stay clear of
+  function hoverCallout(g) {
+    S.hoverCalloutRect = null;
+    const hv = S.hover, rgn = REGIONS.map;
+    if (!hv || !rgn) return;
+    const lines = [];
+    for (const raw of calloutLines(hv)) {
+      const s = fit(String(raw == null ? '' : raw).toUpperCase(), rgn.w - 8);
+      if (s) lines.push(s);
+    }
+    if (!lines.length) return;
+    const LEAD = FACE.h + 1;
+    // ⛔ AS MANY LINES AS FIT THE PANE, AND THE NAME IS NEVER THE ONE DROPPED — it is line 0 and the
+    //    truncation is from the END. A 240p pane holds every one of these today (six lines is 36
+    //    texels against ~200); the clamp is for the 144p buffer the lab also draws at.
+    const room = Math.max(1, Math.floor((rgn.h - 2) / LEAD));
+    if (lines.length > room) lines.length = room;
+    let w = 0;
+    for (const s of lines) w = Math.max(w, measurePixelText(s));
+    const h = lines.length * LEAD - 1;
+    const minX = rgn.x + 1, maxX = rgn.x + rgn.w - w - 1;
+    const minY = rgn.y + 1, maxY = rgn.y + rgn.h - h - 1;
+    if (maxX < minX || maxY < minY) return;        // a pane that cannot hold the plate draws nothing
+    const ax = Math.round(hv.sx), ay = Math.round(hv.sy);
+    const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    // ⭐ THE SIDE WITH THE MOST ROOM FIRST, then the other side, then below, then above. Each candidate
+    //    is CLAMPED into the pane before it is tested, so the test is against the rectangle that would
+    //    actually be drawn and not against the one that was asked for.
+    const leftRoom = ax - rgn.x, rightRoom = rgn.x + rgn.w - ax;
+    const side = rightRoom >= leftRoom ? 1 : -1;
+    const midY = ay - Math.floor(h / 2), midX = ax - Math.floor(w / 2);
+    const cands = side > 0
+      ? [{ x: ax + CALLOUT_GAP, y: midY }, { x: ax - CALLOUT_GAP - w, y: midY }]
+      : [{ x: ax - CALLOUT_GAP - w, y: midY }, { x: ax + CALLOUT_GAP, y: midY }];
+    cands.push({ x: midX, y: ay + CALLOUT_GAP }, { x: midX, y: ay - CALLOUT_GAP - h });
+    let box = null;
+    for (const c of cands) {
+      const bx = cl(Math.round(c.x), minX, maxX), by = cl(Math.round(c.y), minY, maxY);
+      const covers = bx - 1 <= ax + CALLOUT_MARK && bx + w >= ax - CALLOUT_MARK
+                  && by - 1 <= ay + CALLOUT_MARK && by + h >= ay - CALLOUT_MARK;
+      if (!covers) { box = { x: bx, y: by }; break; }
+    }
+    if (!box) return;
+    // ⭐ ONE PLATE FOR THE WHOLE BOX, not one per line: `plated()` lays a rect per string, which on a
+    //    four-line block leaves three one-texel seams of map showing between the rows.
+    rect(g, box.x - 1, box.y - 1, w + 2, h + 2, INK.BG);
+    lines.forEach((s, i) => T(g, s, box.x, box.y + i * LEAD,
+      { color: i === 0 ? INK.KEY : INK.BODY, rgn: 'map', what: 'callout line ' + i }));
+    // ⭐ PUBLISHED FROM THE PLATE'S OWN RECTANGLE (INTERFACE §6). Nothing reads it this wave — the
+    //    callout is never under the pointer that summoned it, so no press can land on it — but the
+    //    DRIVER's press guard is the consumer for it and re-deriving this box there would be a second
+    //    copy of the placement above.
+    S.hoverCalloutRect = { x: box.x - 1, y: box.y - 1, w: w + 2, h: h + 2 };
+  }
+
+  /*  Function · legacy's own tooltip CONTENT for whatever `S.hover` is holding, line by line, name
+   *    first. Upper-casing and fitting belong to `hoverCallout`; this returns the words.
+   *  Intent · AC-1's spec is literally four legacy blocks (see `hoverCallout`'s header for the line
+   *    numbers), so each branch below is one of them, re-spelled for a face that has no lower case.
+   *  ⚠ `R☉` IS NOT IN THE FACE AND `R⊕` IS (checked against `hasGlyph` on both 5x5 and 5x7), so the
+   *    solar radius reads `R SUN` and the Earth radius keeps legacy's glyph. That is the only word cut
+   *    from any of the four blocks.
+   *  ⚠ THE PLANE IS `y = 0`, legacy's own (`NavComputer.js:1896`, `const planeY = 0`) — the GALACTIC
+   *    plane, not the camera's height and not the player's.
+   *  Deliberate non-goals · no habitability percentage (legacy prints it above 0.3; the rail's detail
+   *    block already carries `HAB` and the callout has to stay short enough to place), no binary line
+   *    on a prism star (item 20's member list is parked), no companion separation. */
+  function calloutLines(hv) {
+    const r = hv.ref;
+    if (hv.kind === 'sector') return [(r && r.name) || 'UNKNOWN SECTOR'];
+    if (hv.kind === 'tile') {
+      if (!r || !Number.isFinite(r.kx) || !Number.isFinite(r.kz)) return [];
+      return [`(${r.kx.toFixed(1)}, ${r.kz.toFixed(1)})`];
+    }
+    if (hv.kind === 'star') {
+      if (!r) return [];
+      // ⚠ THE ROW ARRIVES IN TWO SHAPES. A pick off the MAP hands back the live `_localStars` entry
+      //   (`picking.js:275`), which carries `dist` in kpc and no `pc`/`ly`; a pick off a RAIL ROW hands
+      //   back the `D.starRows` row, which carries both (`state.js:883`). Deriving from `dist` when
+      //   they are absent is the same arithmetic `state.js` used to make them.
+      const pc = Number.isFinite(r.pc) ? r.pc
+               : Number.isFinite(r.distPc) ? Number(r.distPc) : (Number(r.dist) || 0) * 1000;
+      const ly = Number.isFinite(r.ly) ? r.ly : pc * 3.26;
+      const wy = Number(r.wy) || 0;
+      return [r.name || 'UNNAMED', `${r.spectral || '?'} CLASS`,
+              `${pc.toFixed(2)} PC (${ly.toFixed(1)} LY)`,
+              `${(wy * 1000).toFixed(0)} PC ${wy >= 0 ? 'ABOVE' : 'BELOW'} PLANE`];
+    }
+    if (hv.kind !== 'body' || !r) return [];
+    const row = r.row || null;
+    if (r.type === 'belt') {
+      if (!row) return [];
+      const au = Number(row.au) || 0, half = (Number(row.widthAU) || 0) / 2;
+      return [beltLabel(row), half > 0 ? `${Math.max(0, au - half).toFixed(1)} TO ${(au + half).toFixed(1)} AU`
+                                       : `${au.toFixed(2)} AU`];
+    }
+    if (r.type === 'star') {
+      // ⛔ THE STAR'S FACTS COME OFF `D.sys`, NOT OFF `row`. The driver publishes `D.sysStar` there —
+      //    a PRISM row, with a spectral letter and a distance — and none of the four numbers legacy's
+      //    primary-star callout prints (radius, age, planet count) exist on it.
+      const st = (D.sys && D.sys.star) || null;
+      const n = D.bodies.filter((b) => b && b.kind === 'planet').length;
+      const out = [(row && row.name) || (D.sysStar && D.sysStar.name) || 'PRIMARY',
+                   `${(st && st.type) || (row && row.spectral) || '?'} CLASS`];
+      if (st && Number.isFinite(st.radiusSolar)) out.push(`${st.radiusSolar.toFixed(2)} R SUN`);
+      out.push(`AGE ${(Number(D.sys && D.sys.ageGyr) || 0).toFixed(1)} GYR`,
+               `${n} PLANET${n === 1 ? '' : 'S'}`);
+      return out;
+    }
+    // A PLANET — and a moon pip has already collapsed to its parent upstream (SEAM §1), so this is
+    // the only body branch left. `row` is the `D.bodies` row the same click would select.
+    if (!row) return [];
+    const out = [row.name || '—'];
+    out.push(`${row.cls || ''}${Number.isFinite(row.rE) ? ` · ${row.rE.toFixed(1)} R⊕` : ''}`);
+    out.push(`${(Number(row.au) || 0).toFixed(2)} AU`);
+    if (row.T) out.push(`${Math.round(row.T)} K`);
+    const m = row.moons | 0;
+    out.push(`${m} MOON${m === 1 ? '' : 'S'}`);
+    if (row.rings) out.push('RINGED');
+    return out;
+  }
+
   function fmtK(n) {
     if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
     if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -1844,7 +2146,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // draws it and by nothing else; the two design 1 fields are cleared here for the mirror-image
     // reason `drawDesign1` clears design 2's. (The minimap publishes nothing — see `d2Prism`.)
     // ⚠ Measured redundant one by one and load-bearing as a set — see the note on `drawDesign1`'s.
-    S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null;
+    S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null; S.hoverCalloutRect = null;
     S.pagerRect = null; S.ladderCounterRect = null;
     if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
     else if (S.level === 3) d2Prism(g, W, mapY, mapH);
@@ -1906,6 +2208,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
           { color: INK.RULE, rgn: 'map', what: 'prism legend' });
       }
       T(g, fit(LEG, W - 8), 4, legY, { color: INK.RULE, rgn: 'map', what: 'global legend' });
+      // ⭐ AC-1 (restorations) — THE CALLOUT RIDES THE SAME GATE AS THE LEGEND, AND FOR THE SAME
+      // REASON: list mode and the drawn search REPLACE the pane with full-pane content of their own,
+      // and a callout over either would be naming a mark that is no longer on the glass. It is drawn
+      // AFTER the legend so its plate wins where the two meet — the legend is structure-ink at the
+      // pane's bottom-left, the callout is a readout the pilot summoned.
+      hoverCallout(g);
     }
 
     // ── TOP BAR: tabs left, ONE locator right.  "Where am I" is answered here and nowhere else —
@@ -2036,9 +2344,13 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // form for the reason `d1Rail`'s detail block gives — `0.00 AU` and `0 MOONS` about the body every
     // orbit is measured from are four plausible numbers the instrument does not mean.
     if (b && b.kind === 'star') return [(b.name || '—').toUpperCase(), (b.cls || '').toUpperCase(), 'PRIMARY'];
-    return b ? [b.name.toUpperCase(), b.cls.toUpperCase(), `${b.au.toFixed(2)} AU`,
-                b.T ? `${Math.round(b.T)} K` : '—', `${b.moons} MOONS`, ...(b.rings ? ['RINGED'] : [])]
-             : ['SYSTEM', 'NO BODY SELECTED'];
+    // ⭐ AC-8 (restorations) — AND THE FOURTH STATE IS THE STAR'S OWN LINE, in the clause form this
+    // bar already joins with ` · `, so what the glass reads is legacy's sentence verbatim:
+    // `SYSTEM · G2 · 8 PLANETS · 4.6 GYR` (NavComputer.js:966-969). 33 characters against 60 of bar.
+    // ⛔ `['SYSTEM', 'NO BODY SELECTED']` STAYS for the system-less case — see `d1Rail`'s twin.
+    if (!b) { const sc = sysStarClauses(); return sc.length ? ['SYSTEM', ...sc] : ['SYSTEM', 'NO BODY SELECTED']; }
+    return [b.name.toUpperCase(), b.cls.toUpperCase(), `${b.au.toFixed(2)} AU`,
+            b.T ? `${Math.round(b.T)} K` : '—', `${b.moons} MOONS`, ...(b.rings ? ['RINGED'] : [])];
   }
   /** The active sort key, named — design 1's hint row builds the same string inline (`sortHint` there).
    *  Empty is the honest default: with no key on, the row degrades to `[ ] SORT`. */
@@ -2394,7 +2706,13 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       const a = (Number(b.ang) || 0) + sysRotY;
       const r = rOf(b.au);
       const x = Math.round(cxp + Math.cos(a) * r), y = Math.round(cyp + Math.sin(a) * r * TILT);
-      if (b.kind === 'belt') { hits.push({ x, y, r: 3, ref: b, moon: -1, star: false }); rect(g, x, y, 1, 1, INK.DIM); return; }
+      // ⭐ AC-8 (restorations) — A BELT IS QUEUED FOR A LABEL, AND UNCONDITIONALLY. The `r > 24` gate
+      //    below is for ORDINAL tags, which say nothing worth crowding an inner orbit for; ASTEROID
+      //    BELT / KUIPER BELT is the belt's whole identity on this picture, and `placeLabel` is what
+      //    decides whether there is room for it. `tag: ''` so the fallback below has nothing to fall
+      //    back TO: a belt gets its name or it gets nothing — it has no ordinal.
+      if (b.kind === 'belt') { hits.push({ x, y, r: 3, ref: b, moon: -1, star: false }); rect(g, x, y, 1, 1, INK.DIM);
+                               tagQueue.push({ b, tag: '', x, y }); return; }
       hits.push({ x, y, r: 4, ref: b, moon: -1, star: false });
       sprite(g, x, y, b.rE > 4 ? SP.giant5 : SP.terr3, INK.BODY);
       if (b.rings) { rect(g, x - 3, y - 2, 7, 1, INK.DIM); rect(g, x - 3, y + 2, 7, 1, INK.DIM); }
@@ -2458,12 +2776,30 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       //    moves; a tag that a later planet used to overpaint is now legible, which is the point.
       if (r > 24) tagQueue.push({ b, tag: roman(i + 1), x, y });
     });
-    // ⭐ THE TAGS, PLACED AGAINST THE FINISHED PICTURE (AC-14). `hits` is complete here — every body,
-    // every belt, every moon pip — so a tag can be refused a slot that covers any of them.
-    for (const q of tagQueue) {
-      const pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b);
-      if (!pos) continue;
-      S.labelHits.push({ ...plated(g, q.tag, pos.x, pos.y, INK.DIM, 'map', 'body tag ' + q.tag),
+    /*  Function · AC-7 and AC-8 — the orrery's labels, placed against the finished picture (AC-14).
+     *    `hits` is complete here — every body, every belt, every moon pip — so a label can be refused a
+     *    slot that covers any of them.
+     *  Intent · page items 19 and 20: *"Body names on the ladder and the orrery, placed like the prism
+     *    labels, in place of or beside the letter and roman tags"*, and belts named at all.
+     *  ⛔ THIS DESIGN TAKES THE "IN PLACE OF" HALF, WHERE DESIGN 1 TAKES "BESIDE" — and the difference
+     *    is not a preference, it is what each picture can carry. Design 1's letter is load-bearing
+     *    (AC-20: the rail prints the same letter beside the same body's row), so a name has to sit next
+     *    to it. This orrery's roman numeral names nothing outside itself — it is the draw loop's
+     *    position in a list `[` / `]` re-sorts — so the NAME is strictly more information in the same
+     *    slot, and drawing both would be the second tag AC-20 forbids.
+     *  ⭐ THE ORDINAL IS THE FALLBACK, NOT THE REPLACEMENT. A name that finds no slot retries as the
+     *    two-or-three-texel-wide numeral, which usually does fit — so a crowded orrery degrades to
+     *    exactly the picture it draws today rather than to a blank one.
+     *  ⚠ THE QUEUE IS RE-ORDERED BEFORE IT IS PLACED (`bodyLabelOrder`): selected first, then the body
+     *    the ship is at, then outward by AU. `placeLabel` is first-come-first-served, so the order IS
+     *    the priority. */
+    for (const q of bodyLabelOrder(tagQueue)) {
+      const name = fit(bodyLabelText(q.b), W - 8);
+      let txt = '', pos = null;
+      if (name) { pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(name), REGIONS.map, q.b); txt = name; }
+      if (!pos && q.tag) { pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b); txt = q.tag; }
+      if (!pos || !txt) continue;
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.DIM, 'map', 'body label ' + txt),
                          ref: q.b, kind: 'body' });
     }
     // ⚠ THE SHIP DIAMOND HAS NO WORLD POSITION AT ALL — a bare `cxp + 8` screen offset — so under
