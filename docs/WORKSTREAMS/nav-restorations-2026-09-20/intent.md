@@ -33,6 +33,8 @@ in the picture; the new menus took that away while adding keys, lists and search
 the information back inside the new designs' own language — the rail, the status line, the ladder, the
 orrery — without switching any screen back to the old renderer.
 
+**Serves:** the 35% SCREENSAVER MVP milestone (`docs/JOURNEY.md`), SCREENSAVER tier (`docs/PLAYER_EXPERIENCE.md`) — the nav computer is the pilot's instrument for choosing where the ship goes; a menu that cannot say what a thing IS falls short of that tier's target experience.
+
 ## Success criteria (Max's language)
 
 The page's own wording for each item, which he approved with "go with your recs":

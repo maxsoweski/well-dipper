@@ -1,0 +1,83 @@
+{
+ "workstream": "nav-restorations-2026-09-20",
+ "commit": "ab610fa",
+ "perLayer": {
+  "unit": "INSUFFICIENT",
+  "integration": "INSUFFICIENT",
+  "uat": "deferred-to-max"
+ },
+ "perAC": [
+  {
+   "id": "AC-1",
+   "result": "PASS",
+   "adversarialVotes": "3/3 sufficient",
+   "evidence": "Hover-inspect wired end-to-end: nav.resolveHover feeds S.hover (state.js:341-352,473-491), consumed by designs.js hoverCallout()/calloutLines() in both designs, including the wave-2a fix suppressing a false callout on a rail-row hover. 59/59 unit tests pass across the 4 AC-1-specific files (navRestorations1.driver, navRestorations2.design, navRestorations3.driver, navRestorations3.design). Read-only verification, zero tracked-file changes."
+  },
+  {
+   "id": "AC-2",
+   "result": "INSUFFICIENT",
+   "adversarialVotes": "0/3 sufficient",
+   "evidence": "1pc lattice plane + directional (green/red) drop-stems on PRISM marks implemented (designs.js prismPlane/prismDrop/d1Prism/d2Prism, catalogue-star spectral ink + halo). Dedicated suite (navRestorations1.design.test.js) passes 11/11; full src/ui regression 918/922 (4 not-run due to 2 unrelated worker-pool crashes, not assertion failures). Despite code+tests matching the AC statement, all 3 adversarial reviewers found the evidence insufficient — needs another verification pass before being called shipped."
+  },
+  {
+   "id": "AC-3",
+   "result": "PASS",
+   "adversarialVotes": "3/3 sufficient",
+   "evidence": "Bare index-digit labels removed; catalogue names on marks, selected star's name drawn first; design 1's detail block and design 2's status line print height/region/player-Y/Y-range. navRestorations1.design.test.js 11/11 pass including the 3 AC-3-specific cases. One documented, tested departure: design 1's HEIGHT clause splits across two rail rows instead of one joined line (149-texel rail budget) — passing but a deviation from the literal single-line observable; flagging for Max's awareness, not a failure."
+  },
+  {
+   "id": "AC-4",
+   "result": "INSUFFICIENT",
+   "adversarialVotes": "0/3 sufficient",
+   "evidence": "Sub-view open/close/Enter/Escape wiring implemented (NavComputer.js handleEscape routing, navViewModes state.js S.sysView/S.detailPlanet, index.js sub-view select/close logic, a429c0d's V-cycle fix). 65/65 headless jsdom tests pass (navRestorations4.{design,driver,host}.test.js). No live browser was driven — contract itself flags '⚠ LIVE CHECK PENDING: a real burn to a moon through the running game.' Deferred to working-Claude to drive live (Enter/commit-click → actual burn; right-click/empty-click exit)."
+  },
+  {
+   "id": "AC-5",
+   "result": "INSUFFICIENT",
+   "adversarialVotes": "0/3 sufficient",
+   "evidence": "Ship diamond + dashed trajectory wired from D.ship (host's focus/moon fields) through designs.js drawShip()/shipHit()/trajectoryHit(), called from both designs, replacing design 2's old fixed-offset diamond. Headless mutation-tested suites green (9 total). No live browser check — contract flags '⚠ LIVE CHECK PENDING: the diamond on the body the running game is actually at; vanishing in a foreign system.' Deferred to working-Claude to drive live."
+  },
+  {
+   "id": "AC-6",
+   "result": "INSUFFICIENT",
+   "adversarialVotes": "0/3 sufficient",
+   "evidence": "Wheel-zoom (_handleWheel, level-4 branch) + drag-gauge for design 2's orrery implemented, radius-only re-centred scaling, design 1 confirmed untouched. 45/45 headless tests pass. docs/NOW.md's own session note independently confirms '⚠ NO LIVE CHECK HAS RUN — the :5175 server was down all session,' matching the contract's own pending-live flag. Deferred to working-Claude to drive a real wheel scroll + gauge drag."
+  },
+  {
+   "id": "AC-7",
+   "result": "PASS",
+   "adversarialVotes": "2/3 sufficient",
+   "evidence": "Body names beside ladder letters (design 1) and in place of orrery numerals (design 2); selected/current-body priority preserved under label crowding. 13/13 tests pass (navRestorations2.design.test.js) after re-run with sandbox disabled — initial in-sandbox runs hit worker/OOM crashes, not test failures. designs.js↔nav-240p-lab.html parity confirmed via extract-nav-designs.mjs --check."
+  },
+  {
+   "id": "AC-8",
+   "result": "PASS",
+   "adversarialVotes": "3/3 sufficient",
+   "evidence": "Belt naming uses the generator's own isKuiper flag (geometry fallback); star-summary line (class/planet count/age, binary variant) replaces 'NO BODY SELECTED' in both designs when nothing is selected; legacy NavComputer.js confirmed untouched by git log. 3 dedicated files, 38/38 tests pass after re-run with --no-file-parallelism (initial shared-box memory contention, not code defects)."
+  },
+  {
+   "id": "AC-9",
+   "result": "PASS",
+   "adversarialVotes": "3/3 sufficient",
+   "evidence": "Single shared VIEW <n> LY formula (designs.js prismNumbers(), rad*3260) now used by both designs, replacing design 2's separate 'PC ACROSS' readout; legacy formula/output unchanged. Dedicated test passes 11/11 including the wheel-moves-both-designs case; 'PC ACROSS' string confirmed absent from all runtime-drawn text."
+  },
+  {
+   "id": "AC-10",
+   "result": "PASS",
+   "adversarialVotes": "3/3 sufficient",
+   "evidence": "Shared yGauge() now drawn and grabbable in design 2's PRISM view (previously a static, non-interactive scale column), publishing the same rect shape as design 1; host mouse handlers gate on generic viewMode not per-design. 119/119 (navPicking.test.js) + 16/16 (navRestorations3.design.test.js) pass. Caveat: a documented 1-texel-skirt boundary is inherited unchanged from design 1's pre-existing gauge, not a new defect."
+  },
+  {
+   "id": "AC-11",
+   "result": "deferred-to-max",
+   "adversarialVotes": "n/a — UAT is Max-only",
+   "evidence": "Whole-instrument judgment: do the two new PRISM menus (design 1 rail / design 2 bars) read as one coherent instrument. Contract's own progress note: 'not started.' No agent may PASS this — Max's walk is the only gate."
+  }
+ ],
+ "overall": "INSUFFICIENT — not ready for Max's UAT walk. Unit layer: 6/7 PASS, AC-2 open (adversarial review unanimously found its evidence insufficient despite matching code+tests). Integration layer: all 3 live-integration ACs (AC-4, AC-5, AC-6) are implemented and pass headless tests but have never been exercised in the running game — deferred to working-Claude to drive live next. UAT (AC-11) deferred to Max, pending those.",
+ "summaryForMax": "Status: INSUFFICIENT overall — not ready for your UAT walk yet.\n\nUnit layer (AC-1,2,3,7,8,9,10): 6/7 PASS. AC-2 (the 1pc lattice plane + green/red drop-stems on PRISM marks) has matching code and a fully-green dedicated test suite, but all 3 adversarial reviewers independently found the verifying evidence insufficient — it needs another verification pass before it can be called shipped. Not your job to fix; flagging so you know it's open.\n\nIntegration layer (AC-4 sub-view open/close/Enter/Escape, AC-5 ship diamond + trajectory, AC-6 design 2's wheel-zoom/drag-gauge orrery): all three are built and pass their headless test suites, but none has been exercised live in the running game yet. The workstream's own notes already flag this (\"LIVE CHECK PENDING\" on AC-4/AC-5; docs/NOW.md independently logs \"NO LIVE CHECK HAS RUN\" on AC-6 because the :5175 server was down all session). These three are deferred to working-Claude (main thread) to drive next via chrome-devtools — objective checks, not your gate.\n\nUAT (AC-11 — \"the two new menus read as one instrument\"): not started. Once AC-2/4/5/6 close, your walk is: open the live game, step through PRISM level in both menu designs (design 1 rail / design 2 bars). Specifically look at: hovering any mark or rail-row shows a readable callout; the lattice plane draws under the marks with correctly-colored drop-stems; body/belt names read cleanly with no overlap, selected body always named; the star-summary line shows when nothing's selected; the ship diamond sits on your actual current body and the dashed trajectory tracks your target/hover; design 2's y-gauge and zoom wheel/drag actually move the camera. Your call is purely felt: does this read as ONE coherent instrument across both designs, not a pile of separate fixes bolted on — no agent can render that judgment for you.",
+ "verifiedAt": "2026-09-20",
+ "runId": "wf_80592cf3-36a",
+ "agents": 43,
+ "coordinatorNote": "Written by working-Claude from the workflow's returned object (the run does not write this file). AC-4/5/6 INSUFFICIENT = no browser driven (the :5175 server was down all session) — procedural, not a judged defect. AC-2 INSUFFICIENT = (1) the observable said '1 pc spacing' while the build doubles the lattice cell as the camera pulls back (recorded only in AC-2's progress), and no test asserted spacing at any zoom; (2) the 'frame hashes byte-identical' clause was a build-time measurement, not an in-test assertion. Both fixed in the commits after ab610fa: the observable rewritten to the measured rule, a spacing test added. A re-run at HEAD is expected to flip AC-2 (~45 agents; not spent — Max's call)."
+}
