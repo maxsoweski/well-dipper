@@ -226,6 +226,239 @@ describe('AC-2 — drop lines, the plane lattice and far-first drawing', () => {
     }
   }, 120000);
 
+  // ── ⭐ THE CELL ITSELF, MEASURED OFF THE GLASS AT A REAL CAMERA ────────────────────────────────
+  //
+  // The case above asserts that a lattice EXISTS, that it is clipped to the pane and that it is
+  // under every mark — and says nothing whatever about its SPACING. The 2026-09-20 verify run found
+  // AC-2 INSUFFICIENT on exactly that: the whole of the observable's number half (1 pc at the
+  // prism's entry camera, doubling in powers of two as the camera pulls back, the tighter of the
+  // two on-screen spacings never below 8 texels) had no test under it, so `prismPlane`'s doubling
+  // could have been deleted, inverted or mis-scaled and every case in this file would still be
+  // green. The three cases below close that, and they close it by MEASURING THE DRAWN TEXELS and
+  // comparing them with a projection derived INDEPENDENTLY through the factory's own
+  // `projectPrism` — never against `PLANE_CELL_KPC`, `PLANE_MIN_TEXELS` or the doubling loop, which
+  // are the very things under test.
+  //
+  // ⛔ THE CAMERA IS SEEDED THE WAY THE `V` KEY SEEDS IT, AND THAT IS NOT A CONVENIENCE. Entering a
+  //    design runs `_seedViewModeCam()` (NavComputer.js:589, called from the V handler at :349),
+  //    which puts the GAME's camera on the designs' own default angles — `_localRotX =
+  //    atan2(0.42, 0.55)`, `_localRotY = 0` — so that is the prism a pilot actually meets. Every
+  //    other case in this file runs at the CONSTRUCTOR's 0.5 / 0.3 (:159-160), where the lattice is
+  //    sheared across the pane: its lines are slanted, and "the spacing between consecutive lines"
+  //    stops being a row-to-row distance at all. Each case below ASSERTS the seeded angles before
+  //    it measures, so a fixture that drifts off the default fails loudly instead of quietly
+  //    measuring a picture of its own.
+  // ⛔ AND THE RADIUS COMES FROM THE REAL WHEEL WHEREVER THE WHEEL CAN REACH IT. `_handleWheel`
+  //    (NavComputer.js:4701-4710) is the only thing in the game that moves `_localRadius` at PRISM,
+  //    and its clamp is `Math.max(0.0015, Math.min(this._localCubeSize || 0.01, r * factor))`. The
+  //    LOWER clamp is the entry radius itself (:1189, :4680 — the designs' `ZOOM_STOPS[0]`), so
+  //    wheeling all the way in lands ON the entry camera. The UPPER clamp is the local cube, which
+  //    this harness never sets (it comes from `setPlayerPosition`, :1188, which `makeHeadlessNav`
+  //    does not call), so the wheel's ceiling here is `_handleWheel`'s own `|| 0.01` fallback —
+  //    measured below — and the lab's `ZOOM_STOPS[3]` (0.01034, the cube at the lab's fixture) is
+  //    reached through the FIELD, stated where it happens.
+
+  /** 1 pc in kpc — legacy's `_localGridCell` (NavComputer.js:1191), the cell the AC is about. */
+  const ONE_PC_KPC = 0.001;
+  /** ⛔ AC-2's OWN FLOOR, SPELLED HERE. Reading `PLANE_MIN_TEXELS` off `designs.js` would make this
+   *  a check that the source agrees with itself; the observable's number is 8 and 8 is what this
+   *  file asserts against. */
+  const MIN_TEXELS = 8;
+
+  /** The designs' default prism angles, derived the way BOTH sides derive them (NavComputer.js:73,
+   *  state.js:140) — from the gains 0.42 / 0.55, never from a literal angle, which is 1-2 ULP off. */
+  function atTheDesignDefaultCamera(r, design) {
+    expect(r.S.cam.rotY, `design ${design}: the prism is not at the designs' default azimuth`).toBe(0);
+    expect(r.S.cam.rotX, `design ${design}: the prism is not at the designs' default elevation`)
+      .toBe(Math.atan2(0.42, 0.55));
+  }
+
+  /**
+   * ⭐ THE LATTICE, READ BACK OUT OF THE INK AS LINES — AND THE 1 pc STEP, PROJECTED BESIDE IT.
+   *
+   * At the default camera a z-line (a line of constant world z) is HORIZONTAL and an x-line is
+   * VERTICAL, and `lineTexels` lays each one down one texel in three (`PLANE_DOT`). So a z-line owns
+   * a row holding ~w/3 grid texels, while a row that merely CROSSES the x-lines holds one texel per
+   * x-line. Measured across the four stops and both designs: 72-150 texels in a line's own row or
+   * column against 3-25 in a crossing one, so "at least half a full run" (42 for design 1's rows,
+   * 70 for design 2's) is a threshold with the whole gap either side of it, not a tuned constant.
+   *
+   * ⛔ THE SPACING IS THE SPAN OVER THE COUNT, NOT A DIFF. Every line's screen position is rounded
+   *    to a texel, so consecutive differences carry ±1; (last - first) / (lines - 1) averages that
+   *    away and is good to a fraction of a texel on the 7-25 lines these panes hold.
+   * ⛔ AND THE PROJECTION IS THE FACTORY'S OWN, AT THIS FRAME'S CAMERA. `projectPrism` is closed
+   *    over the same `S.cam` the paint used; two plane points 1 pc apart, framed by the DECLARED map
+   *    region, give the on-screen length of one 1 pc cell without `prismPlane` having any say in it.
+   *    `py` is the point ON the plane (the foot), which is where the lattice is drawn.
+   */
+  function lattice(r) {
+    const rgn = r.regions.map;
+    const grid = r.fills.filter((f) => f.ink === NEW.GRID);
+    const byY = new Map(), byX = new Map();
+    for (const f of grid) { byY.set(f.y, (byY.get(f.y) || 0) + 1); byX.set(f.x, (byX.get(f.x) || 0) + 1); }
+    const lines = (m, full) => [...m.entries()].filter(([, n]) => n >= full / 2)
+                                               .map(([v]) => v).sort((a, b) => a - b);
+    const step = (a) => (a.length < 2 ? NaN : (a[a.length - 1] - a[0]) / (a.length - 1));
+    const c = r.S.cam;
+    const P = (wx, wz) => r.d.projectPrism({ wx, wy: c.y, wz },
+                                           rgn.x + rgn.w / 2, rgn.y + rgn.h / 2, rgn.w / 2, rgn.h / 2);
+    const o = P(c.x, c.z);
+    const len = (p) => Math.hypot(p.x - o.x, p.py - o.py);
+    const zLines = lines(byY, rgn.w / 3), xLines = lines(byX, rgn.h / 3);
+    return { zLines, xLines, measZ: step(zLines), measX: step(xLines),
+             projZ: len(P(c.x, c.z + ONE_PC_KPC)), projX: len(P(c.x + ONE_PC_KPC, c.z)) };
+  }
+
+  /** k, derived HERE: the smallest power of two for which the tighter 1 pc spacing clears 8 texels. */
+  function kFor(l) {
+    let k = 0;
+    while (k < 16 && Math.min(l.projZ, l.projX) * 2 ** k < MIN_TEXELS) k++;
+    return k;
+  }
+
+  /** The whole measurement at one camera, as one sentence a failure can print. */
+  function report(design, l, k) {
+    return `design ${design}: cell ${2 ** k} pc — z ${l.measZ.toFixed(2)} texels measured over ` +
+           `${l.zLines.length} lines against ${(l.projZ * 2 ** k).toFixed(2)} projected ` +
+           `(1 pc = ${l.projZ.toFixed(2)}), x ${l.measX.toFixed(2)} over ${l.xLines.length} lines ` +
+           `against ${(l.projX * 2 ** k).toFixed(2)} (1 pc = ${l.projX.toFixed(2)})`;
+  }
+
+  /** Wheel until the clamp stops moving the radius, and say how many notches it took. */
+  function wheelToClamp(nav, deltaY) {
+    let prev = -1, notches = 0;
+    while (nav._localRadius !== prev && notches < 60) {
+      prev = nav._localRadius;
+      nav._handleWheel({ deltaY, preventDefault() {} });
+      notches++;
+    }
+    nav.render();
+    return notches;
+  }
+
+  it('⭐ AT THE PRISM\'S ENTRY CAMERA THE CELL IS 1 pc — MEASURED, AGAINST `projectPrism`\'S OWN 1 pc', async () => {
+    // ⭐ THIS IS THE HALF OF THE RULE THE DOUBLING MUST NOT TOUCH: at the camera the prism opens at,
+    //    the lattice is legacy's 1 pc exactly (NavComputer.js:1994-2014), multiplier 1, and the
+    //    picture Max looks at first is not approximate. Halving `PLANE_CELL_KPC` is red here and
+    //    GREEN at the widest stop — the doubling absorbs it there — which is why the entry camera
+    //    needs a case of its own.
+    const h = await loadedNav();
+    for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
+      const nav = await at(h.nav, mode, 3);
+      nav._seedViewModeCam();
+      const notches = wheelToClamp(nav, -120);
+      const r = paint(nav, design);
+      expect(nav._localRadius, `design ${design}: ${notches} notches of wheel did not reach the entry radius`)
+        .toBe(r.d.ZOOM_STOPS[0]);
+      atTheDesignDefaultCamera(r, design);
+      const l = lattice(r);
+      expect(l.zLines.length, `design ${design}: fewer than three z-lines to measure`).toBeGreaterThan(2);
+      expect(l.xLines.length, `design ${design}: fewer than three x-lines to measure`).toBeGreaterThan(2);
+      // ⛔ AND THE MULTIPLIER IS 1 BECAUSE THE GEOMETRY SAYS SO, NOT BECAUSE THE CODE SAYS SO: one
+      //    1 pc cell is ~30 texels tall at this radius, so the 8-texel floor is already clear.
+      expect(kFor(l), `design ${design}: 1 pc does not clear ${MIN_TEXELS} texels at the entry camera, ` +
+                      `so this case is not about the entry camera — ${report(design, l, 0)}`).toBe(0);
+      expect(Math.abs(l.measZ - l.projZ), `${report(design, l, 0)} — z spacing is not 1 pc`)
+        .toBeLessThanOrEqual(1);
+      expect(Math.abs(l.measX - l.projX), `${report(design, l, 0)} — x spacing is not 1 pc`)
+        .toBeLessThanOrEqual(1);
+    }
+  }, 120000);
+
+  it('⛔ AT THE WIDEST THE CELL IS THE SMALLEST POWER OF TWO WHOSE TIGHTER SPACING CLEARS 8 TEXELS', async () => {
+    // ⚠ TWO RADII, REACHED TWO WAYS, AND THE DIFFERENCE IS STATED: the wheel's own ceiling in this
+    //   harness (0.01 — `_localCubeSize` is unset here, see the block above) and the lab's
+    //   `ZOOM_STOPS[3]` (0.01034, the cube size at the lab's fixture), which no wheel can land on
+    //   and which is therefore written to the field. Both are "the camera pulled back"; the rule is
+    //   the same at both and is derived, per camera, from the projection alone.
+    const h = await loadedNav();
+    for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
+      const nav = await at(h.nav, mode, 3);
+      nav._seedViewModeCam();
+      const notches = wheelToClamp(nav, 120);
+      const clamp = nav._localRadius;
+      expect(clamp, `design ${design}: ${notches} notches of wheel did not reach the wheel's ceiling`)
+        .toBe(nav._localCubeSize || 0.01);
+      const wide = [{ how: 'the wheel\'s own ceiling', radius: clamp },
+                    { how: 'the field, at the lab\'s ZOOM_STOPS[3]', radius: paint(nav, design).d.ZOOM_STOPS[3] }];
+      for (const stop of wide) {
+        nav._localRadius = stop.radius;
+        nav.render();
+        const r = paint(nav, design);
+        atTheDesignDefaultCamera(r, design);
+        const l = lattice(r);
+        const k = kFor(l);
+        expect(l.zLines.length, `design ${design} at ${stop.radius} (${stop.how}): fewer than three z-lines`)
+          .toBeGreaterThan(2);
+        // ⭐ THE STOP HAS TO BE ONE WHERE A 1 pc CELL FAILS THE FLOOR, or the case proves nothing
+        //    about doubling at all.
+        expect(k, `design ${design} at ${stop.radius} (${stop.how}): 1 pc already clears ${MIN_TEXELS} texels here, ` +
+                  `so this is not the widest camera — ${report(design, l, k)}`).toBeGreaterThanOrEqual(1);
+        expect(Math.abs(l.measZ - l.projZ * 2 ** k),
+               `at radius ${stop.radius} (${stop.how}) — ${report(design, l, k)}`).toBeLessThanOrEqual(1);
+        expect(Math.abs(l.measX - l.projX * 2 ** k),
+               `at radius ${stop.radius} (${stop.how}) — ${report(design, l, k)}`).toBeLessThanOrEqual(1);
+        // …and the thing the doubling exists for: what is DRAWN clears the floor, not just what was
+        // computed. A 1 pc lattice here draws lines ~4.5 texels apart, which at 240p is a wash.
+        expect(Math.min(l.measZ, l.measX),
+               `at radius ${stop.radius} (${stop.how}) the drawn lattice is tighter than ${MIN_TEXELS} texels — ` +
+               report(design, l, k)).toBeGreaterThanOrEqual(MIN_TEXELS);
+      }
+    }
+  }, 180000);
+
+  it('⭐ ACROSS THE FOUR ZOOM STOPS THE CELL IS A POWER OF TWO AND NEVER SHRINKS AS THE CAMERA PULLS BACK', async () => {
+    // ⚠ THE FOUR STOPS ARE WRITTEN TO THE FIELD, and they have to be: the wheel steps by 1.15 and
+    //   lands on none of 0.003 / 0.006 / 0.01034 exactly. The two cases above are the ones that
+    //   prove the wheel reaches the two ends; this one is about the LAW across the range.
+    const h = await loadedNav();
+    for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
+      const nav = await at(h.nav, mode, 3);
+      nav._seedViewModeCam();
+      nav.render();
+      const stops = paint(nav, design).d.ZOOM_STOPS;
+      const seen = [];
+      for (const radius of stops) {
+        nav._localRadius = radius;
+        nav.render();
+        const r = paint(nav, design);
+        atTheDesignDefaultCamera(r, design);
+        const l = lattice(r);
+        const k = kFor(l);
+        expect(l.zLines.length, `design ${design} at ${radius}: fewer than three z-lines`).toBeGreaterThan(2);
+        // the cell, in 1 pc units, read off the glass and nothing else
+        const cell = Math.round(l.measZ / l.projZ);
+        expect(cell >= 1 && (cell & (cell - 1)) === 0,
+               `design ${design} at ${radius}: the cell is ${l.measZ / l.projZ} pc, not a power of two — ` +
+               report(design, l, k)).toBe(true);
+        expect(cell, `design ${design} at ${radius}: the cell is not the smallest power of two clearing ` +
+                     `${MIN_TEXELS} texels — ${report(design, l, k)}`).toBe(2 ** k);
+        expect(Math.round(l.measX / l.projX),
+               `design ${design} at ${radius}: the two axes carry different cells — ${report(design, l, k)}`)
+          .toBe(cell);
+        // ⛔ AND THE RATIO IS NOT ROUNDED INTO AGREEMENT. A cell that is half or three-quarters of a
+        //    power of two rounds TO one; the texel bound is what says the lattice is actually there.
+        expect(Math.abs(l.measZ - l.projZ * 2 ** k),
+               `design ${design} at ${radius} — ${report(design, l, k)}`).toBeLessThanOrEqual(1);
+        expect(Math.abs(l.measX - l.projX * 2 ** k),
+               `design ${design} at ${radius} — ${report(design, l, k)}`).toBeLessThanOrEqual(1);
+        expect(Math.min(l.measZ, l.measX),
+               `design ${design} at ${radius}: drawn tighter than ${MIN_TEXELS} texels — ${report(design, l, k)}`)
+          .toBeGreaterThanOrEqual(MIN_TEXELS);
+        if (seen.length) {
+          expect(cell, `design ${design}: the cell SHRANK from ${seen[seen.length - 1].cell} pc at ` +
+                       `${seen[seen.length - 1].radius} kpc to ${cell} pc at ${radius} kpc`)
+            .toBeGreaterThanOrEqual(seen[seen.length - 1].cell);
+        }
+        seen.push({ radius, cell, z: l.measZ });
+      }
+      // …and the sweep is a sweep: the first stop is 1 pc and something doubled before the last.
+      expect(seen[0].cell, `design ${design}: ${JSON.stringify(seen)}`).toBe(1);
+      expect(seen[seen.length - 1].cell, `design ${design}: nothing doubled across the range — ` +
+                                         JSON.stringify(seen)).toBeGreaterThan(1);
+    }
+  }, 300000);
+
   it('⭐ MARKS ARE PUBLISHED — AND THEREFORE PAINTED — FAR TO NEAR', async () => {
     // ⛔ THE DEPTH IS THE DESIGNS' OWN, NOT A SECOND COPY. `projectPrism` is exported by the factory
     //    and closes over the SAME `S.cam` this frame painted with, so this reads the very number the
