@@ -494,9 +494,25 @@ export function makeViewModeDriver(nav) {
     // ⭐ AC-1 — AND THE ROW ITSELF GOES OUT WITH IT, for the reason `pickBody`'s `out` exists:
     //    `bodyIdentity` keeps only `{type,index}`, and a callout needs the row's facts. Same object
     //    the map picker reports, so a rail hover and a pip hover on one body are one answer.
-    const b = D.bodies[i] || null;
+    // ⭐⭐ AC-4 (wave 2b) — AND WHEN THE RAIL IS NOT A `D.bodies` PAGE, IT SAYS SO. `S.railBodies` is
+    //    `null` on every screen whose rail IS such a page (the head of both designs clears it), and
+    //    in design 1's moon sub-view it is the rows the paint actually drew — the open planet, then
+    //    its own moons in the ladder's orbit order — already sliced to the drawn page. That list is
+    //    indexed by the DRAWN row, exactly as `S.railTiles` is two branches up, and NOT through
+    //    `rowBase()`: `offset` pages `D.bodies`, and the sub-view is not paging `D.bodies`.
+    // ⛔ MEASURED BEFORE IT WAS WRITTEN (wave 2b integration): with the sub-view open on a planet
+    //    whose first moon is `D.bodies[9]`, the rail draws that moon at row 1 and `rowBase() + 1`
+    //    resolved to `D.bodies[1]` — a different planet entirely. Every row in the picture named the
+    //    wrong body, and `routeSystem`'s own moon-row branch (:1386) read the same wrong row.
+    const b = (S.railBodies ? S.railBodies[row] : D.bodies[i]) || null;
     if (detail && b) { detail.ref = b; detail.moon = -1; detail.star = false; }
-    return bodyIdentity(nav, b);
+    // ⭐ AC-4 (nav-restorations-2026-09-20) — `S` GOES IN SO A ROW ANSWERS THE SAME WAY A PIP DOES.
+    //    `bodyIdentity` collapses a moon onto its parent everywhere but the open sub-view, and the
+    //    fourth argument is what tells it which picture is on the glass. Without it a moon ROW and a
+    //    moon PIP of the same moon, in the same sub-view, would resolve to two different bodies —
+    //    which is the divergence this file's header exists to refuse, arriving through the argument
+    //    list instead of through a second hit test.
+    return bodyIdentity(nav, b, -1, S);
   }
 
   /** The pick the MAP PANE resolves to at this level. Every one reads geometry the paint published. */
@@ -1007,6 +1023,44 @@ export function makeViewModeDriver(nav) {
     //    reopen cannot republish the stale answer before the pointer has moved.
     S.hover = null;
     hoverPick = null;
+    /* Function · AC-4 (SEAM §2) — the moon sub-view closes with the nav.
+     * Intent · it is a transient by `onDeactivate`'s own test: the pilot is in the MIDDLE of reading
+     *   one planet's moons, he has not chosen a setting. `S` outlives the close (`_viewDriverInst`
+     *   is built once and never rebuilt, :255), so without this the nav reopens at SYSTEM already
+     *   inside whichever planet he last drilled — and `detailPlanet` would name a planet of the
+     *   system he was in minutes ago.
+     * Deliberate non-goals · the SELECTION is not cleared here; it never was, and AC-4's Esc keeps
+     *   it deliberately. This closes the picture, not the target. */
+    S.sysView = 'system';
+    S.detailPlanet = -1;
+  }
+
+  /**
+   * ⭐ AC-4 — ESC CLOSES THE MOON SUB-VIEW FIRST, AND THE HOST ASKS BEFORE IT DOES ANYTHING ELSE.
+   *
+   * Function · did the driver have a sub-view to close? Closes it and answers `true`; otherwise
+   *   answers `false` and changes nothing.
+   * Intent · legacy pops `_systemMode === 'planet'` back to `'system'` on the first Esc and leaves
+   *   level 4 on the second (`NavComputer.js:1452-1456`), and Max's ruling on page item 16 is that
+   *   the design gets the same walk without the legacy renderer. The host cannot see `S`, so the
+   *   question has to be asked; one statement folded at the head of `handleEscape()` (:1441) —
+   *   `if (this.viewMode && this._viewDriverInst?.onEscape?.() === true) return true;` — is the
+   *   whole wiring, and right-click reaches it for free through :4489.
+   * Deliberate non-goals · it does NOT clear the selection (SEAM: "exit, keep the selection"), it
+   *   does not touch the level, and it answers `false` — never `true` — when there is nothing open,
+   *   so a second Esc walks back exactly as it does today.
+   * ⛔ THE NAME IS THE CONTRACT, for the reason `onDeactivate`'s is: the host's fold is optional
+   *   (`?.()`), so a rename leaves the class calling `undefined?.()`, the fold falls through, and
+   *   the failure is an Esc that closes the whole nav instead of the sub-view — silent, and
+   *   indistinguishable from never having built the exit.
+   * ⛔ AND IT COMPARES `=== true` ON THE HOST'S SIDE, not merely truthiness, so a future return of
+   *   an object or a rect can never be mistaken for "handled".
+   */
+  function onEscape() {
+    if (S.sysView !== 'planet') return false;
+    S.sysView = 'system';
+    S.detailPlanet = -1;
+    return true;
   }
 
   /**
@@ -1297,6 +1351,131 @@ export function makeViewModeDriver(nav) {
     return inRect(map, x, y);
   }
 
+  /**
+   * ⭐⭐ AC-4 (nav-restorations-2026-09-20) — THE MOON SUB-VIEW'S WHOLE CLICK VOCABULARY, IN ONE PLACE.
+   *
+   * Function · decide what a level-4 map-or-rail click means now that SYSTEM has two pictures, and
+   *   answer `true` when the driver CONSUMED it (`remapClick` then returns `null` and the host's own
+   *   level-4 branch never runs).
+   * Intent · page item 16, Max's ruling: *"a design-side sub-view, not a switch back to the old
+   *   one."* Legacy gets this walk from `_systemMode` and `_renderPlanetDetail`; the designs are
+   *   forbidden both (the pin at `NavComputer.js:4585/4590` stays), so the walk has to be built out
+   *   of what a design DOES have — the pick, `S.sysView`, and the host's own `_selectedBody` /
+   *   `_buildCommitAction` / `_clearCommitSelection`, which already speak moon
+   *   (`_buildCommitAction`:1124-1139 emits `target:'moon'` with both indices, and `main.js`
+   *   consumes it at :5994/:5999).
+   * Deliberate non-goals · it invents no geometry and runs no hit test: every branch below reads the
+   *   pick `resolveHover` just made. It never writes `nav._systemMode` or `nav._selectedPlanetIdx`
+   *   (the host owns both, and the pin is the contract). It does not arm a selection on a FOREIGN
+   *   system's planet — that branch of the host (`:4589-4592`) still arms nothing under a design, so
+   *   the second click there has no selection to match and the sub-view cannot be entered; logged
+   *   for the coordinator rather than faked here.
+   *
+   * ⛔ IT BRANCHES ON A PUBLISHED `kind`/`type`, NEVER ON THE SHAPE OF A REF — the rule `pickBody`
+   *    and `pickPrismStar` both state. `hv.ref.type` is the identity `bodyIdentity` answered with and
+   *    `row.kind` is what `buildBodies` wrote; guessing "it has an `mIdx`, so it must be a moon"
+   *    would be a third copy of a classification that already has one owner.
+   *
+   * ⛔ AND "A MOON'S RAIL ROW" IS A LIST ROW, TESTED AS ONE. `listRow >= 0` is the paint's own grid
+   *    (`S.listGeom`, inverted by `listRowAt`), so the branch fires on a click in the LIST and never
+   *    on a map pip that happens to carry a moon row — which matters because the lab is free to
+   *    publish a sub-view pip's `ref` either way and this file must not depend on which it picks.
+   *
+   * @param {number} listRow  the drawn list row under the click, or `-1` — `listRowAt`'s answer.
+   * @returns {boolean} true if the click was consumed.
+   */
+  function routeSystem(listRow) {
+    if (S.level !== 4) return false;
+    const hv = hoverPick;
+    const ref = (hv && hv.kind === 'body') ? hv.ref : null;
+    const row = ref && ref.row ? ref.row : null;
+
+    // ── ⭐ DESIGN 1's MOON RAIL ROW — SELECTS THE MOON, IN EITHER PICTURE, WITHOUT DRILLING ───────
+    // The rail has ALWAYS listed the moons (`buildBodies` emits a `kind:'moon'` row per moon) and a
+    // click on one has always selected the PARENT, because `bodyIdentity` collapses it — so the one
+    // place in the new nav that names every moon in words could not choose one. The seam's exception:
+    // a row is not a picture, so it names its moon without changing which picture is on the glass.
+    if (listRow >= 0 && row && row.kind === 'moon'
+        && Number.isFinite(row.pIdx) && Number.isFinite(row.mIdx)) {
+      selectMoon(row.pIdx, row.mIdx);
+      return true;
+    }
+
+    // ── ⭐⭐ INSIDE THE SUB-VIEW, THE DRIVER OWNS THE MAP ──────────────────────────────────────────
+    if (S.sysView === 'planet') {
+      if (ref && ref.type === 'moon'
+          && Number.isFinite(ref.planetIndex) && Number.isFinite(ref.moonIndex)) {
+        selectMoon(ref.planetIndex, ref.moonIndex);
+        return true;
+      }
+      // The parent's own mark: selects the planet, exactly as it does in the whole-system picture,
+      // and the sub-view stays open — the pilot is choosing between the planet and its moons.
+      if (ref && ref.type === 'planet' && Number.isFinite(ref.planetIndex)) {
+        if (nav._onSound) nav._onSound('select');
+        nav._selectedBody = { type: 'planet', planetIndex: ref.planetIndex };
+        nav._commitAction = nav._buildCommitAction();
+        return true;
+      }
+      // ⭐ EMPTY MAP LEAVES THE SUB-VIEW *AND* CLEARS, which is AC-2 of the defects batch honoured
+      //   inside the new picture rather than suspended by it: the host's own empty-space branch
+      //   (`NavComputer.js:4592`) calls `_clearCommitSelection()`, and this calls the SAME method
+      //   rather than nulling the three fields itself — one owner for what "nothing is selected"
+      //   means, so the two cannot drift.
+      // ⛔ EATEN, NOT FALLEN THROUGH. Falling through would clear (the host would do it) but would
+      //    leave the sub-view open, and the pilot's gesture would be half-obeyed.
+      if (!ref) {
+        S.sysView = 'system'; S.detailPlanet = -1;
+        if (nav._clearCommitSelection) nav._clearCommitSelection();
+        return true;
+      }
+      // Anything else under the pointer in the sub-view — a star mark, a belt — is not something
+      // either design draws there today, so it keeps exactly the behaviour it has at SYSTEM now.
+      return false;
+    }
+
+    // ── ⭐ ENTER: THE SECOND CLICK ON AN ALREADY-SELECTED PLANET THAT HAS MOONS ────────────────────
+    // ⚠ THE SELECTION IS READ OFF `nav._selectedBody`, NOT `D.selBody`, AND THE TWO ARE THE SAME
+    //   ANSWER ONE FRAME APART. `D.selBody` is the MIRROR, rebuilt by `refresh()` at the head of a
+    //   paint (`state.js`); the host's field is written by the click itself. Between two clicks with
+    //   no frame in between — a double click faster than a frame, and every headless test that does
+    //   not render — the mirror is still showing the selection BEFORE the first click, so reading it
+    //   here would make the walk depend on the frame rate. Same object either way once a frame has
+    //   painted, which is the case that ships.
+    // ⛔ A PLANET WITH NO MOONS NEVER ENTERS: there is no picture to draw, and opening an empty
+    //    sub-view would be a screen that answers nothing — the defect class this workstream is named
+    //    for. `row.moons` is `buildBodies`' own count, the same number the rail and the callout print.
+    if (ref && ref.type === 'planet' && Number.isFinite(ref.planetIndex)) {
+      const sel = nav._selectedBody;
+      const moons = (row && Number.isFinite(row.moons)) ? row.moons : 0;
+      if (sel && sel.type === 'planet' && sel.planetIndex === ref.planetIndex && moons > 0) {
+        S.sysView = 'planet';
+        S.detailPlanet = ref.planetIndex;
+        // ⛔ EATEN, AND THE SELECTION IS LEFT EXACTLY WHERE IT IS. Falling through would re-run the
+        //    host's planet branch, which rebuilds `_selectedBody` and `_commitAction` for the same
+        //    planet — harmless today and a second writer of the armed target tomorrow.
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /* Function · AC-4 — arm a MOON as the selection and the commit target.
+   * Intent · the two statements the host's own planet-detail branch runs (`NavComputer.js:4515-4519`)
+   *   — `_selectedBody = { type:'moon', planetIndex, moonIndex }` then `_commitAction =
+   *   _buildCommitAction()` — called from the design side, where `_systemMode` is pinned to 'system'
+   *   and that branch can never run. The payload is therefore byte-identical to legacy's, which is
+   *   what makes `main.js:5994/5999` (frozen) turn it into a burn or a warp with nothing to change.
+   * Deliberate non-goals · no clamping and no validation of `mIdx` against the system data: the
+   *   indices come from a `D.bodies` row or from a published hit, both of which were built FROM that
+   *   data, and re-checking here would be a second copy of `buildBodies`' own walk.
+   * ⚠ THE SOUND IS THE HOST'S OWN NAME ON THE HOST'S OWN GUARD (`if (this._onSound)`), so a moon
+   *   picked in a design sounds like a moon picked in legacy. */
+  function selectMoon(planetIndex, moonIndex) {
+    if (nav._onSound) nav._onSound('select');
+    nav._selectedBody = { type: 'moon', planetIndex, moonIndex };
+    nav._commitAction = nav._buildCommitAction();
+  }
+
   function remapClick(p, w, h) {
     const bars = nav.viewMode === 'bars';
     const g2 = geo(w, h);
@@ -1484,7 +1663,15 @@ export function makeViewModeDriver(nav) {
     //    different texel from the last frame's hover. Both drilled the PREVIOUS frame's target while
     //    lighting this one. Resolving here costs one hit-test and makes the two the same object by
     //    construction rather than by the pointer happening not to have moved.
-    if (!inStrip) { resolveHover(p.x, p.y, w, h); notePick(p.x, p.y); return p; }
+    if (!inStrip) {
+      resolveHover(p.x, p.y, w, h);
+      // ⭐ AC-4 — AND AT SYSTEM THE SUB-VIEW GETS THE CLICK BEFORE THE HOST DOES. See `routeSystem`.
+      //    It reads the pick `resolveHover` has just made at THIS click's own point, which is the
+      //    same object `_handleClick` is about to drill — so the picture the pilot clicked and the
+      //    body the driver acts on cannot come apart. `true` means it was consumed.
+      if (routeSystem(listRowAt(g2, p.x, p.y, bars))) return null;
+      notePick(p.x, p.y); return p;
+    }
     if (tabI < 0) { resolveHover(p.x, p.y, w, h); notePick(p.x, p.y); return p; }
     // ⭐ THE DISABLED SYSTEM TAB EATS ITS CLICK (see `tabLevel`). The designs draw it in INK.RULE on
     // `S.noSystem`, so what the pilot sees is a dimmed tab that does not answer — never a screen
@@ -1531,6 +1718,12 @@ export function makeViewModeDriver(nav) {
     // `NavComputer.js:620` — `this._viewDriverInst?.onDeactivate?.()`. THE NAME IS THE CONTRACT, for
     // the reason the two above give: a rename is a close that silently stops clearing anything.
     onDeactivate,
+    // ⭐ AC-4's EXIT (nav-restorations-2026-09-20), called OPTIONALLY by the HOST's fold at the head
+    // of `handleEscape()` (`NavComputer.js:1441`):
+    // `if (this.viewMode && this._viewDriverInst?.onEscape?.() === true) return true;`
+    // THE NAME IS THE CONTRACT for the reason `onDeactivate`'s is — rename it and the class calls
+    // `undefined?.()`, the fold falls through, and Esc closes the whole nav instead of the sub-view.
+    onEscape,
     regions: designs.regions,
     violations: () => violations.slice(),
     /**

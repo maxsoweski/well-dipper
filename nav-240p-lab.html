@@ -1102,6 +1102,10 @@ function drawDesign1(g, W, H) {
   //    picker dereferencing a field that is not there freezes the glass, and it freezes it LOOKING
   //    ALIVE — `PanelHost` catches a painter throw once and then stops uploading frames.
   S.pagerRect = null; S.ladderCounterRect = null;
+  // ⛔ AC-4's ROW LIST ON THE SAME RULE. `S.railBodies` is published only by the SUB-VIEW's rail
+  //    branch, so without a clear here the rows of a planet the pilot left would stay on offer under
+  //    the whole-system list — geometry out of nobody's paint, which is the defect this block names.
+  S.railBodies = null;
   // ⛔ AC-1's RECTANGLE IS CLEARED HERE TOO. `hoverCallout` nulls it on every path, but a frame
   //    that never reaches the map painter (there is none today) would otherwise leave last frame's
   //    plate live for the driver's press guard to find.
@@ -1191,6 +1195,33 @@ function drawDesign1(g, W, H) {
                  //    active tab filled, so TAB is the one control on this row a pilot can SEE, and
                  //    the strip's own legend (below) names SHIFT+TAB. The other four rows keep it.
                  `SELECT A BODY   ${(S.ladderMax || 0) > 0 ? 'SCROLL , . OR CLICK ...   ' : ''}${sortHint}   / SEARCH`];
+  /*  Function · AC-4 — the SYSTEM row while a planet is open.
+   *  Intent · page item 16. Legacy's own sub-view prints `SELECT MOON TO NAVIGATE · CLICK EMPTY
+   *    SPACE TO GO BACK` (NavComputer.js:3533) — the way OUT is half of what that row says, because
+   *    a screen a pilot cannot leave is a trap.
+   *  ⛔⛔ IT SAYS `RIGHT CLICK BACK` AND NOT `ESC BACK`, AND THAT IS A MEASUREMENT, NOT A STYLE
+   *    CHOICE. Wave 2b drew `ESC BACK` here on the seam's EXIT row; the HOST lane then measured
+   *    that the Escape KEY never reaches this overlay's class at all — `NavComputer._onKeyDown`
+   *    (:344-360) has no `Escape` clause, so the key falls through to `main.js:13557`, which sees
+   *    the nav open and closes THE WHOLE OVERLAY (Max's own 2026-07-29 ruling, guarded by
+   *    `src/ui/__tests__/NavComputer.escape.test.js`: *"esc should just dismiss"*). A hint row that
+   *    named Esc would therefore promise the pilot a way back and take the whole screen away, which
+   *    is the exact defect class this workstream is named for. RIGHT-CLICK does exit, through the
+   *    canvas's own `contextmenu` listener (`NavComputer.js:336`) → `handleEscape()` → the wave-2b
+   *    fold at :1441 → `drv.onEscape()`; the empty-map click exits too (the driver's own INSIDE
+   *    rule). Whether Esc should ALSO pop the sub-view is a reversal of a ruling Max made himself,
+   *    so it is reported to him rather than decided here.
+   *  ⛔ NOTHING IS CUT FROM AN EXISTING CLAUSE: this is a NEW row for a state that had none. It
+   *    measures 59 characters of the 69 this buffer holds at the longest key this level owns
+   *    (`[ ] SORT NAME`), and 58 with the scroll clause — so both fit unclipped.
+   *  ⚠ THE SORT AND SEARCH CLAUSES YIELD TO THE SCROLL CLAUSE, AND ONLY TO IT. All three together
+   *    are 82, well past the row; the scroll clause names a control that is ON THE GLASS this frame
+   *    (the `...` caps), while `[ ]` and `/` are named on the four other rows. */
+  const subDet = S.level === 4 ? sysDetail() : null;
+  if (subDet) {
+    const scrollC = (S.ladderMax || 0) > 0 ? 'SCROLL , . OR CLICK ...' : '';
+    hints[4] = `SELECT A MOON   RIGHT CLICK BACK   ${scrollC || `${sortHint}   / SEARCH`}`;
+  }
   // ⭐ AND WHILE THE DRAWN SEARCH IS OPEN THE ROW NAMES THE SEARCH'S OWN CONTROLS. The field takes
   // the rail, so the row that would say "CLICK A LIST ROW" would be naming rows that are not there.
   // ⛔ ESC CLOSES AND ONLY CLOSES — it must never also drill a level, which is the one behaviour the
@@ -1690,6 +1721,99 @@ function d1BodyTagger(order = d1LadderOrder()) {
     return (parent && tags.get(parent)) || '?';
   };
 }
+/*  Function · AC-4's one question, answered once for both designs: is the SYSTEM screen showing a
+ *    planet's moons right now, and if so which planet, which moons, and where is each moon on its
+ *    orbit? Returns `null` for the whole-system picture, which is every frame before this wave.
+ *  Intent · page item 16, Max's ruling *"yes — a design-side sub-view, not a switch back to the old
+ *    one."* Legacy pins `_systemMode = 'planet'` and draws `_renderPlanetDetail`
+ *    (NavComputer.js:3256-3537); under a design that pin is deliberately skipped (intent.md's own
+ *    non-goal), so the sub-view is a pair of fields on `S` — `S.sysView` and `S.detailPlanet`, both
+ *    owned by the DRIVER (SEAM §2) — and this is the ONE place either design reads them.
+ *  ⛔ ONE READER, BECAUSE FOUR PAINTERS ASK THE SAME QUESTION. `d1Ladder`, `d1Rail`, `d2System` and
+ *    `d2Status` all have to agree about which planet is open and what its moons are; four copies of
+ *    `S.sysView === 'planet' && D.bodies.find(...)` is four chances for the rail to list one
+ *    planet's moons under another planet's ladder.
+ *  ⛔ THE TWO SOURCES ARE JOINED HERE AND NOWHERE ELSE. The NAME is the `D.bodies` moon row — the
+ *    rail's own spelling, which AC-7 made the rule for every label on this screen — and the ORBIT,
+ *    the PHASE and the RADIUS are `D.sys.planets[i].moons[m]`, the generator's own numbers, which
+ *    `buildBodies` does not copy across (a moon row's `au` is its PARENT's AU, by design:
+ *    state.js's own note). `mIdx` is the correspondence between them.
+ *  ⛔ `sqrt(orbitRadiusEarth)` AND THE `10 + m * 8` FALLBACK ARE LEGACY'S OWN (`:3327`), so the
+ *    ordering of the moons on both pictures is the ordering legacy drew.
+ *  ⚠ `startAngle` IS READ WITH `Number.isFinite`, NOT WITH LEGACY'S `||` — a moon whose phase is
+ *    exactly 0 is at a real angle, and `||` would move it to `m * 2.4`. That is a departure in the
+ *    PICTURE, which each design draws in its own language; the fallback for an ABSENT angle is
+ *    legacy's own number.
+ *  ⛔ AND IT ANSWERS `null` FOR A PLANET WITH NO MOONS, so a sub-view can never be painted with
+ *    nothing in it — the same state the DRIVER refuses to enter (SEAM: `moons > 0`), stated twice
+ *    because the paint has to stand up on the lab page, which has no driver.
+ *  Deliberate non-goals · no caching (it is a find over ~40 rows, once per painter per frame), no
+ *    writing to `S` (the DRIVER owns every transition), and no opinion about the SELECTION — that
+ *    is `D.selBody`'s, and each design tests it where it frames or names something. */
+function sysDetail() {
+  if (!D.bodies || S.sysView !== 'planet') return null;
+  const pi = Number.isFinite(S.detailPlanet) ? (S.detailPlanet | 0) : -1;
+  if (pi < 0) return null;
+  const parent = D.bodies.find((b) => b && b.kind === 'planet' && b.pIdx === pi) || null;
+  if (!parent) return null;
+  const src = ((((D.sys && D.sys.planets) || [])[pi] || {}).moons) || [];
+  const moons = D.bodies.filter((b) => b && b.kind === 'moon' && b.pIdx === pi)
+    .sort((a, b) => (a.mIdx | 0) - (b.mIdx | 0))
+    .map((row) => {
+      const j = row.mIdx | 0, m = src[j] || {};
+      const rE = Number(m.radiusEarth);
+      const orbitR = Number(m.orbitRadiusEarth) || (10 + j * 8);      // legacy's own fallback, :3327
+      return { row, mIdx: j, orbitR, orbit: Math.sqrt(orbitR),
+               ang: Number.isFinite(m.startAngle) ? m.startAngle : j * 2.4,   // legacy's own, :3341
+               type: String(m.type || row.cls || 'MOON').toUpperCase(),
+               rE: Number.isFinite(rE) ? rE : (Number(row.rE) || 0) };
+    });
+  if (!moons.length) return null;
+  // ⛔ ORDERED BY ORBIT RADIUS, NOT BY THE GENERATOR'S INDEX, AND THE LADDER IS WHY — MEASURED.
+  //    `ladderAxis` is a SEPARATION pass over a list it assumes is ascending (`d1LadderOrder` hands
+  //    it AU order); fed the generator's order it pushes every out-of-order stop 8 texels right of
+  //    the one before, so on the four-moon fixture the axis ran 242 texels into a 226-texel window
+  //    and the outermost moon was culled off the glass. Sorting here also puts design 2's rings in
+  //    inner-to-outer draw order, which is the order legacy draws them in. `mIdx` breaks the tie, so
+  //    two moons on the same orbit keep the generator's order between them.
+  moons.sort((a, b) => (a.orbitR - b.orbitR) || (a.mIdx - b.mIdx));
+  return { pIdx: pi, parent, moons };
+}
+/** The moon currently selected inside `det`, or `null`. ⛔ `D.selBody` is the `D.bodies` moon ROW
+ *  (state.js resolves `{type:'moon', planetIndex, moonIndex}` to it), so the test is on `kind` and
+ *  the two indices — never on the shape of the object, and never on identity with `row`, because a
+ *  re-`refresh()` rebuilds the rows. */
+function selMoonOf(det) {
+  const b = D.selBody;
+  if (!det || !b || b.kind !== 'moon' || b.pIdx !== det.pIdx) return null;
+  return det.moons.find((m) => m.mIdx === (b.mIdx | 0)) || null;
+}
+/*  Function · the virtual axis BOTH of design 1's ladders stand on: the separated stop positions,
+ *    how far the axis runs past the window, and the true-position projector the habitable band uses.
+ *  Intent · AC-4 gives this design a SECOND ladder (the moons of one planet), and `S.ladderStops` /
+ *    `S.ladderMax` are what the DRIVER's scroll control inverts. Two spellings of the separation
+ *    pass would be two ladders that scroll by different rules off one set of keys.
+ *  ⛔ LIFTED VERBATIM OUT OF `d1Ladder` — the `4 +` margin on both ends, the 8-texel minimum
+ *    separation, the unbounded run and the `+ 4` (not `+ 8`) at the end are all ITS measurements and
+ *    its comments explain each one; nothing here is new arithmetic.
+ *  Deliberate non-goals · it draws nothing and publishes nothing; the caller publishes what it drew. */
+function ladderAxis(values, winW) {
+  const vMaxV = Math.max(1e-3, ...values, 1e-3);
+  const vpx = (v) => Math.round(4 + (winW - 8) * Math.sqrt(Math.max(0, v) / vMaxV));
+  const vx = [];
+  let lastV = -99;
+  for (const v of values) { let p = vpx(v); if (p - lastV < 8) p = lastV + 8; lastV = p; vx.push(p); }
+  const vMax = (vx.length ? vx[vx.length - 1] : 0) + 4;
+  return { vpx, vx, maxScroll: Math.max(0, vMax - winW) };
+}
+/** A moon's tag on design 1: its parent's own ladder letter plus a lower-case ordinal — `Cb`, `Cc`.
+ *  ⚠ THE SHIPPED FACE HAS NO LOWER CASE (`PixelText.glyphFor` falls back to the upper-case glyph),
+ *    so what lands on the glass is `CB`. The string keeps the case the seam specified because the
+ *    tag is still exactly one per body and still unique, and a face that authors lower case renders
+ *    it as intended with no edit here. */
+const MOON_ORDS = 'bcdefghijklmnopqrstuvwxyz';
+const moonTag = (parentTag, j) => `${parentTag}${MOON_ORDS[j] || '?'}`;
+
 function d1Ladder(g, mapW, mapY, mapH) {
   // ⛔ THE ROTATABLE ORRERY IS NOT DRAWN. An ellipse at 240p is a 1-texel stroke straddling its own
   // coordinate; this design's answer is a sqrt(AU) LADDER with zero curves.
@@ -1714,19 +1838,25 @@ function d1Ladder(g, mapW, mapY, mapH) {
   // ⚠ THE HABITABLE-ZONE BAND STAYS ON TRUE AU while bodies drift right of it under separation.
   // That mismatch is inherited, not introduced — it is what the pass has always done — and it is
   // more visible now that you can scroll along the axis. Logged, not fixed here.
+  // ⭐ AC-4 (restorations) — AND WHEN A PLANET IS OPEN THIS PANE IS ITS MOONS' LADDER INSTEAD.
+  //    `sysDetail()` answers `null` for every frame that is not in the sub-view, so the whole-system
+  //    ladder below is reached by exactly the path it always was and is byte-identical there.
+  const det = sysDetail();
+  if (det) { d1MoonLadder(g, mapW, mapY, mapH, det); return; }
   const axisY = Math.round(mapY + mapH * 0.62);
   const x0 = 8, x1 = mapW - 10;
   const winW = x1 - x0 - 8;
   rect(g, x0, axisY, x1 - x0, 1, INK.RULE);
   const shown = d1LadderOrder();          // AC-20 — the one ordering, by AU; see `d1LadderOrder`
   const tagOf = d1BodyTagger(shown);
-  const auMax = Math.max(1e-3, ...shown.map((b) => b.au), 1e-3);
 
   // ── THE VIRTUAL AXIS ─────────────────────────────────────────────────────────────────────────
-  const vpx = (au) => Math.round(4 + (winW - 8) * Math.sqrt(Math.max(0, au) / auMax));
-  const vx = [];
-  let lastV = -99;
-  for (const b of shown) { let v = vpx(b.au); if (v - lastV < 8) v = lastV + 8; lastV = v; vx.push(v); }
+  // ⭐ AC-4 — THE PASS ITSELF MOVED INTO `ladderAxis`, AND NOT ONE TEXEL WITH IT. The moon sub-view
+  //    is a second ladder that the same `,` / `.` keys and the same `...` caps scroll, and
+  //    `S.ladderStops` / `S.ladderMax` are what the DRIVER's control inverts — so the separation
+  //    pass has to have ONE spelling or the two pictures scroll by different rules off one key.
+  //    Same expressions, same order, same `Math.max(1e-3, ...values, 1e-3)`; see its header.
+  const { vpx, vx, maxScroll } = ladderAxis(shown.map((b) => b.au), winW);
   // ⛔⛔ `+ 4`, NOT `+ 8` — AND THE 8 MADE EVERY LADDER OVERFLOW BY EXACTLY FOUR TEXELS. `vpx` already
   //    carries the axis's 4-texel margin on BOTH ends (`4 + (winW - 8) * …` runs 4 .. winW - 4), so
   //    the furthest body always lands at `winW - 4` and the right margin it needs is the same 4 the
@@ -1744,8 +1874,6 @@ function d1Ladder(g, mapW, mapY, mapH) {
   //   417x240: Sol's 15 stops end at 222 against a 226-texel window, so no cap and no counter are
   //   drawn on Sol, and the counter appears on a denser system or a narrower buffer (227 wide:
   //   `maxScroll` 21). The counter is a control for the ladders that need it, which Sol is not.
-  const vMax = (vx.length ? vx[vx.length - 1] : 0) + 4;
-  const maxScroll = Math.max(0, vMax - winW);
   const scroll = Math.max(0, Math.min(maxScroll, Math.round(S.ladderScroll || 0)));
   // ⭐ PUBLISHED FOR THE SCROLL CONTROL, so the thing that moves the window and the thing that draws
   // it cannot disagree about where the stops are. Same principle as `region()`: it comes OUT of the
@@ -1884,6 +2012,108 @@ function d1Ladder(g, mapW, mapY, mapH) {
   S.bodyHits = hits;
 }
 
+/*  Function · AC-4 — design 1's PLANET DETAIL, drawn in this design's own language: the same
+ *    scrolling ladder, with the open planet at its head and its moons at stops by orbit radius.
+ *  Intent · page item 16, Max's ruling *"yes — a design-side sub-view, not a switch back to the old
+ *    one."* The audit's sentence: *"Moons cannot be seen on their orbits or chosen as burn
+ *    targets; a pip click selects the parent."* Legacy answers with an in-scene orrery of moons
+ *    (`_renderPlanetDetail`, NavComputer.js:3256-3537) and that is the CONTENT spec — every moon on
+ *    its orbit, named, the selected one framed, a burn armed — but not the PICTURE spec: this design
+ *    draws no curves at all (see `d1Ladder`'s header), so the moons stand on a ladder.
+ *  ⛔ IT IS THE SAME AXIS, NOT A SECOND ONE. `ladderAxis` is `d1Ladder`'s own separation pass, so
+ *    `S.ladderStops` / `S.ladderMax` / `S.ladderScroll` mean exactly what they mean on the
+ *    whole-system ladder and the `,` / `.` keys and the `...` caps work here for free.
+ *  ⛔ THE MOON HITS CARRY THEIR OWN IDENTITY, WHICH IS THE HALF THAT MAKES A MOON A BURN TARGET.
+ *    In the whole-system picture a moon pip is published with its PARENT in `ref` and collapses to
+ *    the parent downstream (`bodyIdentity`) — that is the defect item 16 names. Here each moon's
+ *    `ref` IS the moon's own `D.bodies` row, and the entry additionally carries the explicit
+ *    `{ type:'moon', planetIndex, moonIndex, row }` the seam fixed, so the DRIVER can select the
+ *    moon without inferring anything from the shape of `ref`.
+ *  ⛔ THE SHIP AND ITS TRAJECTORY ARE SUPPRESSED (the seam's PAINT row). `D.ship` names a body in the
+ *    SYSTEM's frame — a planet index and a moon index — and this axis is measured in a planet's own
+ *    moon-orbit radii; a diamond placed from `hits` here would stand on whatever moon happened to
+ *    share the ship's index, which is a mark that lies rather than a mark that is missing.
+ *  ⛔ AND NO `INK.YOU` MARK ON THE HEAD. On the whole-system ladder the 3x3 at virtual 0 sits on the
+ *    system's star; here virtual 0 is a planet, and `YOU` is the ink this glass reserves for where
+ *    the pilot is.
+ *  Deliberate non-goals · no habitable band (it is an AU band about the star), no moon pips under a
+ *    moon, no second tag, no re-ordering (orbit radius outward, legacy's own `sqrt` order). */
+function d1MoonLadder(g, mapW, mapY, mapH, det) {
+  const axisY = Math.round(mapY + mapH * 0.62);
+  const x0 = 8, x1 = mapW - 10;
+  const winW = x1 - x0 - 8;
+  rect(g, x0, axisY, x1 - x0, 1, INK.RULE);
+  // ⭐ THE HEAD IS VIRTUAL 0 AND THE MOONS ARE THEIR OWN ORBIT RADII, so the parent sits where the
+  //    star sits on the other ladder and the axis reads outward from it exactly as that one does.
+  // ⛔ THE RAW ORBIT RADIUS, NOT ITS SQUARE ROOT. `ladderAxis` takes the root itself (it is the AU
+  //    ladder's own `sqrt(au)` compression), so handing it `det.moons[].orbit` — already a root for
+  //    design 2's rings — would put these stops on a FOURTH root and bunch the outer moons.
+  const { vx, maxScroll } = ladderAxis([0, ...det.moons.map((m) => m.orbitR)], winW);
+  const scroll = Math.max(0, Math.min(maxScroll, Math.round(S.ladderScroll || 0)));
+  S.ladderStops = vx; S.ladderMax = maxScroll; S.ladderScroll = scroll;
+  S.ladderCaps = { axisY, x0, x1 };
+  const sx = (v) => x0 + 4 + v - scroll;
+  const vis = (px) => px >= x0 && px <= x1;
+  const hits = [];
+  const nameQ = [], tagPlates = [];
+  const parentTag = d1BodyTagger()(det.parent);
+  const selM = selMoonOf(det);
+  // ── THE OPEN PLANET, AT THE HEAD ─────────────────────────────────────────────────────────────
+  const hx = sx(vx[0]);
+  if (vis(hx)) {
+    sprite(g, hx, axisY, det.parent.rE > 4 ? SP.giant5 : SP.terr3, INK.KEY);
+    if (det.parent.rings) rect(g, Math.max(x0, hx - 4), axisY, Math.min(9, x1 - hx + 4), 1, INK.DIM);
+    hits.push({ x: hx, y: axisY, r: 4, ref: det.parent, moon: -1, star: false });
+    if (D.selBody === det.parent) frame(g, hx - 4, axisY - 4, 9, 9, INK.TARGET);
+    const tw = T(g, parentTag, hx - 2, axisY + 8,
+                 { color: INK.KEY, rgn: 'map', what: 'moon ladder tag ' + parentTag });
+    nameQ.push({ b: det.parent, x: hx, tag: parentTag });
+    tagPlates.push({ x: Math.round(hx - 2) - 2, y: axisY + 8, w: tw + 4 });
+  }
+  // ── THE MOONS ────────────────────────────────────────────────────────────────────────────────
+  det.moons.forEach((m, i) => {
+    const mx = sx(vx[i + 1]);
+    if (!vis(mx)) return;
+    const sel = selM === m;
+    sprite(g, mx, axisY, SP.moon3, sel ? INK.TARGET : INK.BODY);
+    // ⭐ THE ENTRY THE DRIVER READS. `ref` is the MOON's row (so `bodyIdentity` sees `kind:'moon'`
+    //    with a real `pIdx`/`mIdx`), `moon` is its index (so the mark list's existing shape is
+    //    unchanged), and the four explicit fields are the seam's own — a pick that says what it is
+    //    rather than one that has to be inferred from the shape of `ref`.
+    hits.push({ x: mx, y: axisY, r: 4, ref: m.row, moon: m.mIdx, star: false,
+                type: 'moon', planetIndex: det.pIdx, moonIndex: m.mIdx, row: m.row });
+    if (sel) frame(g, mx - 4, axisY - 4, 9, 9, INK.TARGET);
+    const tag = moonTag(parentTag, m.mIdx);
+    const tw = T(g, tag, mx - 2, axisY + 8,
+                 { color: sel ? INK.KEY : INK.DIM, rgn: 'map', what: 'moon ladder tag ' + tag });
+    nameQ.push({ b: m.row, x: mx, tag });
+    tagPlates.push({ x: Math.round(mx - 2) - 2, y: axisY + 8, w: tw + 4 });
+  });
+  // ── THE CAPS AND THE COUNTER, `d1Ladder`'s own rules ─────────────────────────────────────────
+  if (scroll > 0)         for (let k = 0; k < 3; k++) rect(g, x0 + k * 2, axisY, 1, 1, INK.KEY);
+  if (scroll < maxScroll) for (let k = 0; k < 3; k++) rect(g, x1 - 5 + k * 2, axisY, 1, 1, INK.KEY);
+  const first = vx.findIndex((v) => sx(v) >= x0);
+  const lastI = vx.reduce((acc, v, i2) => (sx(v) <= x1 ? i2 : acc), -1);
+  S.ladderVisible = [first, lastI];
+  if (maxScroll > 0) {
+    const cStr = `${first + 1}-${lastI + 1} OF ${vx.length}`;
+    const cW = T(g, cStr, x1 - 4, axisY + 16,
+                 { color: INK.DIM, align: 'right', rgn: 'map', what: 'moon ladder window' });
+    S.ladderCounterRect = { x: x1 - 4 - cW, y: axisY + 16, w: cW, h: FACE.h };
+  }
+  // ── THE NAMES, placed by `placeLabel` against the finished mark list — AC-7's rule, unchanged ──
+  const taken = tagPlates.slice();
+  for (const q of bodyLabelOrder(nameQ)) {
+    const txt = fit(bodyLabelText(q.b), mapW - 8);
+    if (!txt) continue;
+    const pos = placeLabel(taken, hits, q.x, axisY, 4, -14, measurePixelText(txt), REGIONS.map, q.b);
+    if (!pos) continue;
+    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
+                                 'map', 'moon ladder name ' + txt), ref: q.b, kind: 'body' });
+  }
+  S.bodyHits = hits;
+}
+
 function d1Rail(g, x, y, w, cols, rowCount) {
   const LEAD = FACE.h + 1;
   // ⭐ THE DRAWN SEARCH TAKES THE RAIL, BECAUSE THE RAIL IS WHERE THIS DESIGN ALREADY PUTS A RANKED
@@ -1893,9 +2123,13 @@ function d1Rail(g, x, y, w, cols, rowCount) {
   //    picker would resolve against are not on the glass, and a picker reading last frame's grid
   //    would drill a sector the pilot cannot see.
   if (S.search.open) { d1Search(g, x, y, w, cols, rowCount); return; }
-  const hdr = ['SECTORS', 'TILES', 'TILES', 'STARS', 'BODIES'][S.level];
+  // ⭐ AC-4 (restorations) — THE ONE READ OF THE SUB-VIEW, AND EVERY BRANCH BELOW HANGS OFF IT.
+  //    `null` at levels 0-3 and in the whole-system picture, so this rail is byte-identical there.
+  const detPlanet = S.level === 4 ? sysDetail() : null;
+  const hdr = detPlanet ? 'MOONS' : ['SECTORS', 'TILES', 'TILES', 'STARS', 'BODIES'][S.level];
   T(g, hdr, x, y, { color: INK.KEY, rgn: 'rail', what: 'rail header' });
-  const cnt = [String(D.sectorRows.length), '64', '256', `${D.starRows.filter(s=>s.isReal).length}/${fmtK(D.stars.length)}`,
+  const cnt = detPlanet ? String(detPlanet.moons.length)
+            : [String(D.sectorRows.length), '64', '256', `${D.starRows.filter(s=>s.isReal).length}/${fmtK(D.stars.length)}`,
                String(D.bodies.length)][S.level];
   T(g, cnt, x + w, y, { color: INK.DIM, align: 'right', rgn: 'rail', what: 'rail count' });
   rect(g, x, y + LEAD - 1, w, 1, INK.RULE);
@@ -1916,7 +2150,8 @@ function d1Rail(g, x, y, w, cols, rowCount) {
   // picker cannot come apart. Exactly the `S.ladderScroll` / `S.ladderStops` split, one level up.
   // ⛔ AT OFFSET 0 EVERY SLICE BELOW IS `slice(0, listRows)` EXACTLY AS IT ALWAYS WAS, and the label
   //    reads `1-N OF T` exactly as it always did — nothing moves until a key is pressed.
-  const total = [D.sectorRows.length, 64, 256, D.starRows.length, D.bodies.length][S.level];
+  const total = detPlanet ? 1 + detPlanet.moons.length
+              : [D.sectorRows.length, 64, 256, D.starRows.length, D.bodies.length][S.level];
   const off = Math.max(0, Math.min(Math.max(0, total - listRows), S.listOffset | 0));
   S.listOffset = off;   // clamped here too, so a stale offset cannot page off the end of the data
   const detail = [];
@@ -2005,6 +2240,48 @@ function d1Rail(g, x, y, w, cols, rowCount) {
       [`PLANE  ${((s.wy - D.player.y) * 1000).toFixed(0)} PC`, INK.BODY],
       [`COMPS  ${s.mult > 1 ? 'MULTIPLE (' + s.mult + ')' : 'SINGLE'}`, INK.BODY],
       ['WARP ARMED', INK.TARGET]);
+  } else if (detPlanet) {
+    /*  Function · AC-4 — the rail while a planet is open: the planet, then its moons, and the
+     *    detail block showing whichever of them is selected.
+     *  Intent · page item 16. Legacy's planet detail prints a header of `<name> · <type> · <R⊕> ·
+     *    <AU> · <n> moons` and a `moon.type` label under each moon (NavComputer.js:3495/3364); this
+     *    rail is 25 characters wide, so the same facts become a ROW per moon and a block for the one
+     *    selected — the split `d1Rail` already makes at every other level.
+     *  ⛔ THE ROW CARRIES THE LADDER'S OWN TAG (`Cb`), because AC-20's rule — the picture and the
+     *    list must call the same body the same thing — is exactly as load-bearing one level down.
+     *  ⛔ AND THE ORBIT IS IN EARTH RADII, NOT AU. Every moon of one planet has the SAME AU (its
+     *    parent's, by construction in `buildBodies`), so an AU column here would print one number
+     *    four times over; `orbitRadiusEarth` is the number that tells two moons apart and it is the
+     *    one legacy's own sub-view scales its picture by.
+     *  Deliberate non-goals · no temperature column (a moon row's `T` is the generator's, often
+     *    absent, and the type says more per character), no habitability, no pips. */
+    // ⛔ THE ROWS THIS BRANCH DRAWS ARE PUBLISHED, because they are NOT a slice of `D.bodies` — they
+    //    are the open planet followed by its own moons, in the LADDER's order. `pickFromRow`
+    //    (index.js:496) indexes `D.bodies` directly at level 4, so without this every row here
+    //    resolves to a different body. Same split as `S.railTiles`: the paint publishes what it
+    //    actually drew, index-aligned with the drawn rows, and the picker reads the paint. Cleared
+    //    to `null` at the head of both designs, so the whole-system list never offers stale rows.
+    const ptag = d1BodyTagger()(detPlanet.parent);
+    const rows = [{ b: detPlanet.parent, tag: ptag, orbit: '—', type: String(detPlanet.parent.cls || '').toUpperCase() },
+      ...detPlanet.moons.map((m) => ({ b: m.row, tag: moonTag(ptag, m.mIdx),
+                                       orbit: String(Math.round(m.orbitR)), type: m.type }))];
+    S.railBodies = rows.slice(off, off + listRows).map((r) => r.b);
+    lines = rows.slice(off, off + listRows).map((r) => ({
+      txt: `${pad(r.tag, 3)}${pad(String(r.b.name || '—').toUpperCase(), cols - 14)} ` +
+           `${rpad(r.orbit, 4)} ${pad(r.type, 5)}`,
+      bar: 0, sel: r.b === D.selBody }));
+    const sm = selMoonOf(detPlanet);
+    if (sm) detail.push([fit(String(sm.row.name || '—').toUpperCase(), w), INK.KEY],
+      [fit(sm.type, w), INK.BODY],
+      [`RADIUS ${sm.rE ? sm.rE.toFixed(2) + ' EARTH' : '—'}`, INK.BODY],
+      [`ORBIT  ${Math.round(sm.orbitR)} R⊕`, INK.BODY],
+      [fit(`MOON OF ${String(detPlanet.parent.name || '—').toUpperCase()}`, w), INK.DIM]);
+    else detail.push([fit(String(detPlanet.parent.name || '—').toUpperCase(), w), INK.KEY],
+      [String(detPlanet.parent.cls || '').toUpperCase(), INK.BODY],
+      [`RADIUS ${detPlanet.parent.rE ? detPlanet.parent.rE.toFixed(2) + ' EARTH' : '—'}`, INK.BODY],
+      [`ORBIT  ${(detPlanet.parent.au ?? 0).toFixed(2)} AU`, INK.BODY],
+      [`MOONS  ${detPlanet.moons.length}`, INK.BODY],
+      ['SELECT A MOON', INK.DIM]);
   } else {
     // ⭐ AC-20 — THE TAG COMES OFF THE LADDER'S ORDERING, NOT OFF THIS ROW'S POSITION. `off + i` is
     // where the body sits in a list the pilot can re-sort and page; the letter has to name where it
@@ -2626,8 +2903,31 @@ function calloutLines(hv) {
              `${n} PLANET${n === 1 ? '' : 'S'}`);
     return out;
   }
-  // A PLANET — and a moon pip has already collapsed to its parent upstream (SEAM §1), so this is
-  // the only body branch left. `row` is the `D.bodies` row the same click would select.
+  /*  Function · AC-4's half of AC-1 — the callout over a MOON, which only the sub-view can produce.
+   *  Intent · the seam's HOVER row: inside the sub-view a moon IS the pick, so `S.hover` carries
+   *    `kind:'body'` with `ref.type === 'moon'` and the plate has to name the moon rather than the
+   *    planet it orbits. Legacy's own moon tooltip is name, `moon.type` and `R⊕`
+   *    (NavComputer.js:3370-3378); the orbit is added because it is the one number that tells two
+   *    moons of one planet apart, and it is what both designs draw this picture from.
+   *  ⛔ THE FACTS COME OFF `D.sys.planets[i].moons[j]`, NOT OFF THE ROW. `buildBodies` gives a moon
+   *    row its PARENT's `au` and no orbit radius at all (state.js's own note), so a callout built
+   *    from the row would print the planet's distance from the star under the moon's name.
+   *  ⚠ THE ROW STILL OWNS THE NAME, because AC-7's rule is that the rail and the picture spell a
+   *    body the same way. */
+  if (r.type === 'moon') {
+    const src = ((((D.sys && D.sys.planets) || [])[r.planetIndex] || {}).moons) || [];
+    const m = src[r.moonIndex] || {};
+    const out = [(row && row.name) || `MOON ${(r.moonIndex | 0) + 1}`,
+                 String(m.type || (row && row.cls) || 'MOON')];
+    const rE = Number.isFinite(m.radiusEarth) ? m.radiusEarth : Number(row && row.rE);
+    if (Number.isFinite(rE)) out.push(`${rE.toFixed(2)} R⊕`);
+    const orb = Number(m.orbitRadiusEarth);
+    if (Number.isFinite(orb) && orb > 0) out.push(`ORBIT ${Math.round(orb)} R⊕`);
+    return out;
+  }
+  // A PLANET — and in the WHOLE-SYSTEM picture a moon pip has already collapsed to its parent
+  // upstream (SEAM §1; inside the sub-view it does not, which is the branch above), so this is the
+  // only body branch left. `row` is the `D.bodies` row the same click would select.
   if (!row) return [];
   const out = [row.name || '—'];
   out.push(`${row.cls || ''}${Number.isFinite(row.rE) ? ` · ${row.rE.toFixed(1)} R⊕` : ''}`);
@@ -2671,6 +2971,10 @@ function drawDesign2(g, W, H) {
   // ⚠ Measured redundant one by one and load-bearing as a set — see the note on `drawDesign1`'s.
   S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null; S.hoverCalloutRect = null;
   S.pagerRect = null; S.ladderCounterRect = null;
+  // ⛔ AC-4's ROW LIST ON THE SAME RULE. `S.railBodies` is published only by the SUB-VIEW's rail
+  //    branch, so without a clear here the rows of a planet the pilot left would stay on offer under
+  //    the whole-system list — geometry out of nobody's paint, which is the defect this block names.
+  S.railBodies = null;
   if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
   else if (S.level === 3) d2Prism(g, W, mapY, mapH);
   else d2System(g, W, mapY, mapH);
@@ -2860,6 +3164,29 @@ function d2Status(avail = Infinity) {
     if (S.list) return ['LIST', `NEAREST ${D.starRows.length}`, 'L=MAP', d2SortHint(), '- = PAGE'];
     const pn = prismNumbers();
     return ['PRISM', pn.view, pn.height, pn.region];
+  }
+  /*  Function · AC-4 — the bar while a planet is open.
+   *  Intent · page item 16. This bar is the only place design 2 says anything, so the sub-view's
+   *    subject (which planet) and its way OUT have to be here or neither exists for the pilot
+   *    — legacy's own sub-view spends half its hint row on `CLICK EMPTY SPACE TO GO BACK` (:3533).
+   *  ⛔⛔ AND THE WAY OUT IT NAMES IS THE RIGHT-CLICK, NOT Esc — see `drawDesign1`'s hint block for
+   *    the measurement. The Escape key never reaches this class; it closes the whole overlay
+   *    (`main.js:13557`, Max's 2026-07-29 ruling). Right-click reaches `drv.onEscape()` through the
+   *    canvas's `contextmenu` listener, and an empty-map click exits too.
+   *  ⛔ THE MOON'S FACTS REPLACE THE PLANET'S ONCE ONE IS PICKED, rather than being added to them:
+   *    the bar is 60 characters and the chip two texels to its right already reads BURN or WARP for
+   *    whatever is armed. `RIGHT CLICK BACK` is the last clause because ` · `-joined truncation eats
+   *    from the right — and it is the one clause that must never be eaten, so every form here is
+   *    measured short (the longest, a named moon with all four facts, is 58 characters).
+   *  ⚠ THE ORBIT IS IN EARTH RADII — see `d1Rail`'s sub-view branch for why AU would print one
+   *    number over and over. */
+  const det = sysDetail();
+  if (det) {
+    const sm = selMoonOf(det);
+    if (sm) return [String(sm.row.name || '—').toUpperCase(), sm.type,
+                    `${sm.rE.toFixed(2)} R⊕`, `ORBIT ${Math.round(sm.orbitR)} R⊕`, 'RIGHT CLICK BACK'];
+    const n = det.moons.length;
+    return [String(det.parent.name || '—').toUpperCase(), `${n} MOON${n === 1 ? '' : 'S'}`, 'RIGHT CLICK BACK'];
   }
   const b = D.selBody;
   // ⭐ AC-2 — THREE STATES, NOT ONE. `null` already had its clause pair and was unreachable until
@@ -3183,6 +3510,10 @@ function d2Search(g, W, mapY, mapH) {
 }
 
 function d2System(g, W, mapY, mapH) {
+  // ⭐ AC-4 (restorations) — A PLANET IS OPEN, SO THE SKY IS ITS MOONS' ORRERY. `sysDetail()` is
+  //    `null` for every whole-system frame, so the picture below is reached exactly as it was.
+  const det = sysDetail();
+  if (det) { d2MoonSystem(g, W, mapY, mapH, det); return; }
   const cxp = Math.round(W / 2), cyp = Math.round(mapY + mapH / 2);
   const tagsTaken = [], tagQueue = [];
   const hits = [];
@@ -3431,6 +3762,104 @@ function d2System(g, W, mapY, mapH) {
   //   CLEARS the selection, so the parent is the live walk and `{type:'moon'}` is a dead click.
   // ⚠ A BELT GETS AN ENTRY TOO, so the picker can RECOGNISE one and return no pick, rather than
   //   silently leaving whatever was selected before under a click that clearly meant the belt.
+  S.bodyHits = hits;
+}
+/*  Function · AC-4 — design 2's PLANET DETAIL: the open planet at the centre of the pane with each
+ *    of its moons on its own ring, at its own phase, named, and the selected one framed.
+ *  Intent · page item 16, Max's ruling *"yes — a design-side sub-view, not a switch back to the old
+ *    one."* Legacy draws exactly this picture (`_renderPlanetDetail`, NavComputer.js:3256-3537) in
+ *    arcs and alpha on a 1560-wide vector canvas; this is the same CONTENT in this design's own
+ *    vocabulary — dotted ellipses, sprites and knockout plates, at 240p with no curves and no alpha.
+ *  ⛔ IT IS `d2System`'S OWN CAMERA, NOT A SECOND ONE: the same `rotX` / `rotY` off `S.sysCam`, the
+ *    same `maxR` budget, the same `zoom`, the same clipped primitives and the same `onPane` cull. A
+ *    drag turns this picture exactly as it turns the system's, and AC-6's wheel and gauge still work
+ *    — which is the seam's own rule that the zoom gauge STAYS in the sub-view.
+ *  ⛔ THE RADIUS IS THE MOON'S ORBIT IN EARTH RADII, LINEAR IN `sqrt` SPACE — legacy's own scale
+ *    (`projScale = (viewSize/2) / sqrt(maxMoonR * 1.3)`, `:3284`), so two moons keep the spacing
+ *    legacy gave them. `det.moons[].orbit` is that square root, taken once in `sysDetail`.
+ *  ⛔ AND THE PHASE IS THE MOON'S `startAngle`, NOT ITS PARENT'S. `buildBodies` gives a moon ROW its
+ *    parent's angle on purpose (a moon row is placed on the STAR's ring in the whole-system picture,
+ *    where its own phase has no meaning) — here the frame IS the planet, so the moon's own phase is
+ *    the only honest one, and it is read from `D.sys` rather than from the row.
+ *  ⛔ NO ORBIT-RING PICKS (`S.orbitRings = []`). An empty-map click is this sub-view's way OUT (the
+ *    seam's INSIDE row), and legacy's own planet detail says so on its hint row; a moon's thin ring
+ *    answering a click would take that exit away from most of the pane.
+ *  ⛔ THE SHIP AND ITS TRAJECTORY ARE SUPPRESSED — see `d1MoonLadder`'s header for why a diamond
+ *    placed from these hits would be a mark that lies.
+ *  Deliberate non-goals · no companion strip (it names a star, not a moon), no habitability crosses
+ *    on a moon, no pip strip under a moon, and no second picture for the parent's rings. */
+function d2MoonSystem(g, W, mapY, mapH, det) {
+  const cxp = Math.round(W / 2), cyp = Math.round(mapY + mapH / 2);
+  const tagsTaken = [], tagQueue = [];
+  const hits = [];
+  const sc = S.sysCam || {};
+  const sysRotX = sc.rotX === undefined ? SYS_ROTX0 : sc.rotX;
+  const sysRotY = sc.rotY === undefined ? SYS_ROTY0 : sc.rotY;
+  const TILT = Math.sin(sysRotX);
+  const maxR = Math.min(W / 2 - 8, (mapH / 2 - 4) / Math.max(TILT, SYS_MIN_SIN));
+  const zoom = (sc && Number.isFinite(sc.zoom) && sc.zoom > 0) ? sc.zoom : 1;
+  const oMax = Math.max(1e-3, ...det.moons.map((m) => m.orbit));
+  const rOf = (o) => (8 + (maxR - 8) * (Math.max(0, o) / oMax)) * zoom;
+  const pane = REGIONS.map;
+  const onPane = (px, py) => !pane || (px >= pane.x && px < pane.x + pane.w && py >= pane.y && py < pane.y + pane.h);
+  S.orbitRings = [];
+  const selM = selMoonOf(det);
+  // ── THE MOON ORBITS, UNDER EVERYTHING ────────────────────────────────────────────────────────
+  for (const m of det.moons) {
+    const r = rOf(m.orbit);
+    dottedEllipse(g, cxp, cyp, r, r * TILT, INK.RULE, 3, pane);
+    const rb = clipBox(cxp - r, cyp - r * TILT, 2 * r, 2 * r * TILT, pane);
+    if (rb.w > 0 && rb.h > 0) assertMark('moon orbit ' + m.row.name, 'map', rb.x, rb.y, rb.w, rb.h);
+  }
+  // ── THE OPEN PLANET, AT THE CENTRE ───────────────────────────────────────────────────────────
+  const pSp = det.parent.rE > 4 ? SP.giant5 : SP.terr3;
+  spriteClip(g, cxp, cyp, pSp, INK.KEY, pane);
+  if (det.parent.rings) { rectClip(g, cxp - 3, cyp - 2, 7, 1, INK.DIM, pane); rectClip(g, cxp - 3, cyp + 2, 7, 1, INK.DIM, pane); }
+  hits.push({ x: cxp, y: cyp, r: 4, ref: det.parent, moon: -1, star: false });
+  if (D.selBody === det.parent) frameClip(g, cxp - 4, cyp - 4, 9, 9, INK.KEY, pane);
+  {
+    const g0 = det.parent.rE > 4 ? 2 : 1;
+    let l = cxp - g0, t = cyp - g0, rr = cxp + g0, bb = cyp + g0;
+    if (det.parent.rings) { l = Math.min(l, cxp - 3); rr = Math.max(rr, cxp + 3); t = Math.min(t, cyp - 2); bb = Math.max(bb, cyp + 2); }
+    if (D.selBody === det.parent) { l = cxp - 4; t = Math.min(t, cyp - 4); rr = Math.max(rr, cxp + 4); bb = Math.max(bb, cyp + 4); }
+    const mb = clipBox(l, t, rr - l + 1, bb - t + 1, pane);
+    if (mb.w > 0 && mb.h > 0) assertMark('detail planet ' + det.parent.name, 'map', mb.x, mb.y, mb.w, mb.h);
+  }
+  tagQueue.push({ b: det.parent, tag: '', x: cxp, y: cyp });
+  // ── THE MOONS ────────────────────────────────────────────────────────────────────────────────
+  det.moons.forEach((m) => {
+    const a = m.ang + sysRotY;
+    const r = rOf(m.orbit);
+    const x = Math.round(cxp + Math.cos(a) * r), y = Math.round(cyp + Math.sin(a) * r * TILT);
+    // ⭐ AC-19's rule, at this design's other draw site: a mark the camera has pushed off the pane
+    //    is neither drawn NOR published, so the picker is never offered a mark nobody can see.
+    if (!onPane(x, y)) return;
+    const sel = selM === m;
+    spriteClip(g, x, y, SP.moon3, sel ? INK.TARGET : INK.BODY, pane);
+    // ⭐ THE SEAM'S OWN HIT SHAPE — see `d1MoonLadder`'s note: `ref` is the MOON's row and the four
+    //    explicit fields say what the pick IS, so the DRIVER never infers it from `ref`.
+    hits.push({ x, y, r: 4, ref: m.row, moon: m.mIdx, star: false,
+                type: 'moon', planetIndex: det.pIdx, moonIndex: m.mIdx, row: m.row });
+    if (sel) frameClip(g, x - 4, y - 4, 9, 9, INK.TARGET, pane);
+    let l = x - 1, t = y - 1, rr = x + 1, bb = y + 1;
+    if (sel) { l = x - 4; t = y - 4; rr = x + 4; bb = y + 4; }
+    const mb = clipBox(l, t, rr - l + 1, bb - t + 1, pane);
+    if (mb.w > 0 && mb.h > 0) assertMark('moon mark ' + m.row.name, 'map', mb.x, mb.y, mb.w, mb.h);
+    tagQueue.push({ b: m.row, tag: roman(m.mIdx + 1), x, y });
+  });
+  // ── THE NAMES, wave 1b's own pass: the name in the slot, the ordinal as the fallback ─────────
+  for (const q of bodyLabelOrder(tagQueue)) {
+    const name = fit(bodyLabelText(q.b), W - 8);
+    let txt = '', pos = null;
+    if (name) { pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(name), REGIONS.map, q.b); txt = name; }
+    if (!pos && q.tag) { pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b); txt = q.tag; }
+    if (!pos || !txt) continue;
+    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
+                                 'map', 'moon label ' + txt), ref: q.b, kind: 'body' });
+  }
+  // ⭐ AC-6 — THE ZOOM GAUGE STAYS (the seam's PAINT row): the wheel and the drag still magnify this
+  //    picture, so the instrument that reports them has to be on the glass that they move.
+  zoomGauge(g, W, mapY, mapH, zoom);
   S.bodyHits = hits;
 }
 function roman(n) { return ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI'][n - 1] || String(n); }

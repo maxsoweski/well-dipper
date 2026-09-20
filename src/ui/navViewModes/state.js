@@ -398,6 +398,19 @@ export function makeViewState() {
      *  (which carry their own `_anim`/`_systemZoomAnim`), never arm it and therefore never lag. */
     levelArm: null,     // { from, tMs } | null
     railTiles: [],      // [{i,j,id,x,z,n}]             — design 1's rail rows at levels 1-2
+    /* Function · AC-4 — the D.bodies rows design 1's rail ACTUALLY DREW, when what it drew is not a
+     *   slice of `D.bodies`: in the moon sub-view it lists the open planet and then that planet's
+     *   own moons, in the ladder's orbit order.
+     * Intent · `pickFromRow` (index.js:496) indexes `D.bodies` at level 4 by `rowBase() + row`, so
+     *   without this every drawn row in the sub-view resolves to a DIFFERENT body — the same split
+     *   `railTiles` exists for at levels 1-2: the paint publishes what it drew, already sliced to
+     *   the drawn page and index-aligned with the drawn rows, and the picker reads the paint.
+     * Deliberate non-goals · not a second list model and not a general override — `null` is the
+     *   normal state and means "the rail IS a `D.bodies` page", which is every other screen. Both
+     *   designs clear it to `null` at the head of their paint (designs.js:817/2675), so a stale page
+     *   cannot outlive the frame that drew it. NOT cleared by `resetPicks`, for the reason
+     *   `listGeom` is not: it is geometry, republished by the next paint. */
+    railBodies: null,   // [D.bodies row] | null        — design 1's SUB-VIEW rail rows, as drawn
     listGeom: null,     // {x,y,rows,lead,offset,total} — design 2's list
     tabRects: null,     // [{x,y,w,h}] x5               — the DESIGN's tab strip, not the legacy one
     chipRect: null,     // {x,y,w,h}                    — the drawn commit control
@@ -432,6 +445,29 @@ export function makeViewState() {
      *   freezes the glass on the last good frame, which looks alive. */
     sysCam: { rotX: SYSTEM_ROT_X0, rotY: 0, zoom: 1 },
     view: { cx: 8, cz: 0, size: 44 },
+
+    /* Function · WHICH SYSTEM PICTURE IS ON THE GLASS at level 4, and for which planet.
+     *   `'system'` is the whole-system ladder / orrery; `'planet'` is the design-side moon sub-view,
+     *   and `detailPlanet` is the `pIdx` of the planet whose moons it is drawing (`-1` when none).
+     * Intent · AC-4 (SEAM §2), and Max's ruling on page item 16: *"a design-side sub-view, not a
+     *   switch back to the old one."* Legacy enters `_systemMode = 'planet'` and hands the screen to
+     *   `_renderPlanetDetail`; under a design that pin is deliberately skipped
+     *   (`NavComputer.js:4585/4590`, AC-3 of the close pass) and MUST STAY skipped, so the sub-view
+     *   needs a home of its own. This is it: two plain fields on `S`, owned end-to-end by the DRIVER,
+     *   read by the painters, invisible to the host.
+     * Deliberate non-goals · it is NOT a mirror of `nav._systemMode` and never writes it; it carries
+     *   no moon index (the SELECTION does, on `nav._selectedBody`); and it is not a stack — the
+     *   sub-view is one level deep, exactly as legacy's is.
+     * ⛔ NOT CLEARED BY `resetPicks()`, and that is the same line `S.pick` draws. Everything
+     *   `resetPicks` clears is published by the PAINT and is one frame's worth by construction; this
+     *   is published by a CLICK and has to outlive every frame until the pilot leaves the sub-view —
+     *   which is the entire feature. It is reset by the three things that END the picture instead:
+     *   a level change, a design change (`refresh()` below) and `onDeactivate()`.
+     * ⛔ AND BOTH NEED A DEFAULT HERE, like every other field a painter reads: the sub-view branch
+     *   runs inside `d1Ladder` / `d2System`, and `PanelHost` catches a painter throw ONCE and then
+     *   stops uploading — the glass freezes on the last good frame and still looks alive. */
+    sysView: 'system',   // 'system' | 'planet'   — level 4, both designs
+    detailPlanet: -1,    // the sub-view's planet, as a `D.bodies` row's `pIdx`
 
     /* Function · WHAT THE POINTER IS ON, published once a frame from the pick the driver has just
      *   resolved into the host's own `_hoveredTile` / `_hoveredLocalStar` / `_hoveredBody`.
@@ -516,6 +552,10 @@ export function makeViewState() {
     starsRef: null, starsLen: -1, starRowsBase: null, starSortId: null,
     sysRef: undefined, bodiesBase: null, bodySortId: null,
     level: -1,
+    /* ⭐ AC-4 (nav-restorations-2026-09-20) — WHICH DESIGN THE LAST FRAME WAS PAINTED IN, so
+     *   `refresh()` can see a `V` that landed on the OTHER design and close the moon sub-view with
+     *   it. `-1` is "no frame yet", which matches neither 1 nor 2 and so resets on the first paint. */
+    design: -1,
     nameBySeed: new Map(),
     // ⭐ AC-10 (nav-defects-batch-2026-09-18) — see `multFor`. `multGm` remembers WHICH galactic map the
     // filled values were rolled against, because a value rolled with no context is a different answer
@@ -846,6 +886,27 @@ export function makeViewState() {
     //    the glass. Cleared HERE, before the paint that reads it, and republished at the tail of the
     //    same frame by `resolveHover` if the pointer is on something at the new level.
     if (cache.level !== S.level) { cache.level = S.level; S.sortIdx = 0; S.listOffset = 0; S.hover = null; }
+    /* Function · AC-4 (SEAM §2) — THE MOON SUB-VIEW DIES WITH THE PICTURE IT IS DRAWN IN.
+     * Intent · `S.sysView` is a level-4 picture. Carrying it across a level change would reopen
+     *   SYSTEM already inside some planet's moons — a screen the pilot never asked for, with a
+     *   commit row armed for a body he cannot see — and carrying it across `V` would hand design 2
+     *   a sub-view design 1 opened, which is the "settings survive, transients do not" line
+     *   `onDeactivate()` already draws. The DESIGN half is a CHANGE test, because `render()` assigns
+     *   `S.design` before it calls this and `cache.design` is the only record of what the last frame
+     *   actually painted. The LEVEL half is an INVARIANT — "there is no sub-view anywhere but
+     *   SYSTEM" — rather than a change test, because it then holds on every frame and not only on
+     *   the one the level moved: a `S.sysView` set by anything at all outside level 4 is closed by
+     *   the next paint instead of surviving until the level happens to change again.
+     * Deliberate non-goals · it does not clear the SELECTION (leaving a system by tab has never
+     *   cleared it, and AC-4's own Esc keeps it), and it does not try to see a `V` that lands on
+     *   LEGACY: the driver has no entry point while `viewMode === null` (`NavComputer.js:1434`
+     *   calls `render()` only under a design and `:613` skips `bufferFor`), so RAIL → CURRENT → RAIL
+     *   reopens with the sub-view still up. Closing that needs one statement on the host's own `V`
+     *   clause (:349), which is the HOST lane's file, not this one. */
+    if (cache.design !== S.design) { cache.design = S.design; S.sysView = 'system'; S.detailPlanet = -1; }
+    if (S.level !== 4 && (S.sysView !== 'system' || S.detailPlanet !== -1)) {
+      S.sysView = 'system'; S.detailPlanet = -1;
+    }
     const keys = SORT_KEYS[S.level] || [];
     if (keys.length) S.sortIdx = Math.max(0, Math.min(keys.length - 1, S.sortIdx | 0));
     S.sortLabel = keys[S.sortIdx | 0]?.label || '';

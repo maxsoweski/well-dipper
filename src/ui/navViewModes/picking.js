@@ -371,12 +371,12 @@ export function pickBody(nav, S, x, y, mapRegion, out) {
   if (!hp) {
     const ring = pickOrbitRing(S, x, y);
     if (ring && out) { out.ref = ring.ref; out.moon = -1; out.star = false; out.x = x; out.y = y; }
-    return ring ? bodyIdentity(nav, ring.ref, -1) : null;
+    return ring ? bodyIdentity(nav, ring.ref, -1, S) : null;
   }
   if (out) { out.ref = hp.ref || null; out.moon = Number.isFinite(hp.moon) ? hp.moon : -1;
              out.star = !!hp.star; out.x = hp.x; out.y = hp.y; }
   if (hp.star) return { type: 'star', index: 0 };
-  return bodyIdentity(nav, hp.ref, hp.moon);
+  return bodyIdentity(nav, hp.ref, hp.moon, S);
 }
 
 /**
@@ -384,8 +384,22 @@ export function pickBody(nav, S, x, y, mapRegion, out) {
  * @param {object} nav
  * @param {?object} ref  a `D.bodies` row
  * @param {number} [moonIdx]  the moon's index within that body, or `-1`/undefined for the body itself
+ * @param {?object} [S]  the view state, for the design-side sub-view below. Absent ⇒ collapse.
  */
-export function bodyIdentity(nav, ref, moonIdx = -1) {
+/* Function · AC-4's HOVER row (SEAM §2) — the fourth argument, and the one clause that reads it.
+ * Intent · in the DESIGN-SIDE moon sub-view a moon IS the pick. The collapse above is right for the
+ *   whole-system picture and says so in its own note ("a moon click in that mode would CLEAR the
+ *   selection, so map it to the parent and the click drills into detail instead") — but inside the
+ *   sub-view the detail is already open, the moons are drawn on their own orbits, and a callout or a
+ *   click that named the parent would be the glass refusing the only thing on it. `S.sysView` is
+ *   what legacy's `nav._systemMode === 'planet'` is, in the place a design is allowed to keep it.
+ * Deliberate non-goals · it does NOT widen the legacy clause and it does not replace it: legacy's
+ *   own planet detail keeps answering on `_systemMode` exactly as before, byte for byte, and a
+ *   design that has not opened a sub-view keeps collapsing (SEAM: "it may keep collapsing in the
+ *   whole-system view"). It also refuses a moon of ANY OTHER planet, for the same reason the legacy
+ *   clause pins `_selectedPlanetIdx`: `_buildCommitAction` pairs `moonIndex` with a planet index,
+ *   and a foreign moon would arm a burn to a body that does not exist. */
+export function bodyIdentity(nav, ref, moonIdx = -1, S = null) {
   if (!ref || ref.kind === 'belt') return null;
   const isMoon = ref.kind === 'moon' ? true : (moonIdx != null && moonIdx >= 0);
   const pIdx = ref.pIdx;
@@ -393,6 +407,9 @@ export function bodyIdentity(nav, ref, moonIdx = -1) {
   if (!isMoon) return { type: 'planet', index: pIdx };
   const mIdx = ref.kind === 'moon' ? ref.mIdx : moonIdx;
   if (nav._systemMode === 'planet' && nav._selectedPlanetIdx === pIdx && Number.isFinite(mIdx)) {
+    return { type: 'moon', index: mIdx };
+  }
+  if (S && S.sysView === 'planet' && S.detailPlanet === pIdx && Number.isFinite(mIdx)) {
     return { type: 'moon', index: mIdx };
   }
   return { type: 'planet', index: pIdx };

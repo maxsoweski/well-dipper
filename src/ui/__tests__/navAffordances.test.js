@@ -53,7 +53,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { makeHeadlessNav, clickAt } from './helpers/headlessNav.mjs';
+import { makeHeadlessNav, makeRecordingContext, clickAt } from './helpers/headlessNav.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..');
 const DESIGNS = readFileSync(join(ROOT, 'src/ui/navViewModes/designs.js'), 'utf8');
@@ -96,6 +96,85 @@ function drillFrom(n, x, y, level) {
   clickAt(n, x, y);
   if (n._anim?.toLevel !== level + 1) return null;
   return { tile, dest: { ...n._anim.toCenter } };
+}
+
+// ── AC-4's SUB-VIEW (nav-restorations-2026-09-20, wave 2b) ────────────────────────────────────────
+//
+// Two of the phrases below are only ever on the glass while a planet's moon sub-view is open, so
+// their probes have to REACH that screen through real input before they can prove anything on it.
+// Everything here is the pilot's own walk: stand in a system with a moon-bearing planet, click the
+// planet (it selects), click it again (the sub-view opens). No field on `S` is written by hand.
+
+/** The planet these probes open — index 1, the only one in the fixture carrying moons. */
+const MOONY = 1;
+
+/**
+ * Stand the pilot ON the nearest loaded star, in a system whose planet 1 has three moons.
+ *
+ * ⛔ THE PLAYER'S OWN SYSTEM, for the reason `SELECT A BODY`'s probe gives two entries up: under a
+ *    design the foreign-system planet branch arms no selection at all, and the ENTER rule needs the
+ *    planet to BE the selection before a second click can open it.
+ */
+async function standInMoonySystem(n, mode) {
+  n.viewMode = mode;
+  n._systemStar = (n._localStars || []).reduce((m, s) => (m == null || s.dist < m.dist ? s : m), null);
+  if (!n._systemStar) return false;
+  n._playerX = n._systemStar.wx; n._playerY = n._systemStar.wy; n._playerZ = n._systemStar.wz;
+  n._systemData = {
+    star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 },
+    asteroidBelts: [{ centerRadiusAU: 3.1, widthAU: 1 }],
+    planets: [0, 1, 2].map((i) => ({
+      orbitRadiusAU: 0.6 + i * 1.8, orbitAngle: i * 0.9,
+      moons: i === MOONY ? [0, 1, 2].map((j) => ({
+        type: ['ROCK', 'ICE', 'CAPTURED'][j], radiusEarth: 0.18 + j * 0.06,
+        orbitRadiusEarth: 14 + j * 21, startAngle: j * 1.4, T_eq: 120 + j,
+      })) : [],
+      planetData: { radiusEarth: 1 + i, T_eq: 280 - i * 40, habitability: { score: 0.2 }, rings: false },
+    })),
+  };
+  n._currentSystemData = n._systemData;
+  n._levelIndex = 4;
+  n.render();
+  return true;
+}
+
+/** The paint's own mark for a whole-system body — off `S.bodyHits`, never recomputed. */
+const bodyMark = (n, pIdx) => (n._viewDriverInst.S.bodyHits || []).find(
+  (z) => z && !z.star && z.ref && z.ref.kind === 'planet' && z.ref.pIdx === pIdx && z.moon === -1);
+
+/** A moon's pip inside the open sub-view — published there with its own `type`/`moonIndex`. */
+const subViewMoon = (n, mIdx) => (n._viewDriverInst.S.bodyHits || []).find(
+  (z) => z && z.type === 'moon' && z.moonIndex === mIdx);
+
+/** Select the planet, then click it again: the driver's ENTER rule, driven. */
+function enterSubView(n, pIdx) {
+  for (let i = 0; i < 2; i++) {
+    const mk = bodyMark(n, pIdx);             // re-read between clicks: the first one repaints
+    if (!mk) return false;
+    hover(n, mk.x + 0.5, mk.y + 0.5);
+    clickAt(n, mk.x + 0.5, mk.y + 0.5);
+  }
+  n.render();
+  return n._viewDriverInst.S.sysView === 'planet' && n._viewDriverInst.S.detailPlanet === pIdx;
+}
+
+/** A nav whose canvas KEEPS the listeners the class registers on it (helpers/headlessNav.mjs gives
+ *  its own canvas a no-op `addEventListener`, so `contextmenu` is otherwise undriveable).
+ *  Same shape as navRestorations4.host.test.js:227, which drives the same route. */
+async function navWithCanvasListeners() {
+  await makeHeadlessNav({ width: 427, height: 240 });   // installs the DOM globals NavComputer reaches for
+  const listeners = new Map();
+  const canvas = {
+    width: 427, height: 240, style: {}, parentElement: null,
+    addEventListener: (type, fn) => { listeners.set(type, fn); },
+    removeEventListener: () => {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 427, height: 240, right: 427, bottom: 240 }),
+  };
+  const { ctx } = makeRecordingContext(canvas);
+  canvas.getContext = () => ctx;
+  const { NavComputer } = await import('../NavComputer.js');
+  const { GalacticMap } = await import('../../generation/GalacticMap.js');
+  return { nav: new NavComputer(canvas, new GalacticMap(), null), listeners };
 }
 
 /**
@@ -403,6 +482,57 @@ const VOCABULARY = [
         if (!n._commitAction) return false;
       }
       return true;
+    },
+  },
+  {
+    phrase: 'SELECT A MOON',
+    control: 'a moon pip in the open planet sub-view becomes the selection AND the burn target',
+    async probe() {
+      // Design 1 — the only design that draws a hint row at all. The row appears only while a
+      // planet is open, so the probe has to get there the way the pilot does: select the planet,
+      // then click it again (the driver's ENTER rule, navViewModes/index.js:1441).
+      const n = await nav({ level: 3 });
+      if (!(await standInMoonySystem(n, 'rail'))) return false;
+      if (!enterSubView(n, MOONY)) return false;
+      const pip = subViewMoon(n, 2);
+      if (!pip) return false;
+      // ⛔ CLEARED FIRST, so "the moon is selected" cannot pass on the planet selection that the
+      //    ENTER gesture itself had to leave behind.
+      n._selectedBody = null; n._commitAction = null;
+      hover(n, pip.x + 0.5, pip.y + 0.5);
+      clickAt(n, pip.x + 0.5, pip.y + 0.5);
+      const sel = n._selectedBody;
+      return !!sel && sel.type === 'moon' && sel.planetIndex === MOONY && sel.moonIndex === 2
+          && n._commitAction?.target === 'moon' && n._commitAction?.moonIndex === 2;
+    },
+  },
+  {
+    phrase: 'RIGHT CLICK BACK',
+    control: 'the right-click the canvas itself listens for leaves the sub-view and keeps the nav open',
+    async probe() {
+      // ⛔⛔ THE LIVE ROUTE, NOT ITS REACHABLE-LOOKING TWIN. `_handleClick` tests `e.button === 2`
+      //    at NavComputer.js:4488, but no browser fires a `click` event for the secondary button —
+      //    the route a real right-click takes is the canvas's own `contextmenu` listener (:336),
+      //    which calls `handleEscape()` directly. The shared harness gives its canvas an
+      //    `addEventListener` that throws the handler away, so this probe builds one that keeps it.
+      //    Without that, this phrase could only be "proved" through a path the pilot never walks.
+      const { nav: n, listeners } = await navWithCanvasListeners();
+      n._viewModesEnabled = true;
+      n._levelIndex = 3;
+      n.viewMode = 'bars';                     // design 2 draws it on the status bar
+      n.render();
+      if (!(await standInMoonySystem(n, 'bars'))) return false;
+      if (!enterSubView(n, MOONY)) return false;
+      const drv = n._viewDriverInst;
+      const ctxMenu = listeners.get('contextmenu');
+      if (!ctxMenu) return false;
+      // A right-click is a mousedown and THEN `contextmenu` at the same point — the listener's own
+      // 5-texel test measures the second against the first.
+      n._handleMouseDown({ clientX: 120.5, clientY: 110.5, button: 2 });
+      ctxMenu({ clientX: 120.5, clientY: 110.5, preventDefault() {} });
+      n._handleMouseUp();
+      return drv.S.sysView === 'system' && drv.S.detailPlanet === -1
+          && n._levelIndex === 4 && n._selectedBody?.type === 'planet';
     },
   },
   {
