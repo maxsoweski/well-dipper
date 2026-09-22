@@ -1,0 +1,66 @@
+{
+  "status": "complete",
+  "report": "Verified all 6 output files through WSL; all are non-empty.\n\n- Meshes: 2 (`Buoy_Body`, `Mast_MAIN`).\n- Triangles: 266 / 300, confirmed by GLB indices and re-import.\n- Materials: 3, all used: `hull_orange` (1, 0.5, 0.1), `band_cream` (0.88, 0.855, 0.78), `chevron_blue` (0.05, 0.1, 0.4). Metallic 0, roughness 1, alpha 1.\n- Blender dimensions: 2.200000 × 4.000000 × 2.200000 m. Bounds: X/Z ±1.1; Y −1.270632 to 2.729368 m.\n- UVs: no. Textures: 0. Smooth faces: 0. Exported cameras/lights: 0.\n- `Mast_MAIN` glTF Z range: −2.729368 to −0.779368 m; centre −1.754368 m.\n- Cap: flat 0.5 × 0.5 m square; forward space unobstructed.\n- Fresh-scene GLB re-import: dimensions matched within 0.000001 m; rendered ¾ preview from imported geometry; temporary scene deleted.\n- Four PNGs: 960 × 540.\n\nActual ¾ render checks: (1) single isolated body and mast PASS; (2) continuous 0.8 m cream ring PASS; (3) complete blue V inside ring, pointing toward mast PASS; (4) distinct slim mast and cream cap PASS; (5) flat matte facets, no glow/glass/text PASS.",
+  "artifacts": [
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/dock-buoy/dock-buoy.glb",
+      "what": "Verified binary glTF asset."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/dock-buoy/dock-buoy.blend",
+      "what": "Standalone Blender scene with 2 mesh objects and 3 materials."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/dock-buoy/dock-buoy-34.png",
+      "what": "55 mm, 20° elevation / 125° azimuth preview from re-imported GLB."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/dock-buoy/dock-buoy-top.png",
+      "what": "Orthographic top preview."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/dock-buoy/dock-buoy-side.png",
+      "what": "Orthographic side preview."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/dock-buoy/dock-buoy-silhouette.png",
+      "what": "Black ¾ silhouette on white."
+    }
+  ],
+  "decisions": [
+    "Used the brief’s numeric palette over the conflicting fighter reference colours.",
+    "Used a square 0.5 m mast cross-section and cap.",
+    "Moved the cream ring centre 0.2 m toward the mast and narrowed the camera-facing chevron to improve its V outline; both colours use coplanar face assignments.",
+    "Interpreted azimuth as measured from Blender +X toward +Y.",
+    "Computed the assembly origin using uniform-density component volumes.",
+    "Used Workbench studio illumination for previews without adding light objects.",
+    "Saved the final Blender file with only the buoy scene; the original station file was not overwritten."
+  ],
+  "questions": [],
+  "blocked_reason": "",
+  "checkpoint": {
+    "artifact_versions": [
+      "dock-buoy.glb SHA256 prefix 9d07665d6d61715a",
+      "dock-buoy.blend SHA256 prefix 4e0f72646c68113c",
+      "dock-buoy-34.png SHA256 prefix d662b8afb56fad82",
+      "dock-buoy-top.png SHA256 prefix bf1ca666d52a8e73",
+      "dock-buoy-side.png SHA256 prefix 34d41eff05955bb0",
+      "dock-buoy-silhouette.png SHA256 prefix efee2e5b2d877ffb"
+    ],
+    "invariants": [
+      "2.2 × 4.0 × 2.2 m; +Y mast; world-origin component centre of mass.",
+      "At most 300 triangles; exactly 3 specified materials; no textures or smooth shading.",
+      "Continuous cream ring and single blue V aimed toward Mast_MAIN."
+    ],
+    "accepted_decisions": [
+      "266 triangles, square cap, 0.8 m ring width, camera-facing inset chevron."
+    ],
+    "rejected_approaches": [
+      "Initial clipped-face construction omitted boundary vertices; corrected clipping to preserve continuous surfaces.",
+      "Initial chevron appeared too compressed; shifted ring forward and narrowed the V.",
+      "Initial top framing cropped the model; increased orthographic scale to 8.2 m."
+    ],
+    "unresolved": [],
+    "next_action": "Review the six deliverables; apply any Round 2 feedback."
+  }
+}
