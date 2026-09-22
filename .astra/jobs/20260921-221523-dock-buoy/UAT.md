@@ -36,4 +36,4 @@ of the body and the cream band reads as a cap on the far side rather than a belt
 because the band is perpendicular to the mast axis and this camera looks in along that axis. Whether
 that reads as "a cream band with a blue chevron" is the thing to judge.
 
-Verdict: PENDING — awaiting Max
+Verdict: PASS — Max, 2026-09-22: "yes it does read" (asked: does the buoy read as Well Dipper, judged from compare.png beside station hub v3)
