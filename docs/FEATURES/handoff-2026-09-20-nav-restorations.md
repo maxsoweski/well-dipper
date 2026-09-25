@@ -1,4 +1,6 @@
-# Handoff — ▶ **THE NINE RESTORATIONS MAX APPROVED ARE BUILT AND COMMITTED ON LANE A; THE VERIFY VERDICT AND EVERY LIVE CHECK ARE STILL OPEN BECAUSE THE DEV SERVER WAS DOWN ALL SESSION.**
+# Handoff — ▶ **THE NINE RESTORATIONS ARE BUILT, VERIFIED, LIVE-CHECKED AND PUSHED; AC-1..10 ARE `VERIFIED_PENDING_MAX`. WHAT IS OPEN: MAX'S UAT WALK, EIGHT LIVE FINDINGS (24-31) AS THE NEXT BATCH, THE ARTIFACT REPUBLISH, AND SIX UNANSWERED ASKS.**
+
+> ⭐ **STATE AS OF 2026-09-25 (session end).** Lane A HEAD `6633420` = the live-check commit; `0100fd5` and everything before it is PUSHED, the two commits after it (`e6ebca1`, `6633420`) are NOT. Max's last words were *"1 done"* (the server) and *"3 yes"* (push) on 09-21; asks 1-6 of §6 below have had no answer since. The debug Chrome (9223) was left with page 8 parked at design 1 PRISM in Sol with the nav open; the `:5175` server was up on 09-21 — re-probe, do not assume.
 
 > ⭐⭐ **HIS ONLY WORDS THIS SESSION (2026-09-20):** *"Go with your recs on restorations"* — on the eleven restorations of the old-vs-new page (items 13-23). The recommendations, now his rulings: 13 hover-inspect YES; 14 prism depth cues YES; 15 names + height numbers YES; 16 planet detail with moons YES; 17 ship + trajectory YES; 18 wheel zoom at SYSTEM design 2 only; 19 body names YES; 20 belts + star line YES, wide-binary list PARKED; 21 one zoom readout YES (radius in ly); 22 autopilot PARKED; 23 design-2 handles YES. He did NOT answer asks 1 and 3 of the morning's report (the two 09-18 decisions; the review's leftover defects) — carried below.
 
@@ -98,14 +100,15 @@ wc -l src/ui/NavComputer.js src/main.js                                         
 
 ---
 
-## 6. FOR MAX (carried; recommendation stated)
+## 6. FOR MAX (carried since 2026-09-21, unanswered; recommendation stated; he answers by number)
 
-1. **The server**, so the live checks and the pictures can happen: `cd ~/projects/well-dipper && npx vite --port 5175`.
-2. **Esc inside the moon sub-view**: step back one screen, or keep closing the whole nav (your July ruling)? Recommend keep; the glass says RIGHT CLICK BACK and an empty click also steps out. One host fold flips it.
-3. **Push** lane A (seven commits since `8a62ad0`)? Recommend yes.
-4. **Carried from 09-18:** the ladder keeps distance order under every sort; design 1's tab strip lost its level count to the legend. Recommend keep both.
-5. **Carried from 09-18:** the review's leftover defects — recommend go on three (a painter throw freezing the nav until reload; design 2's PRISM map-mode status losing `R/F UP` — re-measure first, wave 1a's legend row may already carry it; one live probe of a SECTOR/REGION click drilling a double-size tile), park the rest (perf, harness hygiene, a narrow-window layout, a doc fix, the HELM `N`/`V` question).
-6. **Follow-ons logged in the contract, none blocking:** foreign-system planet selection under a design (HOST); the ladder scroll not restored after a sub-view in a dense system; the 5 s vitest budget; design 1's PRISM rail digit column; the companion strip's `»` tofu.
+1. **The page.** The in-repo page has the "After the restorations" section and is served live at `http://localhost:5175/well-dipper/docs/FEATURES/nav-menu-map-old-vs-new.html#after-the-restorations` (server up). The claude.ai artifact (F8Ut2bLQbK4hh5V8TJ27UY) still shows the 09-18 version: the Artifact tool refuses a republish until the session has read the whole 1.6 MB live page inline, or Max says **"force"** (nothing published is lost — the live copy was diffed against the repo file: identical but for the host's wrapper). Recommend "force". ⚠ If republishing without force: `Artifact read` of the url WITHOUT `path` (inline, ~400k tokens) is the only thing the gate accepts — a `path` read does not count.
+2. **Findings 24-28 as the next small batch** (defects, all measured live; `contract.json` → `liveFindings2026-09-21`): 24 Sol's planet names generated + unstable (prefer `_knownSystemNames`, normalise the name seed — DRIVER/state.js); 25 design 2's stems through its own hint rows at the widest zoom (plate the legend rows — LAB); 26 `0.0 GYR` / bare `G` printed for absent data (omit — LAB); 27 ladder names on one row run together (a minimum gap — LAB); 28 mouseleave keeps the callout (DRIVER + one host fold on the mouseleave handler). Recommend "go" — one workflow run, LAB + DRIVER + HOST lanes as before. **29-31 are his eye** (design 2's unlabelled SHIP at zoom 1; the callout's doubled name; the moon orrery's crowded centre) — build only what he names.
+3. **Push** `e6ebca1` + `6633420`? Recommend yes.
+4. **Esc inside the moon sub-view**: keep closing the whole nav (his July ruling) or step back first? Recommend keep; the glass says RIGHT CLICK BACK; one host fold in `_onKeyDown` flips it.
+5. **Carried from 09-18:** the ladder keeps distance order under every sort; design 1's tab strip lost its level count to the legend. Recommend keep both.
+6. **Carried from 09-18:** the review's leftover defects — recommend go on three (a painter throw freezing the nav until reload; one live probe of a SECTOR/REGION click drilling a double-size tile; re-measure design 2's PRISM map-mode status `R/F UP` — wave 1a's legend row may already carry it), park the rest.
+7. **Follow-ons logged in the contract, none blocking:** foreign-system planet selection under a design (HOST, a wave of its own); the ladder scroll not restored after a sub-view in a dense system; the 5 s vitest budget; design 1's PRISM rail digit column; the companion strip's `»` tofu. Then **AC-11 — his UAT walk** — once he has ruled on 2.
 
 ## 7. SUGGESTED SKILLS
 
