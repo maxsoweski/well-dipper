@@ -31,7 +31,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { makeHeadlessNav, clickAt, tabCentre } from './helpers/headlessNav.mjs';
 import { makeViewModeDriver } from '../navViewModes/index.js';
-import { simClockMs, _setSimClockMs } from '../../core/SimClock.js';
+import { simClockMs, _setSimClockMs, _advanceSimClock } from '../../core/SimClock.js';
 
 /** The driver surface the KEYS clauses call, per INTERFACE.md §3. */
 const DRIVER_KEYS = ['tabLevel', 'commit', 'cycleSort', 'page', 'searchOpen', 'searchActive', 'searchKey'];
@@ -101,6 +101,18 @@ function instrument(nav, { searchActive = false, searchKey = false } = {}) {
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 describe('AC-6 — Tab and Shift+Tab change level', () => {
+  it('⭐ TABS PRESSED DURING A DRILL EASE ARE HELD AND SPENT, NOT DROPPED (live, 2026-09-25: four quick Tabs moved two levels)', async () => {
+    const { nav } = await loadedNav({ level: 0 });
+    // The live game's first Tab out of GALAXY runs a 400 ms drill ease; the harness's tab click lands
+    // instantly, so the ease the live Tab started is started here the same way `_handleClick` does.
+    nav._startDrillAnim({ ...nav._viewCenter }, nav._viewSize, { ...nav._viewCenter }, nav._viewSize / 4, 1, 400);
+    press(nav, 'Tab');                     // inside the ease — `_handleClick` would have eaten this
+    expect(nav._levelIndex, 'held, not applied mid-ease').toBe(0);
+    for (let i = 0; i < 40 && nav._levelIndex < 2; i++) { _advanceSimClock(100); nav.render(); }
+    expect(nav._levelIndex, 'both Tabs landed: GALAXY → SECTOR → REGION').toBe(2);
+    for (let i = 0; i < 10; i++) { _advanceSimClock(100); nav.render(); }
+    expect(nav._levelIndex, 'and nothing extra was banked').toBe(2);
+  });
   it('⛔ Tab reaches drv.tabLevel(+1) THROUGH THE KEYDOWN PATH, and Shift+Tab reaches -1', async () => {
     const { nav } = await loadedNav();
     const calls = instrument(nav);

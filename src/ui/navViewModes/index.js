@@ -136,6 +136,10 @@ export function makeViewModeDriver(nav) {
    * `nav._dragStartX` asks where the POINTER was last pressed — which has nothing to do with a key.
    */
   let synthClick = false;
+  // ⭐ 2026-09-25 — TABS PRESSED DURING A DRILL EASE ARE HELD, NOT DROPPED. `_handleClick` opens with
+  // `if (this._anim) return;` and a 2D level change runs a 400 ms `_anim`, so measured live four quick
+  // Tabs moved TWO levels. `tabLevel` banks the step here and `render()` spends one per landed ease.
+  let pendingTabs = 0;
   /** ⛔ ONE PER INSTANCE, over the SAME `S` the designs captured — see the "mutate, never replace"
    *  note in `state.js`. It owns no state of its own: the query lives on `S.search` and the results
    *  and the cursor live on the instrument, exactly where `_activateSearchHighlight` reads them. */
@@ -315,6 +319,7 @@ export function makeViewModeDriver(nav) {
     if (!design) return false;
     S.design = design;
     lastW = w; lastH = h;
+    if (pendingTabs && !nav._anim) { const d = Math.sign(pendingTabs); pendingTabs -= d; tabLevel(d); }
     refresh(nav, { width: w, height: h, lines: h });
     agePick();   // ⭐ AFTER refresh — it tests `S.level`, which refresh has just made current.
     if (!D.ready) return false;
@@ -781,6 +786,7 @@ export function makeViewModeDriver(nav) {
    * is 427x240 inside a ~1560x860 box and the point would land a quarter of the way across.
    */
   function tabLevel(dir) {
+    if (nav._anim) { pendingTabs = Math.max(-4, Math.min(4, pendingTabs + (dir > 0 ? 1 : -1))); return; }   // see `pendingTabs`
     const cur = nav._levelIndex | 0;
     // ⭐ AND IT WRAPS, BECAUSE A CLAMPED TAB IS A DEAD KEY ON ONE OF THE FIVE LEVELS. Measured live
     // on the running game after phase 1: pressing Tab from GALAXY walked 3 -> 4 and then STOPPED,
@@ -1016,6 +1022,7 @@ export function makeViewModeDriver(nav) {
    */
   function onDeactivate() {
     search.close();
+    pendingTabs = 0;
     S.levelLag = null;
     S.levelArm = null;
     S.pick = null;
@@ -1090,6 +1097,7 @@ export function makeViewModeDriver(nav) {
    *   fold is optional (`?.()`), so a rename leaves the class calling `undefined?.()` — no throw,
    *   no failure, just a sub-view that quietly survives `V` again. */
   function onLookChange() {
+    pendingTabs = 0;
     S.sysView = 'system';
     S.detailPlanet = -1;
   }

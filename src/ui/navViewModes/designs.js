@@ -846,7 +846,8 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     rect(g, 1 + 15 * CELL, 2, 1, 1, INK.RULE);
     const secW = T(g, fit((D.playerSector?.name || '').toUpperCase(), 17 * CELL), 1 + 17 * CELL, 0,
       { color: INK.DIM, rgn: 'status', what: 'status sector' });
-    const tgt = `TGT ${(D.target?.name || '—').toUpperCase()}  ${(D.target?.ly || 0).toFixed(1)} LY`;
+    // ⭐ 2026-09-25 — THE SYSTEM YOU ARE IN IS NOT A TARGET (state.js `targetIsHere`): `TGT —`, not `TGT SOL  0.0 LY`.
+    const tgt = D.targetIsHere ? 'TGT —' : `TGT ${(D.target?.name || '—').toUpperCase()}  ${(D.target?.ly || 0).toFixed(1)} LY`;
     const tgtW = measurePixelText(fit(tgt, 34 * CELL));
     T(g, fit(tgt, 34 * CELL), W - 1, 0, { color: INK.TARGET, align: 'right', rgn: 'status', what: 'status target' });
     assertClear('status ident/sector vs TGT', 'status',
@@ -1150,7 +1151,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (youCell.w > 0 && youCell.h > 0) assertMark('YOU cell', 'map', youCell.x, youCell.y, youCell.w, youCell.h);
     const youDot = rectClip(g, px - 1, py - 1, 3, 3, INK.YOU, sqPane);
     if (youDot.w > 0 && youDot.h > 0) assertMark('YOU marker', 'map', youDot.x, youDot.y, youDot.w, youDot.h);
-    if (D.target) {
+    if (D.target && !D.targetIsHere) {   // a self-target's diamond sat on top of the YOU dot and hid it
       const tg = spriteClip(g, toX(D.target.wx), toY(D.target.wz), SP.diam5, INK.TARGET, sqPane);
       if (tg.w > 0 && tg.h > 0) assertMark('target diamond', 'map', tg.x, tg.y, tg.w, tg.h);
     }
@@ -1894,7 +1895,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         [`SYSTEMS ${s ? fmtK(estStars(s.centerX, s.centerZ, s.size)) : '—'}`, INK.BODY],
         [`SPAN    ${s ? `${s.size.toFixed(2)} KPC` : '—'}`, INK.BODY], ['', INK.BODY],
         [`YOU     ${fit(s ? s.name.toUpperCase() : 'UNKNOWN', (cols - 8) * FACE.advance)}`, INK.YOU],
-        [`TARGET  ${fit((D.target?.name || '—').toUpperCase(), (cols - 8) * FACE.advance)}`, INK.TARGET]);
+        [`TARGET  ${fit((D.targetIsHere ? '—' : (D.target?.name || '—')).toUpperCase(), (cols - 8) * FACE.advance)}`, INK.TARGET]);
     } else if (S.level === 1 || S.level === 2) {
       const v = levelView(S.level);
       // ⚠ THE BAR NORMALISES AGAINST THE WHOLE RANKING, NOT THE PAGE. `ranked[0]` is the densest tile
