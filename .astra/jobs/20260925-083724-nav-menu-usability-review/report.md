@@ -1,0 +1,194 @@
+# Round 01 — complete
+
+Reviewed **21/21 screenshots**. This is a visual review: **0 interaction tests** and **0 files written**. No blocker is established by the screenshots alone; several major issues make destination selection and travel confirmation ambiguous.
+
+**Design 1 is easier to navigate right now.** Its persistent lists, details, and named travel action give players more ways to identify objects and check their choices. Design 2 improves the orbital presentation and header placement, but removes too much visible guidance.
+
+Severity: **major** = substantially obstructs finding, understanding, or choosing a destination; **minor** = causes confusion or extra work; **polish** = cosmetic. Findings below describe visible outcomes, not inferred implementation faults.
+
+## 1. Per-screen findings
+
+### 1 — `d1-01-system.png`
+
+- **Major — Conflicting location cues.** The upper left says `UNKNOWN`, the header names `TAU VELA-94`, and the upper right says `TGT SOL 0.0 LY`. Nothing plainly identifies the displayed map as the Sol system. A newcomer cannot confidently distinguish their location, viewed system, and travel target.
+- **Major — Crowded map identification.** The inner-body numbers and staggered names occupy a narrow strip, while most of the map is empty. Connecting `SOL-1`, `SOL-2`, `CADEIN`, and nearby markers requires tracing through adjacent labels.
+- **Minor — Unexplained list columns and hierarchy.** `BODIES` has numbers such as `0.39` and trailing dashes without column headings. Planet and moon rows largely share formatting; prefixes such as `8-` provide little explanation of the parent relationship.
+- **Minor — Edge clipping.** The header text touches and is visibly cut by the top edge. This affects information needed for orientation.
+
+### 2 — `d1-02-system-hover.png`
+
+- **Major — Hover information obscures the map.** The Azcai callout occupies the same band as neighboring labels, covering portions of the underlying identification text. Inspecting one body makes surrounding bodies harder to identify.
+- **Minor — The green line has no stated meaning.** A dotted line appears toward Azcai, but nothing labels it as a hover preview, plotted route, or active destination. The bottom still says `SELECT A BODY TO BURN`.
+
+### 3 — `d1-03-system-selected.png`
+
+- **Major — Different regions imply different targets.** Azcai has an orange map box, a highlighted list row, and `BURN TO AZCAI` below, while the header still says `TGT SOL`. These may represent separate states, but the screen does not explain the distinction.
+- **Major — The travel instruction is clipped.** The bottom action strip cuts through the lettering of the burn instruction. The action with the greatest consequence needs the clearest text.
+- **Minor — The next click is undisclosed.** Despite Azcai being selected, the hint remains `SELECT A BODY`. There is no visible indication that clicking it again opens its moons.
+- **Minor — Distance reference is ambiguous.** The details say `ORBIT 9.54 AU`, and the burn strip also presents `9.54 AU`. A player could read the latter as distance from the ship. The screenshot cannot establish whether it is travel distance or orbital radius.
+
+### 4 — `d1-04-planet-moons.png`
+
+- **Major — The action still targets the parent while the task asks for a moon.** `SELECT A MOON` appears, but Azcai remains highlighted and the action offers `BURN TO AZCAI`. Parent travel may be intentional; the screen needs to make that retained selection explicit.
+- **Major — Moon labels collide.** The closely packed inner markers, identifiers, and names form overlapping groups. Finding Iris versus Rume or Brin is much easier through the list than through the map.
+- **Minor — Moon distances lack units.** Values such as `29`, `37`, and `2032` have no visible column label. `SORT AU` does not establish clearly what these particular values measure.
+- **Minor — The sub-view is weakly identified.** The active tab still says `SYSTEM`; `MOONS` and `RIGHT CLICK BACK` help, but there is no explicit `SOL > AZCAI > MOONS` path.
+
+### 5 — `d1-05-prism.png`
+
+- **Major — The view’s geometry is difficult to interpret.** Vertical colored dotted lines dominate the map without a legend. The details mix `HEIGHT 25 PC ABOVE`, `PLAYER Y 25 PC`, a much larger `Y RANGE`, and `VIEW 5 LY`. The screen does not clearly connect those quantities to the visible axes or extent.
+- **Minor — Key instructions are incomplete.** `R/F UP` names two keys but one direction. A newcomer cannot tell which raises or lowers the view.
+- **Minor — Dense, truncated star rows impede identification.** Names such as `PROXIMA CENTA` are shortened, and the numeric and single-letter columns lack headings. Many rows are available, but scanning them requires prior knowledge.
+- **Minor — The default action needs context.** `WARP ARMED` and `WARP TO SOL · 0.0 LY` appear while Sol is also the apparent local context. The screen does not explain whether this is a retained target or a meaningful trip.
+
+### 6 — `d1-06-prism-hover.png`
+
+- **Major — The callout is not visibly tied to a clear source marker.** The generated-name star callout appears above the left-center map, but no unmistakable highlighted point or leader establishes which star it describes. This is especially confusing among the vertical projection lines.
+- **Minor — Hover and action describe different objects without explicit state labels.** The callout describes another star, while the details and action remain on Sol. Retaining selection during hover is useful, but `HOVER` versus `SELECTED` is not explained.
+- **Minor — Different distance contexts are adjacent.** The callout shows approximately `8.15 PC (26.6 LY)` while the view says `5 LY`. These may measure different things; the screen needs reference labels so they do not look contradictory.
+
+### 7 — `d1-07-region.png`
+
+- **Major — Map, list, and location are hard to correlate.** The details show `A6`, the location says `YOU I9`, and the green outlined tile has no readable identifier. It is unclear which tile is inspected and which represents the player.
+- **Minor — The list obscures its organizing principle.** Rows begin `A6`, `A7`, `A5`, `A8`, with many nearly identical `158K` values. `SORT STARS` helps explain the ordering, but the map lacks corresponding tile labels and the four-square indicators have no legend.
+- **Minor — A travel command persists outside destination picking.** The footer still offers `WARP TO SOL · 0.0 LY` while the visible task is choosing a tile. It is not stated that the command refers to a separately retained target.
+
+### 8 — `d1-08-sector.png`
+
+- **Major — Only part of the grid is visibly indexed.** The first column has `A1` through `A8`, while the list also contains `B1`, `C1`, and later identifiers. A player cannot directly map most list rows to labeled cells.
+- **Minor — Location and selection are not separately explained.** The outlined `A1` tile and `YOU A1` agree, but there is no legend explaining whether the outline means current location, inspected tile, or both.
+- **Minor — The repeated square indicators have no meaning on screen.** Four cyan squares appear beside list rows without a heading or key, consuming space that could clarify the tiles.
+
+### 9 — `d1-09-galaxy.png`
+
+- **Major — Three naming systems are not connected.** The map highlights `F5`; the details say `TAU VELA-94`; the list uses sector names. The screen never explicitly states that the named sector corresponds to `F5`.
+- **Major — Truncation makes different sectors look identical.** Adjacent rows repeat visible prefixes such as `ALPHA PUPP` and `IOTA VOLAN`. The distinguishing parts of their names are missing, making list-based selection unreliable without further inspection.
+- **Minor — Target location is unclear on the map.** The details distinguish `YOU TAU VELA-94` and `TARGET SOL`, but the map markers do not have a visible legend distinguishing those roles.
+
+### 10 — `d1-10-search-planet-noresult.png`
+
+- **Major — The search scope violates an obvious expectation.** `AZC` yields `NO MATCHES`, although Azcai is visibly present in earlier system screens. `SEARCH` and `TYPE A NAME` do not disclose any restriction that would explain this result. The screenshots establish the mismatch, not its underlying cause.
+- **Major — Travel remains advertised with no result.** The search hint says `ENTER WARP`, and the action strip still offers warp to Sol. A player cannot tell whether Enter does nothing or uses the retained target while the search is empty.
+- **Minor — The empty state offers no recovery.** `NO MATCHES` does not explain supported object types or where to find a planet.
+
+### 11 — `d1-11-search-stars.png`
+
+- **Major — The apparent search choice and named travel target disagree.** `RIGIL KENTAURUS` is highlighted, but the footer still says `WARP TO SOL · 0.0 LY`. Coupled with `ENTER WARP`, this makes the result of Enter uncertain.
+- **Minor — Mixed result types have an unexplained action.** Star-class letters appear alongside `SYSTEM`, `ARM`, and `GLOBULAR`, yet the instruction uses a single `WARP` verb. It does not say which entries open a view and which are travel destinations.
+- **Minor — Results provide little travel context.** The list shows names and types, but no visible distance or destination preview for the highlighted result.
+
+### 12 — `d2-01-system.png`
+
+- **Major — Three visual signals compete.** Azcai is boxed and named in the bottom strip, a bright callout describes Sol Nova, and the green dotted line runs toward Sol Nova. The screen does not identify the line as a preview distinct from the selected burn destination.
+- **Major — The action button omits its destination.** `[BURN]` is far from the selected body’s name at the opposite end of the footer. With the competing hover information, the player must infer what will be burned toward.
+- **Minor — Hints are faint and incomplete.** The lower-left text has low contrast, and `ENTER` appears without an accompanying action verb. No visible hint advertises opening moons or showing a body list.
+
+### 13 — `d2-02-system-hover.png`
+
+- **Major — Hover obscures neighboring bodies.** The Meagis callout covers part of the central body-label area, making the crowded inner system harder to read while inspecting the outer planet.
+- **Major — Hover and selected destination are easy to confuse.** The bright callout describes Meagis, the footer still names Azcai, and the button says only `[BURN]`. There is no persistent `SELECTED: AZCAI` label beside the action.
+- **Minor — Important names are visually subdued.** Unhovered planet labels are much dimmer than the callout, so discovering other destinations requires additional attention.
+
+### 14 — `d2-03-planet-moons.png`
+
+- **Major — A moon name is clipped at the right edge.** The rightmost Meagis moon label extends beyond the usable map area. Its full identity is unavailable in this view.
+- **Major — The moon view is not clearly presented as a deeper level.** The header remains `SYSTEM` and `SOL · TAU VELA-94`. The bottom mentions Meagis and `RIGHT CLICK BACK`, but a player must infer the hierarchy from that status sentence.
+- **Minor — The action’s object is unstated.** The parent is boxed and the footer says `MEAGIS · 5 MOONS`, while `[BURN]` remains available. Nothing beside the button explicitly says whether it targets the parent or a moon.
+
+### 15 — `d2-04-system-listtoggled.png`
+
+- **Major — No list is visible in the supplied after-L state.** The screen still contains only the orbital map and bottom summary. It provides no visible list-mode status or alternative collection of bodies. This does not establish whether the key failed, changed another state, or has different behavior here.
+- **Major — Selection and hover remain difficult to separate.** Meagis is boxed and named below, but the bright Sol Nova callout and green line remain elsewhere. `[BURN]` still does not name its target.
+- **Minor — The screen gives no route to the list.** Unlike the Prism capture, this System view has no visible `L=LIST` hint.
+
+### 16 — `d2-05-prism.png`
+
+- **Major — Travel target information is missing beside the action.** The footer describes `PRISM`, view size, and height, then offers `[WARP]`. It does not plainly identify the destination. Several bracket-like markers are visible without an explanation of which represents selection.
+- **Minor — Map content reaches the screen boundary.** The lower star labels, including `82 G. ERI` and `ZET-1 RET`, compete with the hint/footer area; right-side labels also approach the edge. The larger map needs a protected text margin.
+- **Minor — Controls and geometry remain cryptic.** `L=LIST` is useful, but faint. `R/F UP` still omits the two directions, and the colored vertical lines have no legend.
+
+### 17 — `d2-06-region.png`
+
+- **Major — Background texture overwhelms essential guidance.** Fine checkerboard fills the side areas and shows behind the lower-left instructions. The dark hints become difficult to read against it. Whether intentional or not, the texture competes with navigation information.
+- **Major — Tiles lack usable identities.** The grid has a green tile and a coordinate callout, but no visible tile IDs, list, or explicit `YOU` marker. The footer’s `158K BEST TILE` does not clearly say whether that statistic belongs to the highlighted tile.
+- **Minor — Warp is detached from a visible destination.** The header starts with `—`, and `[WARP]` remains present without naming a target.
+
+### 18 — `d2-07-sector.png`
+
+- **Major — The grid is difficult to navigate deliberately.** Cells have no visible identifiers, the highlighted top-left cell is unnamed, and no list supplies names. A player can explore by clicking but cannot easily choose or revisit a particular cell.
+- **Major — Controls disappear into the checkerboard.** The lower-left hints lack an opaque, quiet background and are hard to distinguish from the texture.
+- **Minor — `1.2M BEST TILE` needs a referent.** The footer does not clearly identify the tile being described or distinguish its state from the player’s location.
+
+### 19 — `d2-08-galaxy.png`
+
+- **Major — The entry targets are not delineated.** The galaxy image fills the view, but unlike Design 1 there are no clear sector boundaries or labels showing what `CLICK TO ENTER` will enter at a given point.
+- **Major — Displayed names lack explicit roles.** A floating label says `RHO MONOCEROS-60`, while the footer and header refer to `TAU VELA-94`. The screen does not clearly distinguish hovered sector, current sector, and selected sector.
+- **Minor — The turquoise marker is unexplained.** It could mean location or selection; there is no visible legend. `[WARP]` also omits the destination.
+
+### 20 — `legacy-01-galaxy.png` — comparison only
+
+- **Major — Essential text is too small at this full-window scale.** The search text, location, tabs, and autopilot status occupy very little of the available screen. Reading controls is substantially harder than in the retro designs.
+- **Minor — The next interaction is not explained.** A grid is visible, but there is no prominent instruction telling a newcomer how to enter a sector.
+- **Useful comparison:** The persistent search field communicates its scope through `Search stars · systems · structures…`. That is more informative than Design 1’s generic `SEARCH` heading.
+
+### 21 — `legacy-02-system.png` — comparison only
+
+- **Major — The usable system is concentrated in a small central cluster.** Planet labels and the inner bodies are tiny relative to the screen, making identification and precise selection difficult.
+- **Major — Burn lacks a clearly named destination.** The central `[BURN]` button is separated from the selected marker, with no prominent selected-body summary beside it.
+- **Minor — The interaction hint is very small.** `DRAG TO ROTATE · TABS TO CHANGE VIEW` is difficult to read and does not explain selecting a body or entering its moon view.
+- **Useful comparison:** Familiar Sol planet names help users locate expected destinations. The generated names in the retro versions remove that shortcut; this matters specifically when navigating a familiar system.
+
+## 2. Cross-cutting issues
+
+1. **Major — Hover, selection, and travel target are not consistently distinguished.** The strongest examples are `d1-03`, `d1-11`, and `d2-01` through `d2-04`. Color, a box, a line, a callout, and a footer can refer to different objects simultaneously. Each role needs explicit, stable presentation.
+2. **Major — Action text does not consistently predict the result.** Design 1 names a destination but sometimes displays a different highlighted object; Design 2 uses bare `[BURN]` and `[WARP]` labels. Search advertises `ENTER WARP` even with no matches (`d1-10`).
+3. **Major — Spatial labels lack collision and edge protection.** Rail labels overlap in `d1-01` and `d1-04`; callouts cover map information in `d1-02` and `d2-02`; moon text runs off-screen in `d2-03`.
+4. **Major — Essential information is hidden through contrast or missing labels.** Dim map names and hints affect both designs. Design 2’s Region and Sector checkerboards make the problem particularly severe (`d2-06`, `d2-07`). Its unlabeled cells also lose the map-to-list correspondence available in Design 1.
+5. **Minor — Navigation hierarchy and input vocabulary are incomplete.** The five tabs are visible, but `PRISM` is unexplained, moon views retain `SYSTEM`, and the second-click action is not advertised. Design 1 shows `/ SEARCH` and sometimes `TAB LEVEL`; Design 2’s shown screens omit these. `L=LIST` appears in `d2-05` but not its System screens. These are visible hint inconsistencies, not proof of missing features.
+6. **Minor — Numbers and symbols lack reference frames.** List columns, dashes, square indicators, AU values, and Prism height/view quantities require interpretation (`d1-01`, `d1-04` through `d1-09`, `d2-05`).
+7. **Major — Search does not explain what it can find.** The Azcai miss and mixed result types need explicit scope and result-specific actions (`d1-10`, `d1-11`).
+
+**Context checks:** The screenshots support a navigation cost from unfamiliar generated Sol names, especially alongside `UNKNOWN`; they do not establish why the names differ. The reported ignored Tab during animation **cannot be confirmed or dismissed from still images**. Keep it as a separate interaction-test question, not a verified visual finding.
+
+## 3. Design 1 versus Design 2
+
+| Criterion | Easier now | Visible evidence |
+|---|---|---|
+| Find an object by name | Design 1 | Persistent body, moon, star, and tile lists; visible search shortcut. Design 2’s supplied System after-L state shows no list. |
+| Inspect and compare information | Design 1 | Dedicated details and list columns, although headings and units need work. Design 2 relies on transient callouts and a single bottom summary. |
+| Understand the travel destination | Design 1, narrowly | `BURN TO AZCAI` is more explicit than `[BURN]`; retained-target contradictions still require correction. |
+| Understand system spatial relationships | Design 2 | Orbital paths spread bodies across two dimensions; Design 1 compresses them onto a crowded rail. |
+| Identify and revisit larger-scale areas | Design 1 | Visible grid IDs and lists provide reference points. Design 2’s Sector and Region cells are unlabeled. |
+| Read the header and identify the active level | Design 2 | Its top tabs and header fit inside the frame. Design 1’s top text is clipped. |
+| Discover available controls | Design 1 | More actions are spelled out, though crowded. Design 2’s fewer hints are faint and omit useful capabilities in several views. |
+
+Use **Design 1 as the current usability baseline**. Design 2’s spatial System view is worth retaining, but it needs explicit selection/action information and an accessible object list. Making the map larger has not, by itself, made destination choice clearer.
+
+## 4. Top 10 fixes, ranked by expected player impact ÷ effort
+
+Effort is a rough estimate of change scope from the visible result, not a code assessment. “Obvious fix” means the outcome is clearly required; implementation may still take work.
+
+| Rank | Change and visible acceptance outcome | Impact / estimated effort | Decision type | Evidence |
+|---|---|---|---|---|
+| **1** | **Keep all interface text inside the viewport.** Header glyphs and the complete travel instruction are visible, with clear space above and below each line. | High / low | **Obvious fix** | `d1-01`, `d1-03`, `d1-04` |
+| **2** | **Name the destination in the actionable control.** Show, for example, `BURN TO AZCAI · ENTER`. Search’s highlighted result, action label, and resulting destination must agree. With no actionable result, the screen must clearly state whether Enter is unavailable or affects a separately retained target. | Very high / low–medium | **Obvious fix** | `d1-10`, `d1-11`, `d2-01`, `d2-05` |
+| **3** | **Describe the actual next click and key action.** Once a planet is selected, visibly offer `CLICK AGAIN: MOONS` and `ENTER: BURN`. Show the applicable search, list, level-change, and back controls consistently; spell out both height directions. | High / low | **Obvious fix** | `d1-03`, `d1-04`, `d2-04`, `d2-05` |
+| **4** | **Make essential text readable over every background.** Labels and controls remain readable without hover. Region/Sector instructions sit on a quiet opaque surface, and surrounding texture no longer competes with them. | High / low–medium | **Obvious fix** for readable controls; exact decorative treatment is a **judgment call** | `d2-02`, `d2-06`, `d2-07` |
+| **5** | **Label hover and selection as different states.** Keep a persistent `SELECTED: …` summary, use a consistent selected marker, and identify any hover route as a preview. Moving the pointer must not visually imply that the committed destination changed. | Very high / medium | **Obvious fix** | `d1-02`, `d1-03`, `d2-01` through `d2-04` |
+| **6** | **Disclose search scope and give a useful empty state.** The search field names supported categories. Searching `AZC` either finds Azcai or explains that planets are outside this search and directs the player to the appropriate body list. Result actions distinguish opening an area from traveling to an object. | High / low for scope text; medium or more for expanded search | **Judgment call:** Max should choose search scope | `d1-10`, `d1-11`; legacy scope text in `legacy-01` |
+| **7** | **Show a stable location and view path.** Clearly distinguish `YOU`, `VIEWING`, and `TARGET`. Moon views show their parent path; grid IDs are paired with names, such as `F5 · TAU VELA-94`, wherever the same area appears. | High / medium | **Obvious fix** | `d1-01`, `d1-04`, `d1-07`, `d1-09`, `d2-03`, `d2-08` |
+| **8** | **Make Design 2’s object list discoverable and its state visible.** System and Prism both visibly offer the list. When list mode is active, a readable list and its selection appear; closing it returns to a clearly identified map mode. | High / medium | **Judgment call:** persistent panel versus collapsible list; visible access and feedback are required | `d2-04`, `d2-05`; Design 1 lists for comparison |
+| **9** | **Prevent label and callout collisions.** Body names remain associated with their markers, callouts do not cover needed neighboring identification, and edge labels stay entirely on-screen. Dense groups can be identified without guessing which text belongs to which point. | High / medium–high | **Obvious fix** | `d1-02`, `d1-04`, `d1-06`, `d2-02`, `d2-03` |
+| **10** | **Explain numeric columns and map encodings.** Add concise headings with units and reference points; identify moon grouping, tile indicators, player/target markers, and Prism height lines. Orbit radius and distance from the ship must read as different quantities when both are shown. | Medium / low–medium | **Obvious fix** | `d1-01`, `d1-03` through `d1-09`, `d2-05` |
+
+The first verification pass after changes should cover four tasks: identify the current location; find Azcai and one of its moons; select a different star through search; and state the exact destination Enter will use while hovering another object.
+
+## Decisions
+- Judged only the supplied screenshots; capture descriptions identify states but do not prove undisplayed interaction behavior.
+- Assigned no blocker because still images do not establish that an essential task has no working alternative.
+- Treated Legacy as a comparison, not the recommended replacement.
+- Estimated fix effort from visible scope without reviewing code.
+- Mentioned generated Sol names only for their effect on recognizing familiar destinations.
+- Did not diagnose the checkerboard background or absent after-L list as implementation faults.
+
+## Artifacts

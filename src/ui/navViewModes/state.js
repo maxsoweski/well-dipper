@@ -1007,6 +1007,12 @@ export function makeViewState() {
       ? D.starRows.find((r) => r.name === nav._currentSystemName) : null)
       || D.starRows.reduce((m, r) => (m == null || (r.dist ?? Infinity) < (m.dist ?? Infinity) ? r : m), null)
       || null;
+    // ⭐ THE NAME THE "WHERE AM I" LABELS PRINT. `D.here` is a ROW, and star rows exist only once the
+    //    PRISM loader has filled `_localStars` — measured 2026-09-25 in Sol: 0 rows at GALAXY, SECTOR,
+    //    REGION and SYSTEM, so design 1's status read `UNKNOWN` and design 2's locator `—` while the
+    //    game knew exactly where the pilot was. The label falls back to the game's own name; `D.here`
+    //    stays a row (or null) for everything that reads its seed.
+    D.hereName = D.here?.name || nav._currentSystemName || null;
 
     // ── WHAT IS SELECTED. The pilot's choice, never the adapter's.
     const sel = nav._selectedNavStar;
@@ -1019,6 +1025,11 @@ export function makeViewState() {
       ly: Math.hypot(nav._externalTarget.x - D.player.x, nav._externalTarget.y - D.player.y,
                      nav._externalTarget.z - D.player.z) * KPC_TO_LY,
     } : null);
+    // ⭐ A TARGET THAT IS THE SYSTEM YOU ARE IN IS NOT A DESTINATION. The host pre-selects the current
+    //    system's star when the nav opens, so below SYSTEM both designs lit `WARP TO SOL · 0.0 LY ·
+    //    ENTER` from inside Sol (usability review 2026-09-25). The commit row and chip read this to
+    //    draw unarmed, and `commit()` refuses the same case.
+    D.targetIsHere = !!(D.target && nav._currentSystemName && D.target.name === nav._currentSystemName);
     // ⭐ AC-10 — THE SELECTED STAR GOES THROUGH THE SAME MEMO AS EVERY OTHER ROW NOW. When it IS a row
     //    (`D.starRows.find`) this is already filled and the map answers from cache; when it is the
     //    synthesised copy for a star the loader has not reached, this is the only fill it gets. ⛔ ONE

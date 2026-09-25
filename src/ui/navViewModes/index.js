@@ -870,6 +870,10 @@ export function makeViewModeDriver(nav) {
     const star = sel || (ext ? { wx: ext.x, wy: ext.y, wz: ext.z, seed: ext.seed ?? 0,
                                  name: ext.name || '', spectral: undefined } : null);
     if (!star) return false;
+    // ⭐ 2026-09-25 — NOT THE SYSTEM YOU ARE IN. The host pre-selects the current system's star when the
+    // nav opens, so Enter below SYSTEM "warped" to Sol from inside Sol. Same test as state.js's
+    // `D.targetIsHere`, which is what draws the row and chip unarmed.
+    if (nav._currentSystemName && star.name === nav._currentSystemName) return false;
     if (nav._onSound) nav._onSound('warpTarget');
     if (nav._onCommit) {
       nav._onCommit({

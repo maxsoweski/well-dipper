@@ -841,7 +841,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     rect(g, ruleX, mapY, 1, mapH, INK.RULE);
 
     // ── STATUS, row 0 ────────────────────────────────────────────────────────────────────────────
-    const sys = D.here?.name || 'UNKNOWN';
+    const sys = D.hereName || 'UNKNOWN';   // `hereName`, not `D.here.name`: see state.js — star rows are empty outside PRISM
     const identW = T(g, fit(sys.toUpperCase(), 14 * CELL), 1, 0, { color: INK.KEY, rgn: 'status', what: 'status ident' });
     rect(g, 1 + 15 * CELL, 2, 1, 1, INK.RULE);
     const secW = T(g, fit((D.playerSector?.name || '').toUpperCase(), 17 * CELL), 1 + 17 * CELL, 0,
@@ -890,7 +890,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
                    //    exactly the moment a pilot sorted by anything. Dropping the clause that names
                    //    the rail (which is DRAWN, two texels to the right, with its rows highlighted)
                    //    leaves 62 at the worst key. A row that fits is the only kind that can be read.
-                   `CLICK A STAR   ${sortHint}   / SEARCH   WASD PAN   R/F UP`,
+                   `CLICK A STAR   ${sortHint}   / SEARCH   WASD PAN   R/F UP/DOWN`,
                    // ⭐ THE SCROLL CONTROLS ARE NAMED ONLY WHEN THE LADDER HAS SOMEWHERE TO SCROLL. `d1Ladder`
                    // has already run (the map pane paints before this row), so `S.ladderMax` is this
                    // frame's own answer: 0 means no `...` cap is drawn and `,` / `.` move nothing, and a
@@ -981,12 +981,14 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //   `D.target`) and changing it here would move a picture no AC in this batch asked about.
     // ⛔ AND A STAR IS NOT A PLANET: `au` on a star row is 0 by construction, so `0.00 AU` would be a
     //    number the instrument does not mean. The star names its CLASS in the same slot instead.
-    const armed = !cur || !!D.selBody;
+    const warpLive = !!D.target && !D.targetIsHere;   // ⭐ 2026-09-25: no `WARP TO <here> · 0.0 LY`, and no `WARP TO —` with nothing picked
+    const armed = cur ? !!D.selBody : warpLive;
     const label = cur ? (D.selBody
                           ? `BURN TO ${(D.selBody.name || '—').toUpperCase()} · ${D.selBody.kind === 'star'
                               ? (D.selBody.cls || 'STAR').toUpperCase() : `${(D.selBody.au ?? 0).toFixed(2)} AU`} · ENTER`
                           : 'SELECT A BODY TO BURN')
-                      : `WARP TO ${(D.target?.name || '—').toUpperCase()} · ${(D.target?.ly || 0).toFixed(1)} LY · ENTER`;
+                      : warpLive ? `WARP TO ${(D.target?.name || '—').toUpperCase()} · ${(D.target?.ly || 0).toFixed(1)} LY · ENTER`
+                      : 'SELECT A STAR TO WARP';
     // ⭐⭐ AC-11 — THE BAR STARTS AT `ry(rows - 1)`, NOT ONE TEXEL ABOVE IT.
     //    `region('commit', …)` above declares row 39 (y 234 at 240p) and `geometry.js`'s `commitY` says
     //    the same, but this fill started at 233 — which is the LAST row of the tab band
@@ -1948,7 +1950,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         [`DIST   ${s.pc.toFixed(2)} PC`, INK.BODY], [`       ${s.ly.toFixed(1)} LY`, INK.BODY],
         [`PLANE  ${((s.wy - D.player.y) * 1000).toFixed(0)} PC`, INK.BODY],
         [`COMPS  ${s.mult > 1 ? 'MULTIPLE (' + s.mult + ')' : 'SINGLE'}`, INK.BODY],
-        ['WARP ARMED', INK.TARGET]);
+        D.targetIsHere ? ['YOU ARE HERE', INK.YOU] : ['WARP ARMED', INK.TARGET]);
     } else if (detPlanet) {
       /*  Function · AC-4 — the rail while a planet is open: the planet, then its moons, and the
        *    detail block showing whichever of them is selected.
@@ -2139,6 +2141,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (!shown.length) {
       T(g, S.search.text ? 'NO MATCHES' : 'TYPE A NAME', x, qy + LEAD,
         { color: INK.DIM, rgn: 'rail', what: 'search empty' });
+      // ⭐ 2026-09-25 — SAY WHAT THE FIELD CAN FIND. A planet name typed here finds nothing, and the bare
+      //    `NO MATCHES` read as broken; legacy's field always said this in its placeholder.
+      T(g, fit('STARS, SYSTEMS, DEEP SKY', w), x, qy + 2 * LEAD, { color: INK.RULE, rgn: 'rail', what: 'search scope' });
     }
     // ⭐ THE ROW GRID, OUT OF THE CODE THAT DREW IT — row i sits at `top + (i + 1) * lead`, which is
     // the same arithmetic `S.listGeom` publishes, so one picker shape reads both.
@@ -2722,8 +2727,14 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (!S.search.open && !(S.level === 3 && S.list)) {
       const LEG = 'V LOOK  SHIFT+TAB BACK  ESC CLOSE';
       const legY = mapY + mapH - FACE.h - 1;
-      if (S.level === 4) T(g, fit('SELECT A BODY  DRAG ROTATE  ENTER', W - 8), 4, legY - (FACE.h + 1),
-                           { color: INK.RULE, rgn: 'map', what: 'system legend' });
+      // ⭐ 2026-09-25 (usability review) — A KNOCKOUT UNDER EACH LEGEND RUN, IN THE SKY'S OWN INK.
+      //    At SECTOR and REGION the density field fills the whole pane, and RULE-ink text laid straight
+      //    on it could not be read at all. The knockout is `INK.BG`, the colour of the empty sky, so
+      //    on every other screen it is invisible — still no plate, no frame, no box.
+      const knock = (str, x, y) => rect(g, x - 1, y - 1, measurePixelText(str) + 2, FACE.h + 2, INK.BG);
+      if (S.level === 4) { const sl = fit('SELECT A BODY  DRAG ROTATE  ENTER', W - 8); knock(sl, 4, legY - (FACE.h + 1));
+                           T(g, sl, 4, legY - (FACE.h + 1),
+                           { color: INK.RULE, rgn: 'map', what: 'system legend' }); }
       /*  Function · PRISM's own legend row: the loaded-star count and the three keys this level owns.
        *  Intent · AC-3/AC-9 (restorations) took the bar for HEIGHT and VIEW (see `d2Status`). These
        *    four clauses were on the bar; two of them were already being eaten by `fit()` there, and
@@ -2738,11 +2749,14 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
        *  Deliberate non-goals · no sort key here (the bar has no room and PRISM's list mode names it),
        *    no pager, and nothing at all in list mode or under the search — both replace the pane. */
       if (S.level === 3) {
+        knock(`${fmtK(D.stars.length)} STARS`, 4, legY - (FACE.h + 1));
         const cw = T(g, `${fmtK(D.stars.length)} STARS`, 4, legY - (FACE.h + 1),
                      { color: INK.DIM, rgn: 'map', what: 'prism count' });
-        T(g, fit('L=LIST  WASD PAN  R/F UP', W - 10 - cw - 6), 4 + cw + 6, legY - (FACE.h + 1),
+        knock(fit('L=LIST  WASD PAN  R/F UP/DOWN', W - 10 - cw - 6), 4 + cw + 6, legY - (FACE.h + 1));
+        T(g, fit('L=LIST  WASD PAN  R/F UP/DOWN', W - 10 - cw - 6), 4 + cw + 6, legY - (FACE.h + 1),
           { color: INK.RULE, rgn: 'map', what: 'prism legend' });
       }
+      knock(fit(LEG, W - 8), 4, legY);
       T(g, fit(LEG, W - 8), 4, legY, { color: INK.RULE, rgn: 'map', what: 'global legend' });
       // ⭐ AC-1 (restorations) — THE CALLOUT RIDES THE SAME GATE AS THE LEGEND, AND FOR THE SAME
       // REASON: list mode and the drawn search REPLACE the pane with full-pane content of their own,
@@ -2769,7 +2783,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // active tab is `tx - 2, w + 4`, and so is the button. Restating `measurePixelText(n) + 6`
     // anywhere else is the AC-4 defect with a face swap (`;`) as its trigger.
     S.tabRects = tabRects;
-    const loc = `${(D.here?.name || '—').toUpperCase()} · ${(D.playerSector?.name || '').toUpperCase()}`;
+    const loc = `${(D.hereName || '—').toUpperCase()} · ${(D.playerSector?.name || '').toUpperCase()}`;
     const locW = measurePixelText(fit(loc, W - tx - 6));
     T(g, fit(loc, W - tx - 6), W - 4, 1, { color: INK.BODY, align: 'right', rgn: 'topbar', what: 'locator' });
     assertClear('tab strip vs locator', 'topbar', tx, W - 4 - locW);
@@ -2794,7 +2808,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (avail < measurePixelText('PRISM')) fire('status line has no room left beside the commit chip');
     T(g, fit(full, avail), 4, H - BAR + 2, { color: INK.BODY, rgn: 'botbar', what: 'status line' });
     if (S.sabotage) assertFits('D2 status line (unclipped)', 'botbar', 4, H - BAR + 2, measurePixelText(full), FACE.h);
-    const armed = !!(isHere() ? D.selBody : D.target);
+    const armed = !!(isHere() ? D.selBody : (D.target && !D.targetIsHere));   // not the system you are in (state.js `targetIsHere`)
     const chipX = W - chipW - 2;
     if (armed) rect(g, chipX, H - BAR, chipW, BAR, INK.TARGET);
     T(g, isHere() ? '[BURN]' : '[WARP]', chipX + 3, H - BAR + 2,
@@ -3213,6 +3227,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (!shown.length) {
       T(g, S.search.text ? 'NO MATCHES' : 'TYPE A NAME', 4, top + LEAD,
         { color: INK.DIM, rgn: 'map', what: 'search empty' });
+      T(g, fit('STARS, SYSTEMS, DEEP SKY', W - 8), 4, top + 2 * LEAD, { color: INK.RULE, rgn: 'map', what: 'search scope' });   // see design 1's empty state
     }
     S.searchGeom = { design: 2, top, lead: LEAD, rows: shown.length,
                      x0: 2, x1: W - 2, offset: off, total: rows.length };

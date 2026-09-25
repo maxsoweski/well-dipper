@@ -1,0 +1,18 @@
+{
+  "type": "review",
+  "project": "/home/ax/projects/well-dipper",
+  "project_slug": "well-dipper",
+  "name": "nav-menu-usability-review",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "sandbox": "read-only",
+  "codex_version": "codex-cli 0.155.1",
+  "created": "2026-09-25T08:37:24",
+  "rounds": 1,
+  "auto_retries": 0,
+  "thread_lineage": [
+    "01a0d892-0ae8-7e52-8e0a-76a9b36efbe4"
+  ],
+  "last_status": "complete",
+  "missing_artifacts": []
+}

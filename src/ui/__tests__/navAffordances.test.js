@@ -421,6 +421,26 @@ const VOCABULARY = [
     },
   },
   {
+    phrase: 'SELECT A STAR TO WARP',
+    control: "design 1's commit row: picking a star (not the system you are in) arms the warp it names",
+    async probe() {
+      const n = await nav({ level: 3 });
+      const hits = n._viewDriverInst.S.prismHits;
+      if (!hits?.length) return false;
+      const h = hits[hits.length - 1];
+      hover(n, h.x, h.y);
+      if (!n._hoveredLocalStar?.star) return false;
+      clickAt(n, h.x, h.y);
+      n.render();
+      const D = n._viewDriverInst.D;
+      if (!D.target || D.targetIsHere) return false;
+      // ⭐ AND THE SYSTEM YOU ARE IN IS NOT A DESTINATION: name it as here, and the warp disarms.
+      n._currentSystemName = D.target.name;
+      n.render();
+      return D.targetIsHere === true;
+    },
+  },
+  {
     phrase: 'CLICK TO ENTER',
     control: "design 2's map enters the sector / tile under the pointer at GALAXY, SECTOR and REGION",
     async probe() {

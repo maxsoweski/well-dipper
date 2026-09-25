@@ -1,0 +1,5 @@
+!jobs/
+jobs/*/rounds/*/events.jsonl
+jobs/*/rounds/*/stderr.log
+jobs/*/refs/
+jobs/*/out/
