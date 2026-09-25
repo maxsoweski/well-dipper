@@ -546,3 +546,23 @@ describe('AC-10 — every star row carries its multiplicity, and COMPS orders by
     expect(ms, `a cached rebuild of ${drv.D.starRows.length} rows took ${ms.toFixed(1)} ms`).toBeLessThan(200);
   }, 120000);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe("finding 24 (2026-09-25) — a known system's real body names win over generated ones", () => {
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+  it('⭐ authored planet and moon names are published; an unnamed body still gets a generated one', async () => {
+    const { nav } = await designNav({ mode: 'rail', level: 4 });
+    currentSystem(nav);
+    nav._systemData.planets[0].moons = [{ type: 'rocky', radiusEarth: 0.27 }, { type: 'ice', radiusEarth: 0.1 }];
+    nav._systemData._knownSystemNames = { system: 'Trappy', planets: [{ name: 'Terra', moons: ['Luna'] }] };
+    const names = adapt(nav).bodies.map((b) => `${b.kind}:${b.name}`);
+    expect(names).toContain('planet:Terra');
+    expect(names).toContain('moon:Luna');
+    const unnamed = adapt(nav).bodies.filter((b) => b.kind === 'planet' && b.name !== 'Terra');
+    expect(unnamed.length, 'planet 2 has no authored name').toBe(1);
+    expect(unnamed[0].name, 'it falls back to the generator, never blank').not.toBe('—');
+    const moons = adapt(nav).bodies.filter((b) => b.kind === 'moon').map((b) => b.name);
+    expect(moons.length).toBe(2);
+    expect(moons[1], "the second moon has no authored name and is generated").not.toBe('Luna');
+  });
+});

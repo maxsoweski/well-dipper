@@ -626,6 +626,12 @@ export function makeViewState() {
     if (!sys || !star) return rows;
     const rng = makeRng(star.seed + ':names');
     const planets = sys.planets || [];
+    // ⭐ 2026-09-25 (finding 24) — A KNOWN SYSTEM'S REAL NAMES WIN. Sol carries `_knownSystemNames`
+    //    (Mercury … Eris, and the moons), which legacy's `_planetDisplayName` has always read; this
+    //    adapter only ever generated, so Sol's planets read `SOL-1`, `CADEIN`, `KHEACEL` — and the
+    //    generator's seed is `'Sol'` or a hash by arrival path, so they were not even stable. The
+    //    generator stays the fallback for procgen systems, which have no authored names.
+    const known = sys._knownSystemNames?.planets || null;
     // ── ⛔⛔ THE CATCHES BELOW NOW COUNT, BECAUSE A SILENT ONE IS WHAT HID AC-10 FOR A WHOLE
     //    WORKSTREAM. Both `catch`es fired on EVERY body of EVERY system for as long as this file has
     //    existed — `rng.float is not a function`, 39 of 39 on Sol — and produced a plausible-looking
@@ -647,8 +653,8 @@ export function makeViewState() {
     planets.forEach((p, i) => {
       const pd = p.planetData;
       if (!pd) return;
-      let pname = '';
-      try { pname = generatePlanetName(rng.child('p' + i), star.name || 'STAR', i, planets.length); }
+      let pname = known?.[i]?.name || '';
+      if (!pname) try { pname = generatePlanetName(rng.child('p' + i), star.name || 'STAR', i, planets.length); }
       catch (e) { noteFail('generatePlanetName', e); pname = (star.name || 'S') + ' ' + 'bcdefghijk'[i]; }
       // ⛔ NEITHER FIELD MAY BE UNDEFINED. Both designs call `.toUpperCase()` on `name` and `cls`
       // unguarded — `d1Rail`'s detail block does it twice on one line — and `displayClassOf` returns
@@ -687,8 +693,8 @@ export function makeViewState() {
                   // re-derived at the hit-test — a second mapping to keep in step with this one.
                   pIdx: i });
       (p.moons || []).forEach((m, j) => {
-        let mname = '';
-        try { mname = generateMoonName(rng.child(`m${i}.${j}`), pname, j, p.moons.length); }
+        let mname = known?.[i]?.moons?.[j] || '';
+        if (!mname) try { mname = generateMoonName(rng.child(`m${i}.${j}`), pname, j, p.moons.length); }
         catch (e) { noteFail('generateMoonName', e); mname = pname + ' ' + (j + 1); }
         rows.push({ kind: 'moon', name: mname || '—', au: Number(p.orbitRadiusAU) || 0, cls: m.type || 'moon',
                     rE: m.radiusEarth, T: m.T_eq, hab: null, rings: false, moons: 0, parent: i,
@@ -708,6 +714,11 @@ export function makeViewState() {
                     pIdx: i, mIdx: j });
       });
     });
+    // ⭐ 2026-09-25 — A BELT ROW IS NAMED THE WAY THE MAP LABELS IT (`designs.js` `beltLabel`, which reads
+    //    the same `isKuiper` flag this row carries): ASTEROID BELT / KUIPER BELT, not `BELT A` / `BELT B`
+    //    beside a map that says otherwise. A letter is added only when two belts share a kind.
+    const beltKinds = (sys.asteroidBelts || []).map((b) => (b.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT'));
+    const beltSeen = {};
     (sys.asteroidBelts || []).forEach((b, i) => {
       // ⚠ NO `ang` ON A BELT, AND THAT IS CORRECT RATHER THAN AN OMISSION (INTERFACE §2): a belt is
       // drawn as a FULL RING, so it has no phase to be at. A `0` here would be a real angle that
@@ -723,7 +734,8 @@ export function makeViewState() {
       //   `b.isKuiper != null` to tell "the builder told me" from "the builder is silent". Copying
       //   the raw value would leave an inner belt's flag `undefined` and send it back to the
       //   geometry path; `!!` makes the silence an explicit `false` that the flag branch answers.
-      rows.push({ kind: 'belt', name: 'BELT ' + ('ABC'[i] || (i + 1)), au: Number(b.centerRadiusAU) || 0, cls: 'belt',
+      const bk = beltKinds[i], bn = (beltSeen[bk] = (beltSeen[bk] || 0) + 1);
+      rows.push({ kind: 'belt', name: beltKinds.filter((k) => k === bk).length > 1 ? `${bk} ${'ABCDEFGH'[bn - 1] || bn}` : bk, au: Number(b.centerRadiusAU) || 0, cls: 'belt',
                   isKuiper: !!b.isKuiper,
                   rE: null, T: null, hab: null, rings: false, moons: 0, widthAU: b.widthAU });
     });
