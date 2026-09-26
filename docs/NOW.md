@@ -4,6 +4,12 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ▶ 2026-09-25 — **ASTRA REVIEWED THE MENUS FROM THE SCREEN; THE OBVIOUS FIXES ARE IN AND PUSHED; SOL'S PLANETS HAVE THEIR REAL NAMES.** Lane A, pushed through `fc7774f`.
+>
+> **Serves the 35% SCREENSAVER MVP milestone, SCREENSAVER tier.** GPT Astra judged 21 live captures for "easy to navigate from what's on screen" (record: `.astra/jobs/20260925-083724-nav-menu-usability-review/report.md`): design 1 is the baseline, design 2 wins only on system layout. Built: where-am-I says SOL; no warp to the system you are in; design 2's legend readable on SECTOR/REGION; `R/F UP/DOWN`; search says its scope; quick Tabs no longer dropped; no self-target in the headers; **finding 24 fixed** (real Sol names, belts named like the map). `src/ui` 1198/1198.
+>
+> ▶ **FOR MAX:** the 09-20 asks (updated — 24 done, push done, 25 probably fixed) + which of Astra's remaining findings to build. ▶ **HANDOFF → `docs/FEATURES/handoff-2026-09-25-nav-astra-usability.md`.**
+
 
 
 > ## ▶ 2026-09-20 — **THE NINE RESTORATIONS ARE BUILT: THE NEW MENUS IDENTIFY WHAT THE POINTER IS ON, THE PRISM READS HEIGHT AGAIN, THE SHIP AND THE MOONS ARE BACK, DESIGN 2 GOT ITS HANDLES. ▶ THE VERIFY RUN AND THE LIVE CHECKS ARE THE GATE; THE `:5175` SERVER WAS DOWN ALL DAY.** Lane A, `ab610fa` (unpushed since `8a62ad0`). Max's one ruling this session: *"Go with your recs on restorations"* → page items 13-21 and 23 built, 22 and the wide-binary list parked.
