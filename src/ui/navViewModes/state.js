@@ -115,7 +115,7 @@ import { simClockMs } from '../../core/SimClock.js';
  *  build — the AC-4 defect shape, counted by the adversarial pass. `picking.js` already owns the
  *  driver's copy for the rail's z-flip, so the lag's `toView.size` reads that one. */
 import { gridNFallback } from './picking.js';
-import { sameStar, starMemoKey } from './starIdentity.js';
+import { findStar, starMemoKey } from './starIdentity.js';
 import alea from 'alea';
 
 /** `NavComputer.js:69`, verbatim. */
@@ -1035,9 +1035,10 @@ export function makeViewState() {
 
     // ── WHAT IS SELECTED. The pilot's choice, never the adapter's.
     const sel = nav._selectedNavStar;
-    //    ⛔ FOUND BY IDENTITY (`sameStar`), NEVER THE SEED (naming-prism-segments AC-2): a seed match
-    //    put the highlight, the detail block and the commit line on a twin that shares the seed.
-    D.selStar = sel ? (D.starRows.find((r) => sameStar(r, sel)) || {
+    //    ⛔ FOUND BY IDENTITY (`findStar`), NEVER THE SEED (naming-prism-segments AC-2): a seed match
+    //    put the highlight, the detail block and the commit line on a twin that shares the seed — and
+    //    never the first row inside 0.1 pc either, which can be a neighbour.
+    D.selStar = sel ? (findStar(D.starRows, sel) || {
       ...sel, name: nameFor(sel), pc: (sel.dist ?? 0) * 1000, ly: (sel.dist ?? 0) * KPC_TO_LY,
     }) : null;
     D.target = D.selStar || (nav._externalTarget ? {

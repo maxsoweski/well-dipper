@@ -36,6 +36,7 @@ import { burnWorkflowAvailable, navDispatchDuringWarp, systemEntryStyle } from '
 import { orreryStandoff } from '../../camera/orreryStandoff.js';
 import { NavComputer } from '../NavComputer.js';
 import { POSITION_MATCH_TOL } from '../../generation/RealStarCatalog.js';
+import { sameStar } from '../navViewModes/starIdentity.js';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const RAW = readFileSync(resolve(REPO, 'src/main.js'), 'utf8');
@@ -71,7 +72,8 @@ const HOST_FNS = ['_syncNavCommitVerb', 'setScManual', '_installNavCallbacks', '
 const ENV_NAMES = ['burnWorkflowAvailable', 'navDispatchDuringWarp', 'systemEntryStyle', 'orreryStandoff',
   'NavComputer', 'console', 'navs', 'warpTarget', 'warpEffect', 'cameraController', 'scControls',
   '_makeTarget', 'focusStar', 'focusPlanet', 'focusMoon', 'autoNav', 'flythrough', '_setWarpTargetFromNavStar',
-  '_effectiveRegime', '_enterSystemInstantOrrery', 'beginWarpTurn', 'setTimeout', 'playerGalacticPos', 'POSITION_MATCH_TOL'];
+  '_effectiveRegime', '_enterSystemInstantOrrery', 'beginWarpTurn', 'setTimeout', 'playerGalacticPos', 'POSITION_MATCH_TOL',
+  'sameStar'];
 
 /**
  * The host functions, compiled together over one stub scope. `let`s are the main.js module
@@ -80,6 +82,7 @@ const ENV_NAMES = ['burnWorkflowAvailable', 'navDispatchDuringWarp', 'systemEntr
 function host(over = {}) {
   const env = {
     burnWorkflowAvailable, navDispatchDuringWarp, systemEntryStyle, orreryStandoff, NavComputer, POSITION_MATCH_TOL,
+    sameStar,   // naming-prism-segments AC-2: dispatchNavAction's "is this the sky's star" is `sameStar` now
     console: { log: () => {}, warn: () => {} },
     navs: [],
     warpTarget: { direction: null, destType: null, navStarData: null, name: null, turning: false },

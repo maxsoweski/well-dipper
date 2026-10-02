@@ -3,7 +3,7 @@ import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { realStarSeed } from '../generation/realStarSeed.js';  import { realStarKey } from '../generation/GalaxyGrid.js';   // ⚠ second statement on this line to keep line numbers stable
-import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';  import { sameStar } from './navViewModes/starIdentity.js';   // ⚠ second statement on this line to keep line numbers stable
+import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';  import { findStar, isStarKey } from './navViewModes/starIdentity.js';   // ⚠ second statement on this line to keep line numbers stable
 import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
@@ -598,7 +598,7 @@ export class NavComputer {
     if (!star.color) star.color = NavComputer._SPECTRAL_COLORS[star.spectral] || '#ffefb0';
     this._systemStar = star;
     this._selectedNavStar = star;
-    this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' };
+    this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '', key: star.key };
     this._systemData = systemData || this._currentSystemData || null;
     if (systemData) this._currentSystemData = systemData;
     this._hoveredBody = null;
@@ -854,12 +854,12 @@ export class NavComputer {
     // we do NOT reuse `_hoveredLocalStar` (fact 8).
     const star = {
       wx: r.worldPos.x, wy: r.worldPos.y, wz: r.worldPos.z,
-      seed: r.seed, name: r.name, spectral: r.starType,
+      seed: r.seed, key: r.identKey, name: r.name, spectral: r.starType,   /* naming-prism-segments AC-2: the hit's identity ('r:' catalogue star, 'k:' registry system) */
       color: NavComputer._SPECTRAL_COLORS[r.starType] || '#ffefb0',
     };
     this._systemStar = star;
     this._selectedNavStar = star;
-    this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' };
+    this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '', key: star.key };
 
     if (this._onSound) this._onSound('warpTarget');
 
@@ -870,7 +870,7 @@ export class NavComputer {
         target: 'star',
         star: {
           wx: star.wx, wy: star.wy, wz: star.wz,
-          seed: star.seed, name: star.name, spectral: star.spectral,
+          seed: star.seed, key: star.key, name: star.name, spectral: star.spectral,
         },
       });
     }
@@ -881,7 +881,7 @@ export class NavComputer {
       this._externalTarget = null;
       return;
     }
-    this._externalTarget = { x: worldPos.x, y: worldPos.y || 0, z: worldPos.z, name: name || '' };
+    this._externalTarget = { x: worldPos.x, y: worldPos.y || 0, z: worldPos.z, name: name || '', key: worldPos.key };   /* naming-prism-segments AC-2: the target's identity, so `_tryAutoSelectExternalTarget` matches by key */
     // If a local star matches this position, auto-select it
     this._tryAutoSelectExternalTarget();
   }
@@ -1154,15 +1154,15 @@ export class NavComputer {
     const tx = this._externalTarget.x;
     const ty = this._externalTarget.y;
     const tz = this._externalTarget.z;
-    let bestStar = null;
-    let bestDist = Infinity;
+    let bestStar = null, bestDist = Infinity;
+    if (isStarKey(this._externalTarget.key)) { const row = this._localStars.find((s) => s.key === this._externalTarget.key); if (row) this._selectedNavStar = row; return; }   /* ⭐ naming-prism-segments AC-2 (Astra 2026-10-02 finding 1): a target carrying a STAR key is matched by that key alone — only its own row may stand in for it, however close a neighbour sits (distinct stars come 0.02 pc apart), and while that row is not loaded the selection is KEPT. The position match below is for a target with no star key (a 'k:' registry system, a hand-built stand-in). */
     for (const s of this._localStars) {
       const dx = s.wx - tx, dy = s.wy - ty, dz = s.wz - tz;
       const d = dx * dx + dy * dy + dz * dz;
       if (d < bestDist) { bestDist = d; bestStar = s; }
     }
     const sel = this._selectedNavStar, onTarget = !!sel && Math.hypot(sel.wx - tx, sel.wy - ty, sel.wz - tz) < POSITION_MATCH_TOL;   /* ⭐ UAT walk fix D (Astra 2026-10-02): when the selection already IS the target (a sky-clicked star adopted by main.js `_adoptSkyTargetInNav`), only a row that is the SAME star — POSITION_MATCH_TOL, the 0.1 pc identity radius — may replace it. The 1 pc neighbourhood match swapped in a different star up to 1 pc away, so Enter warped there while Space warped to the clicked one. Any other selection keeps the 1 pc match. Folded: this file is line-frozen at 4711. */
-    if (bestStar && bestDist < (onTarget ? POSITION_MATCH_TOL * POSITION_MATCH_TOL : 0.001 * 0.001)) {   /* match within 1 pc (0.001 kpc), or the identity radius when the selection is the target */
+    if (bestStar && (!onTarget || !isStarKey(sel.key) || bestStar.key === sel.key) && bestDist < (onTarget ? POSITION_MATCH_TOL * POSITION_MATCH_TOL : 0.001 * 0.001)) {   /* match within 1 pc (0.001 kpc), or the identity radius when the selection is the target — and a KEYED selection that is the target gives way only to its own row (AC-2) */
       this._selectedNavStar = bestStar;
     }
   }
@@ -1462,7 +1462,7 @@ export class NavComputer {
         this._levelIndex = 3;
         // Stash binary status on the prism star so prism view can show a double-dot
         if (this._systemData?.isBinary && this._systemStar) {
-          const match = this._localStars.find(s => sameStar(s, this._systemStar));   /* naming-prism-segments AC-2: by identity, never the seed — a twin sharing the seed took the binary mark */
+          const match = findStar(this._localStars, this._systemStar);   /* naming-prism-segments AC-2: by identity, never the seed — a twin sharing the seed took the binary mark; the NEAREST same-star row, never the first inside 0.1 pc */
           if (match) {
             match._isBinary = true;
             match._star2Type = this._systemData.star2?.type || null;
@@ -3785,7 +3785,7 @@ export class NavComputer {
         // '"' artifact (AC9 regen eliminates it; guard here defensively since
         // that regen lands in parallel with this fix, not before it).
         if (!rs.name || rs.name === '"') continue;
-        const realKey = `real-${rs.name}`;
+        const realKey = realStarKey(rs);   /* naming-prism-segments AC-2: the catalogue IDENTITY — by name, the second of two same-name records (12 names repeat) never loaded */
         if (this._loadedSeen.has(realKey)) continue;
         this._loadedSeen.add(realKey);
 
@@ -4461,7 +4461,7 @@ export class NavComputer {
             if (!nearest) return;
             this._systemStar = nearest;
             this._selectedNavStar = nearest;
-            this._externalTarget = { x: nearest.wx, y: nearest.wy, z: nearest.wz, name: nearest.name || '' };
+            this._externalTarget = { x: nearest.wx, y: nearest.wy, z: nearest.wz, name: nearest.name || '', key: nearest.key };
             // Use actual system data if returning to current system
             this._systemData = (this._isCurrentSystem() && this._currentSystemData)
               ? this._currentSystemData : null;
@@ -4599,12 +4599,12 @@ export class NavComputer {
     // Prism level — click a star to enter system view with zoom animation
     if (this._levelIndex === 3 && this._hoveredLocalStar) {
       const star = this._hoveredLocalStar.star;
-      console.log('[NAV] Entering system view for:', star.name, 'seed:', star.seed, 'type:', star.spectral);  if (!this._currentSystemData) { this._systemStar = star; this._selectedNavStar = star; this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' }; this._hoveredBody = null; if (this._onSound) this._onSound('select'); return; }   /* ⭐⭐ MAX, 2026-09-07: *"disable the system screen when not in a system."* With no spawned system (`_currentSystemData` null — the ORRERY splash boot, and nothing else) a prism star click SELECTS the star and arms the warp — `_systemStar`, `_selectedNavStar`, `_externalTarget`, the three fields the drill below sets before it animates — and then STOPS, ahead of the drill sound and the zoom. The SYSTEM screen it would have opened draws a system the nav generated for itself, and Max ruled it off. ⛔ THE SELECTION IS KEPT ON PURPOSE: the driver's `commit()` warps from `_selectedNavStar` / `_externalTarget` whenever the level is not 4, so Enter and the rail's chip still fly the pilot out of deep space — the screen is disabled, the function is not. ⭐ WIDENED THE SAME DAY on Max's word (*"3 yes"*): no `viewMode` gate, so today's nav and the cockpit panel select-and-stop too — one predicate for every surface. Folded, not a new line: this file is line-frozen at 4711. */
+      console.log('[NAV] Entering system view for:', star.name, 'seed:', star.seed, 'type:', star.spectral);  if (!this._currentSystemData) { this._systemStar = star; this._selectedNavStar = star; this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '', key: star.key }; this._hoveredBody = null; if (this._onSound) this._onSound('select'); return; }   /* ⭐⭐ MAX, 2026-09-07: *"disable the system screen when not in a system."* With no spawned system (`_currentSystemData` null — the ORRERY splash boot, and nothing else) a prism star click SELECTS the star and arms the warp — `_systemStar`, `_selectedNavStar`, `_externalTarget`, the three fields the drill below sets before it animates — and then STOPS, ahead of the drill sound and the zoom. The SYSTEM screen it would have opened draws a system the nav generated for itself, and Max ruled it off. ⛔ THE SELECTION IS KEPT ON PURPOSE: the driver's `commit()` warps from `_selectedNavStar` / `_externalTarget` whenever the level is not 4, so Enter and the rail's chip still fly the pilot out of deep space — the screen is disabled, the function is not. ⭐ WIDENED THE SAME DAY on Max's word (*"3 yes"*): no `viewMode` gate, so today's nav and the cockpit panel select-and-stop too — one predicate for every surface. Folded, not a new line: this file is line-frozen at 4711. */
       if (this._onDrillSound) this._onDrillSound(4);
       this._systemStar = star;
       this._selectedNavStar = star;
       // Update external target so trajectory line shows in 2D views
-      this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' };
+      this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '', key: star.key };
       this._systemData = null; // will be generated in _renderSystem
       // Component pre-select (AC5 entry b): if this marker is a far member of
       // the system it resolves into (Proxima → Alpha Centauri), the SYSTEM

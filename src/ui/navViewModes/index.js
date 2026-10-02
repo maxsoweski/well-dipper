@@ -50,7 +50,7 @@ import { railGeometry, barsGeometry, tabIndexAt } from './geometry.js';
 import { pickSector, pickTile, pickPrismStar, pickBody, bodyIdentity,
          usableProj, insideProj, projRect, cellAt, gridNFallback, tileOf, HOVER_FIELD } from './picking.js';
 import { makeSearch } from './search.js';
-import { sameStar } from './starIdentity.js';
+import { findStar } from './starIdentity.js';
 import { FACE, measurePixelText } from '../../rendering/PixelText.js';
 import { simClockMs } from '../../core/SimClock.js';
 
@@ -493,10 +493,10 @@ export function makeViewModeDriver(nav) {
       const s = D.starRows[i];
       if (!s) return null;
       // `_handleClick` drills `this._hoveredLocalStar.star`, and the star it wants is the one in
-      // `_localStars` — not the ranked COPY the adapter made. ⛔ Matched by IDENTITY (`sameStar`),
+      // `_localStars` — not the ranked COPY the adapter made. ⛔ Matched by IDENTITY (`findStar`),
       // never the seed: two stars can share a seed, and the row clicked is the star drilled
       // (naming-prism-segments AC-2).
-      const live = (nav._localStars || []).find((t) => sameStar(t, s)) || s;
+      const live = findStar(nav._localStars, s) || s;
       return { star: live, sx: 0, sy: 0 };
     }
     // ⭐ AC-1 — AND THE ROW ITSELF GOES OUT WITH IT, for the reason `pickBody`'s `out` exists:
@@ -879,7 +879,7 @@ export function makeViewModeDriver(nav) {
     }
     const sel = nav._selectedNavStar;
     const ext = nav._externalTarget;
-    const star = sel || (ext ? { wx: ext.x, wy: ext.y, wz: ext.z, seed: ext.seed ?? 0,
+    const star = sel || (ext ? { wx: ext.x, wy: ext.y, wz: ext.z, seed: ext.seed ?? 0, key: ext.key,
                                  name: ext.name || '', spectral: undefined } : null);
     if (!star) return false;
     // ⭐ 2026-09-25 — NOT THE SYSTEM YOU ARE IN. The host pre-selects the current system's star when the

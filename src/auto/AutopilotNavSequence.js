@@ -416,7 +416,7 @@ export class AutopilotNavSequence {
 
     this._nav._systemStar = pick;
     this._nav._selectedNavStar = pick;
-    this._nav._externalTarget = { x: pick.wx, y: pick.wy, z: pick.wz, name: pick.name || '' };
+    this._nav._externalTarget = { x: pick.wx, y: pick.wy, z: pick.wz, name: pick.name || '', key: pick.key };
 
     this._nav._systemZoomAnim = {
       startTime: simClockMs(),

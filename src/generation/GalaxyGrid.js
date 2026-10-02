@@ -186,23 +186,43 @@ export function knownSystemKey(name) {
   return `k:${name}`;
 }
 
-// Cells closer than this to a box edge count as candidates (plan §3.3: the slot
-// counts boundary-touching cells). 1e-9 kpc = 1e-6 pc: far above float error,
-// far below the smallest cell (1.1 pc), so it only settles exact ties.
-const SLOT_EDGE_TOL = 1e-9;
+// The generator's own placement arithmetic, operation for operation
+// (HashGridStarfield: the cell centre (c + 0.5)·cell plus (byte/255 − 0.5)·cell
+// for an offset byte 0…255), so "can this cell put a star in the box" is
+// answered with the very doubles the generator produces — no tolerance. A
+// tolerance once admitted a cell whose LOWEST star sits exactly on the box's
+// excluded upper face (Astra 2026-10-02, finding 4: 16 slots for 12 reachable
+// cells in Sol's N1 prism at the 0.05 kpc tier).
+function placedAt(c, cell, byte) {
+  return (c + 0.5) * cell + (byte / 255 - 0.5) * cell;
+}
+
+/** True when cell c can place a star in [lo, hi): some offset byte lands there (placement rises with the byte). */
+function canPlace(c, cell, lo, hi) {
+  for (let b = 0; b < 256; b++) {
+    const p = placedAt(c, cell, b);
+    if (p >= hi) return false;
+    if (p >= lo) return true;
+  }
+  return false;
+}
 
 function slotRange(lo, hi, cell) {
-  // Cell c places its star in [c·cell, (c+1)·cell] (offset bytes 0..255 reach
-  // both faces), so it can land in [lo, hi) iff (c+1)·cell ≥ lo and c·cell < hi.
-  const a = Math.ceil((lo - SLOT_EDGE_TOL) / cell) - 1;
-  const b = Math.ceil((hi + SLOT_EDGE_TOL) / cell) - 1;
+  // Start one whole cell outside each face (unreachable by construction) and
+  // walk in to the first and last cell that can place a star in [lo, hi).
+  const top = Math.floor(hi / cell) + 1;
+  let a = Math.floor(lo / cell) - 2;
+  while (a <= top && !canPlace(a, cell, lo, hi)) a++;
+  let b = top;
+  while (b >= a && !canPlace(b, cell, lo, hi)) b--;
   return [a, b];
 }
 
 /**
  * Slot number of a generating cell inside its owning box (plan §3.3): the
  * cell's index among ALL that tier's cells that can place a star inside the
- * box — including coarse-tier cells whose centre lies outside it — counted in a
+ * half-open box — including coarse-tier cells whose centre lies outside it, and
+ * EXCLUDING a cell that can only reach the excluded upper face — counted in a
  * fixed mixed-radix order: HEIGHT first (a bigger number is higher up), then
  * rows from the top (largest Z first), then columns left to right (the same
  * reading order as the grid references).

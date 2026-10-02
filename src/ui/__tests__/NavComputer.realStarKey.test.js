@@ -79,4 +79,19 @@ describe('NavComputer real-star merge assigns the catalogue key (AC-2)', () => {
     b._queryYRange(0.07, 0.09);
     expect(a._localStars[0].key).not.toBe(b._localStars[0].key);
   });
+
+  it('two same-name catalogue records in ONE load both become rows, in either order, and a reload adds neither again', () => {
+    // ⛔ Astra 2026-10-02 finding 3: the seen-set gate was `real-${name}`, so the second 'Iot Cnc'
+    //    in a block never loaded (and the test above kept them in separate navs, so it never saw it).
+    const g = { x: 7.92155, y: 0.08545, z: -0.022322, name: 'Iot Cnc', spect: 'G' };
+    const a = { x: 7.933891, y: 0.075929, z: -0.018801, name: 'Iot Cnc', spect: 'A' };
+    for (const order of [[g, a], [a, g]]) {
+      const nav = makeNav(order);
+      nav._queryYRange(0.07, 0.09);
+      expect(nav._localStars.map((s) => s.key).sort()).toEqual([
+        'r:Iot Cnc@7.92155,0.08545,-0.022322', 'r:Iot Cnc@7.933891,0.075929,-0.018801']);
+      nav._queryYRange(0.07, 0.09);
+      expect(nav._localStars).toHaveLength(2);
+    }
+  });
 });

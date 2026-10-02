@@ -248,7 +248,7 @@ describe('star keys (plan §3.2)', () => {
 });
 
 describe('slot numbers inside a box (plan §3.3)', () => {
-  it('numbers every candidate cell once, height first, coarse cells that only touch the box included', () => {
+  it('numbers every cell that can place a star in the box — and ONLY those — once, height first, coarse cells that only touch the box included', () => {
     const box = boundsOf(addressOf(8, 0.025, 0));                  // one 7.8125 × 100 × 7.8125 pc slab
     // Can cell c put a star in [lo, hi)? Use the generator's own placement
     // formula (HashGridStarfield: centre + (byte/255 − 0.5) · cell) over all
@@ -268,6 +268,10 @@ describe('slot numbers inside a box (plan §3.3)', () => {
         const can = reaches(cx, cell, box.min.x, box.max.x) && reaches(cy, cell, box.min.y, box.max.y) && reaches(cz, cell, box.min.z, box.max.z);
         let r = null;
         try { r = slotOf(ident, cell, box); } catch { /* not a candidate */ }
+        // ⛔ A cell that cannot place a star in the half-open box gets NO slot (Astra 2026-10-02,
+        //    finding 4: a tolerance on the upper face numbered 16 cells where 12 can reach, which would
+        //    shift every name tail once corrected).
+        if (!can) expect(r, `cell ${cx},${cy},${cz} @ ${cell} cannot reach the box but got a slot`).toBeNull();
         if (can) {
           // Every cell that can place a star in the box MUST have a slot.
           expect(r).not.toBeNull();
@@ -282,9 +286,18 @@ describe('slot numbers inside a box (plan §3.3)', () => {
         seen.add(r.slot);
       }
       expect(seen.size).toBe(count);                               // dense: 0 … count−1, no gaps or repeats
-      expect(count).toBeGreaterThanOrEqual(reachable);
+      expect(count).toBe(reachable);
       if (cell >= 0.05) expect(touchingOnly).toBeGreaterThan(0);   // coarse: centres outside the column still count
     }
+  });
+
+  it('a cell whose lowest star sits exactly on the excluded upper face is not a candidate (Sol N1, 0.05 kpc tier)', () => {
+    const box = boundsOf(addressOf(8, 0, 0));
+    expect(box.max.y).toBe(0.1);
+    expect((2 + 0.5) * 0.05 + (0 / 255 - 0.5) * 0.05).toBe(0.1);   // cy = 2's lowest placement IS the face
+    expect(() => slotOf({ tier: 'Kg', cx: 160, cy: 2, cz: 0 }, 0.05, box)).toThrow(RangeError);
+    const { count } = slotOf({ tier: 'Kg', cx: 160, cy: 1, cz: 0 }, 0.05, box);
+    expect(count).toBe(12);                                        // 2 (x) × 3 (y: −1, 0, 1) × 2 (z)
   });
 
   it('a higher cell gets a bigger slot; within a layer, rows from the top then columns left to right', () => {

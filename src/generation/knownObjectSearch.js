@@ -51,6 +51,10 @@
  * @property {string} [type]      DISPLAY type: spectral class (star), region
  *                                 (named), object type (structure).
  * @property {number} [mag]       Apparent magnitude (star only, display).
+ * @property {string} [identKey]  The destination's IDENTITY as the nav and arrival compare it
+ *                                 (naming-prism-segments AC-2): 'r:…' (`realStarKey`) for a
+ *                                 catalogue star, 'k:<name>' (`knownSystemKey`) for a registry
+ *                                 system; absent for named/structure hits (places, not stars).
  * @property {string} [key]       Locator key (named), Harris ID (globular),
  *                                 profile key (structure), or display name (registry).
  * @property {string} [region]    Galactic region (named only, display).
@@ -66,6 +70,7 @@
 import { enumerateNamedSystems } from './NameGenerator.js';
 import { KnownSystems, MATCH_RADIUS } from './KnownSystems.js';
 import { realStarSeed } from './realStarSeed.js';
+import { realStarKey, knownSystemKey } from './GalaxyGrid.js';
 import { searchKnownObjects } from '../data/KnownObjectProfiles.js';
 
 // Per-source result caps (mirror the debug panel's cap of 10 for stars/features).
@@ -199,6 +204,7 @@ export function resolveKnownObjects(query, {
           name: star.name,
           worldPos: { x: star.x, y: star.y, z: star.z },
           seed: seedFromPos(star.x, star.y, star.z),
+          identKey: realStarKey(star),
           kind: 'star',
           starType: star.spect,
           type: star.spect,
@@ -239,6 +245,7 @@ export function resolveKnownObjects(query, {
         name: ks.name,
         worldPos: { x: pos.x, y: pos.y || 0, z: pos.z || 0 },
         seed: seedFromPos(pos.x, pos.y || 0, pos.z || 0),
+        identKey: knownSystemKey(ks.name),
         kind: 'registry',
         type: undefined,
         key: ks.name,
@@ -328,7 +335,7 @@ export function resolveKnownObjects(query, {
  * it never touches `window._warpTarget`.
  *
  * @param {SearchResult} result
- * @returns {{worldX:number,worldY:number,worldZ:number,seed:number,name:string,type:(string|undefined)}}
+ * @returns {{worldX:number,worldY:number,worldZ:number,seed:number,key:(string|undefined),name:string,type:(string|undefined)}}
  */
 export function toNavStar(result) {
   return {
@@ -336,6 +343,7 @@ export function toNavStar(result) {
     worldY: result.worldPos.y,
     worldZ: result.worldPos.z,
     seed: result.seed,
+    key: result.identKey,
     name: result.name,
     type: result.starType,
   };

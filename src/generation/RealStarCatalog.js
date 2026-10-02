@@ -14,6 +14,7 @@
 
 import { RealSystemOverlay } from './RealSystemOverlay.js';
 import { realStarSeed } from './realStarSeed.js';
+import { realStarKey } from './GalaxyGrid.js';
 
 // Default identity-match tolerance for findByPosition: 0.1 pc (0.0001 kpc).
 // This MUST stay BELOW KnownSystems' MATCH_RADIUS (0.0005 kpc, see that
@@ -257,6 +258,7 @@ export class RealStarCatalog {
         appMag,
         absMag: s.absMag,
         seed,
+        key: realStarKey(s),   // naming-prism-segments AC-2: the same 'r:' identity as the nav's catalogue row
         name: s.name,
         lum: s.lum,
         color: [baseCol[0] * brightness, baseCol[1] * brightness, baseCol[2] * brightness],

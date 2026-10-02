@@ -198,7 +198,7 @@ export class StarfieldGenerator {
           worldX: rs.worldX,
           worldY: rs.worldY,
           worldZ: rs.worldZ,
-          seed: rs.seed,
+          seed: rs.seed, key: rs.key,   // naming-prism-segments AC-2: the catalogue identity rides the sky click
           name: rs.name,
           isRealStar: true,
           type: rs.type,

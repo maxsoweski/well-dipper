@@ -1,7 +1,9 @@
 import './style.css';
 import * as THREE from 'three';
 import { StarFlare } from './objects/StarFlare.js';
-import { RealStarCatalog, POSITION_MATCH_TOL } from './generation/RealStarCatalog.js';
+import { RealStarCatalog } from './generation/RealStarCatalog.js';
+import { sameStar } from './ui/navViewModes/starIdentity.js';
+import { knownSystemKey } from './generation/GalaxyGrid.js';
 import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
 import { HashGridStarfield } from './generation/HashGridStarfield.js';
 import { realStarSeed } from './generation/realStarSeed.js'; import { assertLabSubject, labSubjectIsAddressed } from './util/lab-subject.js';   // ⛔ APPENDED TO THIS LINE, never inserted below it: this file carries symbol-anchored citations down past :12000 and a new import line shifts every one of them, reding them as some other block's failure. The same discipline world-engine-lab.html:188 keeps.
@@ -5290,6 +5292,7 @@ function _debugEnterKnownSystem(knownSys, pos) {
     worldY: pos.y,
     worldZ: pos.z,
     seed: knownSys.seed || knownSys.name || 'known',
+    key: knownSystemKey(knownSys.name),   // naming-prism-segments AC-2: a KnownSystems arrival's identity
     type: sysData.star?.type || 'G',
     name: knownSys.name,
     isReal: true,
@@ -5796,10 +5799,11 @@ function _skyTargetNavStar() {
  * `_selectedNavStar`), and both the designs' `D.target` and the driver's `commit()`
  * read the selection FIRST — so the nav said `TGT —` and Enter refused "the system
  * you are in". The click now becomes the selection too; `setExternalTarget` runs
- * after, so a loaded PRISM row that IS this star (inside POSITION_MATCH_TOL, the
- * 0.1 pc same-star radius) replaces the copy — and a NEIGHBOUR does not: the old
- * 1 pc neighbourhood match swapped in a different star, so Enter and Space warped
- * to two places (Astra review 2026-10-02; `_tryAutoSelectExternalTarget`).
+ * after, so a loaded PRISM row that IS this star replaces the copy — by its KEY
+ * (naming-prism-segments AC-2), or inside POSITION_MATCH_TOL (0.1 pc) for a record
+ * with no key — and a NEIGHBOUR does not: the old 1 pc neighbourhood match swapped
+ * in a different star, so Enter and Space warped to two places (Astra review
+ * 2026-10-02; `_tryAutoSelectExternalTarget`).
  *
  * ⭐ ONE TRANSITION, NOT A LABEL CHANGE. The click SUPERSEDES whatever body was
  * armed: `_clearCommitSelection` drops `_selectedBody` / `_commitAction` first, or
@@ -5818,7 +5822,7 @@ function _adoptSkyTargetInNav(nav) {
   if (!s) return false;
   if (typeof nav._clearCommitSelection === 'function') nav._clearCommitSelection();
   nav._selectedNavStar = s;
-  nav.setExternalTarget({ x: s.wx, y: s.wy, z: s.wz }, s.name);
+  nav.setExternalTarget({ x: s.wx, y: s.wy, z: s.wz, key: s.key }, s.name);
   return true;
 }
 
@@ -6146,11 +6150,12 @@ function dispatchNavAction(action) {
     // clicked in the sky, the sky's warpTarget is KEPT — it is the richer record
     // (the starfield's own starData, real-star flags included), so Enter and Space
     // warp to one identical target rather than to two copies of it. "The very star"
-    // is POSITION_MATCH_TOL (0.1 pc), the radius the nav may swap the sky copy for a
-    // loaded row at — not 1e-9, which let an identity-matched row re-target the warp.
+    // is `sameStar` (naming-prism-segments AC-2): when both records carry a key the
+    // KEYS decide — distinct stars sit as close as 0.02 pc, so the old 0.1 pc test
+    // kept the sky's star when the pilot committed its neighbour (Astra 2026-10-02,
+    // finding 1). Position at POSITION_MATCH_TOL only for a record with no key.
     const _sky = _skyTargetNavStar();
-    const _isSkyStar = !!_sky && Math.hypot(_sky.wx - action.star.wx, _sky.wy - (action.star.wy || 0),
-      _sky.wz - action.star.wz) < POSITION_MATCH_TOL;
+    const _isSkyStar = sameStar(_sky, action.star);
     if (!_isSkyStar) _setWarpTargetFromNavStar({
       worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
       seed: action.star.seed, key: action.star.key, name: action.star.name, type: action.star.spectral,
@@ -6219,7 +6224,7 @@ function _resolveWarpTargetGalacticPos() {
   if (warpTarget.starIndex >= 0) {
     const entry = skyRenderer.getEntryForIndex(warpTarget.starIndex);
     if (entry?.starData && entry.starData.worldX !== undefined) {
-      return { x: entry.starData.worldX, y: entry.starData.worldY, z: entry.starData.worldZ };
+      return { x: entry.starData.worldX, y: entry.starData.worldY, z: entry.starData.worldZ, key: entry.starData.key };
     }
   }
 
@@ -6229,6 +6234,7 @@ function _resolveWarpTargetGalacticPos() {
       x: warpTarget.navStarData.worldX,
       y: warpTarget.navStarData.worldY,
       z: warpTarget.navStarData.worldZ,
+      key: warpTarget.navStarData.key,   // naming-prism-segments AC-2: the nav matches the target by key
     };
   }
 
@@ -6767,6 +6773,53 @@ let galleryObject = null;      // current Galaxy/Nebula instance (deep sky)
 let _galleryMeshes = [];       // Star/Planet/Moon meshes (star system objects)
 const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for gallery moons
 
+/**
+ * ⭐ WHERE A STAR WARP ARRIVES — the warp target's star, taken from `warpTarget`
+ * and made the player's position and `currentGalaxyStar` (which the nav reopens
+ * on). Lifted verbatim out of `_generateWarpDestinationData` so the AC-2 test can
+ * run click → commit → dispatch → THIS → reopen headless (naming-prism-segments
+ * Phase 1, Astra 2026-10-02 finding 5); the caller still takes the seed from the
+ * star it returns. The KnownSystems realignment stays with the caller.
+ *
+ * First, check if the clicked starfield point maps to a specific GalacticMap
+ * star. If so, warp directly to THAT star — don't do a second direction-based
+ * search that might find a different star.
+ * @returns {object|null} the resolved star record (navStarData or sky starData)
+ */
+function _arriveAtWarpTargetStar() {
+  let resolvedStar = null;
+
+  // Priority 1: Nav computer selected a specific star — use its exact position + seed
+  if (warpTarget.navStarData) {
+    resolvedStar = warpTarget.navStarData;
+    console.log(`[WARP] Priority 1 (navStarData): Y=${resolvedStar.worldY?.toFixed(4)}, seed=${resolvedStar.seed}`);
+  }
+
+  // Priority 2: Sky starfield click — resolve via index
+  if (!resolvedStar && galacticMap && warpTarget.starIndex >= 0) {
+    const entry = skyRenderer.getEntryForIndex(warpTarget.starIndex);
+    if (entry?.starData && entry.starData.worldX !== undefined) {
+      resolvedStar = entry.starData;
+    }
+  }
+
+  // No direction-based fallback needed: every sky star has a starIndex
+  // (Priority 2) and every nav star has navStarData (Priority 1).
+  // The old direction-based search was a legacy holdover from when the
+  // sky had fake fill stars. With the hash grid, every point of light
+  // is a real star with exact coordinates.
+  if (!resolvedStar) {
+    console.warn('[WARP] No star resolved — neither navStarData nor starIndex matched. This should not happen.');
+  }
+
+  if (resolvedStar) {
+    playerGalacticPos = { x: resolvedStar.worldX, y: resolvedStar.worldY, z: resolvedStar.worldZ };
+    currentGalaxyStar = resolvedStar;
+    console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
+  }
+  return resolvedStar;
+}
+
 // Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms).
 // By the time we need to create GPU resources (hyper start), data is ready.
 // Also clean up the old system here so GC pressure happens during FOLD
@@ -6839,43 +6892,13 @@ async function _generateWarpDestinationData() {
   }
 
   if (destType === 'star-system') {
-    // ── Galaxy-aware system generation ──
-    // First, check if the clicked starfield point maps to a specific
-    // GalacticMap star. If so, warp directly to THAT star — don't do
-    // a second direction-based search that might find a different star.
-    let resolvedStar = null;
-
-    // Priority 1: Nav computer selected a specific star — use its exact position + seed
-    if (warpTarget.navStarData) {
-      resolvedStar = warpTarget.navStarData;
-      console.log(`[WARP] Priority 1 (navStarData): Y=${resolvedStar.worldY?.toFixed(4)}, seed=${resolvedStar.seed}`);
-    }
-
-    // Priority 2: Sky starfield click — resolve via index
-    if (!resolvedStar && galacticMap && warpTarget.starIndex >= 0) {
-      const entry = skyRenderer.getEntryForIndex(warpTarget.starIndex);
-      if (entry?.starData && entry.starData.worldX !== undefined) {
-        resolvedStar = entry.starData;
-      }
-    }
-
-    // No direction-based fallback needed: every sky star has a starIndex
-    // (Priority 2) and every nav star has navStarData (Priority 1).
-    // The old direction-based search was a legacy holdover from when the
-    // sky had fake fill stars. With the hash grid, every point of light
-    // is a real star with exact coordinates.
-    if (!resolvedStar) {
-      console.warn('[WARP] No star resolved — neither navStarData nor starIndex matched. This should not happen.');
-    }
-
+    // ── Galaxy-aware system generation ── (`_arriveAtWarpTargetStar`)
+    const resolvedStar = _arriveAtWarpTargetStar();
     if (resolvedStar) {
-      playerGalacticPos = { x: resolvedStar.worldX, y: resolvedStar.worldY, z: resolvedStar.worldZ };
-      currentGalaxyStar = resolvedStar;
       // Use the resolved star's seed for deterministic system generation.
       // Context derivation + starTypeOverride now live in the shared arrival
       // resolution module (FIX-2), fed resolvedStar.type below.
       seed = String(resolvedStar.seed);
-      console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
     }
 
     // ── Shared arrival resolution (FIX-2) ──
@@ -6914,6 +6937,7 @@ async function _generateWarpDestinationData() {
         worldY: knownWarp.position.y,
         worldZ: knownWarp.position.z,
         seed: knownWarp.seed || knownWarp.name || 'known',
+        key: knownSystemKey(knownWarp.name),   // naming-prism-segments AC-2: the SYSTEM's identity ('k:'), not the component row's
         type: pendingSystemData.star?.type || 'G',
         name: knownWarp.name,
         isReal: true,
@@ -10018,6 +10042,30 @@ function _armHelmBootTour({ fromWarp } = {}) {
 }
 
 /**
+ * The post-FOLD redirect: when a player warp was stashed in `_pendingPlayerWarp`
+ * during this warp (see `warpRevealSystem`), aim the warp at it and start the
+ * redirect turn. Lifted verbatim out of `warpRevealSystem` so the AC-2 test can
+ * drive the stash through to arrival (naming-prism-segments Phase 1, Astra
+ * 2026-10-02 finding 5). @returns {boolean} true when a stashed warp was consumed.
+ */
+function _consumePendingPlayerWarp() {
+  if (!_pendingPlayerWarp) return false;
+  const _pw = _pendingPlayerWarp;
+  _pendingPlayerWarp = null;
+  _foldSnapshotTaken = false; // the redirect is a fresh warp; no FOLD snapshot yet
+  if (flythrough.active) flythrough.stop();
+  if (autoNav.isActive) autoNav.stop();
+  scPilot.stop();
+  console.log(`[WARP] reveal REDIRECT — consuming stashed player warp → ${_pw.name} (seed=${_pw.seed}); boot target gets NO settled arrival (AC6)`);
+  _setWarpTargetFromNavStar({
+    worldX: _pw.wx, worldY: _pw.wy, worldZ: _pw.wz,
+    seed: _pw.seed, key: _pw.key, name: _pw.name, type: _pw.type,
+  });
+  setTimeout(() => beginWarpTurn(), 0);
+  return true;
+}
+
+/**
  * Warp: reveal the new system and start autopilot.
  * Called when the warp exit phase finishes.
  *
@@ -10040,21 +10088,7 @@ function warpRevealSystem() {
   // (HELM) boot experience — at the player's system. The boot system is only briefly
   // visible during the redirect turn, exactly as any normal warp departure (never a
   // fly-in toward its star, never a tour armed there). [WARP] log names the winner.
-  if (_pendingPlayerWarp) {
-    const _pw = _pendingPlayerWarp;
-    _pendingPlayerWarp = null;
-    _foldSnapshotTaken = false; // the redirect is a fresh warp; no FOLD snapshot yet
-    if (flythrough.active) flythrough.stop();
-    if (autoNav.isActive) autoNav.stop();
-    scPilot.stop();
-    console.log(`[WARP] reveal REDIRECT — consuming stashed player warp → ${_pw.name} (seed=${_pw.seed}); boot target gets NO settled arrival (AC6)`);
-    _setWarpTargetFromNavStar({
-      worldX: _pw.wx, worldY: _pw.wy, worldZ: _pw.wz,
-      seed: _pw.seed, key: _pw.key, name: _pw.name, type: _pw.type,
-    });
-    setTimeout(() => beginWarpTurn(), 0);
-    return;
-  }
+  if (_consumePendingPlayerWarp()) return;
 
   // ── Distant deep sky: contemplation view with momentum coast ──
   // Galaxies + globular clusters — camera drifts in with decelerating momentum,
