@@ -436,6 +436,10 @@ All 17 points were accepted or mostly accepted: distinct tier tokens; names fitt
 
 ## 13. Decisions for you
 
+> **RULED 2026-10-02 — Max: "go with recs".** D0 = D (provisional until Phase 3's in-browser test), D1 = yes, D2 = A,
+> D3 = A (drop survey names), D4 = 100 pc, D7 = A (fine gauge follows the view). The "going ahead" list below stands.
+> Max also: stay in this session, build with workflows, use Astra as checker / second opinion / tester.
+
 Only what needs you. Decision numbers are kept from draft 3 so earlier references still work; decisions 5, 6 and 8 moved to "going ahead" below.
 
 0. **How the galaxy is cut into sectors.** **Recommend D** (uniform 2 kpc sectors → 16×16 regions of 125 pc → 16×16 columns of 7.8125 pc), **provisionally**: it is confirmed only when Phase 3's in-browser test passes; if a slab cannot stay under 50 ms, this reopens before any name is frozen. You lose chunky GALAXY cells (27 → 11 texels) and equal stars per sector. The alternative, C, adds a ZONE screen to keep big cells everywhere at the cost of one more click and the largest code change.

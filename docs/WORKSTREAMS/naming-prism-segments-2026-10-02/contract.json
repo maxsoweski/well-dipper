@@ -1,0 +1,187 @@
+{
+  "workstream": "naming-prism-segments-2026-10-02",
+  "intentRef": "intent.md",
+  "planRef": "../../FEATURES/naming-prism-segments-PLAN-2026-10-02.md",
+  "project": "well-dipper",
+  "status": "building",
+  "tier": "SCREENSAVER (35% MVP)",
+  "lane": "A — feature/world-engine-production-L1",
+  "decisions": "Max 2026-10-02 'go with recs': D0 option D (provisional until AC-6 passes in-browser), D1 rename once, D2 'Sector Column N1 M-955', D3 drop survey names, D4 100 pc slabs, D7 fine gauge follows the view. Build with workflows; Astra as checker / second opinion / tester.",
+  "phases": [
+    { "phase": 0, "acs": ["AC-0"], "note": "ground truth — no game code" },
+    { "phase": 1, "acs": ["AC-1", "AC-2"], "note": "fixed grid + canonical star identity (the gate)" },
+    { "phase": 2, "acs": ["AC-3", "AC-4", "AC-5"], "note": "one cell = one place on every screen and entry path" },
+    { "phase": 3, "acs": ["AC-6", "AC-7", "AC-8"], "note": "slab loader + segment bar; option D confirmed or reopened here" },
+    { "phase": 4, "acs": ["AC-9"], "note": "vocabulary — only after AC-1/AC-2 and AC-6 pass" },
+    { "phase": 5, "acs": ["AC-10", "AC-11"], "note": "name switch" },
+    { "phase": 6, "acs": ["AC-12"], "note": "where-am-I label" },
+    { "phase": "close", "acs": ["AC-13"], "note": "Max's UAT" }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Phase 0 ground truth: a plain answer to 'what actually costs 3 s' on entering PRISM, and whether option D's 7.8125 pc slab can stay under 50 ms (plan §8).",
+      "verifyVia": {
+        "input": "In the browser, warp to XIGMAG-2AE101G (IOTA AQUILA-6, near the core) and to Sol; enter PRISM in design 1 with and without the profiler; record query bounds, loop and density-call counts, per-callback times, both nav instances; run the option-D slab benchmark at the inner galaxy and Sol in the same browser.",
+        "observable": "A written report (docs/WORKSTREAMS/naming-prism-segments-2026-10-02/PHASE0.md) naming the dominant cost with numbers, explaining the browser-vs-headless gap (3 s vs 0.2 s), and stating the measured option-D slab time at both locations against 50 ms."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-1",
+      "statement": "Every procedural star has exactly one owner — one box at each level (half-open: lower edge in, upper edge out, on every axis, y = 0 is N1) and one (tier, cell) identity — fixed by the exact grid constants (2 kpc sectors, 16×16 regions, 16×16 prisms of 7.8125 pc, offset 1.00390625 kpc, 100 pc slabs, row 1 at the top).",
+      "verifyVia": {
+        "input": "Unit tests over the grid module and HashGridStarfield: stars on faces, edges and corners, negative coordinates, y = 0, coarse tiers, equal seeds; round trip address → bounds → address; injectivity over a sampled volume.",
+        "observable": "Every case resolves to exactly one address and one identity; Sol resolves to sector N10 and the galactic centre to J10; sabotaging the half-open rule (closed upper edge) turns the face/corner tests red."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-2",
+      "statement": "The nav finds stars by that identity, not by the 32-bit seed — two stars with the same seed can no longer be clicked, selected, de-duplicated or warped to as each other (index.js:496, picking.js:271, state.js:571/611/1031, NavComputer.js:3755). Debug / title / ?system= systems are named from their own seed, outside the galaxy-name guarantee.",
+      "verifyVia": {
+        "input": "Headless driver test: inject two stars with equal seeds into one slab; click each row and each map mark; warp from each.",
+        "observable": "Each click selects its own star and each warp resolves to its own position; reverting any one lookup to the seed makes the test fail."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-3",
+      "statement": "\"each cell in the galaxy should represent a single sector … every cell in the sector view should be displaying a single region … every cell in the region view should be displaying a single prism\" — in designs 1 and 2 (made in nav-240p-lab.html and extracted), with edge labels on every grid; PRISM is one fixed 7.8125 pc column (WASD stops at its edge, zoom can pull back past it). Legacy grids kept correct.",
+      "verifyVia": {
+        "input": "Live, in both designs: click cells at GALAXY, SECTOR and REGION (centre, edge, corner cells; Sol; the core); drag the map then click again; read the edge labels.",
+        "observable": "GALAXY draws 19×19 cells and each drawn cell's bounds equal exactly one sector's; SECTOR and REGION draw 16×16 world-locked cells; every click drills to exactly the clicked cell's bounds (published S.mapProj / drill target compared numerically); after a drag the same world point is under the same cell id; every row and column carries an edge label."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-4",
+      "statement": "The autopilot drills through the same cells the pilot would — its private 8×8 / 44 kpc grid (AutopilotNavSequence.js:464-473) is replaced by the shared address → view and enter-column functions.",
+      "verifyVia": {
+        "input": "Run the autopilot's nav drill sequence to a destination; separately drill manually to the same destination.",
+        "observable": "The sequence of cells the autopilot shows at each level equals the manual drill's cell ids exactly; the hover highlight and the animation use the same grid."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-5",
+      "statement": "\"Here\" is worked out from the player's own position, independent of the rows being browsed; a column that is not the player's shows no here-mark (state.js:1018-1027).",
+      "verifyVia": {
+        "input": "Live: open PRISM on the player's own column, then on a neighbouring column; repeat in a system with no loaded row for the player.",
+        "observable": "Own column: the here-mark sits on the player's star and the label names the current system; other column: no here-mark, and the where-am-I label still names the current system (never the nearest browsed row)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-6",
+      "statement": "\"The update build for the prism nav view needs to include performance optimization\" — PRISM loads one 100 pc slab at a time with a deadline-based, resumable, cancellable loader that also budgets naming, merge, sort and publish. No main-thread task over 50 ms. Option D is confirmed here or reopened before any name is frozen.",
+      "verifyVia": {
+        "input": "Live, in both designs and both nav instances: enter PRISM, browse slabs, change every sort mode, jump with the segment bar, leave mid-load (cancel), re-enter cold — at XIGMAG-2AE101G (core) and at Sol; record a performance trace for each.",
+        "observable": "No main-thread task longer than 50 ms in any trace (long-task list empty above 50 ms); keys pressed during loading act within one frame of being pressed (no queued burst)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-7",
+      "statement": "\"you could see the un-highlighted segments in the nav bar and click or drag to a new one quickly, or use existing R and F controls to slowly pan up or down\" — a 60-cell segment bar (N30…N1, S1…S30, coloured thin / thick / halo at 0.3 / 1.0 kpc) beside the fine gauge in design 1 and in design 2 (incl. list mode; minimap moved left); the fine ±2 pc gauge follows the view, ship shown as an edge mark when out of range.",
+      "verifyVia": {
+        "input": "Live: on PRISM click a far segment (mid-plane to N20), drag along the bar, press R/F, grab the fine gauge after a jump.",
+        "observable": "One click moves the view to the clicked slab (camera y within that slab's bounds) and highlights its cell; dragging steps slab by slab; R/F move continuously within the slab as today; grabbing the fine gauge after a jump does NOT throw the view back to the ship's height; the bar never overlaps design 2's minimap (no shared texels)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-8",
+      "statement": "Which procedural star a real catalogue star replaces is decided over a full 3D neighbourhood by identity, so the result is the same whatever slab loads first (NavComputer.js:3779-3815).",
+      "verifyVia": {
+        "input": "Headless: load the same column's slabs in three different orders, including a real star within 2 pc of a column or slab edge.",
+        "observable": "The set of replaced procedural identities and resulting rows is identical across all orders."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-9",
+      "statement": "Max approves the vocabulary: 361 sector words (crisp in the core, soft on the rim) and samples from two separate 256-syllable sets; all 65,536 column words screened exhaustively against real names, constellations and profanity.",
+      "verifyVia": {
+        "input": "An Artifact review page (one medium) listing every sector word on its grid position and column-word samples, with Passes / Needs a fix + notes autosaved to its db.",
+        "observable": "Max's verdicts read back from the db; every rejected word replaced and re-reviewed; the exhaustive screen report shows zero hits."
+      },
+      "layer": "uat"
+    },
+    {
+      "id": "AC-10",
+      "statement": "\"naming stars … based on their galactic location\" with \"readable syllabes at the beginning\": every procedural star's name spells its address, e.g. 'Thessa Korabi N1 M-955'; real, catalogue, KnownSystems and fictional names untouched; still unique by construction, disjoint from every name shape whose lookup joins contents (real-star overlay, KnownSystems aliases), and the same on every visit.",
+      "verifyVia": {
+        "input": "Unit tests: name a sampled grid of procedural identities; name every catalogue / real / KnownSystems entry; re-name the same identity via each call site; build-time lookup-key check.",
+        "observable": "Zero duplicate procedural names; zero procedural names equal to any catalogue, real, archive-host or KnownSystems name or alias; every call site returns the identical string; real names byte-identical to before."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-11",
+      "statement": "The name on a nav row is the name you arrive at — rows, previews, warp arrival, teleports and the self-warp guard all use the one namer (teleports through the shared arrival resolver).",
+      "verifyVia": {
+        "input": "Live: warp from a PRISM row, from search, from the map, and by teleport; at each arrival open the nav.",
+        "observable": "The arrival system name equals the row's name exactly; the where-am-I label and the 'no warp to here' guard recognise the current system in every case."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-12",
+      "statement": "\"the label … doesn't give me all the information … it's not color-coded to match the highlight that shows me visually where I am\" — the where-am-I label shows the full address, each part in the colour of its highlighted cell on the map.",
+      "verifyVia": {
+        "input": "Live: at each level in both designs, read the label and the highlighted cells.",
+        "observable": "The label's parts name the current system, sector, region and column; each part's ink equals the ink of the matching highlighted cell (one shared resolver for text and highlight)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-13",
+      "statement": "The whole: I can navigate the galaxy coherently — every cell is one place, I can read where I am and where I'm going, the prism is quick to move through, and names tell me where a star is.",
+      "verifyVia": {
+        "input": "Max walks the nav in both designs, from Sol and from the core, using the segment bar, warping and arriving.",
+        "observable": "Max's verdict."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/generation/HashGridStarfield.js — star generation per (tier, cell); findStarsInPrism; seeds",
+      "src/generation/GalacticMap.js — density model (the PRISM stall's cost centre, _spiralPotentialOnly)",
+      "src/generation/NameGenerator.js + docs/NAMING_AND_REAL_OBJECTS.md — the July naming system, position locator, catalogue shapes",
+      "src/generation/GalacticSectors.js — today's 775-sector quadtree (replaced by the uniform grid)",
+      "RealStarCatalog / KnownSystems / named-systems catalog — real and authored names",
+      "src/ui/navViewModes/nav-240p-lab.html — the lab source designs.js is extracted from (scripts/extract-nav-designs.mjs --check)"
+    ],
+    "outputs": [
+      "src/ui/NavComputer.js — prism load, drill, R/F, gauge, picking, where-am-I",
+      "src/ui/navViewModes/{state.js,designs.js,index.js,picking.js} — both designs' grids, segment bar, label",
+      "src/auto/AutopilotNavSequence.js — autopilot drill",
+      "src/main.js — warp target name, arrival naming, teleports, ?system= spawns",
+      "src/cockpit/designation.js — name shortening on cockpit panels (procedural names there are a follow-up)",
+      "search (src/generation/knownObjectSearch.js) — results by name"
+    ],
+    "mustStayWorking": [
+      "Real and catalogue star names, KnownSystems (Sol, Alpha Centauri) and their contents joins — no procedural star may acquire real planets",
+      "Warp: nav row → arrival at the same star; the 'no warp to the system you are in' guard",
+      "Legacy nav (viewMode null) grids and behaviour; V cycling restores legacy cameras",
+      "Everything Max passed on the 2026-09-30/10-02 walk: drag tracking, right-click back, quick Tabs, hover, depth cues, moons sub-view, search, design 2 wheel zoom/legend/locator",
+      "Saves and share links (no names persisted today) and ?system= deep links",
+      "src/ui test suite (1198 at fc7774f, --testTimeout=60000) except tests deliberately rewritten in the phase that changes them"
+    ]
+  },
+  "followOns": [
+    "Cockpit (diegetic) nav full redesign — after this workstream (Max 2026-10-02)",
+    "Planet and moon names seeded from the star, not the warp counter (main.js:6644-6645, :7568) — after the name switch",
+    "Legacy look's segment bar; search by sector or column word",
+    "Elsewhere (nav-restorations batch): remove the whole instruction/legend row; one search row per destination; GPS line in every mode (HELM burns, ORRERY GO TO + view glide); SYSTEM screen says which system it shows; nav picks up a star targeted in flight"
+  ]
+}
