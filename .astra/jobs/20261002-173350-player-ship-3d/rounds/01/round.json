@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "codex",
+    "exec",
+    "-C",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-173350-player-ship-3d",
+    "-m",
+    "gpt-6-astra",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "-c",
+    "sandbox_workspace_write.writable_roots=[\"/mnt/c/Users/Max/...\"]",
+    "-s",
+    "workspace-write",
+    "--json",
+    "-o",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-173350-player-ship-3d/rounds/01/result.json",
+    "--output-schema",
+    "/home/ax/projects/personal-os-improvements/astra-lane/skill/scripts/result.schema.json",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-173350-player-ship-3d/refs/player-ship-ext-sheet.png",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-173350-player-ship-3d/refs/player-ship-cockpit-sheet.png",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-173350-player-ship-3d/refs/foss-1-21st-century-foss-cover.jpg",
+    "-"
+  ],
+  "exit": 0,
+  "timed_out": false,
+  "started": "2026-10-02T17:33:50",
+  "finished": "2026-10-02T18:05:50"
+}
