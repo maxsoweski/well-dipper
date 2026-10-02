@@ -1,0 +1,36 @@
+{
+  "status": "complete",
+  "report": "Provenance: output_hint source `/home/ax/.codex/generated_images/01a0fe0c-fe59-7d92-9604-bc21a57d7abe/exec-4ee786d2-09b7-47e3-95f0-4e8210a2e16f.png` → `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-151739-player-ship-ext-v3/out/player-ship-ext-sheet.png`. Copy verified byte-identical: 1,437,508 bytes; 1942 × 809 pixels; SHA256 `405ec358f81c6905562165493e35e9b195093653bf99efc6b449da57b5ab9890`. This round: 2 tool calls; thread total: 4.\n\nVisual checks:\n\n1. PASS — four named orthographic views on one baseline, three-quarter view and black silhouette retained. Scale assessed visually, not measured.\n2. PASS — 1.8 m figure, LENGTH 18 m, BUBBLE 2.6 m and all five part callouts present.\n3. PASS — low head, steep climb and bulky high back retained in side view and silhouette.\n4. PASS — cockpit with two cream front pillars, forward sockets, magenta thrusters including underside sockets, four recessed rear nozzles, teal modules, red hatch and nine-entry legend visible. Deck construction follows this round's replacement instruction.\n5. PASS — no decorative numbers, insignia, flames, exhaust, scene or cast shadows.\n6. PASS — all four views and the three-quarter view show broad flat tiers, chamfered shoulders and sloping faces. Orange spine forms stepped ramps; yellow layers have varied thickness and firm edges.\n7. PASS — BUBBLE 2.6 m appears across the front-view cockpit.\n\nInitial round prompt used the supplied text verbatim from “Edit the previous sheet (Image 1).” through the complete KEEP paragraph, followed by “Tolerance: apart from the surface build, unchanged to the eye.”\n\nCorrective edit prompt, verbatim:\n\nChange only these two missing details: add the exact label \"BUBBLE 2.6 m\" across the glass bubble in the FRONT VIEW, and show one magenta recessed manoeuvring-thruster socket on the bottom-facing surface of the lowest teal underslung module in the small three-quarter view. Preserve the newly established stacked flat plates, chamfered shoulders and sloping wedge faces in every view.\n\nKEEP: the overall outline and insect profile of Image 1; the rounded-cube glass bubble hanging under the front with two cream pillars across its front face; the forward thruster sockets in the front view; magenta recessed manoeuvring thrusters; the engine block recessed inside the hull with four recessed rear nozzles; teal underslung modules (also firm, not puffy); red hatch; side, front, rear and top views with view names, one baseline, same scale; three-quarter view; black silhouette; the 1.8 m figure; \"LENGTH 18 m\", \"BUBBLE 2.6 m\" across the bubble in the front view, and the part callouts; the part colours (spine orange, decks yellow, etc.) and nine-entry legend; flat fills, dark outlines, plain off-white; no numbers, insignia, flames, exhaust, scene or shadows. Take nothing from Image 2 except how its hull surfaces are built (no paint, numerals, panel lines, windows, exhaust). Nothing smaller than 30 cm.",
+  "artifacts": [
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-151739-player-ship-ext-v3/out/player-ship-ext-sheet.png",
+      "what": "Round 02 selected concept sheet, copied unmodified from built-in image generation."
+    }
+  ],
+  "decisions": [
+    "Round 02 flat plates and sloping faces supersede the original stacked fat deck rolls.",
+    "Retained the overall envelope while allowing chamfered corners required by the new surface construction.",
+    "Used the permitted corrective edit to restore the bubble dimension and underside thruster visibility."
+  ],
+  "questions": [],
+  "blocked_reason": "",
+  "checkpoint": {
+    "artifact_versions": [
+      "out/player-ship-ext-sheet.png — Round 02; SHA256 405ec358f81c6905562165493e35e9b195093653bf99efc6b449da57b5ab9890"
+    ],
+    "invariants": [
+      "Low head, steep climb, fat high back.",
+      "Flat stacked plates mixed with sloping faces; no inflated deck rolls.",
+      "Part colours, nine-entry legend, views, cockpit pillars, recessed engines and thrusters.",
+      "BUBBLE 2.6 m label and visible underside magenta sockets."
+    ],
+    "accepted_decisions": [
+      "Selected the corrected second image from Round 02."
+    ],
+    "rejected_approaches": [
+      "Puffy tube-like hull layers rejected by Max."
+    ],
+    "unresolved": [],
+    "next_action": "Max reviews the revised hull surface construction."
+  }
+}

@@ -1,24 +1,29 @@
-# Round 01 — complete
+# Round 02 — complete
 
-Provenance: tool output_hint selected `/home/ax/.codex/generated_images/01a0fe0c-fe59-7d92-9604-bc21a57d7abe/exec-07bb6e8c-ec40-49b4-bb20-47338ca566e0.png`; copied unmodified to `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-151739-player-ship-ext-v3/out/player-ship-ext-sheet.png`. Verified byte equality; 1,430,596 bytes; 1944 × 809 pixels; SHA256 `750b20e293357fb39b6ec544e11b2c1c01c1074e24644de2ad1a6efdc19ed5e5`. Tool calls: 2 (initial generation + 1 edit). Initial prompt sent verbatim.
+Provenance: output_hint source `/home/ax/.codex/generated_images/01a0fe0c-fe59-7d92-9604-bc21a57d7abe/exec-4ee786d2-09b7-47e3-95f0-4e8210a2e16f.png` → `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-151739-player-ship-ext-v3/out/player-ship-ext-sheet.png`. Copy verified byte-identical: 1,437,508 bytes; 1942 × 809 pixels; SHA256 `405ec358f81c6905562165493e35e9b195093653bf99efc6b449da57b5ab9890`. This round: 2 tool calls; thread total: 4.
 
-1. PASS: four named orthographic views, shared baseline, small three-quarter view and black silhouette. Scale assessed visually, not measured.
-2. FAIL: figure labelled 1.8 m, LENGTH 18 m and all five part callouts present. The edit added BUBBLE but removed BUBBLE 2.6 m from the front view.
-3. PASS: side and silhouette show a low head rising steeply into a high, bulky body; deck rolls and orange spine follow the climb.
-4. FAIL: cockpit pillars, forward sockets, four recessed rear nozzles, modules, hatch and nine-entry legend are present. Bottom-facing magenta thrusters are not clearly visible.
-5. PASS: no decorative numbers, insignia, flames, exhaust, scene or cast shadows; text limited to labels and legend.
+Visual checks:
 
-Edit prompt, verbatim:
+1. PASS — four named orthographic views on one baseline, three-quarter view and black silhouette retained. Scale assessed visually, not measured.
+2. PASS — 1.8 m figure, LENGTH 18 m, BUBBLE 2.6 m and all five part callouts present.
+3. PASS — low head, steep climb and bulky high back retained in side view and silhouette.
+4. PASS — cockpit with two cream front pillars, forward sockets, magenta thrusters including underside sockets, four recessed rear nozzles, teal modules, red hatch and nine-entry legend visible. Deck construction follows this round's replacement instruction.
+5. PASS — no decorative numbers, insignia, flames, exhaust, scene or cast shadows.
+6. PASS — all four views and the three-quarter view show broad flat tiers, chamfered shoulders and sloping faces. Orange spine forms stepped ramps; yellow layers have varied thickness and firm edges.
+7. PASS — BUBBLE 2.6 m appears across the front-view cockpit.
 
-Change only the missing BUBBLE part callout: add the label BUBBLE with a leader line pointing to the pale-blue hanging cockpit in the side view.
+Initial round prompt used the supplied text verbatim from “Edit the previous sheet (Image 1).” through the complete KEEP paragraph, followed by “Tolerance: apart from the surface build, unchanged to the eye.”
 
-KEEP: everything in Image 1 except the front profile — parts, colours, legend, views and view names, labels, the bubble's rounded-cube shape and front pillars, the recessed engines and thrusters, the figure; flat fills with dark outlines on plain off-white. Add nothing not listed above.
+Corrective edit prompt, verbatim:
+
+Change only these two missing details: add the exact label "BUBBLE 2.6 m" across the glass bubble in the FRONT VIEW, and show one magenta recessed manoeuvring-thruster socket on the bottom-facing surface of the lowest teal underslung module in the small three-quarter view. Preserve the newly established stacked flat plates, chamfered shoulders and sloping wedge faces in every view.
+
+KEEP: the overall outline and insect profile of Image 1; the rounded-cube glass bubble hanging under the front with two cream pillars across its front face; the forward thruster sockets in the front view; magenta recessed manoeuvring thrusters; the engine block recessed inside the hull with four recessed rear nozzles; teal underslung modules (also firm, not puffy); red hatch; side, front, rear and top views with view names, one baseline, same scale; three-quarter view; black silhouette; the 1.8 m figure; "LENGTH 18 m", "BUBBLE 2.6 m" across the bubble in the front view, and the part callouts; the part colours (spine orange, decks yellow, etc.) and nine-entry legend; flat fills, dark outlines, plain off-white; no numbers, insignia, flames, exhaust, scene or shadows. Take nothing from Image 2 except how its hull surfaces are built (no paint, numerals, panel lines, windows, exhaust). Nothing smaller than 30 cm.
 
 ## Decisions
-- Used Image 1's part colours over the canon paint scheme.
-- Accepted the tool-selected 1944 × 809 canvas.
-- Stopped after the single permitted edit and reported remaining failures as instructed.
-- Used actual absolute Linux paths; this environment provided no /mnt/c destination.
+- Round 02 flat plates and sloping faces supersede the original stacked fat deck rolls.
+- Retained the overall envelope while allowing chamfered corners required by the new surface construction.
+- Used the permitted corrective edit to restore the bubble dimension and underside thruster visibility.
 
 ## Artifacts
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-151739-player-ship-ext-v3/out/player-ship-ext-sheet.png` — Selected concept sheet, copied unmodified.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-151739-player-ship-ext-v3/out/player-ship-ext-sheet.png` — Round 02 selected concept sheet, copied unmodified from built-in image generation.
