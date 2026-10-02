@@ -1,0 +1,117 @@
+{
+  "workstream": "player-ship-lab-2026-10-02",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "programRef": "PLAYER SHIP program, increment 1 of 4 (see intent.md 'Program')",
+  "designDecisions": [
+    "One GLB holds exterior hull AND cockpit interior (Max). Eye-point convention carried over from cockpit.glb: 1 unit = 1 m, Y-up, no scale normalisation, forward = -Z.",
+    "Length 16-20 m: SHIP_HULL_LENGTHS_M.player = 20 (src/core/ScaleConstants.js:154), Max allows 'slightly smaller'. Bubble outer width 1.8-3.0 m: helicopter-cabin scale per Max; the shipped cockpit.glb is 2.56 m wide, inside the range.",
+    "Triangle ceiling 3,000: derived as shipped cockpit.glb (782) + canon freighter-class hull budget (1,500), rounded up for the bubble glass and struts. A prototype ceiling, not a target.",
+    "Display plan comes BEFORE concept art: the number and placement of displays decide the mounts and consoles in the model.",
+    "Astra jobs follow the astra skill loop (2d sheet -> CC sheet review -> 3d -> CC model review). Every Astra output is a PLACEHOLDER (memory: well-dipper-ai-assets-are-placeholders).",
+    "Lab page is a new root-level HTML (player-ship-lab.html), sibling of cockpit-lab.html; no src/ edits."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-DISPLAY-PLAN",
+      "statement": "A display plan, worked out with Max, says how many displays the cockpit has, where each sits, and what each shows (the system you're in; the selected star/planet/moon/object; speed and status), and every item it lists is a value the sim actually tracks today, each with a src/ file:line.",
+      "verifyVia": {
+        "input": "Read docs/WORKSTREAMS/player-ship-lab-2026-10-02/DISPLAY-PLAN.md",
+        "observable": "Each listed readout cites a src/ file:line that produces it; no fuel/hull/heat/cargo/shield readout appears; Max's sign-off sentence is quoted verbatim."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-CONCEPT-SHEETS",
+      "statement": "Astra concept sheets exist for the exterior (Chris Foss references) and the helicopter-bubble cockpit, each passed the CC sheet review, staged at a Windows path, and Max's chosen direction is recorded verbatim.",
+      "verifyVia": {
+        "input": "Open each job's sheet-review.md and UAT.md under .astra/jobs/",
+        "observable": "sheet-review.md rows all PASS; the sheet PNG exists at the staged C:\\Users\\Max\\Documents\\Blender\\astra\\well-dipper-trunk\\... path; UAT.md holds Max's pick in his words."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-ONE-MODEL",
+      "statement": "One GLB contains both the ship's exterior and its bubble cockpit interior, at 16-20 m long, with a 1.8-3.0 m wide bubble, at most 3,000 triangles, flat matte materials, no cameras or lights, and an Eye_Point node inside the bubble.",
+      "verifyVia": {
+        "input": "python3 ~/.claude/skills/astra/scripts/probes/glb_info.py --json public/assets/ship/player-ship.glb",
+        "observable": "bbox long axis 16-20 m; tris <= 3000; cameras 0; lights 0; textures 0; node Eye_Point present, and its position lies inside the bubble's bounds."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-INTERFACE",
+      "statement": "INTERFACE.md next to the model lists everything the game may depend on (scale, origin, axes, every required node name and material slot), and the GLB conforms to it, so a hand-made replacement that meets the list drops in with no code change.",
+      "verifyVia": {
+        "input": "Run the conformance check named in INTERFACE.md against player-ship.glb, then against a GLB with Eye_Point renamed",
+        "observable": "Real GLB: PASS. Sabotaged GLB: FAIL naming Eye_Point (liveness probe)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-HOWTO",
+      "statement": "HOW-TO-REBUILD.md next to the model gives Max, as a beginner Blender user, a head start on hand-modelling it: purpose, key measurements, the reference images, a step order, which parts are free to redesign versus fixed by INTERFACE.md, and how to export and drop it in.",
+      "verifyVia": {
+        "input": "Read public/assets/ship/HOW-TO-REBUILD.md",
+        "observable": "All six sections present; every measurement matches the probe's numbers for the shipped GLB; export steps name the exporter settings that INTERFACE.md requires."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-AI-REGISTER",
+      "statement": "docs/AI-PLACEHOLDERS.md lists every AI-made file in the repo that could reach a build, marked placeholder or replaced, including this increment's GLB and sheets, and flags the grey-area files (Claude-scripted cockpit.glb and fighter GLBs, AI concept sheets used only as reference).",
+      "verifyVia": {
+        "input": "Read docs/AI-PLACEHOLDERS.md and list public/assets/**/*.glb",
+        "observable": "Every GLB under public/assets/ appears in the register with an origin and status; the new player-ship.glb is marked placeholder."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FLY-LAB",
+      "statement": "In player-ship-lab.html, one key press flies the camera from the outside view (behind and a little above the ship, mouse-orbitable) into the pilot's seat at the game's FOV, and the same key flies it back out, as a quick animation rather than a cut.",
+      "verifyVia": {
+        "input": "Open player-ship-lab.html in chrome-devtools, press the toggle key from outside, sample camera position each frame; press again from inside",
+        "observable": "Camera position changes over >= 0.25 s and <= 1.0 s with at least 10 intermediate frames (not a cut); ends within 1 cm of Eye_Point at the game FOV inside, and at the outside pose behind/above the ship; no console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-NOGAME",
+      "statement": "Nothing the game loads changes: no file under src/ is modified and the existing cockpit.glb is untouched.",
+      "verifyVia": {
+        "input": "git diff --stat <start>..HEAD -- src/ public/assets/cockpit/",
+        "observable": "Empty diff."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max flies in and out in the lab and judges: the cockpit feels appropriately sized compared to the ship, the view works inside and outside, and the ship reads as 'woah cool, I've never seen that kind of ship in a game before'.",
+      "verifyVia": {
+        "input": "Max opens player-ship-lab.html, orbits the ship, presses the toggle key in and out several times",
+        "observable": "Max's verdict, recorded verbatim."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "SHIP_HULL_LENGTHS_M.player (src/core/ScaleConstants.js:154) for size",
+      "cockpit.glb eye-point convention and the game FOV setting (src/ui/Settings.js) for the seat view",
+      "Real sim readouts feeding today's panels (src/cockpit/FlightReadout.js, InfoReadout.js, NavSource.js) for the display plan",
+      ".astra/canon/wd-design-language.md + Max's Foss and inspo images for Astra briefs"
+    ],
+    "outputs": [
+      "public/assets/ship/player-ship.glb + INTERFACE.md + HOW-TO-REBUILD.md (consumed by increment 2's HELM wiring)",
+      "DISPLAY-PLAN.md (consumed by increment 4)",
+      "docs/AI-PLACEHOLDERS.md (consumed by any future Steam build checklist)"
+    ],
+    "mustStayWorking": [
+      "Shipped HELM cockpit: cockpit.glb and its 46 named nodes read by src/cockpit/* (PanelLayout, PanelMover, ScreenUV tests)",
+      "cockpit-lab.html and cockpit-screens-lab.html",
+      "Full vitest suite at its current pass/fail count"
+    ]
+  }
+}
