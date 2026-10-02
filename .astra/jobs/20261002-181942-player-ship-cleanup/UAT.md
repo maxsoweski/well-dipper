@@ -20,3 +20,12 @@ Comparisons: `...\player-ship\out\player-ship-model-v1-exterior.png`, `...-model
 
 ## Max's verdict
 (pending)
+
+Max, 2026-10-02, on round 02, verbatim: "at least what I'm seeing of the outside, your call is right. That is a problem. Also, it's a bit too sleek. Like we've lost lots of the shapes of the kind of flat pancakes on the side and so on. And I'm noticing that the exhaust for the engines have protrusions when I want them to all be recessed."
+
+## Round 03 (Max's round-2 notes) — CC review
+Probe: 2,898 tris (2,140 + 758), 18.00 m, 13 materials, 0 textures/cameras/lights, `Bubble_MAIN` z −11.32 … −8.42.
+Simple gates: pancake/lens layers now stack along both flanks (three per side) — PASS by eye; rear nozzles sit in dark
+wells inside the grey carrier, nothing proud — PASS by eye; head: the bubble's roof now meets the underside of a flat,
+blunt-ended head (overhang 1.0 → 0.0 m) — improved, but the head still reads as a long low platform ahead of the climb.
+Max judges on the review page https://claude.ai/artifact/9b2gLE86hupgbSuzBiLPN3 (item "Round 2").

@@ -1,56 +1,52 @@
-# Round 02 — complete
+# Round 03 — complete
 
-Completed retopology and six review passes.
+Round 03 completed with four review passes.
 
-- **2,850 triangles:** 2,092 exterior + 758 cockpit; 150 below ceiling.
-- **34 meshes + Eye_Point**, exactly 13 materials; no textures, cameras or lights in GLB.
-- **Dimensions:** 11.580 × 18.024 × 10.789 m, Blender X/Y/Z.
-- **Bubble width:** 2.600 m; glTF Z range −11.788 to −8.888 m.
-- **Eye_Point:** (0, 9.788, −3.805) m; 1.200 m above floor.
-- **Open pilot view:** 67.316%, measured with 57,600 rays.
-- Seven display UV maps verified; flat normals and exterior symmetry verified.
-- Fresh re-import passed; maximum dimensional difference 0.000000477 m. Temporary scene deleted.
-- All nine required PNGs verified at 960×540; game image verified as exact nearest-neighbour 3× enlargement.
-- Exterior, cockpit, scale and silhouette checks: **PASS by agent inspection**. Max’s approval is not claimed.
+- **Head:** bubble overhang reduced from 1.000 m to 0.000 m; roof meets the blunt head’s underside.
+- **Layers:** three broad flank lenses added; spine, aft lobes and six undercarriage modules preserved.
+- **Engines:** projecting rims removed; carrier recessed 0.200 m, nozzle interiors recessed another 0.180–0.400 m.
+- **Budget:** 2,898 triangles — 2,140 exterior + 758 cockpit; 36 meshes plus Eye_Point; 13 materials.
+- **Scale:** 18.000 m length; 2.600 m bubble width; eye 1.200 m above floor.
+- **Preservation:** cockpit geometry relative to Eye_Point unchanged within 0.000001 m; pilot view remains 67.316% open.
+- **Validation:** GLB re-import dimensions match exactly; required nodes and seven UV faces pass. All nine required renders exist. All 28 listed artifacts verified.
 
-Full part counts, material colours, decisions and loop log: [report.md](/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/report.md).
+Full acceptance measurements, object/material tables and per-pass differences are in report.md. Before/after comparison places Round 02 left and Round 03 right.
 
 ## Decisions
-- Built clean intersecting forms fitted to the sculpt’s views and envelope; performed no further decimation.
-- Assigned the specified colours per named part.
-- Used three supported underslung modules per side, including a long aft pod.
-- Mirrored exterior hatches and ports exactly; retained asymmetric cockpit screens.
-- Used a uniform solid-envelope estimate on a 0.25 m voxel grid to place the centre of mass at the origin.
-- Kept the numeric 2.6 m bubble width despite the larger generated cockpit region.
-- Compensated the exporter’s V inversion so delivered display UVs increase upward.
-- Preserved the original and guide scenes in the blend; exported only the selected active-scene asset.
+- Used three symmetric intersecting lens layers and paired shoulder domes.
+- Moved the complete cockpit 0.100 m aft before recentering; preserved every cockpit mesh relative to Eye_Point.
+- Extended the blunt head over the bubble, keeping the overall length exactly 18 m.
+- Built coplanar engine mouths with inward bevels and recessed dark wells.
+- Mounted the red hatches on the flat rear undercarriage modules, following the exterior concept, after conforming flank patches intersected the new lenses.
+- Retained the uniform-density, 0.25 m voxel-union estimate for centre of mass.
+- Archived Round 02 deliverables and this round’s intermediate renders while retaining directly accessible comparison sheets.
 
 ## Artifacts
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship.glb` — Validated ship and cockpit asset.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship.blend` — Authoring model with named parts and separate hidden guide scene.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-34.png` — Re-imported GLB three-quarter render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-top.png` — Orthographic top render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-side.png` — Orthographic side render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-rear.png` — Orthographic rear render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-front.png` — Orthographic front render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-pilot.png` — Re-imported cockpit at Eye_Point, 70° vertical FOV.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-chase.png` — Chase camera render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-34-game.png` — 320×180 render enlarged exactly 3×.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-silhouette.png` — Black silhouette on white.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r02-pass1.png` — Pass 1 comparison against references.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r02-pass2.png` — Pass 2 comparison against references.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r02-pass3.png` — Pass 3 comparison against references.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r02-pass4.png` — Pass 4 comparison against references.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r02-pass5.png` — Pass 5 comparison against references.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r02-pass6.png` — Final re-imported model comparison.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r02-images.zip` — 36 archived intermediate renders, including final game-resolution source.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/retopo_ship.py` — Clean geometry construction script.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/finalize_retopo.py` — Part consolidation, symmetry, centring and export script.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/render_ship.py` — Render and camera configuration.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review_ship.py` — Comparison-sheet and nearest-neighbour image assembly.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/verify_render_ship.py` — Fresh re-import validation, final rendering and temporary-scene cleanup.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/probe_ship.py` — Independent GLB validation script.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/audit.json` — Blender measurements and re-import results.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/metrics.json` — Independent GLB and image measurements.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/report.md` — Complete acceptance report and six-pass loop log.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/manifest.json` — Verified file sizes and SHA-256 hashes.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship.glb` — Final validated model
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship.blend` — Editable Blender model with preserved scenes and hidden guide
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-34.png` — ¾ render from re-imported GLB
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-top.png` — Top render
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-side.png` — Side render
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-rear.png` — Rear render
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-front.png` — Front render
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-pilot.png` — Pilot render from re-imported GLB
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-chase.png` — Chase render
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-34-game.png` — 320×180 render enlarged exactly 3×
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/player-ship-silhouette.png` — Black silhouette on white
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/report.md` — Acceptance report and four-pass Loop log
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/audit.json` — Blender geometry and re-import audit
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/metrics.json` — Independent GLB probe and preservation measurements
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/manifest.json` — Artifact sizes and SHA-256 hashes
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r03-pass1.png` — First reference comparison
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r03-pass2.png` — Second reference comparison
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r03-pass3.png` — Third reference comparison
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r03-pass4.png` — Final reference comparison
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/round03-before-after.png` — Before/after side, rear and ¾ comparison
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review-r03-images.zip` — 25 intermediate and baseline review images
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/round02-baseline.zip` — 15 preserved Round 02 files
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/round03-baseline.json` — Baseline geometry and transforms
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/revise_round03.py` — Exterior revision script
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/finalize_round03.py` — Consolidation, audit and export script
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/review_round03.py` — Comparison-sheet and image utilities
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/verify_render_round03.py` — Re-import and final rendering script
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/probe_round03.py` — Independent GLB validation script
