@@ -3,7 +3,7 @@ import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { realStarSeed } from '../generation/realStarSeed.js';  import { realStarKey } from '../generation/GalaxyGrid.js';   // ⚠ second statement on this line to keep line numbers stable
-import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';
+import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';  import { sameStar } from './navViewModes/starIdentity.js';   // ⚠ second statement on this line to keep line numbers stable
 import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
@@ -897,7 +897,7 @@ export class NavComputer {
       worldX: this._selectedNavStar.wx,
       worldY: this._selectedNavStar.wy,
       worldZ: this._selectedNavStar.wz,
-      seed: this._selectedNavStar.seed,
+      seed: this._selectedNavStar.seed, key: this._selectedNavStar.key,
       name: this._selectedNavStar.name,
       type: this._selectedNavStar.spectral,
     };
@@ -1132,7 +1132,7 @@ export class NavComputer {
       moonIndex: this._selectedBody.moonIndex ?? null,
       star: {
         wx: this._systemStar.wx, wy: this._systemStar.wy, wz: this._systemStar.wz,
-        seed: this._systemStar.seed, name: this._systemStar.name, spectral: this._systemStar.spectral,
+        seed: this._systemStar.seed, key: this._systemStar.key, name: this._systemStar.name, spectral: this._systemStar.spectral,
       },
     };
     return action;
@@ -1462,7 +1462,7 @@ export class NavComputer {
         this._levelIndex = 3;
         // Stash binary status on the prism star so prism view can show a double-dot
         if (this._systemData?.isBinary && this._systemStar) {
-          const match = this._localStars.find(s => s.seed === this._systemStar.seed);
+          const match = this._localStars.find(s => sameStar(s, this._systemStar));   /* naming-prism-segments AC-2: by identity, never the seed — a twin sharing the seed took the binary mark */
           if (match) {
             match._isBinary = true;
             match._star2Type = this._systemData.star2?.type || null;
@@ -3752,7 +3752,7 @@ export class NavComputer {
     );
 
     for (const s of stars) {
-      const key = `${s.seed}-${s.worldX.toFixed(6)}`;
+      const key = s.key;   /* naming-prism-segments AC-2: the generator's (tier, cell) identity — the old `${seed}-${x.toFixed(6)}` ignored Y, Z and tier */
       if (!this._loadedSeen.has(key)) {
         this._loadedSeen.add(key);
         let name = '';
@@ -3765,7 +3765,7 @@ export class NavComputer {
           wx: s.worldX, wy: s.worldY, wz: s.worldZ,
           name, spectral: s.type,
           color: NavComputer._SPECTRAL_COLORS[s.type] || '#ff9664',
-          seed: s.seed, dist: s.dist,
+          seed: s.seed, key: s.key, ident: s.ident, dist: s.dist,
           distPc: (s.dist * 1000).toFixed(0),
         });
       }

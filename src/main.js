@@ -2370,7 +2370,7 @@ window._lab = {
     }
     if (galleryMode) exitGallery();
     const sysData = StarSystemGenerator.generate(seed);
-    sysData._destType = 'star-system';
+    sysData._destType = 'star-system'; sysData._seedNamed = true;   // no galactic position: named from its own seed (_seedSystemName)
     spawnSystem({ forWarp: false, systemData: sysData });
 
     // ── ORRERY entry tail (added at the master→lane-A merge, 2026-08-06) ──
@@ -5745,7 +5745,7 @@ function _buildCurrentStarEntry() {
     wx: gs.worldX, wy: gs.worldY, wz: gs.worldZ,
     name: _currentSystemName || '',
     spectral: gs.type || system?._systemData?.star?.type || 'G',
-    seed: gs.seed, dist: 0, distPc: '0',
+    seed: gs.seed, key: gs.key, dist: 0, distPc: '0',
   };
 }
 
@@ -5778,7 +5778,7 @@ function _skyTargetNavStar() {
   const wy = d.worldY || 0;
   const spectral = d.type || 'G';
   return {
-    wx: d.worldX, wy, wz: d.worldZ, seed: d.seed, name: warpTarget.name || d.name || '', spectral,
+    wx: d.worldX, wy, wz: d.worldZ, seed: d.seed, key: d.key, name: warpTarget.name || d.name || '', spectral,
     color: NavComputer._SPECTRAL_COLORS?.[spectral] || '#ffefb0',
     dist: Math.hypot(d.worldX - p.x, wy - (p.y || 0), d.worldZ - p.z),
   };
@@ -6112,7 +6112,7 @@ function dispatchNavAction(action) {
       // warping to the player's selection (the boot target gets NO settled arrival).
       _pendingPlayerWarp = {
         wx: action.star.wx, wy: action.star.wy, wz: action.star.wz,
-        seed: action.star.seed, name: action.star.name, type: action.star.spectral,
+        seed: action.star.seed, key: action.star.key, name: action.star.name, type: action.star.spectral,
       };
       console.log(`[NAV DISPATCH] player warp STASHED post-FOLD → ${action.star?.name} (seed=${action.star?.seed}); redirect at reveal — boot target gets no settled arrival (AC6)`);
       return;
@@ -6129,7 +6129,7 @@ function dispatchNavAction(action) {
       const _wasTurning = warpTarget.turning;
       _setWarpTargetFromNavStar({
         worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
-        seed: action.star.seed, name: action.star.name, type: action.star.spectral,
+        seed: action.star.seed, key: action.star.key, name: action.star.name, type: action.star.spectral,
       });
       if (_wasTurning) warpTarget.turning = true;
       console.log(`[WARP] player overwrites in-flight warp target pre-FOLD — player WINS → ${action.star?.name} (seed=${action.star?.seed})`);
@@ -6153,7 +6153,7 @@ function dispatchNavAction(action) {
       _sky.wz - action.star.wz) < POSITION_MATCH_TOL;
     if (!_isSkyStar) _setWarpTargetFromNavStar({
       worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
-      seed: action.star.seed, name: action.star.name, type: action.star.spectral,
+      seed: action.star.seed, key: action.star.key, name: action.star.name, type: action.star.spectral,
     });
     // orrery-coherence-2026-07-15 W2 (systemEntryStyle, seam map §2): HELM →
     // 'warp-cinematic', today's beginWarpTurn portal/warpEffect path. ORRERY →
@@ -6272,7 +6272,7 @@ function _setWarpTargetFromNavStar(navStar) {
     worldX: navStar.worldX,
     worldY: navStar.worldY,
     worldZ: navStar.worldZ,
-    seed: navStar.seed,
+    seed: navStar.seed, key: navStar.key,   // naming-prism-segments AC-2: the star's identity rides to arrival (currentGalaxyStar)
     type: navStar.type,
   };
   warpTarget.name = navStar.name || generateSystemName(new SeededRandom(`warp-nav-${navStar.seed}`), { x: navStar.worldX, y: navStar.worldY, z: navStar.worldZ });
@@ -7595,6 +7595,26 @@ function _hideCurrentSystem() {
 }
 
 /**
+ * The name of a system that is NOT a galaxy star — or null for one that is.
+ *
+ * Function · `SEED <seed>` for a system spawned from a bare seed (the lab's
+ *   `spawnProceduralSystem`, which is also the title-screen bypass and `?system=`,
+ *   and the debug panel's seed and star-system spawns), marked `_seedNamed` at
+ *   those call sites. Null for everything else, which keeps its normal name.
+ * Intent · naming-prism-segments plan §3.5 / AC-2: these systems have no
+ *   galactic position, and naming them from wherever the player happened to be
+ *   gave two seeds at one spot one name and one seed at two spots two names.
+ *   They sit OUTSIDE the galaxy-name guarantee and are named from their own
+ *   seed, in a shape no galaxy name takes (survey names are `XXX J…`, procgen
+ *   multipart names `Word-CODE`, both with no `SEED ` head).
+ * Non-goals · no warp, sky, nav, teleport or known-system arrival is seed-named
+ *   (none sets the flag), and no procedural or real name changes — that is Phase 5.
+ */
+function _seedSystemName(systemData) {
+  return systemData && systemData._seedNamed ? `SEED ${systemData.seed}` : null;
+}
+
+/**
  * Generate and display a full star system (single or binary).
  * @param {Object} options
  * @param {boolean} options.forWarp  — if true, skip camera setup + flythrough start (warp handles that)
@@ -7740,9 +7760,10 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     // name is unique by construction and revisit-stable. Every warp spawn carries
     // a position (systemData.galacticPosition, set at warp resolution); debug/title
     // spawns fall back to the current player position — never a no-position
-    // fallback (D5 eliminated per ac5-decision.md).
+    // fallback (D5 eliminated per ac5-decision.md). A seed-only spawn (debug,
+    // title bypass, ?system=) is named from its own seed instead (_seedSystemName).
     const namingPos = systemData.galacticPosition || systemData._warpTargetPos || playerGalacticPos;
-    systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || null, namingPos);
+    systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || _seedSystemName(systemData) || null, namingPos);
   }
 
   // ── Create star(s) ──
@@ -8412,6 +8433,7 @@ function _debugSpawnType(destType) {
 
   if (destType === 'star-system') {
     preGenData = StarSystemGenerator.generate(seed);
+    preGenData._seedNamed = true;   // no galactic position: named from its own seed (_seedSystemName)
   } else if (destType.includes('galaxy')) {
     preGenData = GalaxyGenerator.generate(seed, destType);
   } else if (destType.includes('cluster')) {
@@ -8528,7 +8550,7 @@ debugPanel.setSpawnCallbacks({
   spawnWithSeed: (seed) => {
     if (galleryMode) exitGallery();
     const sysData = StarSystemGenerator.generate(seed);
-    sysData._destType = 'star-system';
+    sysData._destType = 'star-system'; sysData._seedNamed = true;   // no galactic position: named from its own seed (_seedSystemName)
     spawnSystem({ forWarp: false, systemData: sysData });
     console.log(`Debug spawn with seed: "${seed}"`);
   },
@@ -10028,7 +10050,7 @@ function warpRevealSystem() {
     console.log(`[WARP] reveal REDIRECT — consuming stashed player warp → ${_pw.name} (seed=${_pw.seed}); boot target gets NO settled arrival (AC6)`);
     _setWarpTargetFromNavStar({
       worldX: _pw.wx, worldY: _pw.wy, worldZ: _pw.wz,
-      seed: _pw.seed, name: _pw.name, type: _pw.type,
+      seed: _pw.seed, key: _pw.key, name: _pw.name, type: _pw.type,
     });
     setTimeout(() => beginWarpTurn(), 0);
     return;

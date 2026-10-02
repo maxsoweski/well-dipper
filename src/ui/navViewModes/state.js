@@ -115,6 +115,7 @@ import { simClockMs } from '../../core/SimClock.js';
  *  build — the AC-4 defect shape, counted by the adversarial pass. `picking.js` already owns the
  *  driver's copy for the rail's z-flip, so the lag's `toView.size` reads that one. */
 import { gridNFallback } from './picking.js';
+import { sameStar, starMemoKey } from './starIdentity.js';
 import alea from 'alea';
 
 /** `NavComputer.js:69`, verbatim. */
@@ -557,27 +558,30 @@ export function makeViewState() {
      *   `refresh()` can see a `V` that landed on the OTHER design and close the moon sub-view with
      *   it. `-1` is "no frame yet", which matches neither 1 nor 2 and so resets on the first paint. */
     design: -1,
-    nameBySeed: new Map(),
+    nameByStar: new Map(),
     // ⭐ AC-10 (nav-defects-batch-2026-09-18) — see `multFor`. `multGm` remembers WHICH galactic map the
     // filled values were rolled against, because a value rolled with no context is a different answer
     // and caching it silently would be worse than not filling at all.
-    multBySeed: new Map(),
+    multByStar: new Map(),
     multGm: undefined,
   };
 
   /** The system name for a prism star — memoised, because `generateSystemName` is not cheap and the
-   *  rank runs over every loaded star. Keyed by seed, which is what the name is derived from. */
+   *  rank runs over every loaded star. ⛔ Keyed by the star's IDENTITY (`starMemoKey`), not its seed:
+   *  two stars can share a seed, and a seed-keyed memo handed the second one the first one's name
+   *  (naming-prism-segments AC-2). */
   const nameFor = (s) => {
     if (s.name) return s.name;
-    if (cache.nameBySeed.has(s.seed)) return cache.nameBySeed.get(s.seed);
+    const k = starMemoKey(s);
+    if (cache.nameByStar.has(k)) return cache.nameByStar.get(k);
     let n = '';
     try { n = generateSystemName(makeRng(s.seed), { x: s.wx, y: s.wy, z: s.wz }); } catch (e) { n = ''; }
-    cache.nameBySeed.set(s.seed, n);
+    cache.nameByStar.set(k, n);
     return n;
   };
 
   /**
-   * ⭐⭐ AC-10 (nav-defects-batch-2026-09-18) — HOW MANY STARS A ROW'S SYSTEM HAS, MEMOISED BY SEED.
+   * ⭐⭐ AC-10 (nav-defects-batch-2026-09-18) — HOW MANY STARS A ROW'S SYSTEM HAS, MEMOISED BY STAR.
    *
    * Three consumers read `s.mult` on ORDINARY rows and all three got `undefined`: `d2Prism`'s
    * multiplicity pips (`designs.js:1582`), the rail's COMPS column (`:1234`) and `SORT_KEYS[3]`'s
@@ -586,11 +590,12 @@ export function makeViewState() {
    * spreading `_localStars` entries and those carry no multiplicity — the oracle that answers the
    * question has existed the whole time and nothing called it.
    *
-   * ⛔ KEYED BY SEED AND NEVER INVALIDATED, WHICH IS WHAT MAKES FILLING EVERY ROW AFFORDABLE.
+   * ⛔ KEYED BY THE STAR (`starMemoKey` — its identity, never its seed: naming-prism-segments AC-2, two
+   * stars can share a seed) AND NEVER INVALIDATED, WHICH IS WHAT MAKES FILLING EVERY ROW AFFORDABLE.
    * `starRowsBase` is REBUILT EVERY TIME THE BACKGROUND LOADER GROWS `_localStars` — measured
    * headless at 417x240: 31 rebuilds carrying the list from 212 to 9,988 rows in chunks of 153-973 —
    * so a fill that recomputed would pay the whole cost once per rebuild. Against this map a rebuild
-   * pays only for the seeds it has never seen.
+   * pays only for the stars it has never seen.
    *
    * ⭐ MEASURED, BECAUSE THE SEAM ASKED FOR A NUMBER (node, this machine, 2026-09-18): a cold
    * `multiplicityForSeed` costs 0.97-1.60 us per row (four passes over 9,988 real prism rows: 16.0,
@@ -609,14 +614,15 @@ export function makeViewState() {
    *   name catches were caught wearing. A number is always published.
    */
   function multFor(row, gm) {
-    if (cache.multBySeed.has(row.seed)) return cache.multBySeed.get(row.seed);
+    const k = starMemoKey(row);
+    if (cache.multByStar.has(k)) return cache.multByStar.get(k);
     let m = 1;
     try {
       m = multiplicityForSeed({ seed: row.seed, pos: { x: row.wx, y: row.wy, z: row.wz },
                                 type: row.spectral, name: row.name }, { galacticMap: gm }).count;
     } catch (e) { m = 1; }
     if (!Number.isFinite(m) || m < 1) m = 1;
-    cache.multBySeed.set(row.seed, m);
+    cache.multByStar.set(k, m);
     return m;
   }
 
@@ -986,7 +992,7 @@ export function makeViewState() {
     const starKey = sortKeyFor(S, 3);
     if (cache.starsRef !== D.stars || cache.starsLen !== D.stars.length) {
       cache.starsRef = D.stars; cache.starsLen = D.stars.length; cache.starSortId = null;
-      // ⭐ AC-10 — `mult` IS FILLED HERE, ON EVERY ROW, THROUGH THE SEED MAP. See `multFor` for the
+      // ⭐ AC-10 — `mult` IS FILLED HERE, ON EVERY ROW, THROUGH THE STAR MAP. See `multFor` for the
       //    measurement that says this is affordable and for why it is not lazy. ⛔ AFTER `nameFor`,
       //    because the oracle's highest-precedence chain is `KnownSystems.findByAlias(name, pos)` —
       //    Alpha Centauri reports 3 by NAME and would roll 1 or 2 procedurally without one.
@@ -1003,7 +1009,7 @@ export function makeViewState() {
     //   without this the COMPS sort would be the identity for as long as that base survived. One pass,
     //   at most once, and it re-ranks by clearing the sort id the way a key change does.
     if (cache.starRowsBase && D.gm && cache.multGm !== D.gm) {
-      cache.multGm = D.gm; cache.multBySeed.clear(); cache.starSortId = null;
+      cache.multGm = D.gm; cache.multByStar.clear(); cache.starSortId = null;
       for (const row of cache.starRowsBase) row.mult = multFor(row, D.gm);
     }
     if (cache.starRowsBase && cache.starSortId !== starKey.id) {
@@ -1029,7 +1035,9 @@ export function makeViewState() {
 
     // ── WHAT IS SELECTED. The pilot's choice, never the adapter's.
     const sel = nav._selectedNavStar;
-    D.selStar = sel ? (D.starRows.find((r) => r.seed === sel.seed) || {
+    //    ⛔ FOUND BY IDENTITY (`sameStar`), NEVER THE SEED (naming-prism-segments AC-2): a seed match
+    //    put the highlight, the detail block and the commit line on a twin that shares the seed.
+    D.selStar = sel ? (D.starRows.find((r) => sameStar(r, sel)) || {
       ...sel, name: nameFor(sel), pc: (sel.dist ?? 0) * 1000, ly: (sel.dist ?? 0) * KPC_TO_LY,
     }) : null;
     D.target = D.selStar || (nav._externalTarget ? {

@@ -48,6 +48,7 @@
  * the columns between are inside the region and outside the picture. Clamping a click there would
  * drill the edge tile of a map the pilot did not click on. `projRect` is the PICTURE, never the pane.
  */
+import { sameStar } from './starIdentity.js';
 
 /** Where each level's pick is written. `_handleClick` reads exactly these three fields. */
 export const HOVER_FIELD = ['_hoveredTile', '_hoveredTile', '_hoveredTile',
@@ -268,7 +269,8 @@ export function pickPrismStar(nav, S, x, y, mapRegion) {
   const hp = (lab && (lab.kind === 'index' || lab.kind === 'star'))
     ? lab : nearestHit(S.prismHits, x, y);
   if (!hp || !hp.ref) return null;
-  const live = (nav._localStars || []).find((t) => t && t.seed === hp.ref.seed) || hp.ref;
+  // ⛔ BY IDENTITY, NEVER THE SEED (naming-prism-segments AC-2): two marks can share a seed.
+  const live = (nav._localStars || []).find((t) => sameStar(t, hp.ref)) || hp.ref;
   return { star: live, sx: hp.x, sy: hp.y };
 }
 

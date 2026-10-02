@@ -50,6 +50,7 @@ import { railGeometry, barsGeometry, tabIndexAt } from './geometry.js';
 import { pickSector, pickTile, pickPrismStar, pickBody, bodyIdentity,
          usableProj, insideProj, projRect, cellAt, gridNFallback, tileOf, HOVER_FIELD } from './picking.js';
 import { makeSearch } from './search.js';
+import { sameStar } from './starIdentity.js';
 import { FACE, measurePixelText } from '../../rendering/PixelText.js';
 import { simClockMs } from '../../core/SimClock.js';
 
@@ -492,8 +493,10 @@ export function makeViewModeDriver(nav) {
       const s = D.starRows[i];
       if (!s) return null;
       // `_handleClick` drills `this._hoveredLocalStar.star`, and the star it wants is the one in
-      // `_localStars` — not the ranked COPY the adapter made. Match by seed.
-      const live = (nav._localStars || []).find((t) => t && t.seed === s.seed) || s;
+      // `_localStars` — not the ranked COPY the adapter made. ⛔ Matched by IDENTITY (`sameStar`),
+      // never the seed: two stars can share a seed, and the row clicked is the star drilled
+      // (naming-prism-segments AC-2).
+      const live = (nav._localStars || []).find((t) => sameStar(t, s)) || s;
       return { star: live, sx: 0, sy: 0 };
     }
     // ⭐ AC-1 — AND THE ROW ITSELF GOES OUT WITH IT, for the reason `pickBody`'s `out` exists:
@@ -888,7 +891,7 @@ export function makeViewModeDriver(nav) {
       nav._onCommit({
         type: 'warp', target: 'star',
         star: { wx: star.wx, wy: star.wy, wz: star.wz,
-                seed: star.seed, name: star.name, spectral: star.spectral },
+                seed: star.seed, key: star.key, name: star.name, spectral: star.spectral },   // `key` rides to arrival (AC-2)
       });
     }
     return true;

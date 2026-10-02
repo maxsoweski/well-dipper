@@ -445,14 +445,14 @@ export class AutopilotNavSequence {
       moonIndex: null,
       star: {
         wx: star.wx, wy: star.wy, wz: star.wz,
-        seed: star.seed, name: star.name, spectral: star.spectral,
+        seed: star.seed, key: star.key, name: star.name, spectral: star.spectral,
       },
     };
 
     if (this._onWarpReady) {
       this._onWarpReady({
         worldX: star.wx, worldY: star.wy, worldZ: star.wz,
-        seed: star.seed, name: star.name, type: star.spectral,
+        seed: star.seed, key: star.key, name: star.name, type: star.spectral,
       });
     }
 

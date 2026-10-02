@@ -106,7 +106,8 @@ function withCatalogue(nav) {
   for (const s of CATALOGUE) {
     nav._localStars.push({ wx: c.x + s.dx, wy: c.y + s.dy, wz: c.z + s.dz,
                            dist: Math.hypot(s.dx, s.dz, s.dy), seed: s.key, name: s.key,
-                           spectral: s.spectral, isReal: true, color: '#ffffff' });
+                           spectral: s.spectral, isReal: true, color: '#ffffff',
+                           key: `r:${s.key}` });   // the catalogue identity the real-star merge gives every real row (naming-prism-segments AC-2)
   }
   nav.render();
   return nav;
@@ -506,7 +507,7 @@ describe('AC-3 — design 1 names its catalogue stars, and both designs print th
   it('⛔ THE EIGHT INDEX DIGITS ARE GONE AND THE NAMES ARE ON THE MARKS, SELECTED FIRST', async () => {
     const h = await loadedNav();
     withCatalogue(h.nav);
-    h.nav._selectedNavStar = { seed: 'SIRIUS' };
+    h.nav._selectedNavStar = { seed: 'SIRIUS', key: 'r:SIRIUS' };   // ⚠ by IDENTITY: since naming-prism-segments AC-2 the adapter never finds a star by its seed
     const nav = await at(h.nav, 'rail', 3);
     const r = paint(nav, 1);
     const mapLabels = r.lines.filter((l) => (r.S.labelHits || []).some((hit) => hit.x === l.x && hit.y === l.y));
