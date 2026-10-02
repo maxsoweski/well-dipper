@@ -65,4 +65,15 @@ its own scoped contract when we reach it.
 
 ## Sign-off
 
-(Max's sentence goes here.)
+Max, 2026-10-02, verbatim: "Your instruments plan sounds good to me; fuel is only relevant in terms of warping, so
+some kind of contextual display makes sense. Hull integrity/systems statuses are a good thing to display. Let's
+figure that out after getting the basic nav systems worked out in the cockpit"
+
+## Deferred by Max (after the basic nav systems work in the cockpit)
+
+- **Warp fuel** — relevant only for warping; a contextual display (shown when warp is in play). Needs a fuel model
+  the sim does not have yet.
+- **Hull integrity / systems status** — wanted. Needs a damage/systems model the sim does not have yet.
+
+Both need new simulation, not just new displays; scope them as their own workstream when we get there. Leave room
+for one contextual readout near the warp glyph and one status readout when placing instruments on the model.
