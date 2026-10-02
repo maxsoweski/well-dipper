@@ -42,6 +42,13 @@
       "note": "slab loader + segment bar; option D confirmed or reopened here"
     },
     {
+      "phase": "3b",
+      "acs": [
+        "AC-14"
+      ],
+      "note": "generator fixes before the name freeze (Max 2026-10-02 'yes')"
+    },
+    {
       "phase": 4,
       "acs": [
         "AC-9"
@@ -164,6 +171,15 @@
         "observable": "The set of replaced procedural identities and resulting rows is identical across all orders."
       },
       "layer": "integration"
+    },
+    {
+      "id": "AC-14",
+      "statement": "Before any name is frozen, fix the two generator defects Phase 1 found (Max ruled 'yes' 2026-10-02): (a) the acceptance test and the X offset read overlapping hash bits, so wherever acceptance < 1/256 every accepted star sits exactly on its cell's lower X face (340/340 at (0,0,16)); (b) the star seed hash loses precision, so distinct stars can share a seed. Stars may move or change once; names change once anyway at Phase 5.",
+      "verifyVia": {
+        "input": "Unit tests over HashGridStarfield at the rim, Sol and the inner galaxy; a sampled volume for seed uniqueness.",
+        "observable": "Fraction of stars exactly on a cell face matches chance (~1/256 per axis, no location at 100%); zero duplicate seeds across the sampled volume; the Phase 1 identity/ownership tests still pass; regression baselines re-recorded deliberately with the change named in the commit."
+      },
+      "layer": "unit"
     },
     {
       "id": "AC-9",
