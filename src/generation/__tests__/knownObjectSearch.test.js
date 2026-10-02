@@ -20,6 +20,7 @@ import { RealStarCatalog } from '../RealStarCatalog.js';
 import { RealFeatureCatalog } from '../RealFeatureCatalog.js';
 import { enumerateNamedSystems } from '../NameGenerator.js';
 import { realStarSeed } from '../realStarSeed.js';
+import { KnownSystems } from '../KnownSystems.js';
 
 function loadJson(rel) {
   return JSON.parse(readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf-8'));
@@ -72,10 +73,15 @@ describe('resolveKnownObjects — (a) real stars', () => {
     expect(typeof hit.seed).toBe('number');
   });
 
-  it('resolves Rigil Kentaurus (HYG proper name) to a star hit', () => {
-    const hit = run('Rigil Kentaurus').find(r => r.kind === 'star');
+  it('resolves Rigil Kentaurus (HYG proper name) to its system — the star row is folded into Alpha Centauri', () => {
+    // Rigil's HYG record IS Alpha Centauri's registered position, so the catalogue
+    // hit is the same destination as the registry entry: one row, the registry's.
+    const results = run('Rigil Kentaurus');
+    expect(results.some(r => r.kind === 'star')).toBe(false);
+    const hit = results.find(r => r.kind === 'registry');
     expect(hit).toBeDefined();
-    expect(hit.name).toBe('Rigil Kentaurus');
+    expect(hit.name).toBe('Alpha Centauri');
+    expect(hit.matchedAlias).toBe('Rigil Kentaurus');
     expect(hit.worldPos.x).toBeCloseTo(8.000948, 4);
   });
 
@@ -110,17 +116,14 @@ describe('resolveKnownObjects — (d) registry-name bridge (debug-panel gap)', (
   });
 
   it('resolves an alias ("Rigil Kentaurus") back to its registry entry', () => {
-    // Alpha Centauri claims Rigil Kentaurus as a derived alias (eager far/self +
-    // catalog association). Without a catalog associate() the alias set at least
-    // holds the self-name; Rigil resolves via the STAR source regardless, and if
-    // present as an alias it also yields a registry row pointing at Alpha Cen.
+    // Alpha Centauri claims Rigil Kentaurus as a derived alias only after a
+    // catalog associate(); before that, the catalogue Rigil row sits inside Alpha
+    // Centauri's arrival radius and is folded into the registry row. Either way
+    // the query yields exactly ONE row, and it is Alpha Centauri.
     const results = run('Rigil Kentaurus');
-    const reg = results.find(r => r.kind === 'registry');
-    // A registry alias hit is optional pre-associate; when present it must point
-    // at Alpha Centauri, not a spurious entry.
-    if (reg) expect(reg.name).toBe('Alpha Centauri');
-    // The star source always resolves Rigil.
-    expect(results.some(r => r.kind === 'star' && r.name === 'Rigil Kentaurus')).toBe(true);
+    const reg = results.filter(r => r.kind === 'registry');
+    expect(reg.map(r => r.name)).toEqual(['Alpha Centauri']);
+    expect(results.some(r => r.kind === 'star' && r.name === 'Rigil Kentaurus')).toBe(false);
   });
 });
 
@@ -229,5 +232,75 @@ describe('toNavStar — SearchResult → warp nav-star adapter', () => {
     expect(star).toBeDefined();
     const hit = run('Sirius').find(r => r.kind === 'star' && r.name === 'Sirius');
     expect(hit.seed).toBe(realStarSeed(star.x, star.y, star.z));
+  });
+});
+
+// ── UAT 2026-09-30 fix (E): one search row per destination ──────────────────
+// Max: "Sol returns 2 entries--star and system. When you're outside the system,
+// there's no disctinction". A catalogue star inside a registry entry's arrival
+// radius is the SAME destination as that entry; the search lists it once, as the
+// registry row, which warps exactly as before (authored system on arrival).
+describe('resolveKnownObjects — one row per destination (UAT fix E)', () => {
+  /** The arrival destination a row warps to: the known system its position lands in, else the row itself. */
+  const destinationOf = (r) => KnownSystems.findAt(r.worldPos)?.name ?? `${r.kind}:${r.name}`;
+  const QUERIES = ['Sol', 'so', 'Alpha Cen', 'Centauri', 'Rigil', 'Rigil Kentaurus', 'Toliman', 'Proxima', 'Proxima Centauri', 'Sirius', 'Barnard'];
+
+  function expectOneRowPerDestination(q) {
+    const dests = run(q).map(destinationOf);
+    const dupes = dests.filter((d, i) => dests.indexOf(d) !== i);
+    expect(dupes, `"${q}" lists a destination twice: ${JSON.stringify(dests)}`).toEqual([]);
+  }
+
+  it('"Sol" yields ONE row, the registry system, with no spectral override', () => {
+    const sol = run('Sol').filter(r => destinationOf(r) === 'Sol');
+    expect(sol).toHaveLength(1);
+    expect(sol[0].kind).toBe('registry');
+    expect(sol[0].name).toBe('Sol');
+    expect(toNavStar(sol[0]).type).toBeUndefined();
+  });
+
+  it('warping from the merged Sol row lands in the authored Sol (13 planets)', () => {
+    const nav = toNavStar(run('Sol').find(r => destinationOf(r) === 'Sol'));
+    const pos = { x: nav.worldX, y: nav.worldY, z: nav.worldZ };
+    // Both arrival joins (nav pick → findByAlias, sky → findAt) reach the entry.
+    const byAlias = KnownSystems.findByAlias(nav.name, pos);
+    expect(byAlias?.name).toBe('Sol');
+    expect(KnownSystems.findAt(pos)).toBe(byAlias);
+    expect(byAlias.generate().planets).toHaveLength(13);
+  });
+
+  it('every Alpha Centauri name (system, Rigil, Toliman, Proxima) is ONE Alpha Centauri row that warps into the authored system', () => {
+    for (const q of ['Alpha Centauri', 'Rigil Kentaurus', 'Toliman', 'Proxima Centauri', 'Centauri']) {
+      const rows = run(q).filter(r => destinationOf(r) === 'Alpha Centauri');
+      expect(rows, `"${q}"`).toHaveLength(1);
+      expect(rows[0].kind, `"${q}"`).toBe('registry');
+      expect(rows[0].name, `"${q}"`).toBe('Alpha Centauri');
+      const nav = toNavStar(rows[0]);
+      expect(nav.type, `"${q}" carries no spectral override`).toBeUndefined();
+      const pos = { x: nav.worldX, y: nav.worldY, z: nav.worldZ };
+      expect(KnownSystems.findByAlias(nav.name, pos)?.name, `"${q}" arrival`).toBe('Alpha Centauri');
+    }
+  });
+
+  it('stars OUTSIDE a registry arrival radius stay star rows (Sirius, Barnard\'s Star)', () => {
+    expect(run('Sirius').find(r => r.name === 'Sirius')?.kind).toBe('star');
+    expect(run("Barnard").find(r => r.name === "Barnard's Star")?.kind).toBe('star');
+  });
+
+  it('no query lists one destination twice — before catalog association', () => {
+    for (const q of QUERIES) expectOneRowPerDestination(q);
+  });
+
+  // Runs LAST in this file: associate() mutates the registry singleton's alias
+  // sets (it is what the live game does once the catalogue loads), so the
+  // registry now matches Rigil / Toliman / Proxima by alias too.
+  it('no query lists one destination twice — after catalog association (the live game state)', () => {
+    KnownSystems.associate(realStarCatalog);
+    expect([...KnownSystems.getAll().find(k => k.name === 'Alpha Centauri').aliases])
+      .toEqual(expect.arrayContaining(['Rigil Kentaurus', 'Toliman', 'Proxima Centauri']));
+    for (const q of QUERIES) expectOneRowPerDestination(q);
+    const reg = run('Toliman').find(r => r.kind === 'registry');
+    expect(reg?.name).toBe('Alpha Centauri');
+    expect(reg?.matchedAlias).toBe('Toliman');
   });
 });

@@ -173,9 +173,11 @@ describe('FIX-4 invariant — dropped names stay searchable to the right destina
     // Registry hit points at the authored Alpha Centauri system...
     const reg = results.find((r) => r.kind === 'registry');
     expect(reg?.name).toBe('Alpha Centauri');
-    // ...and the star-source hit lands on Rigil Kentaurus (α Cen's primary row,
-    // which is Alpha Centauri's registered position), never a separate Toliman.
-    const star = starHit(results);
-    expect(star.name).toBe('Rigil Kentaurus');
+    // ...and the star-source hit (Rigil Kentaurus, α Cen's primary row, which
+    // absorbed Toliman and sits AT Alpha Centauri's registered position) is
+    // folded into that registry row — one row per destination (UAT 2026-09-30
+    // fix E), never a separate Toliman or a second Rigil row.
+    expect(starHit(results)).toBeUndefined();
+    expect(results.filter((r) => r.kind === 'registry')).toHaveLength(1);
   });
 });

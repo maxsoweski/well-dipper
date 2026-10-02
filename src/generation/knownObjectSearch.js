@@ -21,6 +21,16 @@
  *                         panel scans only HYG `_stars.name`, so it misses these.
  *                         NEW GAP.
  *
+ * ONE ROW PER DESTINATION (UAT 2026-09-30, Max: "Sol returns 2 entries--star and
+ * system. When you're outside the system, there's no disctinction"). A catalogue
+ * star that sits inside a registry entry's arrival radius (`MATCH_RADIUS` — the
+ * same test `KnownSystems.findAt` and `associate()` use) IS that registry
+ * destination: warping to it lands in the authored system anyway. Such a star is
+ * FOLDED into the registry row (Sol ← catalogue Sol; Alpha Centauri ← Rigil
+ * Kentaurus / Toliman / Proxima Centauri) instead of listed beside it, so the
+ * merged row warps exactly as the registry row always has (registry name +
+ * position + seed, no spectral override).
+ *
  * Intent: AC2 needs the same multi-source resolution as the debug panel, on a
  * NON-debug surface (the nav computer), plus the two gaps above. A shared pure
  * resolver is unit-testable headless (this file's test). Deliberately NOT here:
@@ -47,11 +57,14 @@
  * @property {string} [harrisId]  Harris catalog id (globular only, display).
  * @property {number} [radius]    Structure radius, kpc (structure only, display).
  * @property {string} [matchedAlias]  The alias string that matched (registry, or a
- *                                 star hit resolved via a catalog-dedup alias).
+ *                                 star hit resolved via a catalog-dedup alias). A
+ *                                 registry row reached only through a FOLDED
+ *                                 catalogue star carries that star's name (or the
+ *                                 dedup alias that matched on it).
  */
 
 import { enumerateNamedSystems } from './NameGenerator.js';
-import { KnownSystems } from './KnownSystems.js';
+import { KnownSystems, MATCH_RADIUS } from './KnownSystems.js';
 import { realStarSeed } from './realStarSeed.js';
 import { searchKnownObjects } from '../data/KnownObjectProfiles.js';
 
@@ -108,6 +121,23 @@ function seedFromPos(x, y, z) {
 }
 
 /**
+ * The registry entry whose arrival radius holds `pos`, or null. Same test as
+ * `KnownSystems.findAt` (and the claim `associate()` makes), written over
+ * `getAll()` so an injected `knownSystems` needs only that one method.
+ * @param {Object} knownSystems @param {{x,y,z}} pos
+ * @returns {Object|null}
+ */
+function registryEntryAt(knownSystems, pos) {
+  for (const ks of knownSystems.getAll()) {
+    const p = ks.position;
+    if (!p) continue;
+    const dx = pos.x - p.x, dy = (pos.y || 0) - (p.y || 0), dz = (pos.z || 0) - (p.z || 0);
+    if (Math.sqrt(dx * dx + dy * dy + dz * dz) < MATCH_RADIUS) return ks;
+  }
+  return null;
+}
+
+/**
  * Resolve a query against all four known-object sources.
  *
  * @param {string} query
@@ -142,6 +172,10 @@ export function resolveKnownObjects(query, {
   // Australis ← Xi UMa; ...) also matches on those absorbed names, resolving them
   // to the ONE surviving destination (canonical name, position, F1 seed). This is
   // what keeps every dropped designation searchable after the dedup.
+  // A hit inside a registry entry's arrival radius is NOT listed here: it is
+  // folded into that entry's registry row below (one row per destination), and
+  // does not count against STAR_CAP.
+  const folded = new Map(); // registry entry -> the matched string of its first folded star
   const catalog = realStarCatalog;
   if (catalog?.loaded && Array.isArray(catalog._stars)) {
     for (const star of catalog._stars) {
@@ -149,6 +183,13 @@ export function resolveKnownObjects(query, {
       const aliasHit = !nameHit && Array.isArray(star.aliases)
         && star.aliases.some((a) => a.toLowerCase().includes(q));
       if (nameHit || aliasHit) {
+        const ks = registryEntryAt(knownSystems, star);
+        if (ks) {
+          if (!folded.has(ks)) {
+            folded.set(ks, nameHit ? star.name : star.aliases.find((a) => a.toLowerCase().includes(q)));
+          }
+          continue;
+        }
         stars.push({
           name: star.name,
           worldPos: { x: star.x, y: star.y, z: star.z },
@@ -172,7 +213,10 @@ export function resolveKnownObjects(query, {
   // Kentaurus / Toliman / Proxima → Alpha Centauri). A registry hit resolves to
   // the entry's own position; warp arrival then applies the authored/merged
   // system via the known-system override (position + name), so no spectral type
-  // is carried.
+  // is carried. An entry that holds a FOLDED catalogue star (above) gets its row
+  // even when the query matched only that star — before `associate()` runs the
+  // alias set does not yet name Rigil Kentaurus, but the star is still Alpha
+  // Centauri's destination.
   const registrySeen = new Set();
   for (const ks of knownSystems.getAll()) {
     let matchedAlias = null;
@@ -183,6 +227,7 @@ export function resolveKnownObjects(query, {
         if (alias && alias.toLowerCase().includes(q)) { matchedAlias = alias; break; }
       }
     }
+    if (!matchedAlias && folded.has(ks)) matchedAlias = folded.get(ks);
     if (matchedAlias && !registrySeen.has(ks.name)) {
       registrySeen.add(ks.name);
       const pos = ks.position || { x: 0, y: 0, z: 0 };
@@ -261,7 +306,8 @@ export function resolveKnownObjects(query, {
   }
 
   // Merge order: stars, registry, named, structures (most-specific identity
-  // first). Slice to the overall limit.
+  // first). Slice to the overall limit. No destination appears twice across
+  // stars + registry: registry-radius stars were folded above.
   return [...stars, ...registry, ...named, ...structures].slice(0, limit);
 }
 
