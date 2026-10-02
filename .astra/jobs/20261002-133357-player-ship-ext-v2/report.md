@@ -1,46 +1,47 @@
-# Round 05 — complete
+# Round 06 — complete
 
-One edit produced two dark, magenta-ringed forward sockets and two cream pillars across the front glass. The rounded-cube bubble remains recognisable. **The edit dropped the BUBBLE 2.6 m label**, a preservation failure.
+One edit completed. The engine block now sits inside the yellow rear hull outline, BUBBLE 2.6 m is restored, and the visible canopy ribs have shifted forward. Preservation deviations: the side BUBBLE callout disappeared and a 1.8 m label was added.
 
-Provenance: output_hint source `/home/ax/.codex/generated_images/01a0fdae-12f7-7da1-a242-86bcea6d477c/exec-3f8669b8-6493-44cf-b735-b89c026c8072.png` → `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png`; 1,375,423 bytes; 1942 × 809 pixels; SHA256 `db881d26cf6c245a4e0615f58a5a3e46b1bbd90a846080bcf1b12b947b112088`. Copy verified byte-identical. Calls: 1 edit this round, 7 cumulative.
+Provenance: output_hint source `/home/ax/.codex/generated_images/01a0fdae-12f7-7da1-a242-86bcea6d477c/exec-84eec3af-79ab-4ccb-8f05-49203109baf2.png` → `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png`; 1,380,641 bytes; 1944 × 809 pixels; SHA256 `8d0f78228a1b4cff8157d6dd5f9801953cf0650753518b27dd44a211631e88ad`. Copy verified byte-identical. Calls: 1 edit this round, 8 cumulative.
 
-1. **FAIL** — Four named principal views and baseline retained; existing scale mismatch remains.
-2. **PASS** — Black human retained beside side view.
-3. **FAIL** — LENGTH 18 m and five part callouts retained; BUBBLE 2.6 m missing.
-4. **PASS** — Layered rolls, spine and underslung modules preserved.
-5. **PASS** — Approximately 11.3 human heights long, within ±20% tolerance.
-6. **FAIL** — Front pillars now clear; original bubble-height criterion remains unmet.
-7. **FAIL** — Part colours retained; subtle shading remains instead of strictly flat fills.
-8. **PASS** — Solid black silhouette retained.
-9. **PASS** — No extraneous scene, insignia, flames, exhaust or cast shadows.
-10. **PASS** — Rear view retains four face-on main nozzle sockets.
-11. **PASS** — Main engines remain rear-facing.
-12. **FAIL** — Cockpit hangs below forward hull, but central module remains lower in side view.
-13. **PASS** — Complete nine-entry legend retained.
-14. **PASS** — Bubble remains a rounded block, not a sphere.
-15. **FAIL** — Manoeuvring ports and legend retained, with hidden-face coverage inferred as permitted. Several older ports still lack clear dark interiors and appear smaller than 30 cm.
-16. **PASS** — Front view now shows two dark recessed sockets with magenta rings at nose-deck height. They are noticeably larger than corresponding side-view markings.
-17. **FAIL** — Two cream pillars cross the front-view glass into three panes and appear toward the front in the three-quarter view. Side view retains its previous central-looking rib, so placement is not consistently demonstrated across all required views.
-18. **PASS** — Rounded-cube bubble outline preserved to the eye, with minor front-view widening.
+1. **FAIL** — Four named principal views and shared baseline retained; existing scale mismatch remains.
+2. **PASS** — Black human retained, now explicitly labelled 1.8 m.
+3. **FAIL** — Both exact dimension labels present. SPINE, DECKS, ENGINES and HATCH callouts remain; standalone BUBBLE callout disappeared, though BUBBLE remains in the legend and dimension label.
+4. **PASS** — Layered rolls, spine and underslung hardware retained.
+5. **PASS** — Visible side length approximately ten human heights, within ±20% tolerance. Dimension line extends beyond the shortened rear outline.
+6. **FAIL** — Front pillars remain clear; original bubble-height criterion remains unmet.
+7. **FAIL** — Nine part colours retained; subtle tonal variation remains.
+8. **PASS** — Black silhouette updated with a rounded hull rear and no projecting engine block.
+9. **PASS** — No insignia, flames, exhaust, scene or cast shadows. Text remains labels, although 1.8 m was newly added.
+10. **PASS** — Rear view retains four dark face-on nozzle sockets inside the surrounding yellow hull.
+11. **PASS** — Main nozzles remain rear-facing; none appears face-on in side or top view.
+12. **FAIL** — Hanging cockpit remains above the lowest central module in side view.
+13. **PASS** — Complete nine-entry colour legend retained.
+14. **PASS** — Bubble remains a rounded block.
+15. **FAIL** — Manoeuvring ports remain distributed around the hull, with hidden-face coverage inferred. Some still lack clear recessed interiors and appear below 30 cm.
+16. **PASS** — Two dark magenta-ringed forward sockets retained in front view.
+17. **PASS** — Front view retains two cream pillars across the glass; side and three-quarter ribs now sit toward the canopy's forward portion. Exact cross-view alignment remains approximate.
+18. **PASS** — Rounded-cube bubble shape preserved to the eye.
+19. **PASS** — Yellow hull defines the rear outline in side and top views; grey engine block no longer projects beyond it.
+20. **PASS** — Exact BUBBLE 2.6 m text restored across the front-view bubble.
+21. **PASS** — Visible side-view cream rib shifted toward the forward third of the canopy; three-quarter framing also shifted forward.
 
-Measurements are visual estimates, not geometry probes. Layout, hull massing, colours, rear engines, hatch and legend remain unchanged to the eye.
+Inspection is visual, not a geometry probe. The front-view label partially covers the pillars; overall layout, legend, hatch and forward sockets remain intact.
 
 Edit prompt, verbatim:
 
-Edit the previous sheet (Image 1 = latest sheet). Image 2 in the conversation is the sheet from one round earlier and indicates the earlier canopy pillar position. Use the explicit pillar placement below.
+Edit the previous sheet (attached). Change only these three things:
+1. ENGINES FULLY RECESSED: the grey engine block no longer sticks out behind the hull. Its rear face sits flush with, or set back inside, the rear ends of the yellow deck rolls and the orange spine, so nothing extends past the body at the back. In the side and top views the ship's rear outline is the deck rolls, with the engine block tucked inside them; the rear view still looks straight into the four recessed nozzles. Update the black silhouette to match.
+2. RESTORE THE LABEL: the "BUBBLE 2.6 m" label was dropped last round; put it back across the bubble in the front view, exactly that text.
+3. SIDE-VIEW PILLARS: in the side view and three-quarter view, the cockpit frame's pillars sit at the FRONT of the canopy (matching the two front pillars the front view now shows), not in the middle of the glass.
 
-Change only these two things:
-1. FRONT VIEW THRUSTERS: in the front view, show the forward-facing manoeuvring thrusters face-on — the magenta recessed ports at the nose (the pair visible at the nose in the side view) appear in the front view as dark recessed sockets ringed in magenta, at the matching height and spacing. Add any other forward-facing ports the side and top views imply.
-2. CANOPY PILLARS: move the cockpit frame's two thick pillars back to roughly where they were in Image 2: two cream pillars running vertically up the FRONT face of the glass, in front of the pilot, dividing the front glass into a centre pane and two side panes, meeting the frame at the top and bottom. In the front view they cross the glass face-on; in the side and three-quarter views they show at the front of the canopy. These are structural pillars for later instrument and HUD mounting; do not add instruments or HUD elements now.
+KEEP: the front view exactly as it is now (forward thruster sockets, two front pillars, rounded-cube bubble), except for restoring its dimension label; the bubble's shape; everything else unchanged — side, front, rear and top views with view names, one baseline, same scale; three-quarter view; black silhouette; 1.8 m figure; "LENGTH 18 m" and the part callouts; massing; part colours and nine-entry legend; flat fills, dark outlines, plain off-white; no numbers, insignia, flames, exhaust, scene or shadows. Add nothing not listed above.
 
-KEEP: the bubble's new shape exactly ("a spherical cube"); everything else on the sheet unchanged — side, front, rear and top views with view names, one baseline, same scale; three-quarter view; black silhouette; 1.8 m figure; labels "LENGTH 18 m", "BUBBLE 2.6 m" and the part callouts; massing; part colours and the nine-entry legend; flat fills, dark outlines, plain off-white; no numbers, insignia, flames, exhaust, scene or shadows. Add nothing not listed above.
-
-Tolerance: unchanged to the eye apart from the two changes; a few pixels' drift is not a failure.
+Tolerance: unchanged to the eye apart from the three changes.
 
 ## Decisions
-- Used round 04 as the edit target and the explicit front-pillar placement instruction to resolve the earlier reference's ambiguity.
-- Added no instruments or HUD elements.
-- Preserved unrelated drawing issues within the limited edit scope.
+- Restoring the bubble dimension label is the specified exception to preserving the front view.
+- Preserved unrelated scale and drawing issues within this round's limited scope.
 
 ## Artifacts
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png` — Round 05 sheet, copied unmodified from the image-tool edit result.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png` — Round 06 sheet, copied unmodified from the image-tool edit result.
