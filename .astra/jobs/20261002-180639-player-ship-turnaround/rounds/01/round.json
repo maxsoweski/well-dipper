@@ -1,0 +1,31 @@
+{
+  "argv": [
+    "codex",
+    "exec",
+    "-C",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-180639-player-ship-turnaround",
+    "-m",
+    "gpt-6-astra",
+    "-c",
+    "model_reasoning_effort=\"medium\"",
+    "-c",
+    "mcp_servers.blender.enabled=false",
+    "-s",
+    "workspace-write",
+    "--json",
+    "-o",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-180639-player-ship-turnaround/rounds/01/result.json",
+    "--output-schema",
+    "/home/ax/projects/personal-os-improvements/astra-lane/skill/scripts/result.schema.json",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-180639-player-ship-turnaround/refs/player-ship-ext-sheet.png",
+    "-"
+  ],
+  "exit": 0,
+  "timed_out": false,
+  "started": "2026-10-02T18:06:39",
+  "finished": "2026-10-02T18:09:56",
+  "archived": [
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-180639-player-ship-turnaround/out/r01/player-ship-turnaround.png"
+  ]
+}
