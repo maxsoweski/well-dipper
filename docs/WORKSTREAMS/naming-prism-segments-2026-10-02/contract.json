@@ -26,7 +26,9 @@
         "observable": "A written report (docs/WORKSTREAMS/naming-prism-segments-2026-10-02/PHASE0.md) naming the dominant cost with numbers, explaining the browser-vs-headless gap (3 s vs 0.2 s), and stating the measured option-D slab time at both locations against 50 ms."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "VERIFIED_PENDING_MAX 7554b70",
+      "progress": "MEASURED LIVE 2026-10-02 at 7554b70 (Chrome 154, lane-A server :5175), report PHASE0.md, Astra second opinion folded in (PHASE0 §10). What costs the 3 s: the per-cell galaxy-density call, 62% of CPU in _spiralPotentialOnly (GalacticMap.js:844, 7 calls x 6 arms per cell). XIGMAG is at R = 17.0 kpc (the sparse rim, not near the core as this AC says), so its query box is 76.8 pc wide because _localCubeSize is used as a half-width (NavComputer.js:1188 -> :3698/:3750 vs :1593): 728,424 cells per 100 pc step vs Sol's 64,792, 1.86-2.18 s per query, 3.5-4.2 s per background callback, 32 callbacks, 116.6 s to fill the column (63,924 rows). Browser vs headless: the headless probes never tested R = 17; on identical bounds node takes 1.28-1.33 s and Chrome 2.0 s (same stars, same density calls), so the gap is ~10x box size times an observed ~1.5-1.65x engine factor; the profiler added nothing measurable. The cockpit nav keeps loading its own column alongside the overlay. Option D slab (7.8125 x 7.8125 x 100 pc) in Chrome: warm query 26.5-30.8 ms (max 32.1) inner galaxy, 29.2-30.9 ms (max 33.0) Sol, 22.6-26.5 ms XIGMAG, 4.0-4.4 ms bulge - all under 50 ms; with a cold feature cache 66-71 ms inner and 55 ms Sol - over 50 ms. Naming (~2 us/star) and multiplicity (~18-21 ms per dense slab, inferred) come on top. Verdict: Decision 0 stands, conditional on the Phase 3 loader slicing inside a slab under one deadline shared by both nav instances. Not yet measured (Phase 3): leaving PRISM, the six sort modes, cancelling a slab, swapping a same-size slab. Status sha note: 7554b70 is the code that was measured; the report lands in the commit after it, which cannot cite its own sha (no amend)."
     },
     {
       "id": "AC-1",
