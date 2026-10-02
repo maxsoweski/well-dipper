@@ -1,12 +1,15 @@
 # Plan: one cell = one place, location-based star names, and a segmented PRISM column
 
-*Lane A, branch `feature/world-engine-production-L1`. Written 2026-10-02. This is a **plan only**: no code was changed and this file was not committed. This is the **third draft**. Draft 2 folded in a critique (section 11). Draft 3 makes your "one cell = one thing one level down" rule the first principle and rebuilds the grid around it (section 0). Section 13 lists what changed and why.*
+*Lane A, branch `feature/world-engine-production-L1`. Written 2026-10-02. This is a **plan only**: no code was changed. Draft 4 is not committed yet. This is the **fourth draft**. Draft 2 folded in a critique. Draft 3 made your "one cell = one thing one level down" rule the first principle (section 0). Draft 4 folds in Astra's review of draft 3 and your rulings since then. The biggest addition is section 3: before any name is frozen, every star must have exactly one owner and one identity that the whole game uses. Section 14 lists what changed and why.*
 
 **How to read the labels:**
 - **[V]** = verified. Checked in the code (file:line given) or measured by a script running the real modules headless.
+- **[A]** = measured by Astra in its review and **not re-checked** by us (the browser-trace timings in section 8).
 - **[I]** = inference or design proposal. Not built, not tested.
 
-Scratch scripts behind the numbers are in `/tmp/claude-1000/-home-ax/e3bfb779-bd19-48ee-9c65-af3fc876407b/scratchpad/`. Draft 3's grid numbers come from `onecell/`: `a-quadtree.mjs` (today's sector sizes), `b-uniform.mjs` and `d-offset.mjs` (uniform grids), `c-prism.mjs` (stars and timing per slab), `e-examples.mjs` (worked examples), `f-today.mjs` (what today's GALAXY cells contain), `g-cells.mjs` (work per slab). Older numbers: `plan-ex.mjs`, `cov.mjs`, `rev-cells.mjs`, `geo*.mjs`, `prism-*.mjs`, `sec.mjs`.
+Astra's review: `.astra/jobs/20261002-103745-naming-prism-plan-review/report.md` (verdict: **feasible with changes; option D stands provisionally; not ready to freeze names**). A review agent checked Astra's findings against the code: 14 of 15 confirmed; the per-slab loop count was confirmed by recompute; Astra's own trace timings were not re-checked.
+
+Scratch scripts behind the numbers are in `/tmp/claude-1000/-home-ax/e3bfb779-bd19-48ee-9c65-af3fc876407b/scratchpad/onecell/`: `a-quadtree.mjs` (today's sector sizes), `b-uniform.mjs` and `d-offset.mjs` (uniform grids), `c-prism.mjs` (stars and timing per slab), `e-examples.mjs` (worked examples; **draft 4 uses `e2-examples-rowsfromtop.mjs`**, which fixes the grid references), `f-today.mjs` (what today's GALAXY cells contain), `g-cells.mjs` (work per slab; **undercounts**, see §8).
 
 ---
 
@@ -16,532 +19,507 @@ Scratch scripts behind the numbers are in `/tmp/claude-1000/-home-ax/e3bfb779-bd
 
 > "at each level of the navigation screen, what should be represented by the cells in the grid is the next level down in terms of resolution. So, each cell in the galaxy should represent a single sector. Otherwise, we won't be able to actually navigate between them coherently. Every cell in the sector view should be displaying a single region. Every cell in the region view should be displaying a single prism. If that's not how it's working today, we need to reconsider the scale at which each of these things is representing what's inside of it. And consider a different approach if that's not feasible."
 
-**Why it matters.** When a cell is exactly one child, clicking it takes you to that child, the name of the cell is the name of the child, and the "where am I" label can point at one cell. When a cell holds pieces of several children (or a child is spread over several cells), the click, the label and the name can each pick a different one, so they stop agreeing.
+**Why it matters.** When a cell is exactly one child, clicking it takes you to that child, the name of the cell is the name of the child, and the "where am I" label can point at one cell. When a cell holds pieces of several children, the click, the label and the name can each pick a different one, so they stop agreeing.
 
-Everything else in this plan (names, the segment bar, the label, loading) now hangs off a grid that obeys this rule.
+Section 3 applies the same idea one level further down: **every star belongs to exactly one box**, so its name, its click and its warp all point at the same star.
 
 ### 0.2 Today, level by level [V]
 
 | Screen | The rule says each cell is… | What a cell is today | Obeys? |
 |---|---|---|---|
-| **GALAXY** | one sector | **Design 1** draws a plain 8×8 grid over a 36 kpc square (4.5 kpc cells: `designs.js:1062-1066`, `:1109-1135`). It does **not** follow the sectors. 52 cells are drawn. Each touches **2 to 163 sectors (median 4); none holds exactly one**. Sol's cell touches 15 (`f-today.mjs`). A click goes to whichever of the 775 sectors is under the pointer; the code itself says the cell and the sector "are DIFFERENT OBJECTS" (`designs.js:760-767`). **Design 2** draws each sector as a single dot, with no grid (`designs.js:2942-2947`). The 8 densest cells get ids such as "A1" (`designs.js:1158-1173`, `:1209-1216`). | **No** |
-| **SECTOR** | one region | Drilling from GALAXY sets the view to that sector's own square, cut 8×8 (`NavComputer.js:4636-4646`, `:71-73`). So **on arrival** each cell is one region. But the grid is drawn relative to the view, and dragging moves the view (`NavComputer.js:4362-4369`), so after a drag the cells straddle regions. | Only until you drag |
-| **REGION** | one prism | Drilling from SECTOR lines up (`NavComputer.js:4655-4672`). The **default** REGION view is 16 × a density-based tile centred on the player (`NavComputer.js:1216-1221`), so its cells are nobody's prisms. Dragging breaks it too. | Only if you drilled and did not drag |
-| **PRISM** | one prism column | Loads a box of width 2 × max(3 pc, a ~150-star tile) around the clicked tile's centre (`NavComputer.js:4677-4678`), not the tile itself (section 2.4). | **No** |
+| **GALAXY** | one sector | **Design 1** draws a plain 8×8 grid over a 36 kpc square (4.5 kpc cells: `designs.js:1062-1066`, `:1109-1135`). It does **not** follow the sectors. 52 cells are drawn. Each touches **2 to 163 sectors (median 4); none holds exactly one**. Sol's cell touches 15 (`f-today.mjs`). The code itself says the cell and the sector "are DIFFERENT OBJECTS" (`designs.js:760-767`). **Design 2** draws each sector as a dot, with no grid (`designs.js:2942-2947`). | **No** |
+| **SECTOR** | one region | Drilling from GALAXY sets the view to that sector's own square, cut 8×8 (`NavComputer.js:4636-4646`, `:71-73`). After a drag the cells straddle regions (`:4362-4369`). | Only until you drag |
+| **REGION** | one prism | Drilling lines up (`NavComputer.js:4655-4672`). The **default** REGION view is a density-based tile around the player (`:1216-1221`), so its cells are nobody's prisms. | Only if you drilled and did not drag |
+| **PRISM** | one prism column | Loads a box around the clicked tile's centre (`NavComputer.js:4677-4678`), not the tile itself (§2.4). | **No** |
 
-**Corrections to the brief I was given [V]:** the GALAXY grid on screen is *not* the 4 kpc base grid inside `GalacticSectors` (that one starts at −15 kpc, `GalacticSectors.js:97-108`). It is a 4.5 kpc grid re-fitted to the reachable disc. And Sol's 4 kpc base square holds 10 sectors, not 16; the busiest base square holds 223, not 256 (`a-quadtree.mjs`).
+Sol's 4 kpc base square holds 10 sectors and the busiest holds 223 (`a-quadtree.mjs`).
 
 ### 0.3 Why GALAXY is the hard case [V]
 
-Today's 775 sectors are an **adaptive quadtree**: dense ground is cut into smaller squares so each sector holds roughly the same number of stars (`GalacticSectors.js:4-17`, `:126-159`). The sizes are very uneven (`a-quadtree.mjs`):
-
-| Sector size | How many | Width on design 1's GALAXY (216 texels across 36 kpc = 6 texels per kpc) |
-|---|---|---|
-| 0.25 kpc | **480** (62%) | **1.5 texels** |
-| 0.5 kpc | 96 | 3 texels |
-| 1 kpc | 106 | 6 texels |
-| 2 kpc | 52 | 12 texels |
-| 4 kpc | 41 | 24 texels |
-
-Every 0.25 kpc sector sits within R < 4 kpc. A two-character label in the 5×5 pixel font is 11 texels wide, and the existing draw code requires a cell of at least 14 texels to hold one (`designs.js:1163`). Today's chunky 27-texel cells, which you said were good, exist because the grid ignores the sectors.
+Today's 775 sectors are an **adaptive quadtree**: dense ground is cut smaller so each sector holds roughly the same number of stars (`GalacticSectors.js:4-17`, `:126-159`). 480 of them (62%) are 0.25 kpc wide, which is **1.5 texels** on design 1's GALAXY (6 texels per kpc). A two-character label needs a cell of at least 14 texels (`designs.js:1163`). Today's chunky 27-texel cells exist only because the grid ignores the sectors.
 
 ### 0.4 The options for GALAXY
 
-Each option is described as: what you would see, whether it obeys the rule on every screen, what it does to naming, what it does to the PRISM column, and its risks.
+Numbers assume design 1's 216-texel map square (`designs.js:822-828`) [V].
 
-Numbers below assume design 1's 216-texel map square (`designs.js:822-828`: 69 × 40 character cells at 417×240, map 42 cells wide; the square is the 216-texel map height) [V].
-
-#### Option A: draw the quadtree itself on GALAXY (mixed-size cells)
-
-- **What you see:** big squares on the rim, a blizzard of tiny squares in the middle. 480 of the 775 sectors are 1.5 texels wide: too small to see as squares, to click, or to label. To label a 0.25 kpc sector you would need to zoom GALAXY **9.3×**; even a 1 kpc one needs 2.3×. So GALAXY becomes a zoomable map with its own zoom control.
-- **Rule:** obeyed on paper at GALAXY (each drawn square is one sector), but not usable without zoom. SECTOR and REGION obey it if the drill snaps (section 5). Neighbouring sectors of different sizes still meet at SECTOR level (0.25 next to 4 kpc), so neighbour drawing stays complicated.
-- **Naming:** 775 sectors plus rim fill plus an outer ring (draft 2's plan) to hand-review. Sector edges are computed from the density model, so retuning density would move them and rename stars.
-- **PRISM:** keeps equal-ish star counts per prism (1.95 pc wide in the core, 31.25 pc on the rim; ~290 to ~1,700 stars per 100 pc slab). But the work per slab is uneven: a 31.25 pc rim prism evaluates **128,808 cells** per slab, a core one 1,953 (`g-cells.mjs`). The worst slab measured 199 ms warm headless.
-- **Risks:** GALAXY zoom is new UI on both designs; hand-review of ~800 words; uneven loading cost.
-
-#### Option B: replace the quadtree with a uniform sector grid
-
-Every sector is the same size, and the 8×8 regions and 16×16 prisms beneath keep today's drill counts.
-
-| | **B1: 1 kpc sectors** | **B2: 2 kpc sectors** |
-|---|---|---|
-| GALAXY grid | 36×36 at **6 texels** a cell | 18×18 at **12 texels** a cell |
-| Sectors that touch R ≤ 18 kpc (where stars exist) | 1,076 | 284 |
-| Region (8×8) | 125 pc | 250 pc |
-| Prism (16×16) | **7.81 pc** everywhere | **15.63 pc** everywhere |
-| Stars per 100 pc mid-plane slab: bulge R 0.3 / inner R 1.5 / R 4 / Sol / outer R 12 / rim R 16 | 6,662 / 5,449 / 1,430 / 312 / 106 / 15 | 26,911 / 22,335 / 5,865 / 1,258 / 420 / 52 |
-| Warm headless time per slab | 5–27 ms | 17–72 ms |
-| Cells evaluated per slab (same everywhere) | 12,485 | 37,349 |
-
-(`b-uniform.mjs`, `c-prism.mjs`, `g-cells.mjs`)
-
-- **What you see:** B1's 6-texel GALAXY cells can be clicked but carry no labels and lose all of today's chunkiness. B2's 12-texel cells can be clicked and read through edge labels (letters along the top, numbers down the side), but not labelled inside.
-- **Rule:** obeyed on every screen, because a uniform grid is the same grid however you pan. A cell is always exactly one child.
-- **Naming:** B1 has ~1,100 sector words (too many to hand-review comfortably); B2 has ~280 (reviewable). Sector edges become plain arithmetic, so density retuning can never move them.
-- **PRISM:** the trade-off flips. Prism width is the same everywhere, so **the work per slab is the same everywhere** (12,485 cells for B1). Star counts per slab now vary a lot: B1's core slab holds ~6,700 stars against 15 on the rim. B2's core slab holds ~27,000.
-- **Equal stars per sector is lost.** That was the quadtree's purpose (`GalacticSectors.js:4-12`). Nothing uses it today: the only readers of the sector table are the nav and the autopilot's drill animation [V: grep of `getSectorAt` / `getSectors` / `sectorRows` in `src/`].
-
-#### Option C: add a level so every screen is uniform and chunky
-
-GALAXY → **ZONE** → SECTOR → REGION → PRISM. For example: GALAXY 10×10 of 4 kpc zones (21.6 texels, room for an id inside each cell; 83 zones touch R ≤ 18) → ZONE 4×4 of 1 kpc sectors (54 texels: room for a whole sector word) → SECTOR 8×8 of 125 pc regions (27 texels) → REGION 16×16 of 7.81 pc prisms.
-
-- **What you see:** every screen keeps big, labelled cells. It costs one extra click on every trip down, and one more screen to learn.
-- **Rule:** obeyed. But a GALAXY cell is a *zone*, not a sector, which bends your wording ("each cell in the galaxy should represent a single sector").
-- **Naming:** ~1,100 sectors (or 83 zone words plus a generated part, which adds a token to every name).
-- **PRISM:** same as B1 (7.81 pc everywhere).
-- **Risks:** the level index is hard-wired across the nav: 50 references to `_levelIndex` in `NavComputer.js` (a file held at 4,711 lines), 44 to `S.level` in `designs.js`, plus `navViewModes/index.js`. That makes this the biggest and riskiest change of the four.
-
-#### Option D (recommended): uniform 2 kpc sectors, 16×16 regions, 16×16 prisms
-
-This is B2 with one change: the SECTOR screen is cut **16×16** instead of 8×8. That brings the prism down to the same 7.81 pc as B1, while GALAXY keeps B2's readable 2 kpc cells. It also makes the arithmetic work out: 36 kpc ÷ 7.81 pc ≈ 4,600, and three screens with 16 or fewer cells a side can only reach that if the bottom two are both 16×16 [I, arithmetic].
+- **A: draw the quadtree itself.** 480 sectors would be 1.5 texels; GALAXY would need a 9.3× zoom to label them. ~800 sector words. Uneven loading work per slab (a 31.25 pc rim prism is about 10× a 7.8 pc one).
+- **B: uniform sector grid with today's 8×8 regions.** B1 (1 kpc sectors) gives 6-texel GALAXY cells (too small to read) and ~1,100 words. B2 (2 kpc) gives 15.6 pc prisms with ~27,000 stars per core slab and about 3× D's loading work.
+- **C: add a ZONE screen** (GALAXY → ZONE → SECTOR → REGION → PRISM). Every screen keeps big labelled cells, but one more click every trip, ~1,100 words, and the biggest code change (the level index is hard-wired in 100+ places: 50 `_levelIndex` in `NavComputer.js`, 44 `S.level` in `designs.js`).
+- **D (recommended): uniform 2 kpc sectors, 16×16 regions, 16×16 prisms.**
 
 ```
-GALAXY   19 × 19 grid of 2 kpc sectors    (11 texels a cell; 293 drawn, corners outside R = 18 kpc not drawn)
+GALAXY   19 × 19 grid of 2 kpc sectors    (11 texels a cell; 293 touch R ≤ 18 kpc and are drawn)
 SECTOR   one sector, 16 × 16 regions      (125 pc each; 13 texels a cell)
-REGION   one region, 16 × 16 prisms       (7.81 pc each; 13 texels a cell)
+REGION   one region, 16 × 16 prisms       (7.8125 pc each; 13 texels a cell)
 PRISM    one prism column, cut into 100 pc slabs
 ```
 
-- **The grid is shifted so Sol and the galactic centre each sit in the middle of a prism** (sector edges at x, z = 1 kpc + 3.9 pc + any multiple of 2 kpc). Sol is then ~1 kpc from every sector edge, and so is the galactic centre (`d-offset.mjs`). This replaces draft 2's decision 8 ("centre Sol in its prism"). One thing it cannot do: with 16-way cuts, the middle of a sector is a corner between regions, so Sol's prism touches the corner of four regions. That only changes the column word (a regional syllable), not the sector word.
-- **What you see:** GALAXY cells are about half the size of today's chunky ones (11 against 27 texels) and are read by **edge labels**: A–S along the top, 1–19 down the side. Sol's sector reads like "M9". SECTOR and REGION are both 16×16 grids with A–P / 1–16 edge labels. Every cell can be named by its row and column, which answers your "every cell readable for orientation". Hovering a cell shows its sector word or column word. In design 2's wide GALAXY band (≈9.5 texels per kpc) a sector is ≈19 texels.
-- **Rule:** obeyed on every screen, at any pan.
-- **Naming:** **293 sector words**, all hand-reviewable. Below them, one shared set of **256 three-letter syllables**: a column word is region syllable + prism syllable (6 letters, 65,536 combinations). Sectors outside R = 18 kpc (distant globular clusters) still have a grid square; they take generated words from a separate "far" set, so no rim fill or outer ring table is needed.
-- **PRISM:** 7.81 pc wide everywhere, the same width Sol's prism had in draft 2. Each 100 pc slab costs the same work everywhere: 12,485 cells, 5–27 ms warm headless. That is **7× less than the worst slab in draft 2** (the 31.25 pc rim prism, 199 ms). Stars per mid-plane slab: ~5,600–6,700 in the inner galaxy, ~300 at Sol, ~100 at R 12, ~15 on the rim.
-- **Risks:**
-  - GALAXY loses its chunky cells (27 → 11 texels).
-  - The whole bulge (R < 1 kpc) is **one** sector.
-  - Inner-galaxy prisms are dense (~6,000 stars per slab), so the PRISM list there is long.
-  - Rim prisms are nearly empty (high slabs on the rim will often have zero stars).
-  - Moving 16× more cells into each core slab could make the unexplained in-browser stall worse at the core (section 2.8). **Phase 0 measures a 7.81 pc core slab in the browser before the grid is frozen.**
+- **Exact constants [V, Astra recomputed].** Prism width is **2/256 kpc = 7.8125 pc exactly**. The grid is shifted by **1.00390625 kpc** (1 kpc plus half a prism) so Sol at (8, 0) and the galactic centre at (0, 0) each sit in the middle of a prism, about 1 kpc from every sector edge. Both numbers are exact in binary, so every computer computes the same cell. **The rounded figures 7.81 pc and 3.9 pc in earlier drafts must never become constants.** The full grid runs from −18.99609375 to +19.00390625 kpc: 19×19 = 361 squares, of which 293 touch R ≤ 18 kpc and 68 corners do not.
+- **One thing the shift cannot do:** the middle of a sector is a corner between four regions, so Sol's prism touches four regions. That changes the column word, not the sector word. Also, the central sector does not hold literally every point within 1 kpc of the centre: its lower edges are at −0.99609375 kpc.
+- **What you see:** GALAXY cells are about 11 texels (today 27), read through **edge labels**: A–S along the top, 1–19 down the side. Sol's sector is **N10**; the galactic centre's is **J10**. SECTOR and REGION are 16×16 with A–P / 1–16. Hovering a cell shows its word.
+- **Rule:** obeyed on every screen, at any pan, because a uniform grid is the same grid however you pan.
+- **Loading:** every 100 pc slab of every column runs the same loop: **13,680 cell visits** [V, recomputed from the production loops; draft 3's 12,485 came from a scratch formula that did not match the code]. What varies is how many stars come out: ~5,600–6,700 per slab in the inner galaxy, ~300 at Sol, ~15 on the rim.
+- **Risks:** smaller GALAXY cells; the whole bulge is one sector; dense inner-galaxy lists; empty rim slabs; and the browser cost of a core slab is still unproven (§8). **D is provisional until Phase 0 and Phase 3 measure it in the browser.**
 
 ### 0.5 Recommendation
 
-**Option D.** The criteria, in order:
-
-1. **It obeys your rule on every screen, at any pan or drag.** A, B, C and D all can; C bends the wording at GALAXY.
-2. **Every cell can be clicked and read at 417×240:** at least ~11 texels and an edge label. This rules out A (1.5 texels) and B1 (6 texels).
-3. **PRISM performance is a hard requirement:** the worst-case work per slab should be bounded and small. D and B1 are best (12,485 cells, ≤27 ms headless). B2 is 3× that and its core slabs hold ~27,000 stars. A's rim slab is 10× that.
-4. **Hand-reviewable sector names:** D has 293. A has ~800, B1 and C ~1,100.
-5. **Smallest structural change:** D keeps four screens and today's drill counts apart from SECTOR going 8×8 → 16×16. C adds a level across 100+ hard-wired references.
-
-**What D gives up:** today's chunky GALAXY cells, and equal stars per sector. If chunky GALAXY cells matter more to you than one fewer click, C is the alternative. That is decision 0.
+**Option D.** The criteria, in order: (1) obeys your rule on every screen at any pan; (2) every cell clickable and readable at 417×240 (rules out A and B1); (3) PRISM performance is a hard requirement, so the worst-case work per slab must be small and the same everywhere (D and B1 best); (4) sector words few enough to hand-review (D: 361 including the corners; others ~800–1,100); (5) smallest structural change (D keeps four screens). **What D gives up:** chunky GALAXY cells and equal stars per sector. That is decision 0.
 
 ---
 
 ## 1. The goal, in your words
 
-You asked for:
+1. **Names that mean something.** "I like the Elite approach of having readable syllables at the beginning, and naming stars … based on their galactic location." Real catalogue stars and in-universe named systems keep their own names.
+2. **A column you can move through.** Prisms "are very tall … right now you can just press R and F or drag the vertical slider but it takes minutes to go from one section to another." Visible segments you can click or drag to, with R/F kept for slow panning.
+3. **A "where am I" label** showing the full address, coloured to match the map highlight.
+4. **(Governing) One cell = one thing one level down** on every nav screen, with every cell readable for orientation.
+5. **PRISM performance is a hard requirement** (your words in the walk): no multi-second stall entering, moving through, or leaving a column.
 
-1. **Names that mean something.** "I like the Elite approach of having readable syllables at the beginning, and naming stars … based on their galactic location." Real catalogue stars and the in-universe named systems keep their own names.
-2. **A column you can move through.** Prisms "are very tall … right now you can just press R and F or drag the vertical slider but it takes minutes to go from one section to another." You want visible segments in the nav bar that you can click or drag to, with R/F kept for slow panning.
-3. **A "where am I" label** that shows the full address (sector, region, prism, slab), coloured to match the map highlight.
-4. **(New, governing) One cell = one thing one level down** on every nav screen (section 0), with **every cell readable** for orientation.
-5. **PRISM performance as a hard requirement:** no multi-second stall entering or moving through a column.
+You also asked that this not be "a new process slapped on". **This plan keeps July's whole precedence chain, every guarantee and the 48,000-name catalogue. It replaces only the last step: how a procedural star's identity is spelled out as text.**
 
-You also asked that this not be "a new process slapped on". The July naming system took real work. **This plan keeps its whole precedence chain, every guarantee and the 48,000-name catalogue. It replaces only the last step: how a procedural star's identity is spelled out as text.**
+### 1.1 Your rulings since draft 3, and where each one goes
 
-**Why the asks become one project [I].** A name can only carry a location if the galaxy has a fixed, permanent grid of places. Your rule says the nav screens must *be* that grid. So the same grid is what each screen draws, what the segment bar shows, what the label reads from, what a name spells out, and what decides how many stars to load at once. The plan builds it once and uses it everywhere.
+| Ruling (walk, `UAT-walk-2026-09-30.md`) | Where it goes | Why there |
+|---|---|---|
+| **PRISM performance is a hard requirement**, including the ~1.5 s hitch on leaving PRISM | **In this plan** (§8, Phase 0 and Phase 3) | The slab loader is rebuilt here; leaving PRISM is part of the acceptance test. |
+| **The whole instruction/legend row above the tab strip is removed** (key hints included) | **Its own small fix in the nav-restorations batch**, not this plan | It is a walk defect on today's screens and should not wait for a multi-phase project. This plan's layouts (§6, §7) assume the row is gone; if it has not landed by Phase 2, Phase 2 removes it, since it redraws those screens anyway. |
+| **Search shows one row per destination** (Sol appears twice: real star + KnownSystems) | **Nav-restorations batch**, not this plan | It is a search merge (`knownObjectSearch.js:145-196`). Note: the stable identity for real objects in §3.4 is the natural merge key, so if search is fixed first it should key on the KnownSystems/real-star link, which §3 will reuse. |
+| **The GPS line works in every mode**: HELM Enter burns; ORRERY reads GO TO <body> and Enter glides the view along the line (July's "nothing flies in ORRERY" kept) | **Separate SYSTEM-screen contract**, not this plan | It is the SYSTEM screen and the burn workflow, not the galaxy grid or names. |
+| **The cockpit nav gets a full redesign after this non-diegetic redesign** | **Follow-up** (replaces draft 3's "cockpit display of names" follow-up) | This plan adds no new widgets to the cockpit nav. But the cockpit runs its own nav instance (`main.js:4700`, `:5895`), so it must keep working and must pass the performance test (§8). |
+
+**Why the asks become one project [I].** A name can only carry a location if the galaxy has a fixed grid of places, and your rule says the screens must *be* that grid. So the same grid is what each screen draws, what the segment bar shows, what the label reads, what a name spells out, and what decides how many stars load at once.
 
 ---
 
 ## 2. What we have today, and the surprises
 
 ### 2.1 Where a system's name comes from [V]
-The first source that has a name wins:
-1. **KnownSystems** (Sol, Alpha Centauri): `main.js:7597-7598`, `arrivalResolution.js:61-63`
-2. **Real-star names**: `main.js:6137`, `main.js:14321-14324`, `main.js:14388-14391`
-3. **The named-systems catalogue** (48,000 shipped names): `NameGenerator.js:461-462`
-4. **Procedural name**: `NameGenerator.js:396-410`
-
-This order is written down in `docs/NAMING_AND_REAL_OBJECTS.md:271-277`.
+The first source that has a name wins: (1) **KnownSystems** (Sol, Alpha Centauri: `main.js:7597-7598`, `arrivalResolution.js:61-63`); (2) **real-star names** (`main.js:6137`, `:14321-14324`, `:14388-14391`); (3) **the 48,000-name catalogue** (`NameGenerator.js:461-462`); (4) **procedural** (`NameGenerator.js:396-410`). Written down in `docs/NAMING_AND_REAL_OBJECTS.md:271-277`.
 
 ### 2.2 Why today's procedural names look meaningless [V]
-- A procedural name spells out a ~70-bit number that encodes the star's position (`NameGenerator.js:238-288`). That needs 14 or more characters (`:44-50`).
-- In the fantasy style, the readable word comes from the **low** bits of that number (`:407`). Two neighbouring stars therefore get unrelated words: "Jessep-4ORN2UU4JC" and "Juddil-4OS5AX07KA". The location sits in the code at the end. Elite does the reverse: the readable part is the location.
+A procedural name spells out a ~70-bit position number (`NameGenerator.js:238-288`), and the readable word comes from its **low** bits (`:407`), so neighbouring stars get unrelated words ("Jessep-4ORN2UU4JC", "Juddil-4OS5AX07KA"). Elite does the reverse: the readable part is the location.
 
 ### 2.3 Today's sector table cannot be used as it is [V]
-*(Draft 3: option D replaces this table with a uniform grid, which removes all four problems below. They are kept here as the reason.)*
-- There are 775 sectors but only 453 distinct sector names. 319 names repeat, in mirror-image pairs: (x, z) and (−x, −z) share a name. Sol's sector name "Tau Vela-94" is also used at (−8.5, −0.5). The file itself calls the naming a placeholder (`GalacticSectors.js:209`).
-- The table does not cover everything:
-  - It spans only x and z from −15 to +17 kpc (`GalacticSectors.js:100-103`), but stars are created out to R = 18 kpc (`HashGridStarfield.js:304`). In a sample, 38,540 of 407,065 points inside R = 18 belonged to no sector; `getSectorAt` silently picks the nearest sector instead (`GalacticSectors.js:58-72`, measured with `cov.mjs`).
-  - Beyond R = 18 kpc, `getSectorAt` returns `null` (`GalacticSectors.js:47`). 20 of the 152 globular clusters are out there, and 57 are more than 3 kpc from the plane (measured by the critique).
-- Sector boundaries are computed from the density model (`GalacticSectors.js:114-136`). Retuning density would move them.
-- Its sizes range from 0.25 to 4 kpc (section 0.3), which is what makes GALAXY break your rule.
+*(Option D replaces it.)* 775 sectors but only 453 distinct names (mirror pairs share names; `GalacticSectors.js:209` calls it a placeholder). It spans only −15 to +17 kpc (`:100-103`) while stars reach R = 18 kpc; `getSectorAt` silently picks the nearest sector for 38,540 of 407,065 sampled points (`:58-72`) and returns `null` beyond 1.2 × the galaxy radius (`:47`). Its edges come from the density model (`:114-136`), so retuning density would move them.
 
 ### 2.4 A "prism" is not a fixed thing yet [V]
-The prism you see depends on how you got there:
-
 | How you reach PRISM | Width at Sol | Code |
 |---|---|---|
-| Drilled down from SECTOR → REGION → PRISM | 7.8 pc tile | `NavComputer.js:4651-4677` |
-| The default region, centred on the player | 41.9 pc tile (670 pc region) | `NavComputer.js:1216-1221` |
-| The width actually loaded (a ~150-star cube, used as a half-width) | 20.7 pc | `NavComputer.js:1188`, `:4678`, `:3750` |
+| Drilled SECTOR → REGION → PRISM | 7.8 pc tile | `NavComputer.js:4651-4677` |
+| The default region, centred on the player | 41.9 pc tile | `NavComputer.js:1216-1221` |
+| The width actually loaded | 20.7 pc | `NavComputer.js:1188`, `:4678`, `:3750` |
+| **The autopilot's drill** | its own 8×8 grid over 44 kpc (5.5 kpc squares), subdivided by 16; PRISM entry uses adaptive widths, direct entry a synthetic 0.01 kpc view | `AutopilotNavSequence.js:464-475`, `:312`, `:352`, `:371` |
 
-On top of that, SECTOR and REGION views pan freely (`NavComputer.js:4362-4369`), and drill tiles are measured from wherever the view is centred (`:4651-4657`). After a pan, a tile straddles fixed cells.
+The autopilot's hover reads the sector table (`:233`), but the destination it actually drills to comes from that separate grid (`:244`). Draft 3 said the autopilot "reads sector centre and size"; that was wrong.
 
-### 2.5 Prisms are far too many to name by hand [V, updated for option D]
-Under option D there are 293 sectors × 256 regions × 256 prisms = **19.2 million** prism columns (draft 2's quadtree gave 12.7 million). That is in the same range as Elite's procedurally named sectors. Each can have a generated name, but none can be named by hand. Only the **293 sector words** are few enough to review one by one, plus the 256 syllables used to build column words.
+### 2.5 Prisms are far too many to name by hand [V]
+Option D has 293 × 256 × 256 = **19.2 million** prism columns. Only the sector words are few enough to review one by one.
 
 ### 2.6 Why moving up and down is slow [V]
-- R/F moves at `_localRadius × 0.01` per 60 Hz frame (`NavComputer.js:1373`). That is about 0.9 pc/s at entry zoom and at most about 6 pc/s at Sol (zoom is capped at the cube size, `:4705`).
-- The column is ±3 kpc = 6,000 pc tall (`NavComputer.js:3856`). Crossing it takes about 16 minutes fully zoomed out at Sol, and nearly 2 hours at entry zoom.
-- The draggable Y gauge reaches only ±2 pc around the player (`designs.js:2211`, clamp at `navViewModes/index.js:1136-1141`): 4 pc of a 6,000 pc column.
-- Small mismatch: the "Y RANGE" readout says ±2.0 kpc (`designs.js:2185`), but the loader fills ±3.0 kpc (`NavComputer.js:3856`).
+R/F moves at about 0.9 pc/s at entry zoom and at most ~6 pc/s at Sol (`NavComputer.js:1373`, zoom cap `:4705`). The column is ±3 kpc (`:3856`): about 16 minutes to cross at best. The draggable Y gauge reaches only ±2 pc around the player (`designs.js:2211`, clamp `navViewModes/index.js:1136-1141`). The "Y RANGE" readout says ±2.0 kpc (`designs.js:2185`) but the loader fills ±3.0.
 
-### 2.7 Every procedural star already has a fixed "slot" [V]
-- There are 10 spectral tiers: O, B, A, F, G, K, M and three giants Kg, Gg, Mg (`HashGridStarfield.js:73-90`). Each tier has its own cubic grid, from 1.1 pc cells (M) to 74 pc cells (O).
-- Each (tier, cell) is hashed once and passes or fails one test, so each slot makes **at most one star** (`HashGridStarfield.js:651-735`).
-- This is the same structure as Elite's "mass letter + boxel". Your July ruling already asked for it: prefer "encoding the star's generative grid-cell identity" (`ac5-decision.md`, Addendum, ruling 1).
-- The star's `seed` is only 32 bits (`HashGridStarfield.js:729`). With ~2×10¹¹ stars it cannot be unique, so nothing in this plan keys on the seed [I, arithmetic].
+### 2.7 Every procedural star has a fixed slot, but the game does not use it [V]
+- 10 spectral tiers (O, B, A, F, G, K, M and giants Kg, Gg, Mg), each with its own cubic grid from 1.1 pc cells (M) to 74 pc (O) (`HashGridStarfield.js:73-90`). Each (tier, cell) makes **at most one star** (`:651-735`). July already asked to name stars by this "grid-cell identity" (`ac5-decision.md`, Addendum ruling 1).
+- **But the generator throws that identity away.** The star records it returns carry position, seed and type, not the cell (`HashGridStarfield.js:731`); the sky's copy is the same (`:216`).
+- **Instead the game identifies stars by their 32-bit `seed`** (`:729`), which cannot be unique across ~2×10¹¹ stars. Draft 3 said "nothing in this plan keys on the seed". That was true of the plan, but **the game already does, in five places**: a PRISM list click (`navViewModes/index.js:496`), a PRISM map click (`picking.js:271`), selection (`state.js:1031`), the multiplicity cache (`state.js:611`) and the name cache (`state.js:571-574`) all find "the star with this seed"; and loading de-duplicates on seed plus X rounded to 6 decimals (`NavComputer.js:3755`). Two different stars with the same seed can therefore be **clicked as each other and warped to the wrong one**. Section 3 fixes this.
 
-### 2.8 The PRISM stall [V]
-- The walk (`UAT-walk-2026-09-30.md`) profiled ~3 s of main-thread time per 0.1 kpc loading step near the core, with 98% in the density calculation (`GalacticMap._spiralPotentialOnly`, called from `HashGridStarfield.findStarsInPrism`).
-- Headless, the worst step measured is ~210 ms at Sol, and the core is cheap (~10 ms per slab).
-- **That 15× gap is unexplained.** Candidates: the cockpit's second NavComputer loading at the same time (`main.js:4700`, `:5895`), the real-feature catalogue (not loaded headless), or profiler overhead.
-- **Draft 3 note [I]:** the density calculation runs once per *cell evaluated*, and under option D a core slab evaluates 12,485 cells against ~2,000 for draft 2's 1.95 pc core prism. If the browser cost really is per cell, option D makes core slabs ~6× more expensive than draft 2 did (and the rim ~10× cheaper). Phase 0 measures exactly this before anything is frozen.
+### 2.8 The PRISM stall [V unless marked]
+- The walk profiled ~3 s of main-thread time per loading step near the core (system XIGMAG-2AE101G).
+- **From the saved trace [A]:** of a 94.5 s trace, 93.1 s was inside the query chain (`_queryYRange` → `findStarsInPrism`), of which 66.7 s in `_spiralPotentialOnly`. Rebuilding the rows took 0.21 s and the real-feature density 0.09 s. The 32 background steps took a median of 3.09 s each. So **the cost is the star query itself**, not the list or the feature catalogue.
+- **Headless [A]:** the same kind of 7.8125 pc × 100 pc query at six radii made 7,834–8,964 density calls and took 5.9–15.6 ms warm.
+- **The gap is still unexplained.** Astra's leading suspect is that the measurements were not like for like: the walk's steps used a different box (wider, two slabs, at another location) than the headless runs. The bulge (R < 0.5 kpc) is unusually cheap (`GalacticMap.js:845`); elsewhere each density call runs seven spiral evaluations (`:770`). A browser or profiler overhead may remain after that is normalised. **Phase 0 measures exactly that** (§8).
+- **Draft 3 claimed slab loading "cuts the work ~60-fold whatever the cause". That was wrong**: loading one slab instead of the whole column reduces the total, but does not make an individual slow query faster. Only a time-sliced loader bounds each task.
 
 ---
 
-## 3. The proposed address and name
+## 3. Star identity: one star, one owner, one key (the gate before any name is frozen) [I unless marked]
 
-### 3.1 The fixed hierarchy [I]
-None of it depends on where you are or how you got there. Every level is plain arithmetic on position (option D):
+**Why this comes first.** A name is a promise: one star, one string, forever. That promise only holds if (a) every star belongs to exactly one box, so the box part of the name cannot depend on which query found it, and (b) the game uses one identity for that star everywhere: when it lists it, draws it, you click it, it de-duplicates it, it warps to it and it names it. Today neither holds (§2.7). Astra rated this the one **blocker**: not a reason to drop option D, but a reason not to freeze names until it is done.
+
+### 3.1 Rule 1: exactly one owning box per star
+- Every box is **half-open on every axis: the lower edge belongs to it, the upper edge belongs to the next box.** In code: index = `floor((coordinate − origin) / size)`, for X, Y and Z, at every level (sector, region, prism, slab).
+- **Negative coordinates use the same floor**, so they need no special case: −0.1 kpc ≤ y < 0 is index −1.
+- **Slabs:** slab index k = `floor(y / 0.1 kpc)`. k ≥ 0 is **N(k+1)**; k < 0 is **S(−k)**. So **y = 0 exactly is N1**, and the first star below the plane is S1. There is no "slab zero".
+- **One function, called by everything.** Position → address is a single shared function. 7.8125 pc and 1.00390625 kpc are exact in binary, but 0.1 kpc is not; that is safe only if every caller does the same arithmetic, so no screen, loader or namer may compute a box itself.
+- **Why lower-inclusive:** today the generator puts stars exactly on cell edges (offset byte 0 or 255, `HashGridStarfield.js:717`) and the prism filter accepts both edges (`:724`). Without a rule, a star on an edge is in two boxes and can get two names.
+
+### 3.2 Rule 2: one identity, carried everywhere
+- **A procedural star's identity is (tier, cellX, cellY, cellZ)**: the generating slot the hash grid already used. The generator returns it on every star record (it already knows it), and the sky's copy (`HashGridStarfield.js:216`) carries it too.
+- **It is carried, never recomputed from position, through:** query results → list rows and map hits → picking (map and list) → selection → de-duplication → the warp target → arrival → naming.
+- **Real and catalogue objects get their own stable identity** (their catalogue id or KnownSystems id), kept separate from the procedural slot they replace.
+- **The seed stays exactly as it is, as a generation input.** Nothing a system contains changes; only how the game *finds* a star changes.
+
+### 3.3 Rule 3: the slot number inside a box
+- A star's name tail is its tier token plus a **slot number**: the index of its generating cell among **all** that tier's cells that can place a star inside the owning box, counted in a fixed, documented mixed-radix order (height first, so a bigger number is higher up).
+- **Coarse tiers need care.** An O-star cell is 74 pc, much bigger than a 7.8125 pc column, so many columns share one O cell, and a box's candidate cells include ones whose centre lies outside the box. The slot counts those boundary-touching cells too. Every tier's cell size and the counting order become **frozen constants alongside the grid**.
+- **When only a position is known** (should be rare once identity is carried), the namer regenerates the candidate cells from the hash alone (never the density model). At a corner that can be **up to eight** cells, not "one or two" as draft 3 said. If more than one candidate matches, it reports an error rather than guessing.
+- **Draft 3's worked-example slot numbers were computed from position with `floor`, the very method this section rules out**, so they are placeholders and will change (§4.3).
+
+### 3.4 What switches off the seed (replacing every seed-keyed lookup)
+| Site | Today | Becomes |
+|---|---|---|
+| PRISM list click, `navViewModes/index.js:496` | first loaded star with the same seed | the star with the same identity |
+| PRISM map click, `picking.js:271` | same | same |
+| Selection, `state.js:1031`; multiplicity cache `:611` | by seed | by identity |
+| Name cache, `state.js:571-574` | by seed | by identity |
+| Load de-duplication, `NavComputer.js:3755` | seed + X to 6 decimals (ignores Y, Z, tier) | by identity |
+| Warp target transport, `main.js:6137` → `:6658` → `:7601-7604` | position + name string | adds the identity |
+
+### 3.5 Systems that are not galaxy stars
+- **Feature-centre systems** (real galaxy objects not made by the hash grid) are places in the galaxy: they keep a position-based **X tail** (§4.4).
+- **Debug, title-screen and `?system=` systems** are not. `spawnProceduralSystem(seed)` makes a system from any seed without giving it a galactic position (`main.js:2358-2370`), and naming then falls back to wherever the player happens to be (`:7603`). So two different seeds at one spot would get the same name, and one seed at two spots two names. **Decision (technical, made here):** these are **excluded from the galaxy-name guarantee** and named from **their own seed**, in a separate shape that cannot be mistaken for a galaxy address. Seed links keep producing the same contents. Tests: same position with different seeds gives different names; same seed at different positions gives the same name.
+
+### 3.6 Tests, and the gate
+- Stars exactly on **faces, edges and corners** of prisms, regions, sectors and slabs; **negative** coordinates; **y = 0**; coarse tiers (O, giants) across adjacent queries; the same star found by two neighbouring queries gets one box and one name.
+- **Two stars with deliberately equal seeds** at different positions: clicking each on the map and in the list selects, warps to and arrives at the right one.
+- **The gate:** no vocabulary approval (Phase 4) and no name switch (Phase 5) until these tests pass. Identity is built in Phase 1, before anything on screen changes.
+
+---
+
+## 4. The proposed address and name
+
+### 4.1 The fixed hierarchy [I]
+Every level is plain arithmetic on position (§3.1), independent of where you are or how you got there:
 
 ```
-SECTOR      2 kpc square on one galaxy-wide grid (edges at 1 kpc + 3.9 pc + k × 2 kpc)  → a sector word
-  REGION    the sector's 16×16 grid, 125 pc                                              ┐ together: a
-    PRISM   the region's 16×16 grid, 7.81 pc (a full-height column)                      ┘ column word
+SECTOR      2 kpc square (edges at 1.00390625 kpc + k × 2 kpc)            → a sector word
+  REGION    the sector's 16×16 grid, 125 pc                                ┐ together: a
+    PRISM   the region's 16×16 grid, 7.8125 pc (a full-height column)      ┘ column word
       SLAB  a 100 pc height band: N1, N2 … above the plane, S1, S2 … below
-        STAR  tier token + slot number inside that box
+        STAR  tier token + slot number (§3.3)
 ```
 
-Each screen draws exactly one row of this ladder: GALAXY draws sectors, SECTOR draws one sector's regions, REGION draws one region's prisms, and the PRISM segment bar draws one column's slabs.
+Each screen draws exactly one row of this ladder.
 
-**Name shape (recommended, option A in decision 2):**
+**Grid references, one direction everywhere [I, matches V].** Letters run left to right with increasing X. **Numbers run top to bottom, row 1 at the largest Z**, which is how the existing drill already counts rows (`NavComputer.js:4657`: row 0 is at the view's top, `centre.z + extent`). The same rule applies on GALAXY (A–S, 1–19), SECTOR and REGION (A–P, 1–16), and one conversion function is used for drawing, picking, labels and names. With it, **Sol's sector is N10** and the galactic centre's is **J10** (the 19 rows are symmetric, so Sol is row 10 either way; draft 3's "M9" was an off-by-one in the example script).
+
+**Name shape (recommended, decision 2 A):**
 
 ```
 <Sector word> <Column word> <Slab> <Tier>-<Slot>
 Thessa Korabi N1 M-955
 ```
 
-What each part tells you:
-- **Same first word = same sector = same GALAXY cell.** The label, the map highlight and the name all agree.
-- **Column word = region syllable + prism syllable.** Columns in the same region share their first syllable ("Korabi", "Korvex", "Kordal"), so neighbours sound related. This is the opposite of today.
-- **Slab = height.** "N16" means 1.5 to 1.6 kpc above the plane. The boundary uses `floor`, never rounding, so each star belongs to exactly one slab, the same way real astronomy truncates coordinates in J2000 names.
-- **Tier = star type, Slot = which star.** The slot number is counted height-first, so a higher number is higher up inside the slab.
+- **Same first word = same sector = same GALAXY cell.**
+- **Column word = region syllable + prism syllable.** Columns in the same region share their first syllable, so neighbours sound related.
+- **Slab = height.** "N16" means 1.5 to 1.6 kpc above the plane.
+- **Tier and slot = which star in the box.**
 
-**The same address as map grid references** (edge labels, section 5): sector "M9" on GALAXY, region "I9" on SECTOR, prism "A3" on REGION. The name uses words; the screens use letters and numbers along their edges. Both describe the same cells.
+### 4.2 Corrections built into the shape [I]
+- **Every tier gets its own token**: O, B, A, F, G, K, M, and **KG, GG, MG** for giants, so a K dwarf and a K giant in one box cannot both be "K-5". A test pairs every tier with every other inside one box.
+- **Hyphen and zero-padding** (at least 3 digits): "M-042", never "M42" (a Messier object) or "K2" (a NASA mission). The hyphen also stops "O" being read as zero.
+- **Column words from two separate syllable sets.** *(Changed in draft 4.)* Draft 3 used one shared set of 256 syllables for both halves and also rejected doubles such as "Korkor". Astra pointed out the arithmetic: 256 of the 65,536 pairs are doubles, so rejecting them leaves 65,280, too few for 256 prisms in each of 256 regions. **Fix:** a **region set** of 256 three-letter syllables and a separate **prism set** of 256, with no syllable in both (for example, the first set starts with a consonant and the second with a vowel). Then no column word can be a double, every one of the 65,536 pairs is distinct, and each word splits only one way. **All 65,536 column words are screened exhaustively** (not by sample) for distinctness, real names and bad joins. The mapping is frozen once shipped.
+- **Sector words are one token** (no spaces), unique across the table, with a test.
 
-### 3.2 Corrections built into the shape [I]
-- **Every tier gets its own token.** O, B, A, F, G, K, M are the dwarfs. The giants get two-letter tokens, **KG, GG, MG**. Without this, a K dwarf and a K giant in the same box could both be called "K-5", because each tier counts its slots from zero. A test pairs every tier with every other tier inside one box.
-- **Hyphen and zero-padding on the slot number** (at least 3 digits): "M-042", "K-002", "O-001". Without them, a tail could read like a real designation: "M42" and "M31" are Messier objects, "K2" is a NASA mission. The hyphen also stops "O" being misread as zero. With 7.81 pc prisms, the largest slot is 7,451 (M dwarfs, a 9×92×9 box), so slots are 3 or 4 digits.
-- **Fixed-length syllables.** *(Changed in draft 3.)* A column word is always a 3-letter region syllable plus a 3-letter prism syllable (6 letters; e.g. "Kor" + "abi"), both drawn from **one shared set of 256 syllables**. With fixed lengths, a column word can only be split one way, so two different (region, prism) pairs can never spell the same word. This uses the same rule July used: exactly-3-character syllables (`NameGenerator.js:333-343`). A test checks that all 65,536 column words are distinct. The screen also rejects doubled words such as "Korkor".
-- **Sector words are one token** (no spaces), unique across the whole table, with a test.
-
-### 3.3 Worked examples [V numbers, I words]
-The numbers come from `onecell/e-examples.mjs`, which ran the real `HashGridStarfield` with seed `well-dipper-galaxy-1` on the option D grid. The words are **placeholders**: the real vocabulary does not exist yet.
+### 4.3 Worked examples [V numbers, I words]
+Grid references from `onecell/e2-examples-rowsfromtop.mjs`, which ran the real `HashGridStarfield` (seed `well-dipper-galaxy-1`) on the option D grid with the row rule above. The words are placeholders. **The slot numbers are placeholders too** (§3.3); the canonical mapping will change them.
 
 | Where | Address (numbers) | Example name |
 |---|---|---|
-| Red dwarf near Sol (8.005, 0.050, 0.027 kpc) | Sector M9. Region I9, prism A3, 7.81 pc wide. Slab N1. M slot (1, 11, 7) in a 9×92×9 box → 955 | **Thessa Korabi N1 M-955** |
-| Orange dwarf, same column | K slot (2, 42, 4) in 6×57×6 → 1538 | **Thessa Korabi N1 K-1538** |
-| Sun-like star 1.55 kpc above Sol (halo) | Sector M9, region H8, prism P16 (Sol's own column), slab **N16**, G slot (3, 16, 2) in 5×49×5 → 413 | **Thessa Lunvex N16 G-413** |
-| Inner galaxy, R ≈ 1.5 kpc | Sector J9. Region B16, prism J3, 7.81 pc. N1. M slot (0, 8, 5) → 693 | **Kethra Virosa N1 M-693** |
-| Outer disk, R ≈ 12 kpc | Sector D13. Region P8, prism P3, 7.81 pc. N1. M slot (4, 77, 6) → 6295 | **Oriel Lumaye N1 M-6295** |
-| Real or catalogue star | Name unchanged. The label shows its address. | "Sirius · Thessa Korabi N1" |
+| Red dwarf beside Sol's column (8.005, 0.050, 0.027 kpc) | Sector N10, region I8, prism A14, slab N1 | **Thessa Korabi N1 M-955** |
+| Orange dwarf, same column | same | **Thessa Korabi N1 K-1538** |
+| Sun-like star 1.55 kpc above Sol (Sol's own column) | Sector N10, region H9, prism P1, slab **N16** | **Thessa Lunvex N16 G-413** |
+| Inner galaxy, R ≈ 1.5 kpc | Sector K10, region B1, prism J14, N1 | **Kethra Virosa N1 M-693** |
+| Outer disk, R ≈ 12 kpc | Sector E6, region P9, prism P14, N1 | **Oriel Lumaye N1 M-6295** |
+| Real or catalogue star | Name unchanged; the label shows its address | "Sirius · Thessa Korabi N1" |
 
-Stars in one 100 pc slab of these columns [V, headless]: Sol N1 304 · inner N1 5,652 · outer N1 99 · Sol N16 (halo) 69 · rim (R ≈ 16) N1 15.
+Stars in one 100 pc slab of these columns [V, headless]: Sol-side N1 304 · inner N1 5,652 · outer N1 99 · Sol N16 (halo) 69 · rim (R ≈ 16, sector J2) N1 15.
 
-**Longest possible name [I]:** sector word ≤ 7 letters + column word 6 + slab ≤ 3 ("S30") + tail ≤ 6 ("M-7451", "KG-011"), plus 3 spaces = **25 characters** (draft 2: 26). Section 6.4 says how that fits the nav.
+### 4.4 Name lengths and the exceptions [I, widths V]
+- **Ordinary procedural name:** head (sector ≤ 7 + column 6 + slab ≤ 3, with spaces) is **at most 18 characters**; with the tail (≤ 6, "M-7451", "KG-011") **at most 25** inside the nav's ±3 kpc.
+- **X tails are longer, and the 25-character limit does not cover them.** A position inside a 7.8125 × 100 × 7.8125 pc box at July's 4e-6 kpc step needs ~95 billion codes, so at least 8 base-36 characters: "X-" + 8 = **10 characters**. They are rare (feature-centre systems only).
+- **Authored names** (real stars, KnownSystems, the 48,000 catalogue names) have their own lengths and **never** take the procedural shape.
 
-### 3.4 Special cases [I]
-- **Stars on a cell edge.** A star whose offset byte is 0 or 255 sits exactly on its cell's edge (`HashGridStarfield.js:717-722`). Working its cell out from its position could give the neighbouring cell, and two stars could then share a slot. Fix: call sites carry the **tier and cell the generator used** (the generator already knows them). Where only a position is available, the namer regenerates the one or two candidate cells and matches positions. That uses only the hash, never the density model.
-- **Systems with no grid slot.** These are feature-centre systems, title-screen and `?system=` spawns (named at the player's position, `main.js:7603`, `:5570`), and anything else not made by the hash grid. They get an **X tail**: "X-" plus a short code for the position inside the slab box, quantised at the same 4e-6 kpc step July uses. It is unique and rare. X is not a tier token, so it can never collide with a slot name.
-- **Procedural teleports** currently take their contents from the nearest grid star but their name from the player's position (`main.js:8312-8313`). That breaks the "one system, one name" rule (`NAMING_AND_REAL_OBJECTS.md` §6). Fix: name them after `nearest[0]`, using its tier and cell.
-- **Far from the disc.** *(Simplified in draft 3.)* The uniform grid continues forever, so every position anywhere belongs to exactly one sector without any rim fill or outer ring. The 293 sectors that touch R ≤ 18 kpc get hand-reviewed words. Every square beyond that gets a word generated from a separate "far" word set, keyed by its grid position. Distant globular clusters therefore get normal-shaped names. Slabs simply keep counting past ±3 kpc (N31, N32 …).
+### 4.5 A bounded naming area *(Changed in draft 4; technical, decided here)*
+Draft 3 let the grid run forever with a finite "far" word set. Astra pointed out that a finite set cannot name an unbounded grid uniquely. **Fix [I]:**
+- **All 361 squares of the 19×19 grid get hand-reviewed sector words** (the 293 drawn ones plus the 68 corners). The grid spans ±19 kpc, which contains everywhere the hash grid makes stars: it rejects any cell whose centre is beyond R = 18 kpc (`HashGridStarfield.js:684`, R measured in the disc plane) [V].
+- **Slab numbers** are allowed up to three digits (N999/S999, ±99.9 kpc). Phase 1 confirms the largest height any tier can actually produce sits well inside that.
+- **Anything outside that area** has no procedural stars. A non-grid object out there (for example a feature-centre system in a distant globular cluster) gets a distinct fixed-length "far" code, which is unique by construction.
+- **What this does not do:** it does not make stars appear around distant clusters, and it does not make far slabs selectable on the ±3 kpc segment bar. Out-of-range objects show their address in the label and detail text; the bar shows an "above" or "below" mark at its end.
 
 ---
 
-## 4. How the plan keeps the July rules
+## 5. How the plan keeps the July rules
 
 The precedence chain does not change: KnownSystems, then real names, then the 48,000-name catalogue, then procedural. **Only step 4 changes.**
 
 | July rule (source) | How this plan keeps it |
 |---|---|
-| **Unique by construction, no registry** (ac5 item 1) | [I] Two different stars either differ in sector, column or slab, in which case a head token differs, or share a box. In the same box they have different (tier, cell) slots, because one slot makes at most one star [V `HashGridStarfield.js:651-735`]. Tier tokens are distinct (§3.2), and slot numbers are a fixed mixed-radix count, so the tails differ. Every token can be split only one way (fixed-length syllables, one-word sector words, a fixed token order). All vocabulary comes from fixed tables indexed by position in the grid, so there is no registry. |
-| **Same star, same name forever, on every path** (item 1, D5) | The name is a pure function of the star's tier and cell (or position, for X tails). It only stays stable if the grid never changes, so the sector size and offset, the 16×16 and 16×16 cuts, the 100 pc slab height, the tier tokens and the vocabulary all become **frozen shipped constants**, with a golden-names test pinning ~50 stars. Under option D the grid no longer depends on the density model, so retuning the galaxy cannot rename anything. **The one honest exception:** switching over renames every procedural star **once** (decision 1). Nothing durable stores names, so no save or link breaks [V `Settings.js:112`, `ShipCameraSystem.js:514-522`, `flightModes.js:664-681`, `main.js:5558-5571`]. |
-| **No fallback when a position is missing** (D5) | Kept. The namer still throws (`NameGenerator.js:444-451`). |
-| **Real names win on every path** (D4) | Untouched; those steps run first. |
-| **The 48,000 catalogue names keep working** | The position number L (Q = 4e-6 kpc, same ranges, `NameGenerator.js:261-264`) **stays** as the catalogue's lookup key. It is no longer spelled out in procedural names, but all 48,000 keys still match. |
-| **Never output a real name or survey label, and never let a name change a system's contents** (item 2, §1.2) | [V] The contents lookups match on the **exact** name (`RealSystemOverlay.js:156`, `:282-283`; `KnownSystems.js:135-152`). The new shape always has 4 tokens and its third token is N/S plus digits. Settled catalogue names are 1 token (`^[A-Z][a-z]+$`) and Greek names are 3 tokens ending in digits (`^Word Word \d{1,4}$`), so the shapes cannot overlap (`injective.test.js:27-28`). [I] A build-time check runs the new name pattern against **every** contents-lookup key set: HYG names, the companion table, exoplanet-archive host names, supplement bridge names and KnownSystems aliases. It must match zero keys. The vocabulary is also screened against real proper names and constellation names. |
-| **"Not every name has to become multi-part"** (Max, ac5 :5-6) | Every *procedural* name becomes multi-part. The ~12,000 settled one-word names, ~36,000 Greek names and all real names stay short, which is how Elite works too. Covered by decision 1. |
-| **Survey designations "like real astronomy designations"** (Addendum ruling 1) and **core more catalogue-like** (D1) | **This plan changes that, so it is decision 3.** Option A drops the survey class (`_surveyName`, `NameGenerator.js:396-401`) and gives the core its own flavour through sector-word sound alone. Option B keeps a survey-style shape for core sectors. |
-| **Region flavour** (D1, in spirit) | Through sector words: crisp syllables in the core, soft ones on the rim (decision 3 chooses whether that is the only carrier). |
-| **Naming never changes contents** (§1.2) | The namer only reads tier, cell and position. Generation is untouched. |
-| **Use the grid-cell identity** (Addendum ruling 1) | This plan does exactly that. |
+| **Unique by construction, no registry** (ac5 item 1) | Each star has one owning box (§3.1). Two stars in different boxes differ in a head token; two in the same box have different (tier, cell) slots, because one slot makes at most one star [V `HashGridStarfield.js:651-735`]. Tier tokens are distinct, slot numbers are a fixed mixed-radix count, and every token splits only one way. Debug and `?system=` systems are outside this guarantee and named by their own seed (§3.5). |
+| **Same star, same name forever, on every path** (item 1, D5) | The name is a pure function of the star's identity (§3.2), never of which query found it. The grid, offset, cuts, slab height, tier cell sizes, slot order, tokens and vocabulary become **frozen constants**, pinned by a golden-names test of ~50 stars, including edge and corner stars. **The one exception:** the switch renames every procedural star **once** (decision 1). Nothing durable stores names, so no save or link breaks [V `Settings.js:112`, `ShipCameraSystem.js:514-522`, `flightModes.js:664-681`, `main.js:5558-5571`]. |
+| **No fallback when a position is missing** (D5) | Kept; the namer still throws (`NameGenerator.js:444-451`). |
+| **Real names win on every path** (D4) | Untouched. |
+| **The 48,000 catalogue names keep working** | The position number L (`NameGenerator.js:261-264`) stays as the catalogue's lookup key; all 48,000 keys still match. |
+| **Never output a real name, never let a name change contents** (item 2, §1.2) | The contents lookups match on the **exact** name (`RealSystemOverlay.js:156`, `:282-283`; `KnownSystems.js:135-152`). The new shape always has 4 tokens with N/S-plus-digits third; settled catalogue names are 1 token and Greek names 3, so the shapes cannot overlap (`injective.test.js:27-28`). A build-time check runs the new pattern against every lookup-key set (HYG names, companion table, exoplanet hosts, supplement bridge names, KnownSystems aliases) and must match zero. |
+| **"Not every name has to become multi-part"** (Max) | Only *procedural* names become multi-part; settled, Greek and real names stay short. |
+| **Survey designations** (Addendum ruling 1) and **catalogue-like core** (D1) | **Changed by this plan: decision 3.** |
+| **Use the grid-cell identity** (Addendum ruling 1) | Done, and now carried through the whole game (§3). |
 
 ---
 
-## 5. Making every screen obey the rule, and "prism" one fixed thing (decision 6) [I]
+## 6. Every screen and every entry path obeys the rule [I]
 
-You can only name a prism if the PRISM screen always shows the same fixed column for the same stars, and your rule needs every screen above it to be the fixed grid too. Proposal (option D):
-
-- **Every grid is locked to the world, not to the view.** GALAXY, SECTOR and REGION draw the fixed grid lines wherever the view is. SECTOR and REGION keep **free panning** (you walked and approved the drag): a pan slides the fixed cells across the glass, it never re-cuts them. The current parent's cells are drawn normally; cells belonging to the neighbouring parent are dimmed and outlined in that parent's colour. Because every sector is the same size, neighbours are the same grid continuing, so draft 2's mixed-size "neighbour blocks" are no longer needed.
-- **Drill goes to the fixed cell under the pointer** (at GALAXY, the sector under the pointer is now the cell under the pointer; today they differ, section 0.2).
-- **Edge labels on every grid.** GALAXY: letters A–S along the top, numbers 1–19 down the side. SECTOR and REGION: A–P and 1–16. Squaring the grid to 209 texels (19 × 11) or 208 (16 × 13) frees one text row above it, and design 1's map is 36 texels wider than the square, which leaves room for the numbers. These replace design 1's ids on the 8 densest tiles (`designs.js:1158-1173`). Hovering a cell shows its word.
-- **The default REGION view snaps** to the fixed region that contains the player (125 pc everywhere, instead of a 670 pc player-centred window at Sol).
-- **PRISM shows exactly one fixed column**, 7.81 pc wide everywhere, instead of today's 20.7 pc window at Sol. **WASD clamps at the column edge.** To step sideways, go up to REGION and click the next column. That way the column word on screen never changes underneath you.
-- **Zoom is no longer tied to column width.** Today the wheel caps the zoom radius at the cube size (`NavComputer.js:4704-4705`), and R/F speed is proportional to zoom (`:1373`). New limits: zoom radius from 0.0015 kpc up to `max(0.01 kpc, 2 × column width)` = 0.0156 kpc. Today's `max(0.003, …)` floor (`:1188`, `:4678`) is replaced by this rule. The camera can always pull back past the column. (With a uniform 7.81 pc column, draft 2's worry about a 1.95 pc core column that could not be zoomed out no longer arises.)
-- **What you will notice:**
-  - GALAXY cells are smaller (11 texels against 27 today) and the whole bulge is one cell.
-  - SECTOR has 256 smaller cells (13 texels) instead of 64.
-  - Sol's PRISM column looks sparser: about 300 stars per 100 pc slab against roughly 2,000 in today's wider window (estimated).
-  - Inner-galaxy columns are dense (~5,600–6,700 per slab), and rim columns are nearly empty.
-  - On paper the column is very tall relative to its width (~770:1). But you will view and load **one slab at a time** (100 pc tall, about 13:1), so the "very tall" problem moves into the segment bar, where you can jump.
+- **Every grid is locked to the world, not to the view.** SECTOR and REGION keep **free panning**; a pan slides the fixed cells across the glass and never re-cuts them. Cells of a neighbouring parent are dimmed.
+- **Drill goes to the fixed cell under the pointer.** Drawing and picking use the same function, so a drawn cell can never point somewhere else.
+- **Edge labels on every grid** (GALAXY A–S × 1–19, SECTOR and REGION A–P × 1–16), replacing design 1's ids on the 8 densest tiles (`designs.js:1158-1173`). Hover shows the cell's word.
+- **The default REGION view snaps** to the fixed region containing the player.
+- **PRISM shows exactly one fixed column**, 7.8125 pc wide everywhere. **WASD clamps at the column edge**; to step sideways, go up to REGION and pick the next column, so the column word never changes underneath you.
+- **Zoom is no longer tied to column width.** Zoom radius 0.0015 kpc up to `max(0.01 kpc, 2 × column width)` = 0.015625 kpc, replacing `max(0.003, …)` (`NavComputer.js:1188`, `:4678`, `:4704-4705`).
+- **Every way into PRISM uses the same two functions** *(new in draft 4)*: "address → view" (what a screen shows for a sector, region or column) and "enter column". That covers the manual drill, Tab banking, the default view, and **the autopilot**. The autopilot's own 8×8 / 44 kpc grid (`AutopilotNavSequence.js:464-475`), its adaptive PRISM setup (`:312`) and its synthetic 0.01 kpc direct-entry view (`:352`, `:371`) are deleted and replaced by calls to those functions, so the hover and the destination are the same cell (`:233` vs `:244` today). Tests: animated and direct entry, row direction, the destination slab ready on arrival, an empty slab, and the selection after loading finishes.
+- **"Here" means the player, not a list row** *(new in draft 4)*. Today "here" is the loaded row with your system's name, else **the nearest loaded row** (`state.js:1018-1027`; legacy `NavComputer.js:2052`), and that row's name overrides your real system's name. Once you can browse other columns, the nearest row is a stranger. **Fix:** the player's address is computed from the player's own position and identity, independently of what is loaded. **A column that is not the player's shows no "here" mark at all.** Distances in the list are measured from the player, not from the query's centre (today they are from the centre: `HashGridStarfield.js:728`, `NavComputer.js:3768`). Tests: browse a far column at your own height, an empty column, and a case where your star is not among the loaded rows.
+- **Legacy look keeps working** *(new in draft 4)*. Its new segment widget is still a follow-up, but its grids (`NavComputer.js:1634`, `:1654`) share the same picking and drilling, so in Phase 2 they draw the fixed grid too. Otherwise a legacy cell could send you somewhere else.
+- **Design changes go into the lab first** *(new in draft 4)*. `designs.js` is generated from `nav-240p-lab.html` by `scripts/extract-nav-designs.mjs` (`designs.js:2`; ownership documented in `docs/FEATURES/handoff-2026-09-07-nav-screens-close-pass.md:255`). Every drawing change in this plan is made in the lab file, regenerated, and checked with the extractor's `--check`; an edit to `designs.js` alone would be lost at the next extraction.
+- **What you will notice:** smaller GALAXY cells and the bulge as one cell; 256 cells on SECTOR; Sol's PRISM column sparser (~300 stars per slab against ~2,000 in today's wider window); dense inner columns, empty rim columns.
 
 ---
 
-## 6. Segments and the nav controls
+## 7. Segments and the nav controls
 
-### 6.1 Two different things: naming slabs and bar bands (decisions 4 and 5) [I]
-- **Naming slab (decision 4, permanent).** Its height is baked into every procedural name forever. Recommended: **100 pc**. That matches the loader's existing step (`NavComputer.js:3853-3884`), keeps every query well under the guard that silently drops M dwarfs from queries taller than ~0.44 kpc (`HashGridStarfield.js:661-662`), and makes the token read as a height. A taller slab means fewer slabs but bigger slot numbers. A whole-column box (no slab token) would need 6-digit slot numbers with no height meaning.
-- **Bar bands (decision 5, changeable later without renaming anything).** How the bar groups slabs for display. Recommended: one cell per 100 pc slab, 60 cells across ±3 kpc, coloured by layer. The alternative is a handful of labelled floors, like a building's floor selector (thin disk, thick disk, halo, north and south), each expanding to its slabs on hover or click.
-- **The bar obeys the rule too:** each bar cell is exactly one slab, the level below a column.
+### 7.1 Naming slabs and bar bands (decision 4) [I]
+- **Naming slab (decision 4, permanent):** recommended **100 pc**. It matches the loader's existing step (`NavComputer.js:3853-3884`), stays well under the guard that silently drops M dwarfs from queries taller than ~0.44 kpc (`HashGridStarfield.js:661-662`), and reads as a height.
+- **Bar bands (changeable later without renaming):** one cell per slab, 60 cells across ±3 kpc, coloured thin/thick/halo. *(Draft 3's decision 5; now in "going ahead unless you object".)*
+- **The bar obeys the rule:** each bar cell is exactly one slab.
 
-### 6.2 One layer function [V thresholds, I sharing]
-`prismNumbers` already prints the layer: THIN under 0.3 kpc, THICK under 1.0, otherwise HALO (`designs.js:2183`). The plan **uses those same thresholds** (not the 0.9 kpc an earlier draft had), in one shared function that both the bar colours and `prismNumbers` call. With 100 pc slabs: N1–N3 thin, N4–N10 thick, N11 and up halo. This avoids the Elite bug where two screens worked out the region differently and disagreed near borders (research, Frontier issue 13286).
+### 7.2 One layer function [V thresholds, I sharing]
+`prismNumbers` already prints THIN under 0.3 kpc, THICK under 1.0, otherwise HALO (`designs.js:2183`). One shared function uses those thresholds for both the bar colours and the readout: N1–N3 thin, N4–N10 thick, N11 and up halo.
 
-### 6.3 The segment bar [I, built on V layout]
-- **Design 1:** a new segment column beside the ±2 pc fine gauge you already approved. The map gives up one 6-texel column (map width 252 → 246, `designs.js:822-828`). 60 cells on 216 texels is ~3.6 texels each, enough for a coloured cell but not text. The current slab and layer show in the rail block (`designs.js:1946-1948`) as "N16 · HALO".
-- **Design 2:** the new column sits just left of the gauge (gauge at x = W−20, `designs.js:3117`). The bottom bar has no spare room: its last characters are reserved for the height number (`designs.js:2876-2878`). So the slab token **replaces** the existing height and layer clauses (`:2888-2891`) instead of being added.
-- **Behaviour:** the current slab is lit, loaded slabs are mid-tone, unloaded slabs are dim, and slabs with no stars (common on the rim and high in the halo under option D) get their own empty mark. **Click** jumps to the middle of a slab. **Drag** moves the highlight and loads on release, so dragging never stalls. **R/F is unchanged** as the slow pan, and the 100 ms per-frame cap stays (`NavComputer.js:44`, `:1371`) so a slow frame cannot teleport the camera.
-- **Plumbing:** it reuses the existing grab pattern. Paint publishes a rect, the press is armed at mouse-down, mouse-up releases (`designs.js:2219`, `NavComputer.js:4349`, `:4402`, `:4415`, `navViewModes/index.js:205`, `:1381`).
-- **Y range:** the bar spans **±3 kpc**, matching the loader. The "Y RANGE" readout is fixed to the same shared constant (today it says ±2.0).
-- **Code constraint:** `NavComputer.js` is held at 4,711 lines (`:156` comment). Segment logic and the grid module go in **new modules**; NavComputer gets call-site changes only.
-- **Legacy look:** not in this contract (section 9, follow-ups).
+### 7.3 The segment bar, and the fine gauge after a jump (decision 7) [I, layout V]
+- **Design 1:** a new column beside the ±2 pc fine gauge; the map gives up 6 texels (`designs.js:822-828`). 60 cells on 216 texels is ~3.6 texels each: drawable, but whether it is comfortable to hit is for your UAT at real resolution. The current slab and layer show in the rail block (`:1946-1948`) as "N16 · HALO".
+- **Design 2:** the gauge is at x = W−20 (`designs.js:3117`) and the minimap occupies W−44 to W−20 (`:3092`), so a new column just left of the gauge **would land on the minimap**. **Fix (technical):** the minimap moves left by the bar's width, and every widget gets its own non-overlapping paint and click rectangle (the gauge's click area today adds one texel each side, `index.js:1121`, so two adjacent widgets' click areas would overlap). The slab token replaces the height and layer clauses in the bottom bar (`:2888-2891`).
+- **Design 2's list mode:** today the gauge is not drawn in list mode (`designs.js:3034`). **The segment bar is drawn in list mode too**, because changing slab is exactly what you want while reading a list; the fine gauge stays map-only.
+- **Behaviour:** current slab lit, loaded mid-tone, unloaded dim, empty slabs marked. Click jumps to a slab's middle; drag moves the highlight and loads on release. R/F unchanged, with the 100 ms per-frame cap (`NavComputer.js:44`, `:1371`).
+- **The problem Astra found with the fine gauge.** Today the ±2 pc gauge is centred on **your ship's height**, not on where you are looking (`designs.js:2211`, `:2220`), and dragging it clamps to your ship ±2 pc (`index.js:1136`). So if you jump to N16 with the bar and then grab the fine gauge, you are **thrown back to your ship's height**, 1.5 kpc away. That is decision 7:
+  - **A (recommended): the fine gauge follows where you are looking.** After a jump it is centred on the view's height and fine-adjusts there. Your ship is shown as a mark at the gauge's edge (an arrow) whenever it is out of range. One rule: bar = big jumps, gauge = small moves, both around what you see.
+  - **B: the fine gauge stays tied to your ship.** It keeps its current meaning, but after any jump grabbing it pulls you home. Simple, but surprising.
+  - **C: drop the fine gauge**; use the bar for jumps and R/F for fine movement. Less on screen, but it removes a control you approved.
+- **Tests:** every bar cell hit, shared boundaries between widgets, drag release, leaving the canvas mid-drag, switching views mid-drag.
+- **Y range:** the bar spans ±3 kpc, matching the loader; the "Y RANGE" readout uses the same constant.
+- **Code constraint:** `NavComputer.js` is held at 4,711 lines (`:156`). The grid, identity and segment logic go in **new modules**; NavComputer gets call-site changes only.
 
-### 6.4 Names in the nav lists [V widths, I fix]
-Today nav text is cut **from the right** (`navPixelType.js:146-151`, `designs.js:399`), and that cuts off exactly the part that identifies the star:
-- Design 1's PRISM list pads names to **12 characters** (`designs.js:1928`, rail `cols` = 25 at `:825`, `:868`). Every row would read "THESSA KORAB".
-- Design 2's name column is 119 texels, ~19 characters (`designs.js:3176`). "THESSA KORABI N1 M-6295" would become "THESSA KORABI N1 M-", and longer sector words cut into the slot number, giving a valid-looking name for a **different** star. That is exactly what `cockpit/designation.js:9-20` forbids.
+### 7.4 Names in the nav lists [V widths, I fix]
+Nav text is cut **from the right** today (`navPixelType.js:146-151`, `designs.js:399`), which cuts exactly the part that identifies a star. Design 1's PRISM list allows **12 characters** (`designs.js:1928`); design 2's name column is 119 texels, ~19 characters (`:3177`). Design 1's location field is 17 characters (`:847`). And the cockpit's `fitDesignation` drops words from the front but, as a last resort, **cuts the final word** (`cockpit/designation.js:56`), so draft 3's "never cut a token" was not true of the code it cited.
 
-Fix:
-- **Inside PRISM, list rows show only the tail** ("N16 M-7451", at most 10 characters), and the column's head ("THESSA KORABI") is drawn once as a header. Every star in the list shares that head, so nothing is lost.
-- **Anywhere else a star name is shortened, whole words are dropped from the front**, the same rule as `fitDesignation`. Characters are never cut from the end of a name.
-- The **location label** (§6.5) is a separate thing, not a name. It drops whole fields from the right (star first, then slab), because its job is location.
-- **A layout test** renders the longest possible name (§3.3, 25 characters) in every nav field in both designs and fails if any field shows a cut-off token.
-- **Long lists [I, new in draft 3]:** an inner-galaxy slab can list ~6,000 stars. The rail already pages; the list is appended per slab (§7), never rebuilt.
+**Rules (namespace-aware) *(changed in draft 4)*:**
+- **Procedural address names in PRISM rows show only the tail** ("N16 M-7451", ≤ 10 characters); the column's head ("THESSA KORABI") is drawn once as a list header, since every procedural star in the column shares it.
+- **X tails:** a procedural row with an X tail would need up to 14 characters ("N16 X-…" + 8), more than design 1's 12. In design 1 those rows show the 10-character X tail alone; the slab is on the bar and in the detail.
+- **Real, KnownSystems and catalogue names are never turned into a tail.** They show their own name. If one does not fit, it is shortened with a visible cut mark so a shortened name can never look like a different complete name; the full name is in hover and detail.
+- **Elsewhere, procedural names are shortened by dropping whole words from the front.** Characters are never cut from the end.
+- **A displayed (possibly shortened) string is never used as an identity or a contents-lookup key.**
+- **Layout test:** the longest ordinary name, an X name, a far address, a one-word catalogue name, a Greek name, a real designation and a component suffix, in every nav field in both designs. It fails on any cut-off token.
 
-### 6.5 The "where am I" label [I]
-- Shows **where you are**, not what you are browsing (browsing shows in the rail):
-  - Procedural star: `M-955 · [sector colour]THESSA [column colour]KORABI [slab colour]N1`
-  - Named star: `SOL · [sector colour]THESSA [column colour]KORABI [slab colour]N1`
-- **Each part is coloured with the ink that highlights the same thing on the map**: the sector part matches the highlighted GALAXY cell, the column part matches the highlighted REGION cell, and the slab part matches the lit segment-bar cell. So the label reads as the full address and each piece can be found on screen.
-- **Design 1:** the 14-cell `hereName` slot takes the star's own name or tail. The 17-cell sector slot takes "THESSA KORABI N1" (16 characters, fits) (`designs.js:844-847`).
-- **Design 2:** the top-bar locator (`designs.js:2787-2790`).
-- **One resolver** returns the address **and** the colours, and both the label and the map highlights call it. Each sector gets a fixed colour from a small palette. On a uniform grid a repeating 2 × 2 colour pattern guarantees that side-by-side and diagonal neighbours always differ [I, arithmetic].
-
----
-
-## 7. Loading one slab at a time, and the stall [I unless marked]
-
-**PRISM performance is a hard requirement.** Proposed acceptance test: an in-browser trace shows **no main-thread task over 50 ms** (the browser's own "long task" line) while entering PRISM or jumping between slabs, at an inner-galaxy column (R ≈ 1.5 kpc) and at Sol, with the cockpit open.
-
-- **Today [V]:** entering PRISM loads the whole ±3 kpc column, about 30 rounds of two 0.1 kpc slabs (`NavComputer.js:3854-3884`). Each round evaluates density for every cell of all 10 tiers (`HashGridStarfield.js:651-694`). Under a design, every round also rebuilds and re-sorts every row (`state.js:986-1011`).
-- **New:** load **the slab you are in** first. Then load the slabs above and below while idle. Unload far slabs.
-- **Costs under option D [V, headless, warm]:** every slab of every column evaluates the same 12,485 cells. Measured 5–27 ms per slab (bulge 5, inner R 1.5 20, R 4 27, Sol 17, outer 14, rim 11; `onecell/c-prism.mjs`). Draft 2's worst slab (31.25 pc, outer disk) was 199 ms.
-- **Splitting the work.** Splitting by tier alone does not bound a frame: M dwarfs are 60% of the cells evaluated (7,452 of 12,485). Instead the loader works through a **cell budget per frame**, splitting M and K by y-row, aiming at ≤ 8 ms of loading per frame. At 27 ms a slab that is about 4 frames.
-- **Rows are appended per slab**, with no full rebuild and re-sort per step. Stars in one slab share their head, so the address lookup runs once per slab.
-- **Three correctness fixes that come with slab loading:**
-  1. **"Here" detection** matches your name against the loaded stars and falls back to the nearest one (`NavComputer.js:2052-2058`). If your own slab were not loaded, the wrong star would be marked. Fix: **always load and pin the player's own slab.**
-  2. **Real stars** replace their hash-grid twin only among stars already loaded (`:3790-3800`), and they are de-duplicated once. If the twin's slab loads later, both would appear. Fix: merge real stars against a 2 pc margin that reaches into the neighbouring slabs, and re-run the merge for each slab as it loads.
-  3. **`_loadedSeen` is cleared per slab on unload**; otherwise an unloaded slab could never reload.
-- **Name cache:** `state.js:571-574` caches names by the 32-bit seed. On a large column some seed collisions are expected, which would show one star's name on another. Fix: key the cache by the address (tier + cell).
-- **Bright-star defect [V]:** the prism query drops O and giant stars whose cell centre is outside the prism but whose position is inside it (`HashGridStarfield.js:679-681`; 0 of 40 found in a test). Naming does not depend on this query. But the slab loader is rewritten anyway and you will judge the PRISM view, so the fix lands with the loader (Phase 3).
-- **Unknown [V that it is unexplained]:** the walk's ~3 s per step. Slab loading cuts the work ~60-fold whatever the cause. But if one slab really costs seconds in the browser, the first slab would still stall. **Phase 0 profiles in the browser first**: one nav instance only, the location of XIGMAG-2AE101G recorded, the feature catalogue on and off, and **a 7.81 pc inner-galaxy slab** (the option D worst case, §2.8). If that slab breaks the 50 ms line even after per-frame splitting, decision 0 is reopened before anything is frozen.
+### 7.5 The "where am I" label [I]
+- Shows **where you are**, not what you are browsing: `M-955 · [sector colour]THESSA [column colour]KORABI [slab colour]N1`; for a named star, `SOL · …`.
+- **Each part uses the ink of its map highlight** (GALAXY cell, REGION cell, lit bar cell). A repeating 2 × 2 colour pattern on the uniform grid keeps neighbours different.
+- **Design 1:** the 14-cell `hereName` slot and the 17-cell sector slot ("THESSA KORABI N1" is 16) (`designs.js:844-847`). **Design 2:** the top-bar locator (`:2787-2790`).
+- **One resolver** returns address and colours for both the label and the highlights, and it reads the player's address from §6's player resolver, never from loaded rows.
 
 ---
 
-## 8. Everything that depends on a name or on the sector table
+## 8. Loading and performance (a hard requirement) [I unless marked]
+
+**Acceptance line:** an in-browser trace shows **no main-thread task over 50 ms**, at an inner-galaxy column (R ≈ 1.5 kpc), at Sol, **and at the original failing location (XIGMAG-2AE101G)**, with the cockpit's nav instance open as well, covering:
+- **cold** entry to PRISM (first time after load) and warm entry;
+- rapid slab changes on the bar, including **cancelling** a slab mid-load;
+- a slab replaced by another with the same number of stars;
+- all six PRISM sort modes (`state.js:245`);
+- **leaving PRISM** (the walk saw a ~1.5 s hitch there once).
+
+**Today [V]:** entering PRISM loads the whole ±3 kpc column in about 30 synchronous steps (`NavComputer.js:3854-3884`). The query sorts its whole result in one go (`HashGridStarfield.js:740`); then the nav copies every row, works out multiplicity and re-sorts all rows (`state.js:993`, `:1008`); then the map projects every loaded row (`designs.js:3038`).
+
+**New loader:**
+- **Load the slab you are looking at first**, then the slabs above and below while idle; unload far slabs.
+- **A time limit, not a cell count.** Draft 3 budgeted a fixed number of cells per frame. A cell count does not bound time across locations, cold starts or slower machines. The loader instead **works until a deadline (≈ 8 ms per frame), stops, and resumes next frame where it left off**. The starfield generator already has elapsed-time yielding (`HashGridStarfield.js:290`) and frame-aligned scheduling (`:92`) to build on.
+- **Everything after the query is budgeted too**: naming, real-star replacement, multiplicity, merging into the list, sorting and publishing. Draft 3's "append, never re-sort" conflicted with a sorted list; instead each arriving slab is sorted on its own and **merged** into the sorted list in budgeted steps, so the chosen sort order is kept.
+- **Cancellation:** each slab request carries a generation number; if you jump elsewhere, stale work is dropped at the next check, and that cancel step is itself inside the 50 ms line.
+- **An explicit data revision number** is published with each change, because today's cache checks the array and its length (Astra), so swapping one slab for another of the same size could leave stale rows on screen.
+- **Cost per slab [V]:** 13,680 cell visits for a 7.8125 × 100 pc slab, the same everywhere. **[A]** 7,834–8,964 density calls and 5.9–15.6 ms warm headless at six radii.
+
+**Correctness fixes that come with slab loading:**
+1. **Real-star replacement, decided by identity, not by load order** *(changed in draft 4)*. Today a real star replaces the nearest procedural star **among the rows already loaded** (`NavComputer.js:3779-3815`): it queries real stars only inside the current volume (`:3779`), searches only loaded rows (`:3794`), and a name key stops later passes (`:3788`). So which procedural star is replaced can depend on what loaded first, and a real star near a column edge can have its twin in the next column, which a height-only margin (draft 3) cannot reach. **Fix:** for each real star, its twin is chosen from a **full 3D neighbourhood** (all directions, across column and slab edges), generated directly from the hash grid regardless of what is loaded, with ties broken by identity order. The result is a **suppression list keyed by identity**, separate from the display rows, so the same procedural star is hidden whatever order slabs load or unload in. Catalogue positions and KnownSystems membership are kept. Tests: adjacent columns and slabs loaded in both orders, unload and reload, two real stars competing for one twin.
+2. **`_loadedSeen`** becomes identity-keyed and is cleared per slab on unload, so an unloaded slab can reload.
+3. **"Here"** is handled by §6's player resolver, so it no longer needs the player's slab pinned in the list.
+
+**Bright-star defect [V]:** the query drops O and giant stars whose cell centre is outside the box but whose star is inside it (`HashGridStarfield.js:679-681`). The fix lands with the loader, and its corrected query is benchmarked in Phase 0.
+
+**Phase 0 (measure before freezing) [I]:** at the original failing location, record for each nav instance the **exact query bounds, the loop count per tier, the number of density calls, and the elapsed time**, **with and without the profiler running**; repeat the identical query headless. Then benchmark a corrected 7.8125 pc slab at the inner galaxy and at Sol. If one slab cannot be sliced under the 50 ms line, decision 0 is reopened before anything is frozen.
+
+---
+
+## 9. Everything that depends on a name, an identity or the sector table
 
 | Place | Risk | Handling |
 |---|---|---|
-| **Call sites of the namer.** `generateSystemName(rng, pos)` takes no tier today (`NameGenerator.js:443`). | Every caller must now pass tier and cell | Callers: nav pick `main.js:6137`; sky-click `:14306`, `:14327`; screensaver `:14379`, `:14393`; spawn via `generateSystemNames` `:7604`; teleport `:8312-8313` (switch to `nearest[0]`); title and `?system=` spawns `:7603`, `:5570` (X tail); nav rows `NavComputer.js:3759`, `state.js:573`; scripts `gen-named-systems.mjs`, `name-census.mjs`. Nav rows store tier as `spectral` (`NavComputer.js:3767`), but the real-star merge overwrites it (`:3812-3815`), so a separate `tier` field is kept. |
-| Warp target → arrival, carried as a string (`main.js:6137` → `:6658` → `:7601-7604` → `:8051`) | Works if all callers share one function | One shared function. A test checks that the nav-row name equals the arrival name on every targeting path. |
-| **Contents lookups** `RealSystemOverlay.resolve`, `KnownSystems.findByAlias` (`arrivalResolution.js:54-93`, `main.js:6751-6760`) | The dangerous one: a collision would give a procedural star **real planets** | Shape disjointness plus the build-time check against every lookup key set (§4). |
-| Nav "here" and the self-warp guard (`state.js:1018-1044`, `navViewModes/index.js:882`) | Breaks if the nav and spawn name stars differently | Same function, same grid. NavComputer stops building its own sector table (`NavComputer.js:141`). |
-| **[New] Everything that reads today's 775-sector table** | Under option D the table is replaced by the grid module | `NavComputer.js:141`, `:1183`, `:4636-4646` (GALAXY drill); `picking.js:181-187` (`pickSector` becomes arithmetic); `state.js:966-979` (`sectorRows`: 293 rows); `navViewModes/index.js:929` (hard-coded count of 64 cells at SECTOR becomes 256); `designs.js:1033-1107` (`reachableRadius`, `liveGridCells`: replaced by "draw a cell if it touches R ≤ 18 kpc"), `:2942-2947` (design 2's sector dots become the grid); `AutopilotNavSequence.js:226-250` (autopilot drill reads sector centre and size); `NavComputer.js:71-73` (`gridNForLevel`: SECTOR 8 → 16). |
-| Warp-tunnel pattern seeded from the name (`main.js:348`, `:10347-10348`) | Each destination's tunnel looks different after the switch | Cosmetic; accept it. |
-| Sector names in the nav (`GalacticSectors.js:207-235`, `state.js:966`) | They become the 293 unique sector words | This also fixes the 319 duplicates. |
-| Tests: `NameGenerator.injective.test.js` (`:25-37`, `:148-173`), `scripts/gen-named-systems.mjs:63`, `scripts/name-census.mjs`, `tests/baseline/known-failures.json:210` | The old shape rules fail | Rewrite for the new shape; re-record the baseline deliberately. Tests that only use old names as fixed inputs are fine. Tests that pin today's 775 sectors or GALAXY cell counts are rewritten for the grid. |
-| Cockpit name fitting (`cockpit/designation.js:46-56`) drops leading words | A focused procedural star shows "N1 M-955" on 9-column panels | That is a truthful shorter name, not a wrong one. Better cockpit handling is a follow-up. |
-| Search (`knownObjectSearch.js`) | Nothing breaks | Search by sector word is a possible follow-up. |
-| Planet and moon names that embed the system name | They follow automatically but get long ("Thessa Korabi N1 M-955 b") | Accept; front-drop fitting covers the panels. The planet-name fix is its own follow-up (§9). |
+| **Call sites of the namer.** `generateSystemName(rng, pos)` takes no identity today (`NameGenerator.js:443`) | Every caller must pass the identity | Nav pick `main.js:6137`; sky-click `:14306`, `:14327`; screensaver `:14379`, `:14393`; spawn `:7604`; title/`?system=` `:7603`, `:5570` (seed-named, §3.5); nav rows `NavComputer.js:3759`, `state.js:573`; scripts `gen-named-systems.mjs`, `name-census.mjs`. Nav rows keep a separate `tier` field, because the real-star merge overwrites `spectral` (`:3812-3815`). |
+| **Seed-keyed lookups** (§3.4) | Wrong star clicked or warped to | Switched to identity in Phase 1. |
+| **Procedural teleports** (`main.js:8295-8354`) | Today a teleport sets the player at the requested spot, takes context from there (`:8300`), borrows the nearest grid star's seed (`:8315`), and re-rolls the star type unless it is a real star (`:8336`, `:8354`). So it can differ from warping to the same star, not just in name | **Route procedural teleports through the shared arrival resolver** (`arrivalResolution.js:54`) with the chosen star's identity, position, type and seed. Test: preview, teleport and warp to the same star give the same name and contents. KnownSystems and real-star precedence kept. |
+| Warp target → arrival (`main.js:6137` → `:6658` → `:7601-7604` → `:8051`) | Works if all callers share one function | One function; a test checks nav-row name = arrival name on every targeting path. |
+| **Contents lookups** (`arrivalResolution.js:54-93`, `main.js:6751-6760`) | A collision would give a procedural star real planets | Shape disjointness plus the build-time key check (§5). |
+| Nav "here" and the self-warp guard (`state.js:1018-1044`, `navViewModes/index.js:882`) | Wrong "here" in a foreign column | Player resolver (§6). |
+| **Readers of today's 775-sector table and grid sizes** | Under option D the table is replaced | `NavComputer.js:141`, `:1183`, `:4636-4646`; `picking.js:181-187`; **`picking.js:62` (`gridNFallback`, also imported by `state.js:117`)**; `state.js:966-979` (`sectorRows`: 361 rows, 293 drawn); `navViewModes/index.js:929` (64 → 256 cells); **`designs.js:579` (SECTOR subdivision), `:1844` and `:1866` (64-cell counts)**; `designs.js:1033-1107`, `:2942-2947`; **`navViewModes/geometry.js:45` (repeats map and gauge geometry)**; `NavComputer.js:71-73` (`gridNForLevel`: SECTOR 8 → 16); **legacy grids `NavComputer.js:1634`, `:1654`**; **autopilot `AutopilotNavSequence.js:233`, `:244`, `:312`, `:352`, `:371`, `:464-475`** (§6). |
+| **The lab file** `nav-240p-lab.html` | `designs.js` is generated from it | Every drawing change is made in the lab and regenerated; extractor `--check` must pass (§6). |
+| Tests | Pinned old values fail | **Each phase updates the tests it breaks, in that phase.** Phase 2: `navViewModes.test.js:83` and `navPicking.test.js:793` (775 sectors), GALAXY cell counts. Phase 5: `NameGenerator.injective.test.js` (`:25-37`, `:148-173`), `scripts/gen-named-systems.mjs:63`, `scripts/name-census.mjs`, baseline `tests/baseline/known-failures.json:210` (re-recorded deliberately). |
+| Warp-tunnel pattern seeded from the name (`main.js:348`, `:10347-10348`) | Each tunnel looks different after the switch | Cosmetic; accepted. |
+| Sector names in the nav (`GalacticSectors.js:207-235`, `state.js:966`) | Become the sector words | Also fixes today's 319 duplicates. |
+| Cockpit name fitting (`cockpit/designation.js:46-56`) | A focused star may show "N1 M-955" | Truthful but short. The cockpit nav redesign (follow-up) handles it properly. |
+| Planet and moon names embedding the system name | Get long | Front-drop fitting covers panels; the planet-name fix is its own follow-up. |
+
+The whole-tree search found no production system outside the nav and the autopilot that reads the sector table [V, Astra and draft 3].
 
 ---
 
-## 9. Build order
+## 10. Build order
 
-This spans several systems, so it gets a `dev-collab-scope` contract (`intent.md` + `contract.json`) before any code, and each phase is verified with `verify-workstream`. You do the UAT.
-
-*(Draft 3 adds Phase 2, the grid on screen, so your rule is the first thing you see; later phases move down one number.)*
+This spans several systems, so it gets a `dev-collab-scope` contract (`intent.md` + `contract.json`) before any code, and each phase is verified with `verify-workstream`. You do the UAT. *(Draft 4 merges draft 3's Phase 2 and the geometry half of Phase 3 into one milestone, adds identity to Phase 1, and moves each test change into the phase that causes it.)*
 
 | Phase | What gets built | What you can see or check afterwards |
 |---|---|---|
-| **0. Ground truth and scope** | Browser profile of the PRISM stall (one nav instance, location recorded), **including a 7.81 pc inner-galaxy slab**. Your decisions recorded. Contract written. | A one-line answer to "what actually costs 3 s", and whether option D's core slab passes the 50 ms line. |
-| **1. The fixed grid** | Grid module: 2 kpc sectors with the Sol-centring offset, 16×16 regions, 16×16 prisms, 100 pc slabs. Position → address and address → box. Ten tier tokens, edge-cell handling, X tails. Placeholder sector ids (grid references). Injectivity, round-trip and golden tests. | No visible change. A lab readout of addresses for sample stars. |
-| **2. One cell = one place on every screen** (designs 1 and 2) | GALAXY draws the 19×19 sector grid (cells outside R = 18 kpc not drawn); SECTOR and REGION draw world-locked 16×16 grids with neighbours dimmed; drill goes to the fixed cell under the pointer; default REGION snaps to the player's region; edge labels A–S/1–19 and A–P/1–16; hover shows the cell's id; every reader of the old sector table switched (§8). | **Click any cell on any screen and you land in exactly that place; drag, and the cells stay the same places.** |
-| **3. Fixed PRISM, segment bar, slab loading** (designs 1 and 2) | PRISM = one 7.81 pc column, WASD clamp, zoom limits (§5). Segment bar with click and drag. R/F unchanged. Shared layer function and Y-range constant. Slab loader with per-frame budget, pinned own slab, real-star margin merge, `_loadedSeen` per slab. Bright-star fix. In-browser long-task check. | **Mid-plane to 2 kpc in one click, and no main-thread task over 50 ms entering PRISM or jumping slabs.** This fixes your main pain point before any renaming. |
-| **4. Vocabulary** | 293 sector words (crisp in the core, soft on the rim), the "far" word set, 256 three-letter syllables. Screened against real names, constellations and a profanity list. | An Artifact review page: you approve or reject every sector word and samples of column words. |
-| **5. Name switch** | The procedural step spells out the address. Call-site changes (§8). Address-keyed name cache. Teleport naming. Build-time lookup-key check. Tail-only PRISM rows with a header, front-drop fitting, the layout test. Rewritten tests and re-recorded baseline. | Nav rows and arrivals read "Thessa Korabi N1 M-955". "Here" detection and the self-warp guard still work. |
-| **6. Where-am-I label** | One resolver for address and colours, used by the label and the map highlights. | Each part of the label matches the colour of its highlighted cell. |
+| **0. Ground truth and scope** | Browser measurement at the failing location, with and without the profiler (§8): bounds, loop and density-call counts, time, both nav instances. Corrected-slab benchmark at the inner galaxy and Sol. Your decisions recorded. Contract written. | A plain answer to "what actually costs 3 s", and whether option D's slab can stay under 50 ms. |
+| **1. The fixed grid and star identity (the gate)** | Grid module with the exact constants (§0.4), half-open boxes and slabs (§3.1), the one row direction (§4.1). Generator returns identity; it is carried through rows, picking, selection, de-duplication and warp transport, replacing every seed lookup (§3.4). Seed-named debug/`?system=` systems (§3.5). Slot mapping including coarse tiers (§3.3). Placeholder sector ids. Tests: faces, edges, corners, negatives, y = 0, coarse tiers, equal seeds; round trip; injectivity. | Little visible change. **Two equal-seed stars can no longer be clicked as each other.** A lab readout of addresses for sample stars. |
+| **2. One cell = one place, on every screen and every entry path** (designs 1 and 2, made in the lab file; legacy grids kept correct) | GALAXY 19×19 grid; world-locked 16×16 SECTOR and REGION with neighbours dimmed; edge labels; drill to the fixed cell; default REGION snap; **PRISM = one fixed 7.8125 pc column**, WASD clamp, zoom limits; **autopilot through the same address → view and enter-column functions**; **player resolver for "here"**; every reader of the old table switched (§9); the 775-sector tests rewritten. | **Click any cell on any screen and land in exactly that place; drag, and the cells stay the same places; the autopilot drills to the same cells you would.** |
+| **3. Slab loader and segment bar** | Deadline-based, resumable, cancellable loader budgeting naming, merge, sort and publish; data revision number; identity-based real-star replacement; bright-star fix. Segment bar (click, drag, list mode in design 2), fine-gauge rule (decision 7), minimap moved, shared layer function and Y-range constant. **The 50 ms acceptance test (§8).** | **Mid-plane to 2 kpc in one click, and no main-thread task over 50 ms entering, browsing, cancelling or leaving PRISM.** Your main pain point is fixed before any renaming. **Option D is confirmed or reopened here.** |
+| **4. Vocabulary** (only after Phase 1's identity tests and Phase 3's performance test pass) | 361 sector words (crisp in the core, soft on the rim), two separate 256-syllable sets, all 65,536 column words screened exhaustively, plus real-name, constellation and profanity screens. | An Artifact review page: you approve or reject every sector word and samples of column words. |
+| **5. Name switch** | The procedural step spells out the address. Namer call sites (§9). Teleports through the arrival resolver. Build-time lookup-key check. Namespace-aware list rules and the layout test (§7.4). Name tests rewritten, baseline re-recorded. | Nav rows and arrivals read "Thessa Korabi N1 M-955"; real names untouched; teleport, preview and warp agree. |
+| **6. Where-am-I label** | One resolver for address and colours, used by the label and the map highlights. | Each part of the label matches its highlighted cell. |
 
-**Follow-ups (separate contracts, not in this one):**
-- the legacy look's segment bar and grid, which reverses the earlier "legacy unchanged" rule;
-- cockpit display of procedural star names;
-- planet and moon names: one shared names object seeded from the star's address, not the warp counter (`main.js:6644-6645`, `:7568`), replacing the three separate namers. This is the order you set in the walk (`UAT-walk-2026-09-30.md:49-50`): system names first;
+**Follow-ups (separate contracts):**
+- **the cockpit (diegetic) nav redesign**, which you ruled comes after this one; it will also handle procedural names on cockpit panels;
+- the legacy look's segment bar (its grids are kept correct in Phase 2);
+- planet and moon names seeded from the star's address, not the warp counter (`main.js:6644-6645`, `:7568`). Changing system names does **not** fix those;
 - search by sector or column word.
 
----
-
-## 10. Risks and unknowns
-
-- **[V] The stall's cause is unknown.** Phase 0 exists so we fix the right cost, and it now also tests option D's worst slab before the grid freezes.
-- **[I] A frozen grid means frozen names.** Any later change to the sector size or offset, the 16×16 cuts, slab height, tier tokens or vocabulary renames every procedural star. The golden-names test makes such a change loud. That is why the grid choice (decision 0) and the Sol offset are now-or-never.
-- **[I] Smaller GALAXY cells.** 11 texels instead of today's 27. Readable through edge labels and hover, not through labels inside the cell.
-- **[I] Uneven stars per column (option D).** ~6,000 per slab in the inner galaxy, ~15 on the rim, often zero high above the rim. The work to load a slab is the same everywhere; what varies is how full the list and the picture are.
-- **[I] The bulge is one sector.** All of R < 1 kpc shares one sector word.
-- **[I] Generated words can be ugly or offensive.** The vocabulary is finite (293 sector words, a far set and 256 syllables), so it can be fully screened, and you review it.
-- **[V] 19.2 million columns** can be named only by generator. Only the sector words are fully hand-reviewable.
-- **[I] A sparser PRISM view** at Sol (§5).
-- **[I] Long planet names**, ~25 characters. Front-drop fitting handles the panels.
-- **[I] World-locked grids with dimmed neighbours** (§5) are new drawing work in both designs.
-- **[V] Real stars displace a grid star within 2 pc** (`NavComputer.js:3785-3816`). The displaced grid star's address simply goes unused; the real name wins.
-- **[I] The model's halo is heavy** (~9% of stars at the mid-plane, majority above ~0.9 kpc), so high slabs are not empty near Sol. This is a fact about the galaxy model, not about naming.
+**Elsewhere (nav-restorations batch or the SYSTEM-screen contract, §1.1):** the legend row removal, one search row per destination, the GPS line in every mode.
 
 ---
 
-## 11. How the critique was handled (draft 2)
+## 11. Risks and unknowns
 
-| # | Critique point | Handling |
+- **[A/V] The stall's cause is narrowed but not explained.** The time is in the star query, not the list (§2.8). Phase 0 measures like for like before the grid freezes.
+- **[I] A frozen grid means frozen names.** Any later change to the grid constants, cuts, slab height, tier cell sizes, slot order, tokens or vocabulary renames every procedural star; the golden-names test makes such a change loud.
+- **[I] Identity work touches the click → warp path.** It is the right fix for a real wrong-warp risk, but it changes code you have already walked; Phase 1's equal-seed test and the warp-path test guard it.
+- **[I] Smaller GALAXY cells** (11 texels against 27); readable through edge labels and hover.
+- **[I] Uneven stars per column**: ~6,000 per inner slab, ~15 on the rim, often zero high above the rim. Loading work is the same; list length is not.
+- **[I] The bulge is one sector.**
+- **[I] A 3.6-texel bar cell** is drawable; whether it is comfortable to hit is your UAT.
+- **[I] Generated words can be ugly.** The vocabulary is finite and fully screened, and you review it.
+- **[I] Long planet names** (~25+ characters); front-drop fitting handles panels.
+- **[I] The model's halo is heavy**, so high slabs near Sol are not empty.
+
+---
+
+## 12. How reviews were handled
+
+### 12.1 Astra's review of draft 3 (draft 4)
+
+| # | Finding (severity) | Handling |
 |---|---|---|
-| 1 | Tier letter not unique (K vs KG) | **Accepted.** 10 distinct tokens, cross-tier test (§3.2). |
-| 2 | Names do not fit the nav lists; cutting from the right gives a wrong name | **Accepted.** Tail-only PRISM rows, a header, front-drop fitting, longest-name layout test (§6.4). |
-| 3 | Silently overrides survey designations and catalogue-like core | **Accepted.** Now decision 3, with options. |
-| 4 | Lattice is not fixed in the nav (panning, mixed sizes) | **Accepted.** Draft 2: drill and snap rules, neighbour blocks, WASD clamp. Draft 3: superseded by the uniform world-locked grid (§0, §5), which removes mixed sizes altogether. |
-| 5 | Slab height is permanent, not a UI default | **Accepted.** Naming slab separated from bar bands; decisions 4 and 5. |
-| 6 | Two layer resolvers (0.9 vs 1.0 kpc); design 2's bar has no spare room | **Accepted.** One function using the existing 0.3/1.0 thresholds; the slab token replaces the height and layer clauses (§6.2, §6.3). |
-| 7 | Splitting by tier does not bound the frame; cold numbers include JIT warm-up | **Accepted.** Per-frame cell budget, M and K split by y-row; warm numbers quoted (§7). |
-| 8 | Narrower PRISM hits the zoom clamp and slows R/F | **Accepted.** Zoom decoupled from column width; new limits stated (§5). |
-| 9 | Slab loading breaks "here", real-star merge and `_loadedSeen` | **Accepted.** Own slab pinned, margin merge, per-slab reset (§7). |
-| 10 | Seed-keyed name cache | **Accepted.** Keyed by address (§7). |
-| 11 | Signature change, call sites, teleport naming | **Accepted.** Full call-site list, separate `tier` field, teleport named after `nearest[0]`, X tails for title and deep-link spawns (§3.4, §8). |
-| 12 | No coverage past R = 18 kpc | **Accepted.** Draft 2: outer ring. Draft 3: the uniform grid covers everything; far squares get generated words (§3.4). |
-| 13 | Joined syllables can be ambiguous | **Accepted.** Fixed-length syllables (3 + 3 in draft 3), distinctness test (§3.2). |
-| 14 | Weak alternative in the name-shape decision | **Accepted.** Option B is now sector word + grid reference (decision 2). |
-| 15 | Scope creep | **Mostly accepted.** Legacy bar, cockpit, planet names and search are now follow-ups. **Two items kept:** (a) the bright-star fix stays with the slab loader: it is not needed for naming, but that phase rewrites that loader path and you will judge the PRISM view it affects; (b) the Sol offset stays, now built into the grid choice, because it can only be done before names freeze. Doing it later would rename everything a second time. |
-| 16 | Tails look like real designations ("M42", "K2") | **Accepted.** Hyphen plus 3-digit padding ("M-042"). |
-| 17 | Y RANGE readout ±2 vs loader ±3 | **Accepted.** One ±3 kpc constant (§6.3). |
+| 1 | Star ownership not specified (blocker) | **Accepted.** New §3: half-open boxes, identity carried end to end, coarse-tier slots, up-to-8-candidate recovery that refuses to guess; Phase 1 gate. |
+| 2 | Seed-keyed picking, selection and de-duplication can pick the wrong star | **Accepted.** §3.4 table; equal-seed test. |
+| 3 | `?system=` and title systems cannot be told apart by position | **Accepted.** Excluded from the galaxy guarantee and named by their own seed (§3.5). |
+| 4 | Autopilot drills on its own grid | **Accepted.** Same address → view and enter-column functions (§6). |
+| 5 | Pinning the player's slab does not fix "here" in a foreign column | **Accepted.** Player resolver; no "here" in foreign columns; distances from the player (§6). |
+| 6 | Real-star replacement depends on load order | **Accepted.** Full 3D neighbourhood, identity-keyed suppression list (§8). |
+| 7 | Performance evidence overstated (60-fold, constant work 12,485) | **Accepted.** Count corrected to 13,680; 60-fold claim withdrawn; Phase 0 records bounds, counts and time, with and without the profiler (§2.8, §8). |
+| 8 | A cell budget does not bound task time | **Accepted.** Deadline-based, resumable, cancellable loader that budgets everything through publishing; wider acceptance test (§8). |
+| 9 | Unbounded far naming | **Accepted.** Bounded 19×19 naming area plus a unique far code (§4.5). |
+| 10 | Missed consumers, lab file, phase coupling | **Accepted.** §9 rows; lab-first rule (§6); Phases 2 and 3 geometry merged; tests move with their phase (§10). |
+| 11 | Teleport naming alone does not make paths agree | **Accepted.** Teleports through the shared arrival resolver (§9). |
+| 12 | Constants rounded; grid references off by one | **Accepted.** 7.8125 pc and 1.00390625 kpc pinned; one row direction; Sol is N10 (§0.4, §4.1, §4.3). |
+| 13 | Rejecting doubled syllables breaks 65,536 | **Accepted.** Two separate syllable sets; exhaustive screen (§4.2). |
+| 14 | Segment bar vs fine gauge meaning and design 2's minimap | **Accepted.** Minimap moved, separate click areas, bar in list mode; gauge meaning is decision 7 (§7.3). |
+| 15 | Length and cut rules ignore X, catalogue and real names | **Accepted.** Namespace-aware rules; X rows and authored names excepted; display strings never used as keys (§4.4, §7.4). |
+
+### 12.2 The draft 2 critique (kept for the record; section numbers are draft 2's)
+
+All 17 points were accepted or mostly accepted: distinct tier tokens; names fitting the lists; survey names as a decision; a lattice fixed in the nav; slab height as a permanent decision; one layer function; per-frame budgeting (now replaced by a time deadline, §8); zoom decoupled from width; slab-loading correctness fixes (now reworked, §6, §8); no seed-keyed name cache (now extended to all seed lookups, §3.4); full call-site list; coverage past R = 18 (now a bounded area, §4.5); unambiguous syllables (now two sets, §4.2); a stronger alternative name shape; scope trimmed to follow-ups (bright-star fix and Sol offset kept); hyphenated, padded tails; one Y-range constant.
 
 ---
 
-## 12. Decisions for you
+## 13. Decisions for you
 
-0. **(New, first) How the galaxy is cut into sectors, so every cell on every screen is exactly one thing.**
-   - **D (recommended):** uniform 2 kpc sectors (293), each cut 16×16 into 125 pc regions, each cut 16×16 into 7.81 pc prisms. GALAXY cells are 11 texels and read through edge labels. It obeys the rule everywhere, gives the same loading work for every slab, and leaves 293 sector words to review. You lose today's chunky GALAXY cells and equal stars per sector.
-   - **C:** add a ZONE screen (GALAXY 4 kpc zones → ZONE 1 kpc sectors → SECTOR → REGION). Every screen keeps big labelled cells, but every trip down costs one more click, there are ~1,100 sector words, and it is the largest code change.
-   - **B2:** uniform 2 kpc sectors with today's 8×8 regions. Chunky SECTOR screen and a fuller Sol prism (~1,260 stars per slab), but core slabs hold ~27,000 stars at 3× the loading work.
-   - **A:** draw today's 775 mixed-size sectors on GALAXY. Needs GALAXY zoom (9×) before most sectors can be seen or clicked; uneven loading cost.
-   - **Recommend: D**, unless Phase 0 shows its inner-galaxy slab cannot stay under 50 ms.
-1. **Rename every procedural star once.** Every procedural name becomes multi-part, and July's "same name forever" is broken exactly once; after that it holds again. No save or link breaks. **Recommend: yes.**
-2. **Name shape.**
-   - **A:** sector word + generated column word: "Thessa Korabi N1 M-955". You get a sayable name and neighbouring columns sound alike. The cost is 65,536 generated column words, built from 256 reviewed syllables, checked by sample only.
-   - **B:** sector word + grid reference: "Thessa I9A3 N1 M-955". Only 293 words need review, and the code is exactly what the edge labels on the SECTOR and REGION screens say (stronger under draft 3's edge labels than before). The cost is more letters and numbers, which is the "meaningless strings" look you objected to.
-   - **Recommend: A**, with the grid reference shown on hover and on the map edges so you can match the two.
-3. **Survey-style names** (your July ruling: "like real astronomy designations"; core "more catalogue-heavy").
-   - **A:** drop the survey class. One Elite-style shape for all procedural stars, with the core's feel carried by crisp sector words. This follows today's direction ("readable syllables at the beginning").
-   - **B:** keep a survey-style variant in core sectors, e.g. "PVX Thessa-Korabi N1.M-955". That keeps July's ruling, but the name no longer starts with syllables there.
-   - **Recommend: A.**
-4. **Naming slab height (permanent).** **Recommend: 100 pc**, giving N1–N30 and S1–S30 inside the nav's ±3 kpc.
-5. **How the bar groups slabs (changeable later).** **Recommend: 60 cells coloured thin/thick/halo, with the slab name in the rail.** The alternative is ~6 labelled floors that expand to their slabs.
-6. **PRISM becomes one fixed column.**
-   - The view equals the fixed 7.81 pc column everywhere (sparser at Sol, dense in the inner galaxy).
-   - Drill goes to the fixed cell under the pointer.
-   - Free panning stays; the grid stays locked to the world, with neighbours dimmed.
-   - WASD stops at the column edge.
-   - Zoom can always pull back past the column.
-   - **Recommend: yes.** Without it, one star could carry different names depending on how you reached it.
-7. **Segment bar beside the ±2 pc fine gauge you approved, or replacing it.** **Recommend: beside.**
-8. **Centre Sol in its prism (now or never).** *(Now part of decision 0's grid.)* Shift the grid by 1 kpc + 3.9 pc so Sol and the galactic centre each sit in the middle of a prism, about 1 kpc from every sector edge. Without the shift, Sol sits exactly on a corner shared by four sectors, and its home neighbourhood would carry four sector words. **Recommend: yes.**
+Only what needs you. Decision numbers are kept from draft 3 so earlier references still work; decisions 5, 6 and 8 moved to "going ahead" below.
+
+0. **How the galaxy is cut into sectors.** **Recommend D** (uniform 2 kpc sectors → 16×16 regions of 125 pc → 16×16 columns of 7.8125 pc), **provisionally**: it is confirmed only when Phase 3's in-browser test passes; if a slab cannot stay under 50 ms, this reopens before any name is frozen. You lose chunky GALAXY cells (27 → 11 texels) and equal stars per sector. The alternative, C, adds a ZONE screen to keep big cells everywhere at the cost of one more click and the largest code change.
+1. **Rename every procedural star once.** July's "same name forever" is broken exactly once, then holds again. No save or link breaks. **Recommend: yes.**
+2. **Name shape.** **A:** sector word + column word, "Thessa Korabi N1 M-955" (sayable; neighbours sound alike). **B:** sector word + grid reference, "Thessa I8A14 N1 M-955" (only the sector words need review, but more letters and numbers). **Recommend A**, with the grid reference shown on hover and the map edges.
+3. **Survey-style names** (your July ruling: "like real astronomy designations"). **A:** drop them; one Elite-style shape, with the core's feel carried by crisp sector words. **B:** keep a survey variant in core sectors. **Recommend A.**
+4. **Naming slab height (permanent).** **Recommend 100 pc** (N1–N30 and S1–S30 inside ±3 kpc).
+7. **What the fine ±2 pc gauge means after you jump with the segment bar.** Today it is tied to your ship, so after jumping to N16 grabbing it throws you back 1.5 kpc. **A:** it follows where you are looking, with your ship shown as an edge mark when out of range. **B:** it stays tied to your ship. **C:** remove it. **Recommend A.**
 
 **Going ahead unless you object:**
-- edge labels on every grid (GALAXY A–S × 1–19, SECTOR and REGION A–P × 1–16), replacing design 1's ids on the 8 densest tiles;
-- performance acceptance line: no main-thread task over 50 ms entering PRISM or jumping slabs, measured in the browser at the inner galaxy and at Sol;
-- tail-only star rows inside PRISM with the column name as a header;
-- whole words dropped from the front whenever a name is shortened;
-- layer thresholds stay at today's 0.3 / 1.0 kpc;
-- the Y range is ±3 kpc everywhere;
-- the label shows where you are, not what you are browsing, with each part coloured like its map highlight;
-- procedural teleports are named after the star they actually spawn;
-- the legacy look, cockpit, planet names and search become follow-ups.
+- the star identity work (§3) before any name is frozen, including no "here" mark on a column that is not yours;
+- PRISM is one fixed column; WASD stops at its edge; zoom can always pull back past it (was decision 6);
+- the segment bar has 60 one-slab cells coloured thin/thick/halo, sits beside the fine gauge, and also shows in design 2's list mode; design 2's minimap moves left to make room (was decisions 5 and 7's layout half);
+- the grid is shifted so Sol and the galactic centre sit mid-prism (was decision 8, now part of decision 0);
+- edge labels on every grid; one row direction (row 1 at the top);
+- debug, title-screen and `?system=` systems are named by their own seed, outside the galaxy-name guarantee;
+- the naming area is the 19×19 grid (361 reviewed words) plus a unique far code beyond it;
+- two separate syllable sets for column words;
+- procedural teleports go through the same arrival code as warps;
+- performance acceptance as in §8;
+- real and catalogue names are never shortened into a procedural tail;
+- the cockpit nav redesign, legacy segment bar, planet names and search-by-word are follow-ups; the legend row, search duplicates and the GPS line belong to other contracts (§1.1).
 
 ---
 
-## 13. Changelog
+## 14. Changelog
 
-**Draft 3 (2026-10-02): your one-cell-one-child rule.**
-- **Added section 0.** Your rule, verbatim, as the first principle. An audit of every screen, today against required: GALAXY fails outright (0 of 52 cells hold exactly one sector). SECTOR and REGION obey only until you drag. PRISM does not obey. Four GALAXY options with measured numbers; **option D recommended.**
-- **Hierarchy replaced (§3.1).** Draft 2 used the 775-sector adaptive quadtree, frozen as data, plus rim fill and an outer ring, with 8×8 regions and 16×16 prisms. Draft 3 uses a uniform 2 kpc grid (293 sectors inside R = 18 kpc) with 16×16 regions and 16×16 prisms. **Why:** a mixed-size quadtree cannot be drawn one-cell-per-sector at 417×240 (62% of sectors would be 1.5 texels). A uniform grid obeys the rule at any pan, covers all space without special tables, and no longer moves when density is retuned.
-- **Prism width is now 7.81 pc everywhere** (was 1.95 pc core to 31.25 pc rim). **Why:** loading work per slab becomes the same everywhere (12,485 cells, 5–27 ms warm headless; the worst slab was 199 ms). The trade is uneven star counts (~6,000 per slab in the inner galaxy, ~15 on the rim).
-- **Counts changed (§2.5).** 19.2 million columns (was 12.7 million). 293 sector words to review (was ~800). Column words are 3 + 3 letters from one 256-syllable set (was 2 + 3 letters from 64 + 256 syllables), because regions per sector went from 64 to 256.
-- **Names changed (§3.3).** Worked examples were recomputed on the new grid. The slot number is now 4 digits at most, and the longest name is 25 characters (was 26).
-- **Sol centring (decision 8)** is now part of the grid (a shift of 1 kpc + 3.9 pc). It also centres the galactic centre.
-- **New in §5:** world-locked grids with dimmed neighbours (replacing draft 2's mixed-size neighbour blocks), and edge labels on every grid.
-- **New in §6.5:** each part of the where-am-I label is coloured like its map highlight.
-- **New in §7:** performance is a hard requirement, with a 50 ms long-task acceptance line. Phase 0 must also test a 7.81 pc inner-galaxy slab in the browser, because option D puts more work into core slabs than draft 2 did.
-- **New in §8:** a row listing every reader of today's 775-sector table.
-- **Build order (§9):** new Phase 2 (one cell = one place on every screen), so your rule is visible before PRISM, vocabulary or renaming. The later phases moved down one number.
-- **Decisions (§12):** new decision 0 (the grid); decision 2's option B noted as now matching the edge labels; decision 8 folded into the grid; two new "going ahead" items (edge labels, the 50 ms line).
-- **Corrected from the brief:** the GALAXY grid on screen is a re-fitted 4.5 kpc grid, not the 4 kpc base grid in `GalacticSectors`. Sol's 4 kpc base square holds 10 sectors (not 16), and the busiest holds 223 (not 256).
-- **Unchanged:** the naming precedence chain and July guarantees (§4), tier tokens and slot padding, X tails, edge-cell handling, teleport naming, slab height, segment bar layout and plumbing, layer thresholds, the slab-loading correctness fixes, call-site list, follow-ups.
+**Draft 4 (2026-10-02): Astra's review and your rulings.**
+- **New §3, star identity.** Every star has exactly one owning box (half-open on every axis, defined at y = 0 and for negatives) and one identity (tier + generating cell) carried through queries, picking, selection, de-duplication, warp transport and naming. Every seed-keyed lookup is replaced. It is a gate before vocabulary or names. **Why:** without it a star on an edge can get two names, and two stars with the same seed can be clicked as each other and warped to wrongly (Astra's blocker and finding 2, confirmed in code).
+- **Debug, title and `?system=` systems** are named by their own seed, outside the galaxy guarantee (§3.5). **Why:** position alone cannot tell them apart.
+- **Autopilot** routes through the same address → view and enter-column functions (§6). **Why:** it drills on its own 44 kpc grid today; draft 3 described it wrongly.
+- **"Here"** is computed from the player, not from list rows; foreign columns show no "here" (§6).
+- **Real-star replacement** is decided over a full 3D neighbourhood by identity, independent of load order (§8).
+- **Performance (§2.8, §8):** loop count corrected to 13,680 (draft 3's 12,485 came from a formula that did not match the code); the "60-fold" claim withdrawn; the loader is now deadline-based, resumable and cancellable, and budgets naming, merge, sort and publishing; the acceptance test now covers cold entry, cancellation, equal-size replacement, all sort modes, both nav instances and leaving PRISM, at the original failing location too; Phase 0 records exact bounds, counts and timing with and without the profiler.
+- **Bounded naming area (§4.5):** 361 reviewed sector words for the whole 19×19 grid and a unique far code beyond, replacing the unbounded "far" word set.
+- **Exact constants:** 7.8125 pc and 1.00390625 kpc. **Grid references fixed:** one row direction (row 1 at the top, as the drill code already counts); Sol's sector is N10 (was "M9"); all worked examples recomputed; the example slot numbers are marked as placeholders.
+- **Syllables:** two separate 256-sets instead of one shared set with doubles rejected (which only gave 65,280 words); all 65,536 screened exhaustively.
+- **Segment bar (§7.3):** design 2's minimap collision and overlapping click areas resolved; bar shown in design 2's list mode; the fine gauge's meaning after a jump is the new decision 7.
+- **Name lengths (§4.4, §7.4):** X tails (10 characters) and authored names are excepted from the 25-character and tail-only rules; real and catalogue names are never shown as tails; displayed strings are never keys; draft 3's claim that `fitDesignation` never cuts a token corrected.
+- **Teleports** go through the shared arrival resolver, not just a renamed label (§9).
+- **Missed consumers added (§9):** `designs.js:579`, `:1844`, `:1866`; `picking.js:62`; `geometry.js:45`; legacy grids; the two 775-sector tests; the full autopilot path; and the rule that drawing changes go into `nav-240p-lab.html` first.
+- **Build order (§10):** draft 3's Phase 2 and the geometry half of Phase 3 merged into one milestone; identity added to Phase 1; tests move in the phase that breaks them; vocabulary waits for both the identity and performance gates.
+- **Your rulings (§1.1):** performance (in this plan); legend row removal, one search row per destination, the GPS line in every mode (other contracts); cockpit nav redesign after this one (follow-up).
+- **Decisions (§13):** shortened to six. Decisions 5, 6 and 8 moved to "going ahead"; decision 7 now asks what the fine gauge means after a jump.
+- **Sections renumbered:** draft 3's §3–§13 are now §4–§14 (identity inserted as §3). §0.4's option comparison is condensed. `docs/GAME_BIBLE.md` does not exist; Astra used `docs/ARCHIVE/GAME_BIBLE_LEGACY.md`.
+
+**Draft 3 (2026-10-02): your one-cell-one-child rule.** Added §0 (the rule, an audit of every screen, four GALAXY options, option D recommended); replaced draft 2's 775-sector quadtree with a uniform 2 kpc grid; prism width the same everywhere; Sol and galactic-centre centring built into the grid; world-locked grids and edge labels; the 50 ms performance line; a table of sector-table readers; new Phase 2 (the grid on screen).
 
 ---
 
 ## Appendix: Evidence
 
 ### Code (branch `feature/world-engine-production-L1`)
-- **Name precedence:** `src/generation/NameGenerator.js:443-472` (throw `:444-451`, catalogue `:461-462`); `src/main.js:6137`, `:14321-14324`, `:14388-14391`, `:7597-7598`, `:8356`; `arrivalResolution.js:61-63`, `:82-86`; `docs/NAMING_AND_REAL_OBJECTS.md:271-277`.
-- **Position locator L and catalogue key:** `NameGenerator.js:238-288` (constants `:261-264`), `:290-331`; `src/generation/data/namedSystemsCatalog.js:1-57`.
-- **Procedural shapes:** survey `NameGenerator.js:396-401`; multipart `:405-410` (word from low bits `:407`); syllables `:333-352`; bit floor `:43-50`; region weights `:366-371`.
-- **Shape tests:** `src/generation/__tests__/NameGenerator.injective.test.js:25-37`, `:148-173`; `scripts/gen-named-systems.mjs:63`; `tests/baseline/known-failures.json:210`.
-- **Sectors:** `src/generation/GalacticSectors.js:4-17` (purpose: equal stars per sector), `:44-73` (null beyond 1.2 × radius `:47`, nearest fallback `:58-72`), `:92-159` (base grid `:97-124`, quadtree `:126-159`, depth ≤ 4 `:136`), `:114-115` and `:132-136` (density-driven), `:207-243` (placeholder names, hash).
-- **Sector table readers:** `NavComputer.js:15`, `:141`, `:1183`, `:1199-1221` (`_setupViewStackForPlayer`), `:4630-4650` (GALAXY drill); `navViewModes/picking.js:181-187`; `navViewModes/state.js:966-979`; `navViewModes/index.js:261`, `:477`, `:929`; `auto/AutopilotNavSequence.js:226-250`.
-- **GALAXY drawing:** `designs.js:576-581` (`levelView`), `:760-781` (`pickedSector`, cell ≠ sector; function at `:776`), `:1033-1048` (`reachableRadius`), `:1062-1066` (`d1GalaxyView`), `:1093-1107` (`liveGridCells`), `:1109-1135` (`d1TwoD` grid), `:1158-1173` (8 densest tile ids), `:1209-1216` (`d1TileRows`, ids A–P), `:2942-2947` (design 2 sector dots).
-- **Layout and font:** `designs.js:822-828` (design 1 map width, height, rail); `src/rendering/PixelText.js:79-91` (shipped 5×5 face, advance 6).
-- **Galaxy extent:** `GalacticMap.js:89-90`, `:93-94` (Sol); `HashGridStarfield.js:304-305`, `:455`, `:684`.
-- **Star tiers and slots:** `HashGridStarfield.js:73-90` (10 tiers, `ALL_TYPES`), `:651-735` (one star per tier-cell), `:690` (tier hash offset), `:717-722` (offset bytes), `:729` (32-bit seed), `:661-662` (`yCells > 200` skip), `:679-681` (bright-star drop), `:726-727` (50k cap).
-- **Density layers:** `GalacticMap.js:480-494`, `:682-820`, `:766-776`, `:843-872`.
-- **Prism geometry and nav:** `NavComputer.js:44` (`MAX_PAN_STEP_MS`), `:71-73` (`gridNForLevel`), `:141` (own sector instance), `:156` (line-freeze note), `:1183-1223`, `:1371-1407` (pan), `:1595-1602` (`computeTileSize`), `:1880-1881`, `:2052-2058` ("here"), `:3539-3673` (legacy minimap), `:3696-3884` (loader, `_queryYRange`, `_scheduleBgExpand`, MAX_Y `:3856`), `:3756-3816` (row naming, real-star merge), `:4349`, `:4362-4369` (view pan), `:4398-4415` (grabs), `:4651-4680` (drill), `:4704-4705` (zoom clamp).
-- **Designs:** `src/ui/navViewModes/designs.js:399` (`pad`), `:822-836` (design 1 layout), `:825`, `:868` (rail cols), `:844-853` (status row), `:1928` (PRISM list pad `cols-13`), `:1946-1948` (rail numbers), `:2155-2159` (`d1PlayerTile` grid reference), `:2180-2186` (layer thresholds, Y RANGE ±2), `:2210-2221` (y-gauge ±2 pc), `:2787-2790` (design 2 locator), `:2860-2891` (bottom bar), `:3101-3130` (minimap, gauge), `:3176` (list name 119 texels).
-- **Nav state:** `navViewModes/state.js:559-575` (`nameBySeed`), `:610-620`, `:627-657` (design body namer), `:966`, `:986-1011` (row rebuild), `:1018-1044` ("here", self-warp); `navViewModes/index.js:205`, `:882`, `:1121-1141`, `:1320`, `:1381`.
-- **Text fitting:** `src/ui/navPixelType.js:146-151` (right-cut `fit`); `src/cockpit/designation.js:9-20`, `:46-56` (front-drop rule).
-- **Name-keyed sites:** `main.js:348`, `:5558-5572`, `:6644-6645`, `:6658`, `:6691`, `:6751-6760`, `:6790`, `:7568`, `:7601-7604`, `:8051`, `:8312-8313`, `:10347-10348`, `:14306`, `:14327`, `:14379`, `:14393`; `RealSystemOverlay.js:156`, `:173-215`, `:282-283`; `KnownSystems.js:36-45`, `:135-152`; `knownObjectSearch.js:1-79`, `:202-221`.
-- **No durable name storage:** `Settings.js:112`, `:161`; `ShipCameraSystem.js:514-522`; `navViewModes/index.js:1834-1843`; `flightModes.js:664-681`.
+- **Name precedence:** `src/generation/NameGenerator.js:443-472` (throw `:444-451`, catalogue `:461-462`); `src/main.js:6137`, `:14321-14324`, `:14388-14391`, `:7597-7598`, `:8356`; `arrivalResolution.js:54-93`; `docs/NAMING_AND_REAL_OBJECTS.md:271-277`.
+- **Position locator L and catalogue key:** `NameGenerator.js:238-288` (constants `:261-266`), `:290-331`; `src/generation/data/namedSystemsCatalog.js:1-57`.
+- **Procedural shapes:** survey `NameGenerator.js:396-401`; multipart `:405-410`; syllables `:333-352`.
+- **Shape tests:** `NameGenerator.injective.test.js:25-37`, `:148-173`; `scripts/gen-named-systems.mjs:63`; `tests/baseline/known-failures.json:210`; `navViewModes.test.js:83`, `navPicking.test.js:793` (775 sectors).
+- **Sectors:** `GalacticSectors.js:4-17`, `:44-73`, `:92-159`, `:207-243`.
+- **Star identity and edges:** `HashGridStarfield.js:73-90` (tiers), `:216` (sky transport), `:651-735` (one star per tier-cell), `:657`, `:668` (loop extents), `:679-681` (bright-star drop), `:684` (R ≤ 18 kpc), `:717-724` (edge offsets, inclusive filter), `:728` (distance from query centre), `:729` (32-bit seed), `:731` (records without cell), `:740` (whole-result sort), `:290`, `:92` (existing yielding and scheduling).
+- **Seed-keyed lookups:** `navViewModes/index.js:496`; `picking.js:271`; `state.js:571-574`, `:611`, `:1031`; `NavComputer.js:3755`.
+- **"Here":** `state.js:1018-1027`; `NavComputer.js:2052`, `:3697`, `:3768`.
+- **Real-star merge:** `NavComputer.js:3779-3815`.
+- **Spawns and teleports:** `main.js:2358-2370`, `:5571`, `:7603`, `:8295-8354`; `flightModes.js:667`; `arrivalResolution.js:54`.
+- **Autopilot:** `AutopilotNavSequence.js:233`, `:244`, `:312`, `:352`, `:371`, `:464-475`.
+- **Grid consumers:** `NavComputer.js:71-73`, `:141`, `:1183`, `:1634`, `:1654`, `:4636-4672` (drill; row direction `:4657`); `picking.js:62`, `:181-187`; `state.js:117`, `:966-979`; `navViewModes/index.js:929`; `geometry.js:45`; `designs.js:579`, `:1033-1107`, `:1844`, `:1866`, `:2942-2947`.
+- **Lab ownership:** `designs.js:2`; `scripts/extract-nav-designs.mjs`; `docs/FEATURES/handoff-2026-09-07-nav-screens-close-pass.md:255`.
+- **Layout and widgets:** `designs.js:399`, `:822-853`, `:1158-1173`, `:1928`, `:1946-1948`, `:2180-2186`, `:2205-2221` (y-gauge on player Y), `:2787-2790`, `:2860-2891`, `:3034` (list mode), `:3038`, `:3092` (minimap), `:3117` (gauge), `:3177`; `navViewModes/index.js:1121-1141`; `state.js:245` (sort modes), `:993`, `:1008`.
+- **Text fitting:** `navPixelType.js:146-151`; `cockpit/designation.js:9-20`, `:46-56`.
+- **Density:** `GalacticMap.js:770`, `:843-872`.
+- **No durable name storage:** `Settings.js:112`, `:161`; `ShipCameraSystem.js:514-522`; `flightModes.js:664-681`.
 - **Two nav instances:** `main.js:4700`, `:5895`.
 
-### Measurements (draft 3, `scratchpad/onecell/`)
-- `a-quadtree.mjs`: 775 sectors by size (480 × 0.25, 96 × 0.5, 106 × 1, 52 × 2, 41 × 4 kpc); texels at 6 per kpc; zoom needed to label; sectors per 4 kpc base square (Sol 10, max 223).
-- `f-today.mjs`: design 1's 52 drawn GALAXY cells touch 2–163 sectors each (median 4); none holds exactly one; Sol's touches 15.
-- `b-uniform.mjs`: uniform 1 / 2 / 4 kpc grids: 1,076 / 284 / 88 squares touching R ≤ 18 kpc.
-- `d-offset.mjs`: option D's shifted 2 kpc grid: 293 sectors, 19 × 19, Sol and the galactic centre each at a prism centre ~1 kpc from sector edges; 4 kpc zones: 83 (10 × 10); 1 kpc sectors: 1,093.
-- `c-prism.mjs`: stars and warm time per 100 pc slab for 7.81 / 15.63 / 31.25 pc prisms at six radii.
-- `g-cells.mjs`: cells evaluated per slab: 1,953 (1.95 pc), 12,485 (7.81 pc), 37,349 (15.63 pc), 128,808 (31.25 pc).
-- `e-examples.mjs`: section 3.3's worked examples.
+### Measurements (`scratchpad/onecell/` and Astra)
+- `a-quadtree.mjs`, `f-today.mjs`, `b-uniform.mjs`, `d-offset.mjs`, `c-prism.mjs`: as in draft 3.
+- `e2-examples-rowsfromtop.mjs`: §4.3 grid references with row 1 at the top (Sol N10, centre J10).
+- **13,680** loop iterations per 7.8125 × 100 pc slab, from the production loop extents (Astra, confirmed by recompute). `g-cells.mjs` used a different formula and undercounts.
+- **[A]** saved-trace attribution, density-call counts and warm timings in §2.8 and §8.
 
 ### Records
-- `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/ac5-decision.md`: ratified items 1-6; Addendum ruling 1 (astronomy-style designations, grid-cell identity); Addenda 2-3 (bit floor, shipped catalogue).
-- `docs/NAMING_AND_REAL_OBJECTS.md`: §1.2 (naming never changes contents), §6 (one system, one name).
-- `docs/WORKSTREAMS/nav-restorations-2026-09-20/UAT-walk-2026-09-30.md`: body-namer findings and the order "system names first"; the PRISM stall profile; the Elite input; your 2026-10-02 direction.
+- `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/ac5-decision.md`: items 1-6; Addendum ruling 1.
+- `docs/NAMING_AND_REAL_OBJECTS.md`: §1.2, §6.
+- `docs/WORKSTREAMS/nav-restorations-2026-09-20/UAT-walk-2026-09-30.md`: the PRISM stall, your one-cell rule, and the rulings in §1.1.
+- `.astra/jobs/20261002-103745-naming-prism-plan-review/report.md`: Astra's review of draft 3.
+- `docs/ARCHIVE/GAME_BIBLE_LEGACY.md` (there is no current `docs/GAME_BIBLE.md`).
 
 ### Research sources
 - **Elite Dangerous name format and sector math (EDTS):** https://bitbucket.org/Esvandiary/edts/raw/HEAD/edtslib/pgdata.py · …/sector.py · …/pgnames.py · C# inversion gist https://gist.github.com/klightspeed/772c654f07292b71dfe7aa55c91397e8
