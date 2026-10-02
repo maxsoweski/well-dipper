@@ -251,3 +251,81 @@ describe('(C) in ORRERY (nav.commitIsView) the commit reads GO TO, and Enter dis
     expect(got[true]).toEqual(got[false]);
   }, 60000);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('(D) fixup — at home on SYSTEM with no body picked, a live star target IS the commit (Astra 2026-10-02)', () => {
+  /** Home SYSTEM, nothing picked, and the selection set to a star that is NOT here (an adopted sky click). */
+  async function homeWithTarget(mode, { target = true } = {}) {
+    const h = await loadedNav();
+    const nav = await at(h, mode, 4);
+    nav._currentSystemName = nav._systemStar.name;
+    nav._selectedBody = null; nav._commitAction = null;
+    const far = nav._localStars.filter((s) => s !== nav._systemStar && s.name).reduce((m, s) => (m == null || s.dist < m.dist ? s : m), null);
+    nav._selectedNavStar = target ? far : nav._systemStar;
+    nav.render();
+    nav.farName = String(far.name).toUpperCase();
+    return nav;
+  }
+  const commitRow = (p) => p.lines.filter((l) => l.y === 234);
+
+  it('design 1: the row reads WARP TO <star> in target ink — not "SELECT A BODY TO …" under a TGT naming it', async () => {
+    const nav = await homeWithTarget('rail');
+    expect(nav._viewDriverInst.D.isCurrent, 'the fixture must be at home').toBe(true);
+    const p = paint(nav, 1);
+    const row = commitRow(p);
+    expect(row.map((l) => l.s).join(' ').startsWith(`WARP TO ${nav.farName} · `), 'WARP TO <the target>').toBe(true);
+    expect(p.fills.find((f) => f.x === 0 && f.y === 234 && f.w === W)?.ink, 'the bar is lit, in target ink').toBe(INK.TARGET);
+    expect(p.violations).toBe(0);
+  }, 60000);
+
+  it('design 2: the chip reads [WARP] and is armed', async () => {
+    const nav = await homeWithTarget('bars');
+    const p = paint(nav, 2);
+    expect(p.lines.find((l) => l.s === '[WARP]'), 'chip [WARP]').toBeTruthy();
+    expect(nav._viewDriverInst.S.chipRect.armed).toBe(true);
+  }, 60000);
+
+  it('⛔ controls: home selected → the prompt and an unarmed chip; a picked body still wins over the star', async () => {
+    let nav = await homeWithTarget('rail', { target: false });
+    expect(commitRow(paint(nav, 1)).map((l) => l.s).join(' ')).toBe('SELECT A BODY TO BURN');
+    nav = await homeWithTarget('bars', { target: false });
+    paint(nav, 2);
+    expect(nav._viewDriverInst.S.chipRect.armed).toBe(false);
+    nav = await homeWithTarget('rail');
+    nav._selectedBody = { type: 'planet', planetIndex: 1 }; nav._commitAction = nav._buildCommitAction(); nav.render();
+    expect(commitRow(paint(nav, 1)).map((l) => l.s).join(' ')).toMatch(/^BURN TO /);
+  }, 60000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('(C) fixup — the LEGACY nav\'s commit button follows nav.commitIsView too (Astra 2026-10-02)', () => {
+  /** Today's nav (no view mode) at home on SYSTEM with a planet armed; optionally in its planet close-up. */
+  async function legacy(isView, { detail = false, foreign = false } = {}) {
+    const h = await makeHeadlessNav({ width: 614, height: 512 });
+    const { nav, rec } = h;
+    nav._levelIndex = 3; nav.render();
+    await at(h, null, 4, { foreign });
+    nav.commitIsView = isView;
+    nav._selectedBody = { type: 'planet', planetIndex: 1 };
+    nav._commitAction = nav._buildCommitAction();
+    if (detail) { nav._systemMode = 'planet'; nav._selectedPlanetIdx = 1; }
+    rec.text.length = 0;
+    nav.render();
+    return rec.text.map((t) => t.text);
+  }
+
+  for (const detail of [false, true]) {
+    it(`${detail ? 'planet close-up' : 'SYSTEM'}: [ GO TO ] in ORRERY, [ BURN ] in HELM`, async () => {
+      const orrery = await legacy(true, { detail });
+      expect(orrery, 'ORRERY: the button still says BURN while it glides the view').toContain('[ GO TO ]');
+      expect(orrery).not.toContain('[ BURN ]');
+      const helm = await legacy(false, { detail });
+      expect(helm).toContain('[ BURN ]');
+      expect(helm).not.toContain('[ GO TO ]');
+    }, 60000);
+  }
+
+  it('a FOREIGN system still reads [ WARP ] in either regime', async () => {
+    for (const isView of [true, false]) expect(await legacy(isView, { foreign: true })).toContain('[ WARP ]');
+  }, 60000);
+});

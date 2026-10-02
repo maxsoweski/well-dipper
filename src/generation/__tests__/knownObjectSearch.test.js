@@ -304,3 +304,26 @@ describe('resolveKnownObjects — one row per destination (UAT fix E)', () => {
     expect(reg?.matchedAlias).toBe('Toliman');
   });
 });
+
+describe('resolveKnownObjects — the star cap stops LISTING, not folding (Astra review 2026-10-02, finding 5)', () => {
+  // A registry system whose only matching name is a companion star that sits AFTER ten ordinary matching
+  // stars in catalogue order. The scan used to `break` at STAR_CAP (10), so the companion was never seen
+  // and the query returned no system row at all — fix E's "a star-only hit surfaces the system row".
+  const home = { name: 'Zeta Home', position: { x: 1, y: 0, z: 0 }, aliases: [] };
+  const knownSystems = { getAll: () => [home] };
+  const catalog = {
+    loaded: true,
+    _stars: [
+      ...Array.from({ length: 10 }, (_, i) => ({ name: `Qux ${i + 1}`, x: 5 + i, y: 0, z: 0, spect: 'K', mag: 9 })),
+      { name: 'Qux Companion', x: 1, y: 0, z: 0, spect: 'M', mag: 11 },
+    ],
+  };
+
+  it('a companion past ten ordinary hits still surfaces its system row', () => {
+    const rows = resolveKnownObjects('qux', { realStarCatalog: catalog, knownSystems });
+    expect(rows.filter(r => r.kind === 'star'), 'ordinary star rows stay capped at ten').toHaveLength(10);
+    const reg = rows.filter(r => r.kind === 'registry');
+    expect(reg, 'the companion\'s system was never reached').toHaveLength(1);
+    expect(reg[0]).toMatchObject({ name: 'Zeta Home', matchedAlias: 'Qux Companion' });
+  });
+});

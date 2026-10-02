@@ -1219,14 +1219,20 @@ function drawDesign1(g, W, H) {
   // ⛔ AND A STAR IS NOT A PLANET: `au` on a star row is 0 by construction, so `0.00 AU` would be a
   //    number the instrument does not mean. The star names its CLASS in the same slot instead.
   const warpLive = !!D.target && !D.targetIsHere;   // ⭐ 2026-09-25: no `WARP TO <here> · 0.0 LY`, and no `WARP TO —` with nothing picked
-  const armed = cur ? !!D.selBody : warpLive;
+  // ⭐ 2026-10-02 (UAT walk fix D) — AT HOME WITH NO BODY PICKED, A LIVE STAR TARGET IS THE COMMIT. A star
+  //    the pilot clicked in the sky is adopted as the selection (main.js `_adoptSkyTargetInNav`), and the
+  //    nav opens on SYSTEM — where this row said `SELECT A BODY TO …` under a TGT naming that star, and
+  //    Enter did nothing. A picked body still wins; with none, the row is the same WARP TO the levels
+  //    above draw, and the driver's `commit()` warps on the same test.
+  const homeWarp = cur && !D.selBody && warpLive;
+  const armed = cur ? (!!D.selBody || homeWarp) : warpLive;
   // ⭐ 2026-10-02 (Max's ruling, UAT walk stop 4) — IN ORRERY THE COMMIT READS `GO TO`, NOT `BURN TO`.
   //    *"I want the nav view to work in Orrery"*: in HELM Enter burns; in ORRERY it glides the view
   //    along the line, and nothing flies. `D.commitIsView` is the host's `nav.commitIsView` (state.js),
   //    so the WORD follows the regime and the ACTION does not change here — Enter still dispatches the
   //    same 'burn' action, and the host decides what that does.
   const verb = D.commitIsView ? 'GO TO' : 'BURN TO';
-  const label = cur ? (D.selBody
+  const label = cur && !homeWarp ? (D.selBody
                         ? `${verb} ${(D.selBody.name || '—').toUpperCase()} · ${D.selBody.kind === 'star'
                             ? (D.selBody.cls || 'STAR').toUpperCase() : `${(D.selBody.au ?? 0).toFixed(2)} AU`} · ENTER`
                         : D.commitIsView ? 'SELECT A BODY TO GO TO' : 'SELECT A BODY TO BURN')
@@ -1240,7 +1246,7 @@ function drawDesign1(g, W, H) {
   //    Moving the fill down one texel makes the button the pilot sees and the button the driver tests
   //    the same rectangle. ⚠ Nothing else moves: the LABEL was already drawn at `ry(rows - 1)`, and
   //    240 / LEAD 6 leaves exactly six rows here, so 234-239 is the last full row on the glass.
-  rect(g, 0, ry(rows - 1), W, LEAD, armed ? (cur ? INK.YOU : INK.TARGET) : INK.RULE);
+  rect(g, 0, ry(rows - 1), W, LEAD, armed ? (cur && !homeWarp ? INK.YOU : INK.TARGET) : INK.RULE);
   const labelFull = label + (S.sabotage ? SAB : '');
   T(g, fit(labelFull, W - 4), W / 2, ry(rows - 1), { color: armed ? INK.BG : INK.DIM, align: 'center', rgn: 'commit', what: 'commit label' });
   // the guard must see the UNCLIPPED string, or it is not a guard — it is the clip
@@ -3076,7 +3082,8 @@ function drawDesign2(g, W, H) {
   // ⭐ 2026-10-02 — `[GO TO]` IN ORRERY (see design 1's commit row and `D.commitIsView`). It is the one
   //    chip word wider than `[WARP]`, so the chip is measured off it only then; every other frame keeps
   //    the `[WARP]` width the bar has always had.
-  const chipTxt = isHere() ? (D.commitIsView ? '[GO TO]' : '[BURN]') : '[WARP]';
+  const homeWarp = isHere() && !D.selBody && !!D.target && !D.targetIsHere;   // ⭐ fix D (see design 1's row): no body picked at home + a live star target → the chip is [WARP]
+  const chipTxt = isHere() && !homeWarp ? (D.commitIsView ? '[GO TO]' : '[BURN]') : '[WARP]';
   const chipW = measurePixelText(chipTxt === '[GO TO]' ? chipTxt : '[WARP]') + 6;
   // ⭐ AC-18 — THE BUDGET IS MEASURED BEFORE THE LINE IS WRITTEN, NOT AFTER. `avail` moved two lines
   // up so `d2Status` can be handed it: the one clause whose length this design does not control is
@@ -3088,7 +3095,7 @@ function drawDesign2(g, W, H) {
   if (avail < measurePixelText('PRISM')) fire('status line has no room left beside the commit chip');
   T(g, fit(full, avail), 4, H - BAR + 2, { color: INK.BODY, rgn: 'botbar', what: 'status line' });
   if (S.sabotage) assertFits('D2 status line (unclipped)', 'botbar', 4, H - BAR + 2, measurePixelText(full), FACE.h);
-  const armed = !!(isHere() ? D.selBody : (D.target && !D.targetIsHere));   // not the system you are in (state.js `targetIsHere`)
+  const armed = !!(isHere() && !homeWarp ? D.selBody : (D.target && !D.targetIsHere));   // not the system you are in (state.js `targetIsHere`)
   const chipX = W - chipW - 2;
   if (armed) rect(g, chipX, H - BAR, chipW, BAR, INK.TARGET);
   T(g, chipTxt, chipX + 3, H - BAR + 2,

@@ -1161,8 +1161,8 @@ export class NavComputer {
       const d = dx * dx + dy * dy + dz * dz;
       if (d < bestDist) { bestDist = d; bestStar = s; }
     }
-    // Match within 1 pc (0.001 kpc)
-    if (bestStar && bestDist < 0.001 * 0.001) {
+    const sel = this._selectedNavStar, onTarget = !!sel && Math.hypot(sel.wx - tx, sel.wy - ty, sel.wz - tz) < POSITION_MATCH_TOL;   /* ⭐ UAT walk fix D (Astra 2026-10-02): when the selection already IS the target (a sky-clicked star adopted by main.js `_adoptSkyTargetInNav`), only a row that is the SAME star — POSITION_MATCH_TOL, the 0.1 pc identity radius — may replace it. The 1 pc neighbourhood match swapped in a different star up to 1 pc away, so Enter warped there while Space warped to the clicked one. Any other selection keeps the 1 pc match. Folded: this file is line-frozen at 4711. */
+    if (bestStar && bestDist < (onTarget ? POSITION_MATCH_TOL * POSITION_MATCH_TOL : 0.001 * 0.001)) {   /* match within 1 pc (0.001 kpc), or the identity radius when the selection is the target */
       this._selectedNavStar = bestStar;
     }
   }
@@ -3057,7 +3057,7 @@ export class NavComputer {
     // region that commits a WARP on click.
     if (this._selectedBody && this._commitAction && !this._bare) {
       // Draw commit button — click commits the pending action
-      const btnText = isCurrent ? '[ BURN ]' : '[ WARP ]';
+      const btnText = isCurrent ? (this.commitIsView ? '[ GO TO ]' : '[ BURN ]') : '[ WARP ]';   /* ⭐ UAT walk fix C (Astra 2026-10-02): in ORRERY this button no longer burns — main.js `dispatchNavAction` GLIDES THE VIEW — so the word follows the host's `commitIsView`, as the designs' commit row does. HELM still reads BURN. */
       const btnColor = isCurrent ? '#00ff80' : 'rgba(100, 180, 255, 0.9)';
       // ⭐ ONE FUNCTION, TWO CALLERS. `btnW = 180, btnH = 28, btnY = drawH - 52` used to be written
       // out HERE and again in `_renderPlanetDetail`, both publishing into the SAME
@@ -3505,7 +3505,7 @@ export class NavComputer {
     // the else branch so `_commitButtonRect` is nulled rather than left pointing
     // at a button nobody can see.
     if (isCurrent && this._selectedBody && this._commitAction && !this._bare) {
-      const btnText = '[ BURN ]';
+      const btnText = this.commitIsView ? '[ GO TO ]' : '[ BURN ]';   /* ⭐ fix C: ORRERY reads GO TO here too (see the SYSTEM view's commit button) */
       const btn = navCommitButton(w, drawH, h);
       const btnW = btn.w, btnH = btn.h;
       const btnX = btn.x, btnY = btn.y;

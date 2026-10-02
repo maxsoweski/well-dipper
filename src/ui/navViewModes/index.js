@@ -856,8 +856,12 @@ export function makeViewModeDriver(nav) {
    *   designs draw a `WARP TO … ENTER` row at every level. The mechanism that already arms a warp
    *   with no `_selectedBody` is `_selectSearchResult`'s tail (:866-876); this is that tail, sourcing
    *   the star from `_selectedNavStar` and falling back to `_externalTarget`.
-   *   ⛔ EXCEPT AT SYSTEM, where an unarmed Enter is a NO-OP: there the `[ BURN ]` button is dead
-   *   too, and a key that commits where the button will not is the divergence read backwards.
+   *   ⭐ AT SYSTEM TOO, since 2026-10-02 (UAT walk fix D). This used to return early at level 4 — an
+   *   unarmed Enter there was a no-op — but the nav OPENS on SYSTEM, so a star the pilot clicked in the
+   *   sky (adopted as `_selectedNavStar`) was named on TGT and Enter did nothing. Both designs now draw
+   *   that case as `WARP TO <star>` / `[WARP]` armed (no body picked + a target that is not here), and
+   *   the commit-row click calls this same function, so the key and the button still agree. With the
+   *   home star selected (every fresh open), the "not the system you are in" test below refuses it.
    *
    * ⛔ NEVER hand-set `window._warpTarget` and never use the debug teleport. `_onCommit` is the
    *   supported contract and `main.js`'s warp branch reads `action.star`'s native shape off it.
@@ -870,7 +874,6 @@ export function makeViewModeDriver(nav) {
       if (nav._onCommit) nav._onCommit(nav._commitAction);
       return true;
     }
-    if (nav._levelIndex === 4) return false;
     const sel = nav._selectedNavStar;
     const ext = nav._externalTarget;
     const star = sel || (ext ? { wx: ext.x, wy: ext.y, wz: ext.z, seed: ext.seed ?? 0,
@@ -1614,7 +1617,8 @@ export function makeViewModeDriver(nav) {
     //    `Enter` fires, and its `_commitAction` branch fires the SAME `_onSound` name and the SAME
     //    `_onCommit` payload as `NavComputer.js:4503-4509` — so the key, the button and the handler are
     //    one path and cannot diverge, which is the observable ("the click does what Enter does"). At
-    //    0-3 it warps to the selected / external star; at 4 with nothing armed it returns false.
+    //    0-3 it warps to the selected / external star; at 4 with nothing armed it does the same unless
+    //    that star is the system you are in (fix D, 2026-10-02 — see `commit()`).
     // ⛔ THE CLICK IS EATEN EITHER WAY — `return null`, armed or not. The rectangle is DRAWN, so it
     //    must answer the press (§6's plate rule), and falling through would hand a click on the bottom
     //    row to the tab strip that shares the band with it (design 1, pre-AC-11) or to the map.

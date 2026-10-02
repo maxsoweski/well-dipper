@@ -190,6 +190,11 @@ export function resolveKnownObjects(query, {
           }
           continue;
         }
+        // ⛔ PAST THE CAP THE SCAN GOES ON, IT ONLY STOPS LISTING. It used to `break` here, so a
+        //    companion star later in the catalogue was never seen and its registry system never got
+        //    the folded row — a query that matched only that star returned no system at all (Astra
+        //    review 2026-10-02, finding 5). Folding is cheap; only ordinary star rows are capped.
+        if (stars.length >= STAR_CAP) continue;
         stars.push({
           name: star.name,
           worldPos: { x: star.x, y: star.y, z: star.z },
@@ -202,7 +207,6 @@ export function resolveKnownObjects(query, {
           // omitted when the primary name itself matched.
           ...(aliasHit ? { matchedAlias: star.aliases.find((a) => a.toLowerCase().includes(q)) } : {}),
         });
-        if (stars.length >= STAR_CAP) break;
       }
     }
   }

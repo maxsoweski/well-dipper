@@ -1,7 +1,7 @@
 import './style.css';
 import * as THREE from 'three';
 import { StarFlare } from './objects/StarFlare.js';
-import { RealStarCatalog } from './generation/RealStarCatalog.js';
+import { RealStarCatalog, POSITION_MATCH_TOL } from './generation/RealStarCatalog.js';
 import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
 import { HashGridStarfield } from './generation/HashGridStarfield.js';
 import { realStarSeed } from './generation/realStarSeed.js'; import { assertLabSubject, labSubjectIsAddressed } from './util/lab-subject.js';   // ⛔ APPENDED TO THIS LINE, never inserted below it: this file carries symbol-anchored citations down past :12000 and a new import line shifts every one of them, reding them as some other block's failure. The same discipline world-engine-lab.html:188 keeps.
@@ -5796,7 +5796,17 @@ function _skyTargetNavStar() {
  * `_selectedNavStar`), and both the designs' `D.target` and the driver's `commit()`
  * read the selection FIRST — so the nav said `TGT —` and Enter refused "the system
  * you are in". The click now becomes the selection too; `setExternalTarget` runs
- * after, so a loaded PRISM row at the same spot (within 1 pc) replaces the copy.
+ * after, so a loaded PRISM row that IS this star (inside POSITION_MATCH_TOL, the
+ * 0.1 pc same-star radius) replaces the copy — and a NEIGHBOUR does not: the old
+ * 1 pc neighbourhood match swapped in a different star, so Enter and Space warped
+ * to two places (Astra review 2026-10-02; `_tryAutoSelectExternalTarget`).
+ *
+ * ⭐ ONE TRANSITION, NOT A LABEL CHANGE. The click SUPERSEDES whatever body was
+ * armed: `_clearCommitSelection` drops `_selectedBody` / `_commitAction` first, or
+ * the cockpit's always-live glass kept an earlier BURN armed under a TGT naming
+ * the star, and Enter fired the burn. With nothing armed, the driver's `commit()`
+ * warps to the adopted star at every level, SYSTEM included — which is where the
+ * overlay opens (Astra 2026-10-02 finding 1; the live walk's caveat 2).
  *
  * Called at the click (both instances — the glass is live and is not re-opened
  * fresh) and on every overlay open (the overlay re-selects home on each open).
@@ -5806,6 +5816,7 @@ function _skyTargetNavStar() {
 function _adoptSkyTargetInNav(nav) {
   const s = nav ? _skyTargetNavStar() : null;
   if (!s) return false;
+  if (typeof nav._clearCommitSelection === 'function') nav._clearCommitSelection();
   nav._selectedNavStar = s;
   nav.setExternalTarget({ x: s.wx, y: s.wy, z: s.wz }, s.name);
   return true;
@@ -6134,10 +6145,12 @@ function dispatchNavAction(action) {
     // Fix D (UAT walk 2026-09-30): when the nav commits the very star the pilot
     // clicked in the sky, the sky's warpTarget is KEPT — it is the richer record
     // (the starfield's own starData, real-star flags included), so Enter and Space
-    // warp to one identical target rather than to two copies of it.
+    // warp to one identical target rather than to two copies of it. "The very star"
+    // is POSITION_MATCH_TOL (0.1 pc), the radius the nav may swap the sky copy for a
+    // loaded row at — not 1e-9, which let an identity-matched row re-target the warp.
     const _sky = _skyTargetNavStar();
-    const _isSkyStar = !!_sky && Math.abs(_sky.wx - action.star.wx) < 1e-9
-      && Math.abs(_sky.wy - (action.star.wy || 0)) < 1e-9 && Math.abs(_sky.wz - action.star.wz) < 1e-9;
+    const _isSkyStar = !!_sky && Math.hypot(_sky.wx - action.star.wx, _sky.wy - (action.star.wy || 0),
+      _sky.wz - action.star.wz) < POSITION_MATCH_TOL;
     if (!_isSkyStar) _setWarpTargetFromNavStar({
       worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
       seed: action.star.seed, name: action.star.name, type: action.star.spectral,

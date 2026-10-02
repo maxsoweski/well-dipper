@@ -35,6 +35,7 @@ import { makeHeadlessNav } from './helpers/headlessNav.mjs';
 import { burnWorkflowAvailable, navDispatchDuringWarp, systemEntryStyle } from '../../flight/flightModes.js';
 import { orreryStandoff } from '../../camera/orreryStandoff.js';
 import { NavComputer } from '../NavComputer.js';
+import { POSITION_MATCH_TOL } from '../../generation/RealStarCatalog.js';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const RAW = readFileSync(resolve(REPO, 'src/main.js'), 'utf8');
@@ -70,7 +71,7 @@ const HOST_FNS = ['_syncNavCommitVerb', 'setScManual', '_installNavCallbacks', '
 const ENV_NAMES = ['burnWorkflowAvailable', 'navDispatchDuringWarp', 'systemEntryStyle', 'orreryStandoff',
   'NavComputer', 'console', 'navs', 'warpTarget', 'warpEffect', 'cameraController', 'scControls',
   '_makeTarget', 'focusStar', 'focusPlanet', 'focusMoon', 'autoNav', 'flythrough', '_setWarpTargetFromNavStar',
-  '_effectiveRegime', '_enterSystemInstantOrrery', 'beginWarpTurn', 'setTimeout', 'playerGalacticPos'];
+  '_effectiveRegime', '_enterSystemInstantOrrery', 'beginWarpTurn', 'setTimeout', 'playerGalacticPos', 'POSITION_MATCH_TOL'];
 
 /**
  * The host functions, compiled together over one stub scope. `let`s are the main.js module
@@ -78,7 +79,7 @@ const ENV_NAMES = ['burnWorkflowAvailable', 'navDispatchDuringWarp', 'systemEntr
  */
 function host(over = {}) {
   const env = {
-    burnWorkflowAvailable, navDispatchDuringWarp, systemEntryStyle, orreryStandoff, NavComputer,
+    burnWorkflowAvailable, navDispatchDuringWarp, systemEntryStyle, orreryStandoff, NavComputer, POSITION_MATCH_TOL,
     console: { log: () => {}, warn: () => {} },
     navs: [],
     warpTarget: { direction: null, destType: null, navStarData: null, name: null, turning: false },
@@ -304,4 +305,126 @@ describe('(D) a star clicked in the sky becomes the nav\'s target', () => {
     expect(arrive).toBeGreaterThan(-1);
     expect(adopt, 'the overlay open does not adopt, or adopts BEFORE the arrival re-selects home').toBeGreaterThan(arrive);
   });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('(D) fixup — Astra review 2026-10-02: the adopted sky star is what Enter commits, on the screen the nav opens on', () => {
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * ⛔ NO DROP TO GALAXY. The overlay opens on SYSTEM (`openToCurrentSystem` sets level 4 and clears
+   * the commit), and the first fix-D test switched to GALAXY before pressing Enter — which is how it
+   * missed that Enter did nothing on the screen the pilot actually sees. A real system is attached,
+   * so SYSTEM draws its own home ladder.
+   */
+  async function openedHome(mode = 'rail') {
+    const h = await makeHeadlessNav({ width: W, height: H });
+    const { nav } = h;
+    nav._viewModesEnabled = true;
+    nav._levelIndex = 3;
+    nav.viewMode = mode;
+    nav.render();
+    const home = nav._localStars.reduce((m, s) => (m == null || s.dist < m.dist ? s : m), null);
+    nav._currentSystemName = home.name || 'HOMEY';
+    nav._playerX = home.wx; nav._playerY = home.wy; nav._playerZ = home.wz;
+    const sys = { star: { type: 'G' }, zones: { hzInnerAU: 0.9, hzOuterAU: 1.4 }, asteroidBelts: [],
+      planets: [0.5, 1.2, 3].map((au) => ({ orbitRadiusAU: au, moons: [],
+        planetData: { radiusEarth: 1, T_eq: 260, habitability: { score: 0.2 }, rings: false } })) };
+    nav.openToCurrentSystem({ ...home, name: nav._currentSystemName }, sys);
+    nav.render();
+    return { ...h, home, drv: nav._viewDriverInst };
+  }
+
+  /** A sky click 40 pc off — outside the loaded prism, as most sky stars are. */
+  const skyClick = (nav, over = {}) => ({
+    direction: { x: 1, y: 0, z: 0 }, destType: null, name: 'SKYPICK', turning: false,
+    navStarData: { worldX: nav._playerX + 0.04, worldY: nav._playerY, worldZ: nav._playerZ, seed: 424242, type: 'K', ...over },
+  });
+  const adopt = (nav, wt) => {
+    const h = host({ warpTarget: wt, playerGalacticPos: { x: nav._playerX, y: nav._playerY, z: nav._playerZ } });
+    h.setSkyPick(wt.navStarData);
+    expect(h._adoptSkyTargetInNav(nav)).toBe(true);
+    return h;
+  };
+  const fire = (nav) => {
+    const fired = [];
+    nav._onCommit = (a) => fired.push(a); nav._onSound = () => {};
+    press(nav, 'Enter');
+    return fired;
+  };
+
+  it('control: freshly opened at home on SYSTEM with nothing picked, Enter commits nothing', async () => {
+    const { nav } = await openedHome();
+    expect(nav._levelIndex).toBe(4);
+    expect(nav._isCurrentSystem(), 'the fixture must be at home').toBe(true);
+    expect(fire(nav)).toEqual([]);
+  }, 60000);
+
+  it('⭐⭐ on SYSTEM — the screen the overlay opens on — Enter warps to the adopted sky star (both designs)', async () => {
+    for (const mode of ['rail', 'bars']) {
+      const { nav, drv } = await openedHome(mode);
+      const wt = skyClick(nav);
+      adopt(nav, wt);
+      nav.render();
+      expect(nav._levelIndex, `${mode}: adoption must not move the screen`).toBe(4);
+      expect(drv.D.target?.name).toBe('SKYPICK');
+      const fired = fire(nav);
+      expect(fired, `${mode}: Enter on SYSTEM did nothing — finding 1`).toHaveLength(1);
+      expect(fired[0]).toMatchObject({ type: 'warp', target: 'star',
+        star: { wx: wt.navStarData.worldX, wz: wt.navStarData.worldZ, seed: 424242, name: 'SKYPICK' } });
+    }
+  }, 120000);
+
+  it('⭐⭐ a body burn armed BEFORE the click is superseded — Enter warps to the star, not the old burn', async () => {
+    const { nav } = await openedHome();
+    nav._selectedBody = { type: 'planet', planetIndex: 1 };
+    nav._commitAction = nav._buildCommitAction();
+    expect(nav._commitAction?.type, 'the fixture must arm a home burn').toBe('burn');
+    const wt = skyClick(nav);
+    adopt(nav, wt);
+    expect(nav._commitAction, 'the old burn survived the adoption').toBeNull();
+    expect(nav._selectedBody).toBeNull();
+    nav.render();
+    const fired = fire(nav);
+    expect(fired).toHaveLength(1);
+    expect(fired[0].type, 'Enter fired the superseded burn').toBe('warp');
+    expect(fired[0].star.seed).toBe(424242);
+  }, 60000);
+
+  it('⭐⭐ a loaded NEIGHBOUR 0.4 pc away does not replace the clicked star — Enter and Space go to one place', async () => {
+    const { nav } = await openedHome();
+    const wt = skyClick(nav);
+    const sd = wt.navStarData;
+    const neighbour = { wx: sd.worldX + 0.0004, wy: sd.worldY, wz: sd.worldZ, seed: 999, name: 'NEIGHBOUR', spectral: 'M', dist: 0.04 };
+    nav._localStars.push(neighbour);
+    adopt(nav, wt);
+    expect(nav._selectedNavStar.seed, 'the 1 pc neighbourhood match swapped in a different star').toBe(424242);
+    nav._tryAutoSelectExternalTarget();   // the PRISM loader re-runs this match on its first load (NavComputer :3723)
+    expect(nav._selectedNavStar.seed, 'the prism loader\'s re-match swapped it').toBe(424242);
+    const fired = fire(nav);
+    expect(fired[0].star).toMatchObject({ wx: sd.worldX, seed: 424242, name: 'SKYPICK' });
+  }, 60000);
+
+  it('a loaded row that IS the star (inside the 0.1 pc identity radius) may stand in, and Enter still keeps the sky warpTarget', async () => {
+    const { nav } = await openedHome();
+    const wt = skyClick(nav);
+    const sd = wt.navStarData;
+    const same = { wx: sd.worldX + 0.00002, wy: sd.worldY, wz: sd.worldZ, seed: 424242, name: 'SKYPICK', spectral: 'K', dist: 0.04 };
+    nav._localStars.push(same);
+    const h = adopt(nav, wt);
+    expect(nav._selectedNavStar, 'the identity row should be adopted (the PRISM highlights rows by identity)').toBe(same);
+    const fired = fire(nav);
+    h.env._scManual = true;
+    h.dispatchNavAction(fired[0]);
+    expect(h.env._setWarpTargetFromNavStar, 'the sky record was replaced by the 0.02 pc row').not.toHaveBeenCalled();
+    expect(h.env.beginWarpTurn).toHaveBeenCalledTimes(1);
+  }, 60000);
+
+  it('⛔ unchanged for any other selection: an external target still auto-selects a row within 1 pc', async () => {
+    const { nav, home } = await openedHome();
+    const row = { wx: home.wx + 0.03, wy: home.wy, wz: home.wz, seed: 31337, name: 'ROW', spectral: 'G', dist: 0.03 };
+    nav._localStars.push(row);
+    nav.setExternalTarget({ x: row.wx + 0.0005, y: row.wy, z: row.wz }, 'ROW');   // 0.5 pc off the row
+    expect(nav._selectedNavStar).toBe(row);
+  }, 60000);
 });
