@@ -171,7 +171,9 @@ describe('AC-14 — closing the nav ends what the pilot was in the middle of', (
     expect(drv.S.search.text, 'the fixture typed nothing into the field').toBe('sol');
     expect(!!drv.S.searchGeom, 'the field published no grid').toBe(true);
     expect(!!drv.S.pick, 'the fixture left no click highlight').toBe(true);
-    expect(drv.S.listOffset, 'the fixture never paged the list').toBe(27);
+    // ⚠ 28, was 27: design 1's rail gained a row when its hint row was removed (Max's UAT ruling,
+    //   2026-09-30, *"remove all of that row"*), so one page of the sector list is one row longer.
+    expect(drv.S.listOffset, 'the fixture never paged the list').toBe(28);
     expect(sortIdx, 'the fixture never moved the sort').toBe(1);
     drv.S.list = true; drv.S.zoomIdx = 2;          // the other two PREFERENCES, set where they are read
 

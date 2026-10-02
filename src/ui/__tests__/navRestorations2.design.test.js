@@ -569,7 +569,8 @@ describe('AC-1 — hover-inspect on every screen', () => {
     //    the AC actually promises, which is what a reader of a red run needs.)
     const h = await loadedNav();
     for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
-      const others = design === 1 ? ['status', 'rail', 'hint', 'tabs', 'commit'] : ['topbar', 'botbar'];
+      // ⚠ NO `hint` in design 1: that row was removed 2026-10-02 (Max's UAT ruling) and its band is the map's.
+      const others = design === 1 ? ['status', 'rail', 'tabs', 'commit'] : ['topbar', 'botbar'];
       for (const level of [0, 1, 2, 3, 4]) {
         const nav = await at(h, mode, level);
         const p0 = paint(nav, design);

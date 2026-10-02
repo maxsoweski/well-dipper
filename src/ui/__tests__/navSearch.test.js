@@ -313,8 +313,11 @@ describe('the field is on the canvas, in each design\'s own face', () => {
         `design ${design} advertises no way out of the field`).toBe(true);
       // ⭐ AND THE STRING THE CLOSED-FIELD CONTROL BELOW LOOKS FOR IS ASSERTED HERE, so that control
       //    cannot pass vacuously against a phrase no design draws at all.
+      // ⚠ DESIGN 2 ONLY since 2026-10-02. Design 1 drew this legend on its hint row, which Max's UAT
+      //   walk ruled off the glass entirely (*"remove all of that row"*, key hints included); design 2's
+      //   bar still prints it, so the closed-field control below still has a string to discriminate on.
       expect(strings.some((s) => s.includes('UP DOWN MOVE')),
-        `design ${design} drew no arrow-key legend for the field`).toBe(true);
+        `design ${design} arrow-key legend`).toBe(design === 2);
     });
 
     it(`design ${design}: with the field CLOSED not one of those strings is on the glass`, async () => {

@@ -315,32 +315,25 @@ describe('AC-2 — a selection can be nothing, and it can be the star', () => {
 // AC-12 — THE LEGENDS
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 describe('AC-12 — every bound key is named where it works, and nothing is clipped', () => {
-  it('⭐ DESIGN 1 NAMES / SEARCH AND R/F UP AT PRISM, AND / SEARCH AT SYSTEM', async () => {
+  // ⛔⛔ SUPERSEDED 2026-10-02 BY MAX'S RULING. This AC put `/ SEARCH` and `R/F UP` on design 1's hint row
+  //    (y 222, the row above the tab strip). Max's UAT walk, 2026-09-30, stop 2: *"We don't need to
+  //    display that here. It makes unnecessary clutter."* → *"remove all of that row"*, key hints
+  //    included (docs/WORKSTREAMS/nav-restorations-2026-09-20/UAT-walk-2026-09-30.md). The two cases
+  //    that asserted the row are replaced by the one below; the row's removal itself, at every level and
+  //    in every state, is owned by `navUatSmallFixes.design.test.js`. Design 2's sky legend is untouched.
+  it('⛔ SUPERSEDED: design 1 no longer prints the hint row\'s key phrases at PRISM or SYSTEM, under any sort key', async () => {
     const h = await loadedNav();
-    for (const [level, must] of [[3, ['/ SEARCH', 'R/F UP', 'WASD PAN']], [4, ['/ SEARCH', 'SELECT A BODY']]]) {
+    for (const level of [3, 4]) {
       const nav = await at(h, 'rail', level, { planets: 40 });
-      const hint = paint(nav, 1).atY(222).join(' ');
-      for (const phrase of must) expect(hint, `design 1 level ${level} hint: "${hint}"`).toContain(phrase);
+      for (let i = 0; i < 4; i++) {
+        const drawn = paint(nav, 1).text;
+        for (const phrase of ['/ SEARCH', 'R/F UP', 'WASD PAN', 'TAB LEVEL', '[ ] SORT']) {
+          expect(drawn, `design 1 level ${level} sort "${nav._viewDriverInst.S.sortLabel}" drew "${phrase}"`).not.toContain(phrase);
+        }
+        press(nav, 'BracketRight');
+        nav.render();
+      }
     }
-  }, 60000);
-
-  it('⛔ AND THEY SURVIVE EVERY SORT KEY — the clip is what hides a promise, not the omission', async () => {
-    // ⭐ DRIVEN THROUGH THE REAL `[` / `]` KEYS. `fit()` truncates from the RIGHT, so the clause that
-    //    disappears first is the last one on the row — which on design 1's PRISM row is `R/F UP`, the
-    //    promise this AC adds. A row measured only at the DEFAULT sort key would never see it go.
-    const h = await loadedNav();
-    const nav = await at(h, 'rail', 3);
-    const seen = new Set();
-    for (let i = 0; i < 8; i++) {
-      const hint = paint(nav, 1).atY(222).join(' ');
-      seen.add(nav._viewDriverInst.S.sortLabel || '');
-      expect(hint, `PRISM hint under sort "${nav._viewDriverInst.S.sortLabel}": "${hint}"`)
-        .toContain('R/F UP');
-      expect(hint).toContain('/ SEARCH');
-      press(nav, 'BracketRight');
-      nav.render();
-    }
-    expect(seen.size, 'the probe must actually have moved the sort key').toBeGreaterThan(3);
   }, 60000);
 
   it('⭐ DESIGN 2 NAMES [ ] SORT AND - = PAGE WHERE IT DRAWS A LIST, AND ITS SYSTEM CONTROLS', async () => {

@@ -281,7 +281,9 @@ describe('AC-3 — the pan scale is the DRAWN map, not the legacy square', () =>
     // 1.35x (design 1's 216-texel square), 1.4x (design 2's 224-texel block) and 2.6x (design 2's
     // 417-wide band) — the three numbers Max was given. `navMapSize` is imported, so the legacy side
     // of each ratio is the host's own arithmetic and not a pinned 160.
-    const want = [['rail', 1, 1.35], ['bars', 1, 1.40], ['bars', 0, 2.606]];
+    // ⚠ 2026-10-02: design 1's square is 222 texels now, not 216 — its hint row was removed (Max's UAT
+    //   ruling, *"remove all of that row"*) and the row went to the map, so its ratio is 222/160.
+    const want = [['rail', 1, 1.3875], ['bars', 1, 1.40], ['bars', 0, 2.606]];
     for (const [mode, level, ratio] of want) {
       const { nav, drv } = await designNav({ mode, level });
       const legacy = nav._viewSize / navMapSize(W, H);
@@ -307,7 +309,9 @@ describe('AC-4 — only a press on the map (or on a drawn handle) starts a gestu
       const R = drv.regions();
       const m = mid(R.map);
       expect(drv.pressStartsGesture(m.x, m.y), `rail L${level}: the map refused a press`).toBe(true);
-      for (const name of ['rail', 'status', 'hint', 'tabs', 'commit']) {
+      // ⚠ NO `hint`: design 1's hint row was removed 2026-10-02 (Max's UAT ruling) — its band is the
+      //   map's and the rail's now, and the map answering a press there is the map working.
+      for (const name of ['rail', 'status', 'tabs', 'commit']) {
         const c = mid(R[name]);
         expect(drv.pressStartsGesture(c.x, c.y), `rail L${level}: a press on ${name} armed a gesture`).toBe(false);
       }

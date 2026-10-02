@@ -43,10 +43,12 @@ export function railGeometry(W, H, FACE) {
   const cols = Math.floor((W + 1) / CELL), rows = Math.floor(H / LEAD);
   const railC = Math.min(26, Math.max(10, Math.round(cols * 0.366)));
   const mapC = cols - railC - 2;
-  const rowCount = rows - 4;
+  // ⚠ `rows - 3` and `(rows - 2) * LEAD`: design 1's hint row above the tab strip was removed on
+  //   Max's ruling (UAT walk 2026-09-30, *"remove all of that row"*) and its row went to the map and rail.
+  const rowCount = rows - 3;
   return {
     CELL, LEAD, cols, rows,
-    mapW: mapC * CELL, mapY: LEAD, mapH: (rows - 3) * LEAD - LEAD,
+    mapW: mapC * CELL, mapY: LEAD, mapH: (rows - 2) * LEAD - LEAD,
     railX: (cols - railC) * CELL, railW: railC * CELL - 1, railC,
     // The tab strip: five equal cells of `tabW`, left-aligned — NOT the full width divided by five,
     // which is what the legacy strip does and why a click cannot simply be passed through.

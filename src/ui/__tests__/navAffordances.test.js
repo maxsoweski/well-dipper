@@ -185,6 +185,16 @@ async function navWithCanvasListeners() {
  * was called" is not evidence: the clause that calls it can be unreachable, which is exactly what
  * shipped on 2026-09-07.
  */
+/**
+ * ⛔ RETIRED FROM THE GLASS, NOT FROM THE INSTRUMENT — Max's UAT walk, 2026-09-30, stop 2:
+ * *"remove all of that row"* (docs/WORKSTREAMS/nav-restorations-2026-09-20/UAT-walk-2026-09-30.md).
+ * Design 1's instruction row above the tab strip was the only place these six phrases were drawn, and
+ * the ruling (key hints included) supersedes the AC-12 legends that put them there. The CONTROLS are
+ * all still bound, so each entry keeps its probe and the probe still has to pass; only the "designs.js
+ * must draw it" half is waived. A retired phrase that comes back on the glass is swept like any other.
+ */
+const RETIRED_BY_ROW_RULING = 'design 1 hint row removed (Max, UAT walk 2026-09-30)';
+
 const VOCABULARY = [
   {
     phrase: '[ ] SORT',
@@ -211,6 +221,7 @@ const VOCABULARY = [
   },
   {
     phrase: '/ SEARCH',
+    retired: RETIRED_BY_ROW_RULING,
     control: 'slash opens the drawn search',
     async probe() {
       const n = await nav();
@@ -220,6 +231,7 @@ const VOCABULARY = [
   },
   {
     phrase: 'TAB LEVEL',
+    retired: RETIRED_BY_ROW_RULING,
     control: 'Tab changes level',
     async probe() {
       const n = await nav({ level: 3 });
@@ -328,6 +340,7 @@ const VOCABULARY = [
   },
   {
     phrase: 'SCROLL , . OR CLICK ...',
+    retired: RETIRED_BY_ROW_RULING,
     control: 'comma and full stop walk the SYSTEM ladder',
     async probe() {
       const n = await nav({ level: 4 });
@@ -359,6 +372,7 @@ const VOCABULARY = [
   { phrase: 'L=MAP', control: "L toggles design 2's list mode", sameAs: 'L=LIST' },
   {
     phrase: 'CLICK A SECTOR',
+    retired: RETIRED_BY_ROW_RULING,
     control: 'a click in the GALAXY map drills the sector under the pointer',
     async probe() {
       const n = await nav({ level: 0 });
@@ -380,6 +394,7 @@ const VOCABULARY = [
   },
   {
     phrase: 'CLICK A TILE',
+    retired: RETIRED_BY_ROW_RULING,
     control: 'a click in the SECTOR / REGION map drills the tile under the pointer',
     async probe() {
       for (const level of [1, 2]) {
@@ -404,6 +419,7 @@ const VOCABULARY = [
   },
   {
     phrase: 'CLICK A STAR',
+    retired: RETIRED_BY_ROW_RULING,
     control: 'a click in the PRISM map selects the star under the pointer',
     async probe() {
       const n = await nav({ level: 3 });
@@ -692,7 +708,8 @@ describe('AC-10 — every promise the glass makes is kept', () => {
     const { found } = harvestPromises();
     // If the harvest ever silently matched nothing, every case in this file would pass forever.
     expect(found.size, 'the scrape found no promises at all').toBeGreaterThan(8);
-    for (const known of ['[ ] SORT', '/ SEARCH', 'TAB LEVEL', 'WASD PAN', 'CLICK TO ENTER']) {
+    // ⚠ `/ SEARCH` and `TAB LEVEL` left this list with design 1's hint row (RETIRED_BY_ROW_RULING).
+    for (const known of ['[ ] SORT', 'ESC CLOSE', 'L=LIST', 'WASD PAN', 'CLICK TO ENTER']) {
       expect(found.has(known), `the scrape missed "${known}", which designs.js definitely draws`).toBe(true);
     }
   });
@@ -714,8 +731,9 @@ describe('AC-10 — every promise the glass makes is kept', () => {
     const target = v.sameAs ? BY_PHRASE.get(v.sameAs) : v;
     it(`"${v.phrase}" → ${v.control}`, { timeout: 60000 }, async () => {
       const { found } = harvestPromises();
-      // Only assert the drawing for phrases the designs actually carry; `sameAs` aliases share a probe.
-      if (!found.has(v.phrase) && !v.sameAs) {
+      // Only assert the drawing for phrases the designs actually carry; `sameAs` aliases share a probe,
+      // and a `retired` phrase is no longer drawn by ruling but its control must still work.
+      if (!found.has(v.phrase) && !v.sameAs && !v.retired) {
         throw new Error(`"${v.phrase}" is in the vocabulary but designs.js no longer draws it — `
           + 'delete the entry, or find out why the promise disappeared.');
       }

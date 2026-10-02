@@ -529,6 +529,7 @@ export function makeViewState() {
     sectorRows: [], stars: [], starRows: [], sys: null, bodies: [],
     target: null, selStar: null, selBody: null, sysStar: null, here: null,
     isCurrent: false,   // the HOST's own answer to "is the system on the glass the one the ship is in"
+    commitIsView: false,   // the HOST's `nav.commitIsView`: true in ORRERY, where the commit reads GO TO
     /* Function · WHERE THE SHIP ACTUALLY IS in the system on the glass, or `null` when it is not in
      *   that system at all.
      * Intent · AC-5 (SEAM §2). Legacy places its diamond from `nav._currentFocusIndex` /
@@ -1042,6 +1043,11 @@ export function makeViewState() {
     //    ENTER` from inside Sol (usability review 2026-09-25). The commit row and chip read this to
     //    draw unarmed, and `commit()` refuses the same case.
     D.targetIsHere = !!(D.target && nav._currentSystemName && D.target.name === nav._currentSystemName);
+    // ⭐ 2026-10-02 (Max's UAT ruling) — THE COMMIT VERB FOLLOWS THE GAME'S REGIME. The HOST keeps
+    //    `nav.commitIsView` true while the game is in ORRERY (false in HELM) on every NavComputer, so
+    //    both designs print `GO TO <body>` there instead of `BURN TO`. ⛔ ONLY THE WORD: Enter and the
+    //    commit click still dispatch the same 'burn' action, and the host decides what it does.
+    D.commitIsView = !!nav.commitIsView;
     // ⭐ AC-10 — THE SELECTED STAR GOES THROUGH THE SAME MEMO AS EVERY OTHER ROW NOW. When it IS a row
     //    (`D.starRows.find`) this is already filled and the map answers from cache; when it is the
     //    synthesised copy for a star the loader has not reached, this is the only fill it gets. ⛔ ONE

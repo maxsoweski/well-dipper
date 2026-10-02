@@ -783,11 +783,6 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
 
   // DESIGN 1 — THE 71x40.  A character-cell nav computer: a map pane and a persistent ranked rail.
   // ════════════════════════════════════════════════════════════════════════════════════════════════
-  /** ⭐ THE HINT ROW WHILE THE DRAWN SEARCH IS OPEN, AND IT NAMES EVERY KEY THE FIELD CONSUMES.
-   *  50 characters against the 62 of the GALAXY hint, so no buffer clips it any sooner than that one.
-   *  ⛔ It says ESC CLOSE and not ESC BACK: the field's Escape closes the field and nothing else. */
-  const SEARCH_HINT = 'TYPE A NAME   UP DOWN MOVE   ENTER WARP   ESC CLOSE';
-
   function drawDesign1(g, W, H) {
     // ⭐ EVERY LABEL THIS FRAME DRAWS, CLEARED BEFORE IT DRAWS ANY (INTERFACE §6). Design 2 clears its
     // whole published set at the head of its own paint for the same reason; a stale label rectangle
@@ -825,19 +820,21 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const railC = Math.min(26, Math.max(10, Math.round(cols * 0.366)));
     const mapC = cols - railC - 2;                      // -1 y-gauge, -1 rule
     const railX = cx(cols - railC), railW = railC * CELL - 1;
-    const mapW = mapC * CELL, mapY = ry(1), mapH = ry(rows - 3) - ry(1);
+    // ⭐ 2026-10-02 (Max's UAT walk) — `ry(rows - 2)`, NOT `ry(rows - 3)`: the instruction row above the
+    //    tab strip is gone (see the block where it was drawn), and its six texels go back to the map and
+    //    the rail, which end at the rule over the tabs now.
+    const mapW = mapC * CELL, mapY = ry(1), mapH = ry(rows - 2) - ry(1);
     const gaugeX = cx(mapC), ruleX = cx(mapC + 1) + 2;
 
     region('status', 0, 0, W, FACE.h);
     region('map', 0, mapY, mapW, mapH);
     region('rail', railX, mapY, railW, mapH);
-    region('hint', 0, ry(rows - 3), W, FACE.h);
     region('tabs', 0, ry(rows - 2), W, FACE.h);
     region('commit', 0, ry(rows - 1), W, FACE.h);
 
     rect(g, 0, 0, W, H, INK.BG);
     rect(g, 0, ry(1) - 1, W, 1, INK.RULE);              // the rule lives in the LEADING texel: 0 rows
-    rect(g, 0, ry(rows - 3) - 1, W, 1, INK.RULE);
+    rect(g, 0, ry(rows - 2) - 1, W, 1, INK.RULE);
     rect(g, ruleX, mapY, 1, mapH, INK.RULE);
 
     // ── STATUS, row 0 ────────────────────────────────────────────────────────────────────────────
@@ -857,6 +854,10 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (S.level <= 2) d1TwoD(g, mapW, mapY, mapH);
     else if (S.level === 3) d1Prism(g, mapW, mapY, mapH, gaugeX);
     else d1Ladder(g, mapW, mapY, mapH);
+    // ⭐ 2026-10-02 — WHICH SYSTEM THIS IS, WHEN IT IS NOT YOURS (`foreignSysLines`). Top-left of the map,
+    //    plated, in TARGET ink; the ladder's axis sits at 62% of the pane, so the corner is empty.
+    (foreignSysLines() || []).forEach((t, i) =>
+      plated(g, fit(t, mapW - 4), 2, mapY + 1 + i * (FACE.h + 2), INK.TARGET, 'map', 'foreign system ' + i));
     // ⭐ AC-1 (restorations) — THE HOVER CALLOUT, LAST THING ON THE MAP AND ONLY ON THE MAP. It is
     // placed off `S.hover`'s own texel point and clamped into `REGIONS.map`, so it can never reach the
     // rail, the hint row, the tabs or the commit row. ⛔ NOT DRAWN UNDER THE DRAWN SEARCH: the driver
@@ -865,81 +866,25 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (!S.search.open) hoverCallout(g);
 
     // ── THE RAIL ─────────────────────────────────────────────────────────────────────────────────
-    d1Rail(g, railX, mapY, railW, railC, rows - 4);
+    d1Rail(g, railX, mapY, railW, railC, rows - 3);   // `- 3`, was `- 4`: the hint row's texels are the rail's now
 
-    // ── HINT ─────────────────────────────────────────────────────────────────────────────────────
-    // ⭐ THE HINT NAMES THE ACTIVE SORT KEY. Max never opens a browser console, so a control he can
-    // use has to be legible ON THE GLASS or it does not exist for him. `S.sortLabel` is the driver's
-    // one-word name for the key that is on; empty is the honest default and the row then degrades to
-    // exactly what it has always said, which is why nothing here moves until a sort is wired.
-    const sortHint = S.sortLabel ? `[ ] SORT ${S.sortLabel}` : '[ ] SORT';
-    // ⛔ THE SYSTEM HINT SAID `DRAG TO ROTATE` OVER A LADDER, AND A LADDER HAS NO ROTATION. This
-    //    design draws no orrery at SYSTEM — it draws a scrolling sqrt(AU) axis — so the row now names
-    //    that axis's real controls: `,` and `.` step the window between stops, and the `...` caps
-    //    drawn at either end are click targets for the same step. 62 characters, which is exactly the
-    //    length of the GALAXY hint, so no buffer clips it any sooner than it already clipped that one.
-    const hints = [`CLICK A SECTOR OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
-                   `CLICK A TILE OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
-                   `CLICK A TILE OR A LIST ROW   ${sortHint}   / SEARCH   TAB LEVEL`,
-                   // ⭐ AC-12 — `R` AND `F` RAISE AND LOWER THE PRISM CAMERA AND NOTHING SAID SO. They
-                   // are bound at PRISM and only at PRISM, they move the picture Max is looking at, and
-                   // this row is the only place design 1 names a key.
-                   // ⛔ AND `OR A LIST ROW` PAID FOR IT, WHICH IS A MEASUREMENT AND NOT A PREFERENCE.
-                   //    At 417 the hint row is 69 characters. With the longest key this level owns
-                   //    (`CATALOG`, `SORT_KEYS[3]`) the old row is already 67; adding `   R/F UP` makes
-                   //    76 and `fit()` truncates from the RIGHT — so the new promise would disappear at
-                   //    exactly the moment a pilot sorted by anything. Dropping the clause that names
-                   //    the rail (which is DRAWN, two texels to the right, with its rows highlighted)
-                   //    leaves 62 at the worst key. A row that fits is the only kind that can be read.
-                   `CLICK A STAR   ${sortHint}   / SEARCH   WASD PAN   R/F UP/DOWN`,
-                   // ⭐ THE SCROLL CONTROLS ARE NAMED ONLY WHEN THE LADDER HAS SOMEWHERE TO SCROLL. `d1Ladder`
-                   // has already run (the map pane paints before this row), so `S.ladderMax` is this
-                   // frame's own answer: 0 means no `...` cap is drawn and `,` / `.` move nothing, and a
-                   // hint naming a click target that is not on the glass is the lie AC-10 sweeps for.
-                   // Measured 2026-09-08: Sol's 15 stops end at 222 against a 226-texel window at Max's
-                   // 417x240, so on Sol this row reads `SELECT A BODY   [ ] SORT AU   TAB LEVEL`.
-                   // ⭐ AC-12 — `/` OPENS THE DRAWN SEARCH AT SYSTEM TOO, AND THIS ROW NEVER SAID SO.
-                   // ⛔ `TAB LEVEL` PAID FOR IT, AND ONLY ON THIS ROW. With the ladder overflowing and
-                   //    the longest key this level owns the row is already 65 characters of 69; adding
-                   //    `   / SEARCH` makes 78. The tab strip is drawn on the very next row with the
-                   //    active tab filled, so TAB is the one control on this row a pilot can SEE, and
-                   //    the strip's own legend (below) names SHIFT+TAB. The other four rows keep it.
-                   `SELECT A BODY   ${(S.ladderMax || 0) > 0 ? 'SCROLL , . OR CLICK ...   ' : ''}${sortHint}   / SEARCH`];
-    /*  Function · AC-4 — the SYSTEM row while a planet is open.
-     *  Intent · page item 16. Legacy's own sub-view prints `SELECT MOON TO NAVIGATE · CLICK EMPTY
-     *    SPACE TO GO BACK` (NavComputer.js:3533) — the way OUT is half of what that row says, because
-     *    a screen a pilot cannot leave is a trap.
-     *  ⛔⛔ IT SAYS `RIGHT CLICK BACK` AND NOT `ESC BACK`, AND THAT IS A MEASUREMENT, NOT A STYLE
-     *    CHOICE. Wave 2b drew `ESC BACK` here on the seam's EXIT row; the HOST lane then measured
-     *    that the Escape KEY never reaches this overlay's class at all — `NavComputer._onKeyDown`
-     *    (:344-360) has no `Escape` clause, so the key falls through to `main.js:13557`, which sees
-     *    the nav open and closes THE WHOLE OVERLAY (Max's own 2026-07-29 ruling, guarded by
-     *    `src/ui/__tests__/NavComputer.escape.test.js`: *"esc should just dismiss"*). A hint row that
-     *    named Esc would therefore promise the pilot a way back and take the whole screen away, which
-     *    is the exact defect class this workstream is named for. RIGHT-CLICK does exit, through the
-     *    canvas's own `contextmenu` listener (`NavComputer.js:336`) → `handleEscape()` → the wave-2b
-     *    fold at :1441 → `drv.onEscape()`; the empty-map click exits too (the driver's own INSIDE
-     *    rule). Whether Esc should ALSO pop the sub-view is a reversal of a ruling Max made himself,
-     *    so it is reported to him rather than decided here.
-     *  ⛔ NOTHING IS CUT FROM AN EXISTING CLAUSE: this is a NEW row for a state that had none. It
-     *    measures 59 characters of the 69 this buffer holds at the longest key this level owns
-     *    (`[ ] SORT NAME`), and 58 with the scroll clause — so both fit unclipped.
-     *  ⚠ THE SORT AND SEARCH CLAUSES YIELD TO THE SCROLL CLAUSE, AND ONLY TO IT. All three together
-     *    are 82, well past the row; the scroll clause names a control that is ON THE GLASS this frame
-     *    (the `...` caps), while `[ ]` and `/` are named on the four other rows. */
-    const subDet = S.level === 4 ? sysDetail() : null;
-    if (subDet) {
-      const scrollC = (S.ladderMax || 0) > 0 ? 'SCROLL , . OR CLICK ...' : '';
-      hints[4] = `SELECT A MOON   RIGHT CLICK BACK   ${scrollC || `${sortHint}   / SEARCH`}`;
-    }
-    // ⭐ AND WHILE THE DRAWN SEARCH IS OPEN THE ROW NAMES THE SEARCH'S OWN CONTROLS. The field takes
-    // the rail, so the row that would say "CLICK A LIST ROW" would be naming rows that are not there.
-    // ⛔ ESC CLOSES AND ONLY CLOSES — it must never also drill a level, which is the one behaviour the
-    //    DOM widget got right and the reason its Escape handler stopped at `input.blur()`.
-    const hintFull = (S.search.open ? SEARCH_HINT : hints[S.level]) + (S.sabotage ? SAB : '');
-    T(g, fit(hintFull, W - 2), 1, ry(rows - 3), { color: INK.DIM, rgn: 'hint', what: 'hint line' });
-    // the guard must see the UNCLIPPED string, or it is not a guard — it is the clip
-    if (S.sabotage) assertFits('D1 hint line (unclipped)', 'hint', 1, ry(rows - 3), measurePixelText(hintFull), FACE.h);
+    // ── ⛔ NO HINT ROW ────────────────────────────────────────────────────────────────────────────
+    /*  Function · the instruction/legend row that sat directly above the tab strip — `CLICK A SECTOR OR
+     *    A LIST ROW   [ ] SORT   / SEARCH   TAB LEVEL` and its per-level, sub-view and search variants —
+     *    is REMOVED at every level, in every state.
+     *  Intent · Max's UAT walk, 2026-09-30 (docs/WORKSTREAMS/nav-restorations-2026-09-20/
+     *    UAT-walk-2026-09-30.md, stop 2): *"We don't need to display that here. It makes unnecessary
+     *    clutter."* Then the RULING: *"remove all of that row"* — key hints included, which overrode the
+     *    recommendation to keep them. It supersedes AC-12 of nav-defects-batch-2026-09-18 (which put
+     *    `/ SEARCH` and `R/F UP` on this row) and the sub-view's `RIGHT CLICK BACK` (AC-4, restorations).
+     *  ⭐ THE SIX TEXELS GO TO THE MAP AND THE RAIL: `mapH` ends at `ry(rows - 2)` and `d1Rail` is handed
+     *    one more row, so the picture and the list each gain a row rather than the screen gaining a gap.
+     *  ⛔ THE TAB STRIP'S OWN LEGEND (`V LOOK  SHIFT+TAB BACK  ESC CLOSE`) STAYS. It is ON the tab row,
+     *    not above it, so it is not the row Max ruled on.
+     *  ⚠ THE SABOTAGE PROOF MOVED WITH IT. `S.sabotage` used to lengthen this row; it now lengthens the
+     *    commit label (below), the longest single line this design still draws.
+     *  Deliberate non-goals · nothing re-homed into the rail or the map — a key hint moved somewhere else
+     *    is the same clutter in a new place. Design 2's legend over the sky is untouched (Max passed it). */
 
     // ── TABS + COUNTS, row rows-2 ────────────────────────────────────────────────────────────────
     const tabW = Math.floor(Math.min(8, Math.floor(cols * 0.11)) * CELL);
@@ -965,8 +910,8 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    (`SECTORS 775`, `TILES 64`, `TILES 256`, `STARS 12/27K`, `BODIES 9`) at every level, four
     //    texels to the right of where this row printed it — so what is removed here is the SECOND copy
     //    of a readout, which is the shape this codebase names as a defect everywhere else.
-    // ⛔ AND IT IS NOT DRAWN OVER THE DRAWN SEARCH'S OWN LEGEND. `d1Search` takes the rail, not this
-    //    row, so the strip keeps saying what it always says; `SEARCH_HINT` names ESC for the FIELD.
+    // ⛔ AND IT IS NOT DRAWN OVER THE DRAWN SEARCH. `d1Search` takes the rail, not this row, so the
+    //    strip keeps saying what it always says — and its `ESC CLOSE` is the field's way out too.
     const legend = 'V LOOK  SHIFT+TAB BACK  ESC CLOSE';
     T(g, fit(legend, W - 5 * tabW - 2), W - 1, ry(rows - 2), { color: INK.DIM, align: 'right', rgn: 'tabs', what: 'global legend' });
 
@@ -984,10 +929,16 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    number the instrument does not mean. The star names its CLASS in the same slot instead.
     const warpLive = !!D.target && !D.targetIsHere;   // ⭐ 2026-09-25: no `WARP TO <here> · 0.0 LY`, and no `WARP TO —` with nothing picked
     const armed = cur ? !!D.selBody : warpLive;
+    // ⭐ 2026-10-02 (Max's ruling, UAT walk stop 4) — IN ORRERY THE COMMIT READS `GO TO`, NOT `BURN TO`.
+    //    *"I want the nav view to work in Orrery"*: in HELM Enter burns; in ORRERY it glides the view
+    //    along the line, and nothing flies. `D.commitIsView` is the host's `nav.commitIsView` (state.js),
+    //    so the WORD follows the regime and the ACTION does not change here — Enter still dispatches the
+    //    same 'burn' action, and the host decides what that does.
+    const verb = D.commitIsView ? 'GO TO' : 'BURN TO';
     const label = cur ? (D.selBody
-                          ? `BURN TO ${(D.selBody.name || '—').toUpperCase()} · ${D.selBody.kind === 'star'
+                          ? `${verb} ${(D.selBody.name || '—').toUpperCase()} · ${D.selBody.kind === 'star'
                               ? (D.selBody.cls || 'STAR').toUpperCase() : `${(D.selBody.au ?? 0).toFixed(2)} AU`} · ENTER`
-                          : 'SELECT A BODY TO BURN')
+                          : D.commitIsView ? 'SELECT A BODY TO GO TO' : 'SELECT A BODY TO BURN')
                       : warpLive ? `WARP TO ${(D.target?.name || '—').toUpperCase()} · ${(D.target?.ly || 0).toFixed(1)} LY · ENTER`
                       : 'SELECT A STAR TO WARP';
     // ⭐⭐ AC-11 — THE BAR STARTS AT `ry(rows - 1)`, NOT ONE TEXEL ABOVE IT.
@@ -999,7 +950,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    the same rectangle. ⚠ Nothing else moves: the LABEL was already drawn at `ry(rows - 1)`, and
     //    240 / LEAD 6 leaves exactly six rows here, so 234-239 is the last full row on the glass.
     rect(g, 0, ry(rows - 1), W, LEAD, armed ? (cur ? INK.YOU : INK.TARGET) : INK.RULE);
-    T(g, fit(label, W - 4), W / 2, ry(rows - 1), { color: armed ? INK.BG : INK.DIM, align: 'center', rgn: 'commit', what: 'commit label' });
+    const labelFull = label + (S.sabotage ? SAB : '');
+    T(g, fit(labelFull, W - 4), W / 2, ry(rows - 1), { color: armed ? INK.BG : INK.DIM, align: 'center', rgn: 'commit', what: 'commit label' });
+    // the guard must see the UNCLIPPED string, or it is not a guard — it is the clip
+    if (S.sabotage) assertFits('D1 commit label (unclipped)', 'commit', W / 2 - measurePixelText(labelFull) / 2, ry(rows - 1),
+                               measurePixelText(labelFull), FACE.h);
   }
 
   /**
@@ -1681,7 +1636,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       //   ruled on and is his call, not this pass's.
       S.ladderCounterRect = { x: x1 - 4 - cW, y: axisY + 16, w: cW, h: FACE.h };
     }
-    if (vis(sx(0))) rect(g, sx(0) - 1, axisY - 1, 3, 3, INK.YOU);
+    // ⛔ ONLY AT HOME (2026-10-02). `YOU` is the ink this glass reserves for where the pilot is, and this
+    //    3x3 on a FOREIGN system's star is the "ship dot" Max's walk measured on a ladder he was not in.
+    if (vis(sx(0)) && isHere()) rect(g, sx(0) - 1, axisY - 1, 3, 3, INK.YOU);
     /*  Function · AC-7 and AC-8 — every body and belt on this ladder that has room carries its NAME.
      *  Intent · page items 19 and 20, Max's ruling *"yes"* on both: *"The name is one click away in a
      *    list, not on the thing"*, and *"belts are anonymous dots."* Legacy printed a name under every
@@ -2047,10 +2004,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (L.bar > 0) for (let k = 0; k < Math.round(4 * L.bar); k++) rect(g, x + w - 23 + k * 6, yy + 1, 4, 4, INK.BODY);   // c67-c70
     });
     const pagerY = y + (lines.length + 1) * LEAD;
-    // ⛔ THE PAGER CANNOT ALSO BE SPELLED `[ ]`. The hint row two lines up has already given the
-    //    brackets to SORT, and two different controls sharing one name on one screen is a lie
-    //    whichever of them the key turns out to drive. SORT keeps `[` `]` because its hint is the one
-    //    repeated at every level; PAGE names `-` and `=`. Same eight characters, so nothing reflows.
+    // ⛔ THE PAGER CANNOT ALSO BE SPELLED `[ ]`. Those keys are SORT (design 1 stopped printing that when
+    //    its hint row went, 2026-10-02; design 2's bar still does), and two controls sharing one name
+    //    is a lie whichever of them the key turns out to drive. PAGE names `-` and `=`.
     // ⚠ AND THE RANGE GROWS AS YOU PAGE, WHICH EATS THE KEYS OFF THE RIGHT-HAND END. `fit()` truncates
     //   from the right, so `1000-1026 OF 27524   - = PAGE` loses `- = PAGE` — the control's own name
     //   disappears at exactly the moment you are using it. The compact form is only ever reached WHEN
@@ -2264,6 +2220,27 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *    number of things the glass DREW, or the line contradicts the picture beside it.
    *  Deliberate non-goals · the wide-binary member list (item 20's third clause) is PARKED; no
    *    metallicity, no luminosity class, no separation. */
+  /*  Function · the two lines that say WHICH system the SYSTEM screen is showing, when it is not the
+   *    one the ship is in — `VIEWING <NAME>` over `NOT YOUR SYSTEM` — or `null` when it is (or there is
+   *    none). ⚠ TWO LINES BECAUSE ONE DID NOT FIT, MEASURED: `VIEWING WANVEB-4OQSLX9698 · NOT YOUR
+   *    SYSTEM` is 43 characters against design 1's 42-character map pane, and `fit()` ate the half that
+   *    says why the line is there. The name keeps the first line to itself.
+   *  Intent · Max's UAT walk, 2026-09-30, stop 4: SYSTEM was showing the TARGETED star's system while
+   *    the header named the current one, so *"this doesn't work at all"* was a pilot reading a foreign
+   *    ladder as his own. The defect recorded: *"nothing on the SYSTEM screen says which system you are
+   *    looking at"*. Both designs draw this at the map's top-left, in the target's ink.
+   *  ⛔ THE TEST IS `isHere()`, WHICH IS `D.isCurrent` — the host's 0.1 pc identity test, the same answer
+   *    that gates `D.ship` and the BURN/WARP verb. A second "is this home" spelled here could disagree
+   *    with the commit row on the same frame.
+   *  ⚠ THE NAME IS `D.sysStar.name`, the system ON THE GLASS — not `D.hereName`, which is where you are.
+   *  Deliberate non-goals · no distance (`D.target` need not be the system shown), no change to the
+   *    where-am-I header, which stays where-am-I. */
+  function foreignSysLines() {
+    if (S.level !== 4 || isHere()) return null;
+    const n = (D.sysStar && D.sysStar.name) || (D.sys && D.sys.star && D.sys.star.name);
+    return n ? [`VIEWING ${String(n).toUpperCase()}`, 'NOT YOUR SYSTEM'] : null;
+  }
+
   function sysStarClauses() {
     const sys = D.sys;
     if (!sys) return [];
@@ -2392,7 +2369,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    */
   function shipHit(hits) {
     const sh = D.ship;
-    if (!sh || !Array.isArray(hits) || !hits.length) return null;
+    // ⛔ `!isHere()` TOO (2026-10-02): `D.ship` is already `null` abroad in the game, but this page is
+    //    also the spec and must not draw a ship or a trajectory on a system the ship is not in.
+    if (!sh || !isHere() || !Array.isArray(hits) || !hits.length) return null;
     const pi = Number.isFinite(sh.planetIndex) ? sh.planetIndex : -1;
     if (pi < 0) return hits.find((z) => z.star) || null;            // -2 / -1: at the primary
     const mine = (z) => z.ref && z.ref.kind === 'planet' && z.ref.pIdx === pi;
@@ -2693,6 +2672,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
     else if (S.level === 3) d2Prism(g, W, mapY, mapH);
     else d2System(g, W, mapY, mapH);
+    // ⭐ 2026-10-02 — WHICH SYSTEM THIS IS, WHEN IT IS NOT YOURS (`foreignSysLines`), top-left of the sky
+    //    in TARGET ink. ⚠ FITTED SHORT OF THE ZOOM READOUT (`zoomGauge`, top-right, <= 40 texels), and
+    //    `d2System` drops its companion strip below them to make room.
+    if (!S.search.open) (foreignSysLines() || []).forEach((t, i) =>
+      plated(g, fit(t, W - 54), 4, mapY + 1 + i * (FACE.h + 2), INK.TARGET, 'map', 'foreign system ' + i));
     // ⭐ THE DRAWN SEARCH GOES OVER THE MAP, AFTER IT, IN THIS DESIGN'S OWN IDIOM (AC-11). Design 2's
     // premise is that there is no floating box anywhere — its ONE floating widget, the prism minimap,
     // is drawn as a stated contradiction — so the field cannot be a panel. It is the treatment `d2List`
@@ -2798,7 +2782,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
 
     // ── BOTTOM BAR: one 63-character status line, ' · '-joined so truncation eats the VERB first.
     rect(g, 0, H - BAR, W, 1, INK.RULE); rect(g, 0, H - BAR + 1, W, BAR - 1, INK.BG);
-    const chipW = measurePixelText('[WARP]') + 6;
+    // ⭐ 2026-10-02 — `[GO TO]` IN ORRERY (see design 1's commit row and `D.commitIsView`). It is the one
+    //    chip word wider than `[WARP]`, so the chip is measured off it only then; every other frame keeps
+    //    the `[WARP]` width the bar has always had.
+    const chipTxt = isHere() ? (D.commitIsView ? '[GO TO]' : '[BURN]') : '[WARP]';
+    const chipW = measurePixelText(chipTxt === '[GO TO]' ? chipTxt : '[WARP]') + 6;
     // ⭐ AC-18 — THE BUDGET IS MEASURED BEFORE THE LINE IS WRITTEN, NOT AFTER. `avail` moved two lines
     // up so `d2Status` can be handed it: the one clause whose length this design does not control is
     // the SECTOR NAME, and a line assembled blind is a line `fit()` has to rescue from the right —
@@ -2812,7 +2800,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const armed = !!(isHere() ? D.selBody : (D.target && !D.targetIsHere));   // not the system you are in (state.js `targetIsHere`)
     const chipX = W - chipW - 2;
     if (armed) rect(g, chipX, H - BAR, chipW, BAR, INK.TARGET);
-    T(g, isHere() ? '[BURN]' : '[WARP]', chipX + 3, H - BAR + 2,
+    T(g, chipTxt, chipX + 3, H - BAR + 2,
       { color: armed ? INK.BG : INK.DIM, rgn: 'botbar', what: 'commit chip' });
     // ⭐ THE CHIP'S RECTANGLE AND ITS ARMED STATE, from the two locals the fill and the label already
     // used. The button that LOOKS live and the button that IS live now cannot come apart, and neither
@@ -2926,7 +2914,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     return [b.name.toUpperCase(), b.cls.toUpperCase(), `${b.au.toFixed(2)} AU`,
             b.T ? `${Math.round(b.T)} K` : '—', `${b.moons} MOONS`, ...(b.rings ? ['RINGED'] : [])];
   }
-  /** The active sort key, named — design 1's hint row builds the same string inline (`sortHint` there).
+  /** The active sort key, named — design 2's alone since design 1's hint row was removed (2026-10-02).
    *  Empty is the honest default: with no key on, the row degrades to `[ ] SORT`. */
   function d2SortHint() { return S.sortLabel ? `[ ] SORT ${S.sortLabel}` : '[ ] SORT'; }
   function d2TwoD(g, W, mapY, mapH) {
@@ -3476,8 +3464,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // a press on the text selects whichever ring passes beneath.
     // ⛔ PUBLISHED ONLY WHEN THE STRIP IS DRAWN (`far.length`), from the FITTED string's own returned
     //    width — a band sized from the unfitted string would extend past the glyphs at a narrow buffer.
-    if (far.length) { const fW = T(g, fit(far.join('  '), W - 8), 4, mapY + 1, { color: INK.DIM, rgn: 'map', what: 'companion strip' });
-      S.companionRect = { x: 4, y: mapY + 1, w: fW, h: FACE.h }; }
+    const farY = mapY + 1 + (foreignSysLines() || []).length * (FACE.h + 2);   // under the VIEWING lines when drawn
+    if (far.length) { const fW = T(g, fit(far.join('  '), W - 8), 4, farY, { color: INK.DIM, rgn: 'map', what: 'companion strip' });
+      S.companionRect = { x: 4, y: farY, w: fW, h: FACE.h }; }
     // ⭐ THE ORRERY'S BODY MARKS, OUT OF THE ORBIT ARITHMETIC THAT PLACED THEM. Even now that the
     // angle is the planet's REAL `orbitAngle`, the drawn position also carries `rOf`, `TILT`, the
     // azimuth offset and two roundings — so nothing else in the build could reconstruct where a

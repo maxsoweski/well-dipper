@@ -384,30 +384,22 @@ describe('AC-4 — design 1 draws the moon ladder', () => {
     expect(p.violations, 'mark guard').toBe(0);
   });
 
-  it('⛔ THE HINT ROW NAMES THE WAY OUT, AND IT FITS UNCLIPPED', async () => {
+  // ⛔⛔ SUPERSEDED 2026-10-02. This case asserted design 1's HINT ROW named the sub-view's way out
+  //    (`SELECT A MOON   RIGHT CLICK BACK`). Max's UAT walk, 2026-09-30, stop 2, ruled that whole row
+  //    off the glass — *"remove all of that row"* (docs/WORKSTREAMS/nav-restorations-2026-09-20/
+  //    UAT-walk-2026-09-30.md) — so design 1 no longer prints the way out at all. The way out itself
+  //    is unchanged: right-click still pops the sub-view (`navAffordances.test.js` probes that route
+  //    for `RIGHT CLICK BACK`, which design 2's bar still prints), and the rail still says
+  //    `SELECT A MOON`. What is asserted now is the ruling, and that the rail's prompt survived it.
+  it('⛔ SUPERSEDED: the sub-view draws no hint row in design 1, and the rail still prompts SELECT A MOON', async () => {
     const h = await loadedNav();
     const nav = await at(h, 'rail', 4);
     closeDetail(nav);
-    // ⛔⛔ `RIGHT CLICK BACK`, NOT `ESC BACK`, AND THE CHANGE IS A MEASUREMENT. This row said
-    //    `ESC BACK` when it was written; the HOST lane then measured that the Escape KEY never
-    //    reaches NavComputer at all (`_onKeyDown` :344-360 has no `Escape` clause), so it falls
-    //    through to `main.js:13557` and CLOSES THE WHOLE OVERLAY — Max's own 2026-07-29 ruling.
-    //    The right-click does exit (the canvas's `contextmenu` listener :336 → `handleEscape()` →
-    //    the wave-2b fold at :1441 → `drv.onEscape()`), and `navAffordances.test.js` now probes
-    //    exactly that route for this phrase. A row that named Esc would be the defect this
-    //    workstream is named for, drawn by the fix for it.
-    expect(paint(nav, 1).lines.some((l) => l.s.includes('RIGHT CLICK BACK')),
-           'the whole-system row is unchanged').toBe(false);
     openDetail(nav);
     const p = paint(nav, 1);
-    const hint = inRegion(p, 'hint').map((l) => l.s);
-    expect(hint.some((s) => s.includes('RIGHT CLICK BACK')), 'the sub-view names the way out').toBe(true);
-    expect(hint.some((s) => s.includes('SELECT A MOON'))).toBe(true);
-    // ⛔ THE UNCLIPPED STRING, because `fit()` would hide an overflow by eating the end of the row —
-    //    the very failure AC-3's own PRISM bar was measured into.
-    const row = hint.find((s) => s.includes('RIGHT CLICK BACK'));
-    expect(measurePixelText(row), `"${row}" must fit ${W - 2} texels unclipped`)
-      .toBeLessThanOrEqual(W - 2);
+    expect(p.regions.hint, 'design 1 declares no hint region any more').toBeUndefined();
+    expect(p.lines.some((l) => l.s.includes('RIGHT CLICK BACK')), 'the removed row is not drawn').toBe(false);
+    expect(inRegion(p, 'rail').map((l) => l.s)).toContain('SELECT A MOON');
   });
 });
 
