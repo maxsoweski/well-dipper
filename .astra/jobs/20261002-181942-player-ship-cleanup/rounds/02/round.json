@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "codex",
+    "exec",
+    "resume",
+    "01a0feb3-b048-7e71-86ab-6c3fae0eda63",
+    "-m",
+    "gpt-6-astra",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "-c",
+    "sandbox_workspace_write.writable_roots=[\"/mnt/c/Users/Max/...\"]",
+    "-c",
+    "sandbox_mode=\"workspace-write\"",
+    "--json",
+    "-o",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-181942-player-ship-cleanup/rounds/02/result.json",
+    "--output-schema",
+    "/home/ax/projects/personal-os-improvements/astra-lane/skill/scripts/result.schema.json",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-181942-player-ship-cleanup/refs/pship_q4000_4view.png",
+    "-"
+  ],
+  "exit": 0,
+  "timed_out": false,
+  "started": "2026-10-02T18:28:05",
+  "finished": "2026-10-02T19:08:37"
+}
