@@ -310,7 +310,12 @@ describe('AC-4 — design 1 draws the moon ladder', () => {
     expect(hits.map((z) => z.moonIndex).sort(), 'all four, once each').toEqual([0, 1, 2, 3]);
   });
 
-  it('⛔ THE SHIP AND ITS TRAJECTORY ARE SUPPRESSED, even with the ship parked at this very planet',
+  // ⭐ 2026-10-02 (the GPS line) — WAS "THE SHIP AND ITS TRAJECTORY ARE SUPPRESSED". Max: *"the GPS
+  //    line should also draw to moons, and again it should draw from wherever the player is
+  //    currently."* The suppression's reason — `D.ship` named a body in the SYSTEM's frame — is gone
+  //    (`D.ship.rel` is the ship's offset from the open planet), so a ship parked at this very planet
+  //    now stands on the ladder's HEAD, the planet's own drawn mark.
+  it('⭐ THE SHIP STANDS ON THE HEAD when it is parked at this very planet (no longer suppressed)',
      async () => {
     const h = await loadedNav();
     const nav = await at(h, 'rail', 4);
@@ -321,8 +326,13 @@ describe('AC-4 — design 1 draws the moon ladder', () => {
     expect(whole.fills.some((f) => f.ink === INK_SHIP), 'wave 2a still draws it out here').toBe(true);
     openDetail(nav);
     const sub = paint(nav, 1);
-    expect(sub.fills.some((f) => f.ink === INK_SHIP), 'and never inside the sub-view').toBe(false);
-    expect(sub.lines.some((l) => l.s === 'SHIP')).toBe(false);
+    const head = (sub.S.bodyHits || []).find((z) => !(z.moon >= 0) && z.ref?.kind === 'planet');
+    const centre = sub.fills.find((f) => f.ink === INK_SHIP && f.w === 5 && f.h === 1);
+    expect(centre, 'the diamond is drawn inside the sub-view').toBeTruthy();
+    expect({ x: centre.x, y: centre.y }, 'on the head — the open planet\'s own mark')
+      .toEqual({ x: Math.round(head.x) - 2, y: Math.round(head.y) });
+    // ⚠ The WORD is not asserted: it goes through `placeLabel` after the moons' names and yields
+    //   to them (AC-5's own rule), and on this crowded head it finds no slot. The diamond is the mark.
   });
 
   it('⛔ THE RAIL LISTS THE PLANET THEN ITS MOONS, PUBLISHES THOSE ROWS, AND THE DETAIL BLOCK PRINTS '
@@ -444,7 +454,7 @@ describe('AC-4 — design 2 draws the moon orrery', () => {
     expect(p.violations, 'mark guard').toBe(0);
   });
 
-  it('⛔ THE WAVE-2a ZOOM STILL SCALES THIS PICTURE AND ITS GAUGE IS STILL DRAWN; THE SHIP IS NOT',
+  it('⛔ THE WAVE-2a ZOOM STILL SCALES THIS PICTURE AND ITS GAUGE IS STILL DRAWN; THE SHIP IS ON THE PLANET',
      async () => {
     const h = await loadedNav();
     const nav = await at(h, 'bars', 4);
@@ -456,7 +466,11 @@ describe('AC-4 — design 2 draws the moon orrery', () => {
     const gauge1 = S.zoomGaugeRect;
     const head1 = (S.bodyHits || []).find((z) => !(z.moon >= 0) && z.ref?.kind === 'planet');
     expect(gauge1, 'AC-6\'s gauge stays in the sub-view').toBeTruthy();
-    expect(one.fills.some((f) => f.ink === INK_SHIP), 'the ship is suppressed').toBe(false);
+    // ⭐ 2026-10-02 (the GPS line): no longer suppressed — parked at this planet, the diamond is on
+    //    the centre mark (`head1`), the planet's own texel.
+    const centre1 = one.fills.find((f) => f.ink === INK_SHIP && f.w === 5 && f.h === 1);
+    expect(centre1 && { x: centre1.x, y: centre1.y }, 'the ship stands on the open planet')
+      .toEqual({ x: Math.round(head1.x) - 2, y: Math.round(head1.y) });
 
     // ⛔ 1.5, NOT 2 — MEASURED. `maxR` already budgets the outermost ring into the pane at zoom 1,
     //    so at 2 every moon's centre has left it and AC-19's cull (correctly) publishes none; the

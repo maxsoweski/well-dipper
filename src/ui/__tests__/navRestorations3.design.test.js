@@ -589,7 +589,10 @@ describe('AC-5 — the ship diamond and the trajectory', () => {
     expect(dots.length, 'a trajectory drew where there was none').toBeGreaterThan(5);
     const near = Math.min(...dots.map((f) => Math.hypot(f.x - th.x, f.y - th.y)));
     expect(near, 'no texel of the line lands on the body it points at').toBeGreaterThanOrEqual(3);
-    expect(near, 'and the chevron sits 4 texels back from it').toBeLessThanOrEqual(5);
+    // ⚠ 2026-10-02 (the GPS line): the target here is SELECTED, so it wears the 9x9 frame whose rim is
+    //   at ±4 — and the chevron now stops 6 back from a framed mark (4 from a plain one) so the
+    //   arrowhead never stands on that rim. Was `<= 5` against the old flat 4.
+    expect(near, 'and the chevron sits 6 texels back from the framed target').toBeLessThanOrEqual(7);
     const far = Math.max(...dots.map((f) => Math.hypot(f.x - sh.x, f.y - sh.y)));
     expect(far, 'the line reaches most of the way across').toBeGreaterThan(Math.hypot(th.x - sh.x, th.y - sh.y) / 2);
     expect(p.violations).toBe(0);

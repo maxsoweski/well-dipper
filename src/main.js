@@ -2,7 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 import { StarFlare } from './objects/StarFlare.js';
 import { RealStarCatalog } from './generation/RealStarCatalog.js';
-import { sameStar } from './ui/navViewModes/starIdentity.js';
+import { sameStar } from './ui/navViewModes/starIdentity.js';  import { navShipPublication } from './ui/navViewModes/shipState.js';   // ⛔ APPENDED TO THIS LINE, never a new import line — this file's citations are line-anchored.
 import { knownSystemKey } from './generation/GalaxyGrid.js';
 import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
 import { HashGridStarfield } from './generation/HashGridStarfield.js';
@@ -5858,7 +5858,7 @@ function _applyNavArrival(nav) {
 function _applyNavFocus(nav) {
   if (!nav) return;
   nav.setCurrentBody(focusIndex, focusMoonIndex);
-}
+}  /* ⭐⭐ 2026-10-02 (the GPS line) — WHERE THE SHIP IS, every frame, on EVERY nav instance. Max: *"it should draw from wherever the player is currently."* `setCurrentBody` above is FOCUS (a body index, the destination for a whole burn), so the line used to start at where you were going. This publishes the ship's own position — the flight body in FLIGHT mode, else the camera (ORRERY: the viewpoint, a convention flagged for Max's UAT) — with the rebase origin and the system it belongs to; `shipState.js` `navShipPublication` owns the choice. ⛔ `null` with no star system (deep sky, mid-warp teardown), so a stale position can never be drawn in the next system. */  function _syncNavShip() { const pub = (system && (!system.type || system.type === 'star-system')) ? navShipPublication({ cameraController, camera, origin: _worldOriginVec, systemData: system._systemData || null }) : null; for (const nav of _navComputers()) nav.setShipState(pub); }
 
 /**
  * The four callbacks, installed the SAME way on both instances.
@@ -6035,7 +6035,7 @@ function openNavComputer() {
   _applyNavArrival(_domNavComputer);
   // Fix D: the arrival just re-selected home; a star the pilot clicked in the sky wins it back.
   _adoptSkyTargetInNav(_domNavComputer);
-  _applyNavFocus(_domNavComputer);
+  _applyNavFocus(_domNavComputer);  _syncNavShip();   // ⭐ GPS line: `_navRenderLoop()` below renders at once, before any per-frame sync (Astra point 8)
   _domNavComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
 
   _domNavComputer.activate();
@@ -13333,7 +13333,7 @@ function renderFrame(alpha) {
   // Who owns WASD / R / F this frame. Asked here, beside the cockpit's own
   // gate, because both answers come from the same two facts and neither may be
   // decided anywhere a later un-zoom would not re-decide. See the applier.
-  _syncCockpitNavKeys();
+  _syncCockpitNavKeys();  _syncNavShip();   // ⭐ GPS line — the ship's position, once per RAF, ungated: the DOM overlay and the cockpit glass both read it
 
   if (_cockpitShouldRender()) {
     // The on-glass AUTOPILOT label is a MIRROR (`_autopilotActive`), written

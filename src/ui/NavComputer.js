@@ -3,7 +3,7 @@ import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { realStarSeed } from '../generation/realStarSeed.js';  import { realStarKey } from '../generation/GalaxyGrid.js';   // ⚠ second statement on this line to keep line numbers stable
-import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';  import { findStar, isStarKey } from './navViewModes/starIdentity.js';   // ⚠ second statement on this line to keep line numbers stable
+import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';  import { findStar, isStarKey } from './navViewModes/starIdentity.js';  import { legacyShip, livePlanetAngle, legacyMoonAngle, legacyOrreryShip, legacyOrreryTarget, legacyDetailMoonPoint, legacyDetailShip, legacyDetailTarget, legacyEdgeTriangle } from './navLegacyShip.js';   /* ⭐ GPS line 2026-10-02 — a third statement, same reason */   // ⚠ second statement on this line to keep line numbers stable
 import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
@@ -129,7 +129,7 @@ export function moonBandRadius(moons, index, baseR, projScale) {
   const span = 4 * Math.max(1, moons.length - 1);
   const frac = maxR > 0 ? rOf(moons[index], index) / maxR : 1;
   return (baseR + 6 + span * frac) / projScale;
-}
+}  /* ⭐ 2026-10-02 (the GPS line) — THE THIRD USE OF THE BAND, AND THE ONE HELPER ALL THREE GO THROUGH. The moon dot, the ship-at-moon marker and now a MOON TARGET (legacy's `destP` used to stay null for a moon, so no line drew) all need the moon's point on its band; two inline copies already had to be told to agree, a third would be the drift. The angle is the moon's LIVE one (`legacyMoonAngle`, navLegacyShip.js) — `startAngle` is frozen at generation. */  export function moonBandPoint(p, m, baseR, projScale, wx, wz) { const r = moonBandRadius(p.moons, m, baseR, projScale); const a = legacyMoonAngle(p, m, m * 2.4 + 0.7); return { wx: wx + Math.cos(a) * r, wz: wz + Math.sin(a) * r }; }
 
 export class NavComputer {
   constructor(canvas, galacticMap, webglRenderer) {
@@ -278,7 +278,7 @@ export class NavComputer {
     // focusIndex: -1 = overview (no specific body), -2 = star, 0+ = planet index
     // focusMoonIndex: -1 = planet itself, 0+ = moon index
     this._currentFocusIndex = -1;
-    this._currentMoonIndex = -1;  this._viewEase = null;   /* ⭐ AC-6: THE VIEW EASE IS DELIBERATELY NOT `_anim`. `_handleClick` returns early on `_anim` (:4419) and `handleEscape` on the same field (:1442), so a tab-out that set `_anim` would EAT the next Tab — measured against navSearch.test.js:438-448, which walks PRISM→REGION→SECTOR→GALAXY with three presses and no frame between them. This field only tweens `_viewCenter`/`_viewSize`; it gates nothing, and a second transition simply replaces it. Updated in render() beside `_updateAnim` (:1419). */
+    this._currentMoonIndex = -1;  this._shipState = undefined;  /* ⭐ GPS line: undefined = never published, see setShipState */  this._viewEase = null;   /* ⭐ AC-6: THE VIEW EASE IS DELIBERATELY NOT `_anim`. `_handleClick` returns early on `_anim` (:4419) and `handleEscape` on the same field (:1442), so a tab-out that set `_anim` would EAT the next Tab — measured against navSearch.test.js:438-448, which walks PRISM→REGION→SECTOR→GALAXY with three presses and no frame between them. This field only tweens `_viewCenter`/`_viewSize`; it gates nothing, and a second transition simply replaces it. Updated in render() beside `_updateAnim` (:1419). */
 
     // ── Drill-down animation ──
     this._anim = null; // { startTime, duration, fromCenter, fromSize, toCenter, toSize, fromLevel, toLevel }
@@ -1112,7 +1112,7 @@ export class NavComputer {
   setSoundCallback(fn) { this._onSound = fn; }
 
   /** Set autopilot state (for display). */
-  setAutopilotState(active) { this._autopilotActive = active; }
+  setAutopilotState(active) { this._autopilotActive = active; }  /** ⭐ 2026-10-02 (the GPS line): WHERE THE SHIP IS — main.js `_syncNavShip()` hands every frame `shipState.js` `navShipPublication` (`{pos, origin, sysKey}` or null). `undefined` = never published (headless harnesses, the lab) and keeps the focus path; anything published replaces it. */  setShipState(s) { this._shipState = s || null; }
 
   /** Set callback for autopilot toggle. */
   setOnAutopilotToggle(fn) { this._onAutopilotToggle = fn; }
@@ -2753,7 +2753,7 @@ export class NavComputer {
 
     const planetProj = planets.map((p, i) => {
       const r = auToScreen(p.orbitRadiusAU);
-      const angle = p.orbitAngle || 0;
+      const angle = livePlanetAngle(p);   // ⭐ GPS line: the LIVE orbit — `p.orbitAngle` is frozen at generation (state.js's own note)
       const wx = Math.cos(angle) * r;
       const wz = Math.sin(angle) * r;
       const sp = project(wx, 0, wz);
@@ -2807,9 +2807,9 @@ export class NavComputer {
           ctx.stroke();
 
           // Moon position on its orbit (use startAngle for deterministic placement)
-          const moonAngle = moon.startAngle || (m * 2.4 + 0.7);
-          const moonWx = wx + Math.cos(moonAngle) * moonOrbitR;
-          const moonWz = wz + Math.sin(moonAngle) * moonOrbitR;
+          const moonPt = moonBandPoint(p, m, baseR, projScale, wx, wz);   // ⭐ GPS line: the ONE band expression, at the moon's LIVE angle
+          const moonWx = moonPt.wx;
+          const moonWz = moonPt.wz;
           const moonP = project(moonWx, 0, moonWz);
 
           // Moon dot
@@ -2904,33 +2904,33 @@ export class NavComputer {
     // ── Ship position indicator + trajectory line ──
     const isCurrent = this._isCurrentSystem();
     if (isCurrent) {
-      // Compute ship's projected position based on which body the player is near
-      let shipP = null;
-      if (this._currentFocusIndex === -2 || this._currentFocusIndex === -1) {
-        // At star or system overview — ship is at center
-        shipP = project(0, 0, 0);
-      } else if (this._currentFocusIndex >= 0 && this._currentFocusIndex < planets.length) {
-        const cp = planets[this._currentFocusIndex];
-        const cpR = auToScreen(cp.orbitRadiusAU);
-        const cpAngle = cp.orbitAngle || 0;
-        const cpWx = Math.cos(cpAngle) * cpR;
-        const cpWz = Math.sin(cpAngle) * cpR;
-
-        if (this._currentMoonIndex >= 0 && cp.moons && this._currentMoonIndex < cp.moons.length) {
-          // At a moon — offset from planet position
-          // Must match the moon orbit formula used in rendering (lines 1465-1474)
-          const moon = cp.moons[this._currentMoonIndex];
-          const baseR = Math.max(4, Math.min(12, 3 + Math.log2(Math.max(0.5, cp.planetData.radiusEarth)) * 2.5));
-          const moonOrbitR = moonBandRadius(cp.moons, this._currentMoonIndex, baseR, projScale);
-          const moonAngle = moon.startAngle || (this._currentMoonIndex * 2.4 + 0.7);
-          const moonWx = cpWx + Math.cos(moonAngle) * moonOrbitR;
-          const moonWz = cpWz + Math.sin(moonAngle) * moonOrbitR;
-          shipP = project(moonWx, 0, moonWz);
-        } else {
-          // At a planet
-          shipP = project(cpWx, 0, cpWz);
-        }
-      }
+      const shipP = legacyOrreryShip(legacyShip(this), planets, project, auToScreen, (bp, bm, bR, bwx, bwz) => moonBandPoint(bp, bm, bR, projScale, bwx, bwz));
+      /* ⭐⭐ 2026-10-02 (the GPS line) — THE SHIP WHERE IT IS, NOT AT THE FOCUS INDEX. Max: *"it should draw from wherever the player is currently."* The focus pair named the DESTINATION for a whole burn, so the line started where the ship was going. `legacyShip` reads main.js's per-frame position (`setShipState`) and snaps onto a body only when the ship has ARRIVED there; in open space the ship is projected from its own AU position, `project(cos a·√R, 0, sin a·√R)`. Never published (headless harnesses) → the focus pair, exactly as before. Body positions are LIVE (`livePlanetAngle`) and a moon goes through `moonBandPoint`, the dot's own expression. See navLegacyShip.js.
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       */
 
       // Draw ship diamond indicator
       if (shipP) {
@@ -2959,18 +2959,18 @@ export class NavComputer {
         // ── Trajectory line from ship to hovered/selected body ──
         const target = this._hoveredBody || this._selectedBody;
         if (target) {
-          let destP = null;
-          if (target.type === 'star') {
-            destP = starP; // center of system
-          } else if (target.type === 'planet') {
-            const ti = target.index ?? target.planetIndex;
-            if (ti >= 0 && ti < planets.length) {
-              const tp = planets[ti];
-              const tR = auToScreen(tp.orbitRadiusAU);
-              const tAngle = tp.orbitAngle || 0;
-              destP = project(Math.cos(tAngle) * tR, 0, Math.sin(tAngle) * tR);
-            }
-          }
+          const destP = legacyOrreryTarget(target, planets, project, auToScreen, (bp, bm, bR, bwx, bwz) => moonBandPoint(bp, bm, bR, projScale, bwx, bwz), starP);
+          /* ⭐ GPS line — A MOON IS A TARGET NOW (its `destP` used to stay null, so no line drew), through the same band point its dot is drawn at; planets at their LIVE angle.
+           *
+           *
+           *
+           *
+           *
+           *
+           *
+           *
+           *
+           */
           if (destP) {
             // Dashed trajectory line — green for burn (current system)
             const trajColor = '#00ff80';
@@ -3212,7 +3212,7 @@ export class NavComputer {
     for (let i = 0; i < planets.length; i++) {
       const p = planets[i];
       const r = auToScreen(p.orbitRadiusAU);
-      const angle = p.orbitAngle || 0;
+      const angle = livePlanetAngle(p);   // ⭐ GPS line: the LIVE orbit — `p.orbitAngle` is frozen at generation (state.js's own note)
       const sp = project(Math.cos(angle) * r, 0, Math.sin(angle) * r);
       const pd = p.planetData || {};
       const baseR = Math.max(3, Math.min(10, 3 + Math.log2(Math.max(0.5, pd.radiusEarth || 1)) * 2.5));
@@ -3341,10 +3341,10 @@ export class NavComputer {
       ctx.setLineDash([]);
 
       // Moon position
-      const moonAngle = moon.startAngle || (m * 2.4);
-      const mx = Math.cos(moonAngle) * moonOrbitR;
-      const mz = Math.sin(moonAngle) * moonOrbitR;
-      const moonP = project(mx, 0, mz);
+      const moonP = legacyDetailMoonPoint(p, m, project);   /* ⭐ GPS line: where the moon IS (its live offset — inclination, retrograde), one expression shared with the ship marker, a moon target and the selection ring */
+      /* (the angle and the two coordinates that stood here are inside legacyDetailMoonPoint, navLegacyShip.js)
+       *
+       */
       const moonR = Math.max(3, Math.min(8, 2 + Math.log2(Math.max(0.1, moon.radiusEarth || 0.3)) * 2));
 
       ctx.fillStyle = '#b0b0b0';
@@ -3382,24 +3382,24 @@ export class NavComputer {
 
     // ── Ship position indicator + trajectory line (planet detail) ──
     const isCurrent = this._isCurrentSystem();
-    if (isCurrent && this._currentFocusIndex === idx) {
-      let shipP = null;
-      if (this._currentMoonIndex >= 0 && this._currentMoonIndex < moons.length) {
-        // Ship is at a specific moon
-        const shipMoon = moons[this._currentMoonIndex];
-        const shipMoonOrbitR = Math.sqrt(shipMoon.orbitRadiusEarth || (10 + this._currentMoonIndex * 8));
-        const shipMoonAngle = shipMoon.startAngle || (this._currentMoonIndex * 2.4);
-        const smx = Math.cos(shipMoonAngle) * shipMoonOrbitR;
-        const smz = Math.sin(shipMoonAngle) * shipMoonOrbitR;
-        shipP = project(smx, 0, smz);
-      } else {
-        // Ship is at the planet itself (center)
-        shipP = planetP;
-      }
+    if (isCurrent) {   /* ⭐⭐ GPS line 2026-10-02 — THE FOCUS GATE IS GONE: the ship is drawn from where it IS, as an outward edge triangle when it is not in this planet's picture */
+      const shipP = legacyDetailShip(legacyShip(this), idx, p, project, w, drawH);
+      /* ⭐ GPS line — at this planet → the centre; at one of its moons → that moon's point (legacyDetailMoonPoint); anywhere else → its offset from this planet in Earth radii, `project(cos b·√dE, 0, sin b·√dE)`, or an edge point along that bearing when it falls outside the pane. The focus pair still drives it when nothing was ever published.
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       *
+       */
 
       if (shipP) {
-        // Draw ship diamond
-        const s = 5;
+        const s = 5; if (shipP.edge) legacyEdgeTriangle(ctx, shipP); else {   // ⭐ GPS line: off this picture → an outward edge triangle instead of the diamond
+        /* (`s` is declared on the line above, outside the else, because the SHIP word below still uses it) */
         ctx.fillStyle = '#00ff80';
         ctx.strokeStyle = '#00ff80';
         ctx.lineWidth = 1.5;
@@ -3410,7 +3410,7 @@ export class NavComputer {
         ctx.lineTo(shipP.x - s, shipP.y);
         ctx.closePath();
         ctx.fill();
-        ctx.stroke();
+        ctx.stroke(); }
 
         ctx.font = '7px "DotGothic16", monospace';
         ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
@@ -3421,18 +3421,18 @@ export class NavComputer {
         // Trajectory line to hovered/selected moon
         const target = this._hoveredBody || this._selectedBody;
         if (target) {
-          let destP = null;
-          if (target.type === 'moon') {
-            const mi = target.index ?? target.moonIndex;
-            if (mi >= 0 && mi < moons.length) {
-              const tm = moons[mi];
-              const tmOrbitR = Math.sqrt(tm.orbitRadiusEarth || (10 + mi * 8));
-              const tmAngle = tm.startAngle || (mi * 2.4);
-              destP = project(Math.cos(tmAngle) * tmOrbitR, 0, Math.sin(tmAngle) * tmOrbitR);
-            }
-          } else if (target.type === 'planet') {
-            destP = planetP;
-          }
+          const destP = legacyDetailTarget(target, idx, this._systemData, project, w, drawH);
+          /* ⭐ GPS line — RESOLVED BY PARENT AND MOON (Astra's point 5): this planet's moons and this planet are on the picture; another planet, another planet's moon or the star is off it and gets an edge point along its true bearing, where the line used to land on the centre planet.
+           *
+           *
+           *
+           *
+           *
+           *
+           *
+           *
+           *
+           */
           if (destP) {
             const trajColor = '#00ff80';
             ctx.strokeStyle = trajColor;
@@ -3448,7 +3448,7 @@ export class NavComputer {
 
             const adx = destP.x - shipP.x, ady = destP.y - shipP.y;
             const len = Math.sqrt(adx * adx + ady * ady);
-            if (len > 20) {
+            if (destP.edge) legacyEdgeTriangle(ctx, destP); else if (len > 20) {   // ⭐ GPS line: a target off this picture ends in an outward edge triangle
               const ux = adx / len, uy = ady / len;
               const tipX = destP.x - ux * 12;
               const tipY = destP.y - uy * 12;
@@ -3483,12 +3483,12 @@ export class NavComputer {
     // ── Selection ring on selected moon ──
     if (isCurrent && this._selectedBody && this._selectedBody.type === 'moon') {
       const selMoonIdx = this._selectedBody.moonIndex;
-      if (selMoonIdx >= 0 && selMoonIdx < moons.length) {
+      if (selMoonIdx >= 0 && selMoonIdx < moons.length && (this._selectedBody.planetIndex ?? idx) === idx) {   // ⭐ GPS line: ANOTHER planet's moon is not one of these
         const moon = moons[selMoonIdx];
         // Same orbit + projection as moon rendering above
-        const selOrbitR = Math.sqrt(moon.orbitRadiusEarth || (10 + selMoonIdx * 8));
-        const selAngle = moon.startAngle || (selMoonIdx * 2.4);
-        const selP = project(Math.cos(selAngle) * selOrbitR, 0, Math.sin(selAngle) * selOrbitR);
+        /* ⭐ GPS line: the same point the moon dot is drawn at (legacyDetailMoonPoint) */
+        const selP = legacyDetailMoonPoint(p, selMoonIdx, project);
+        /* (was: the orbit, the phase and a third inline copy of the projection) */
         const pulse = 0.6 + 0.4 * Math.sin(performance.now() * 0.004);
         ctx.strokeStyle = '#00ff80';
         ctx.lineWidth = 2;

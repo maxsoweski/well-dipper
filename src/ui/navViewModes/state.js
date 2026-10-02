@@ -116,6 +116,7 @@ import { simClockMs } from '../../core/SimClock.js';
  *  driver's copy for the rail's z-flip, so the lag's `toView.size` reads that one. */
 import { gridNFallback } from './picking.js';
 import { findStar, starMemoKey } from './starIdentity.js';
+import { deriveShip, liveMoonRelE } from './shipState.js';
 import alea from 'alea';
 
 /** `NavComputer.js:69`, verbatim. */
@@ -545,7 +546,8 @@ export function makeViewState() {
      * ⛔ `null` UNLESS `D.isCurrent`, and that is the host's 0.1 pc identity test, never a seed
      *   comparison (`D.sysStar.seed` is the string 'Sol' in Sol). A stale focus index from the system
      *   the ship really is in would paint SHIP onto a foreign planet. */
-    ship: null,         // { planetIndex, moonIndex } | null
+    ship: null,         // { planetIndex, moonIndex } | null — or, once the host publishes a position,
+                        // shipState.js `deriveShip`'s `{ live, au, rel, range, at, planetIndex, moonIndex }`
     lumCache: new Map(),
   };
 
@@ -1079,10 +1081,23 @@ export function makeViewState() {
     //    immediately under the test it depends on, so "am I home" cannot be asked twice and answered
     //    differently. ⚠ The two indices are copied, not aliased: they are plain numbers, and a design
     //    that captured the object would keep last frame's pair after a burn moved the ship.
-    D.ship = D.isCurrent
-      ? { planetIndex: Number.isFinite(nav._currentFocusIndex) ? nav._currentFocusIndex : -1,
-          moonIndex: Number.isFinite(nav._currentMoonIndex) ? nav._currentMoonIndex : -1 }
-      : null;
+    // ⭐⭐ 2026-10-02 (the GPS line) — AND WHERE THE HOST HAS PUBLISHED A POSITION, THE SHIP IS THAT
+    //    POSITION, NOT A BODY INDEX. Max: *"it should draw from wherever the player is currently."*
+    //    The focus pair names the DESTINATION for a whole burn and the closest body at any distance
+    //    after a stop, so it cannot say where the ship is. `nav._shipState` is main.js's per-frame
+    //    `navShipPublication` (see shipState.js); `deriveShip` turns it into the system-centred AU
+    //    position, the offset from every planet, the 3D ranges and the one body the ship has ARRIVED
+    //    at, if any.
+    //    ⛔ `undefined` MEANS "NEVER PUBLISHED" (the lab, old harnesses) and keeps the focus pair,
+    //       unchanged, so every AC-5 case still reads the shape it was written against. Once anything
+    //       has been published the focus pair is NEVER the fallback: a position from another system
+    //       (`sysKey` is not the system on the glass) or a cleared one draws no ship at all.
+    const pub = nav._shipState;
+    D.ship = !D.isCurrent ? null
+      : pub === undefined
+        ? { planetIndex: Number.isFinite(nav._currentFocusIndex) ? nav._currentFocusIndex : -1,
+            moonIndex: Number.isFinite(nav._currentMoonIndex) ? nav._currentMoonIndex : -1 }
+        : (pub && D.sys && pub.sysKey === D.sys) ? deriveShip(pub, D.sys) : null;
     const bodyKey = sortKeyFor(S, 4);
     if (cache.sysRef !== D.sys) {
       cache.sysRef = D.sys; cache.bodySortId = null;
@@ -1106,6 +1121,12 @@ export function makeViewState() {
         if (r.pIdx == null) continue;
         const p = ps[r.pIdx];
         if (p) r.ang = Number(p._live?.orbitAngle ?? p.orbitAngle) || 0;
+        // ⭐ 2026-10-02 (the GPS line, Astra's point 3) — A MOON'S LIVE OFFSET FROM ITS PLANET, in Earth
+        //    radii, off the scene's own meshes. It carries the real inclination and a retrograde orbit,
+        //    and it is in the same frame as `D.ship.rel`, so a moon picture can put the ship and the
+        //    moon on one set of numbers. `null` without meshes (a foreign system): the pictures then
+        //    fall back to the generator's `startAngle`, as before.
+        if (p && r.kind === 'moon') r.rel = liveMoonRelE(p, r.mIdx);
       }
     }
     if (cache.bodiesBase && cache.bodySortId !== bodyKey.id) {
