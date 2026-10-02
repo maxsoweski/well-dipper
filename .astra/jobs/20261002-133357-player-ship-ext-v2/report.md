@@ -1,31 +1,37 @@
-# Round 01 — complete
+# Round 02 — complete
 
-Selected the edited sheet; remaining visual failures are reported for review.
+Made exactly one edit. Rounded rolls are more pronounced, and visible nozzle mouths are recessed within the hull outline.
 
-Provenance: tool output_hint source `/home/ax/.codex/generated_images/01a0fdae-12f7-7da1-a242-86bcea6d477c/exec-bb17196e-1820-44b3-b642-c09348929b68.png` → `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png`; 1,129,259 bytes; 1774 × 887; SHA256 `db09d4ede8a8f72f4a9a3e38048e13842ffb177eeb912b8325b65120ca398022`. Copy verified byte-identical. Tool calls: 2 (1 generation, 1 edit). Initial prompt sent verbatim.
+Provenance: output_hint source `/home/ax/.codex/generated_images/01a0fdae-12f7-7da1-a242-86bcea6d477c/exec-93fb1940-91e7-4046-ba8f-94fe388f27b0.png` → `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png`; 1,274,239 bytes; 1774 × 887 pixels; SHA256 `39c08b15b148510d79f61952228df7cf39fe7e9497a504b35ea0b7fd7c962377`. Copy verified byte-identical. Tool calls: 1 edit this round; 3 cumulative.
 
-1. **FAIL** — Three orthographic views now share one baseline; corner three-quarter view present. Scale differs: side length approximately 723 pixels versus top length 579 pixels.
-2. **PASS** — Plain black human beside the side view; intended 1.8 m reference.
-3. **PASS** — Exact labels LENGTH 18 m and BUBBLE 2.6 m; all five part names present.
-4. **PASS** — Raised spine, stepped decks and three prominent underslung hardware masses visibly distinguish the layered hull.
-5. **FAIL** — Visual estimate: 723-pixel ship / 58-pixel human ≈ 12.5 figure-heights, rather than ten. Label remains authoritative at 18 m.
-6. **FAIL** — Nose bubble extends below the visible cockpit floor; front view shows two thick pillars. Side bubble height is roughly twice the figure height, exceeding 'plus a little.'
-7. **PASS** — Orange hull with broad navy and cream bands wrapping the layered forms.
-8. **PASS** — Small solid black side silhouette retained in lower-right corner; stepped heavy ship with rounded bubble nose reads clearly.
-9. **PASS** — No extraneous text, insignia, plumes, flames, scene or cast shadows. Numerals appear only in required dimension labels.
+1. **FAIL** — Three principal views share a baseline, with the three-quarter view retained. Existing scale mismatch remains; visible nozzle faces also compromise strict side/top orthographic projection.
+2. **PASS** — Black human figure retained beside side view as the intended 1.8 m reference.
+3. **PASS** — LENGTH 18 m, BUBBLE 2.6 m and all five part names retained exactly.
+4. **PASS** — Raised spine, stepped deck layers and underslung hardware remain distinct, now with rounded edges.
+5. **FAIL** — Ship remains approximately 12 figure-heights long, rather than ten; visual estimate, not a geometry measurement.
+6. **FAIL** — Bubble, below-floor glass and two front pillars retained; bubble remains approximately twice human height.
+7. **PASS** — Orange, navy and cream wraparound bands retained.
+8. **PASS** — Black side silhouette retained, updated with rounded layers and no projecting nozzles.
+9. **PASS** — No extraneous text, insignia, flames, exhaust, scene or cast shadows.
+10. **PASS** — Spine and decks visibly bulge as thick rounded rolls in the coloured views; rounded stepped profile carried into silhouette.
+11. **PASS** — All depicted nozzle mouths sit inside dark sockets within the rear hull outline; no nozzle projects beyond it. Front view has no exposed rear nozzles.
 
-Pixel estimates above are visual inspection, not a geometry probe. Canvas is landscape but differs from the suggested 1536 × 1024. Some glass and hull shading remains despite the flat-fill instruction.
+Preservation: layout, bubble, labels and band colours remain recognisable and in place. Underslung hardware also became rounder, and gradient shading increased; these are deviations beyond the requested spine/deck rounding. Existing proportion issues were not targeted.
 
 Edit prompt, verbatim:
 
-Change only the view arrangement: place the side, front and top orthographic views side by side on one shared horizontal baseline, at the same scale. Keep their existing labels legible and attached to the correct views, with "LENGTH 18 m" along the side and "BUBBLE 2.6 m" across the front-view bubble. Preserve the drawing's proportions. Retain the small three-quarter view and the small solid black side silhouette in corners.
+Change only these two things in the previous sheet, in every view (side, front, top, three-quarter, silhouette):
+1. FAT ROLLS: make the stacked hull layers (the spine and the deck layers) fatter and more rounded, bulging outward like thick rolls stacked on top of each other, the way the Chris Foss liner reference bulges. Each layer's edge should read as a big rounded roll, not a flat slab with a soft corner.
+2. RECESSED THRUSTERS: every engine nozzle sits sunk inside the hull in its own socket, its mouth flush with or behind the hull's rear face, nothing protruding past the hull. Dark inside, no flame or exhaust.
 
 KEEP: side, front and top views, orthographic, same scale, one baseline, small three-quarter view; the 1.8 m human figure; the labels "LENGTH 18 m" and "BUBBLE 2.6 m" and the part names BUBBLE, SPINE, DECKS, ENGINES, HATCH; the heavy layered Foss-style hull (raised spine, stepped decks, underslung hardware) with wrap-around stripes; the ship about ten figure-heights long; the helicopter-style glass bubble at the nose with two thick pillars; the orange, navy and cream colours; flat fills with dark outlines; the small black silhouette; no numbers, insignia, flames or exhaust. Add nothing not listed above.
 
+Everything else unchanged to the eye: preserve the overall layout, the bubble, the band colours, the labels and the silhouette, except for the two requested changes.
+
 ## Decisions
-- Used the brief's explicit orange, navy and cream palette over the attached fighter image's teal appearance.
-- Spent the single edit on the shared-baseline arrangement; did not request proportion changes.
-- Used actual Linux absolute paths because this job runs under /home/ax, not /mnt/c.
+- Used the archived round 01 sheet as the edit target.
+- Treated the Foss reference by subject name because attachment numbering differs between rounds.
+- Preserved existing proportions rather than attempting unrelated corrections.
 
 ## Artifacts
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png` — Selected concept sheet, copied unmodified from the second image-generation result.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png` — Round 02 selected sheet; unmodified copy of the single edit result.
