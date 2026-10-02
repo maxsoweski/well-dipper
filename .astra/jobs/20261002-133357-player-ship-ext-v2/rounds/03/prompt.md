@@ -1,3 +1,7 @@
+# Round 03 feedback
+
+Max's words, verbatim (this is the acceptance criterion for this round):
+
 Max, verbatim: "Silhouette is much better now; thrusters are facing the side rather than rear (we need a rear view included in the concept sheet). The cockpit should be almost "hanging" below the rest of the ship. Take more inspo from Voss's designs. And The paint sceme here is too simple; again, look at Voss; in fact, let's just use color here to visualize the different parts of the ship and we'll worry about texturing later"
 ("Voss" = Chris Foss.)
 
@@ -22,3 +26,34 @@ CHANGES
 KEEP: orthographic views on one baseline at one scale (now side, front, rear, top); small three-quarter view; small black silhouette; the 1.8 m human figure beside the side view; the labels "LENGTH 18 m" and "BUBBLE 2.6 m" and the part names BUBBLE, SPINE, DECKS, ENGINES, HATCH; the ship about ten figure-heights long; flat colour fills with dark outlines on a plain off-white background; no numbers, insignia, flames or exhaust, no scene, no cast shadows. Add nothing not listed above.
 
 Tolerance: proportions are judged by eye and by the labels; a drawing that runs 20 % long or short against the figure is not a failure. Report the brief's visible-outcome checks (stripes check 7 is now replaced by: every part one flat colour matching the legend) plus: (10) rear view present and nozzles visible face-on there, (11) nozzles point backward, not sideways, in side and top views, (12) the bubble hangs below the forward hull and is the lowest point, (13) legend present with every coloured part named. You have one edit turn as usual; spend it on arrangement and labels.
+
+---
+
+# Checkpoint — after round 02
+
+## artifact versions
+- out/player-ship-ext-sheet.png: round 02; SHA256 39c08b15b148510d79f61952228df7cf39fe7e9497a504b35ea0b7fd7c962377
+
+## invariants
+- Authoritative dimensions: LENGTH 18 m and BUBBLE 2.6 m.
+- Preserve layout, bubble cockpit, orange/navy/cream bands, five part labels, human and silhouette.
+- Pronounced rounded hull rolls and recessed nozzle mouths.
+
+## accepted decisions
+- Exactly one edit performed for round 02.
+
+## rejected approaches
+- No additional correction call.
+- No code-based image modification.
+
+## unresolved
+- Views still differ in scale and nozzle-face projection is not strictly orthographic.
+- Ship-to-human and bubble-to-human proportions remain oversized.
+- Underslung hardware became rounder; gradient shading increased.
+
+## next action
+Reviewer assesses the rounded rolls, recessed thrusters and reported preservation deviations.
+
+---
+
+Reply with the same JSON result contract as before (status / report / artifacts / decisions / questions / checkpoint).

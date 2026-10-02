@@ -14,20 +14,21 @@
     "sandbox_mode=\"workspace-write\"",
     "--json",
     "-o",
-    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/rounds/02/result.json",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/rounds/03/result.json",
     "--output-schema",
     "/home/ax/projects/personal-os-improvements/astra-lane/skill/scripts/result.schema.json",
     "-i",
-    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/ext-v2-r01.png",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/ext-v2-r02.png",
     "-i",
     "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/foss-1-21st-century-foss-cover.jpg",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/foss-2-machine-in-shaft-ten-and-the-drought.jpg",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/foss-6-dune-pirate-ship.jpg",
     "-"
   ],
   "exit": 0,
   "timed_out": false,
-  "started": "2026-10-02T13:43:07",
-  "finished": "2026-10-02T13:45:20",
-  "archived": [
-    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/r02/player-ship-ext-sheet.png"
-  ]
+  "started": "2026-10-02T13:56:18",
+  "finished": "2026-10-02T13:59:41"
 }
