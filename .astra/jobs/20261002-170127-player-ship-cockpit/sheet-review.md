@@ -1,16 +1,15 @@
-# Sheet review — player-ship-cockpit, round 01
+# Sheet review — player-ship-cockpit, round 02 (Rebels structure, asymmetric monitors, expressive HUD)
 
-Sheet sha256 `e13a4b502e69` · brief `docs/WORKSTREAMS/player-ship-lab-2026-10-02/briefs/player-ship-cockpit-sheet.md`
-Windows copy: `C:\Users\Max\Documents\Blender\astra\well-dipper-trunk\player-ship\out\player-ship-cockpit-sheet-r01.png` (vs Rebels: `player-ship-cockpit-r01-vs-rebels.png`)
+Sheet sha256 `cb83c2d8346f` · Windows copy: `...\player-ship\out\player-ship-cockpit-sheet-r02.png` (vs Rebels: `player-ship-cockpit-r02-vs-rebels.png`)
 
 | # | check | pass/fail | what I saw |
 |---|---|---|---|
-| 1 | Three named views | PASS | PILOT'S VIEW (large), SIDE SECTION, TOP PLAN. |
-| 2 | Labels | PASS | All nine instrument/part labels + BUBBLE 2.6 m; "1.8 m" dimension drawn on the passage wall beside the figure rather than on the figure (cosmetic). |
-| 3 | Pillars + screens | PASS | Two thick cream front pillars curving inward; SYSTEM left, TARGET right on short arms. The frame also carries extra ribs (sides, below) — more structure than "two pillars", close to the Rebels feel. |
-| 4 | Low narrow dash | PASS | Knee-height bar dash on a post: gauge, 10-segment bar, glyph, two spares; glass below and beside it. |
-| 5 | Blank labelled instruments | PASS | No invented readouts. |
-| 6 | Legend; no scene | PASS | 7-entry legend; plain sky-blue through the glass. |
-| SELF | ≥ 2/3 open glass in pilot's view | PASS (by eye) | Mostly glass. Oddity: the pilot's view shows two brown boot-like shapes on a brown seat back at the bottom — reads as the pilot's own knees/feet drawn in the seat colour; ignore for modelling. Top plan's seat reads as a two-cushion bench. |
+| 1 | Named views | PASS (defect) | PILOT'S VIEW, SIDE SECTION, TOP PLAN, DASH CLOSE-UP. The "TOP PLAN" is drawn as a view from behind the seat looking forward, not from above. |
+| 2 | Labels | PASS | All labels + BUBBLE 2.6 m + "1.8 m (seated)" + new SPEED LIMIT. |
+| 3 | Structure | PASS | Pillars rise and bend into a thick overhead beam; lower ribs gone; view down open. |
+| 4 | Asymmetric monitors | PASS | SYSTEM: wide monitor hung off-centre from the beam (orbit map sample). TARGET: small unit on a bracket on the left pillar (pixelated planet sample). |
+| 5 | Instruments | PASS | Round gauge with tick ring and "FTL" cuts into the left end of a rising-wedge bar (green→red ramp, speed-limit marker); warp glyph = reticle; two dim spares. |
+| 6 | Open glass | PASS (by eye) | Well over half; roughly two-thirds. |
+| — | Data note | n/a | Sample "12,400 km/s" under FTL is not a real FTL speed (FTL starts ≈ 300,000 km/s ≈ 1 c; the game formats in c there). Cosmetic for the concept; the real readout comes from DISPLAY-PLAN. |
 
-Verdict: ACCEPT on arrangement; taste to Max.
+Verdict: ACCEPT pending Max.

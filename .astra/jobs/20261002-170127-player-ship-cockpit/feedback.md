@@ -1,0 +1,20 @@
+Max, verbatim: "Take more inspiration from the image that I provided here. I want the monitors that go at or above eye line to be asymmetrical, like the reference image. As for the portion of the dash that is closer to waist level, that looks okay as is. I want the actual visualizations that go there to be more interesting and expressive. I would want the circular portion to stamp out the leftmost portion of the throttle and speed gauge. Overall, make this a little bit more interesting. Feel free to do some searching online for video game hud especially those from the N64 and PS1 era if that helps."
+
+This round is a NEW GENERATION of the sheet (not a small edit). Image 1 = the previous sheet (its waist-level dash position and the overall bubble are approved). Image 2 = Max's reference (the Rebels cockpit): take more from it.
+
+CHANGES
+1. STRUCTURE LIKE IMAGE 2: the two thick front pillars rise from low at the sides, bend inward and meet a thick OVERHEAD BEAM across the top of the canopy, as in Image 2. Drop the extra lower ribs so the view down past the feet stays open; at most one slim rib per side.
+2. ASYMMETRICAL UPPER MONITORS, as in Image 2: the SYSTEM SCREEN is a wide landscape monitor hung from the overhead beam, a little off-centre, above eye line; the TARGET SCREEN is a smaller unit clipped onto the LEFT pillar near eye line on a short bracket. They are clearly different sizes, shapes and mountings.
+3. EXPRESSIVE INSTRUMENTS (draw them showing a sample state, no longer blank), in a late-1990s PlayStation-1 / Nintendo-64 racing and space-game HUD style: chunky bevelled panels, slanted edges, bold italic numerals, bright colour ramps, thick outlines.
+   - ENGINE GAUGE: a big round dial with a thick bezel and a ring of chunky tick segments around its edge; in its centre a bold mode word "FTL" (sample state; the other modes are "SUB" and "WARP"), and a small digital speed number under it.
+   - The round gauge OVERLAPS AND CUTS INTO the LEFT END of the THROTTLE / SPEED BAR — the circle "stamps out" the bar's leftmost portion, so dial and bar read as one instrument, like a tachometer whose arc runs into a bar.
+   - THROTTLE / SPEED BAR: segments that grow taller from left to right (a rising wedge), coloured in a ramp green → yellow → orange → red, lit up to about 60 % (sample), with one small marker tick showing a speed limit.
+   - WARP GLYPH: a square window showing a bold pictogram (sample: a target-reticle-like symbol for "targeted").
+   - Two small SPARE windows, dim and empty.
+4. SAMPLE SCREEN CONTENT (simple, chunky, 16-bit-console style, a few flat colours): the SYSTEM SCREEN shows a simple star-system map — a star, three or four orbit rings, planet dots, one highlighted; the TARGET SCREEN shows a blocky pixelated image of a planet (big visible square pixels, as if it is still resolving).
+5. Add a fourth view, "DASH CLOSE-UP": the waist-level instrument cluster drawn large and straight-on so the gauge, bar, glyph and spares are clearly readable. Move the legend if needed to make room.
+6. Overall: make it more interesting, more character, in the spirit of Image 2 — still uncluttered: no cables, keypads, switch banks or extra screens.
+
+KEEP: the bubble's rounded-cube shell and plain sky-blue seen through the glass; the waist-level dash position, narrow on its post; the seat and the passage behind it; PILOT'S VIEW (large), SIDE SECTION, TOP PLAN (+ the new DASH CLOSE-UP), each named; the labels SYSTEM SCREEN, TARGET SCREEN, ENGINE GAUGE, THROTTLE / SPEED BAR, WARP GLYPH, SPARE, PILLAR, SEAT, EYE, "BUBBLE 2.6 m", the 1.8 m seated figure with its EYE marker; the part-colour legend (glass, frame and pillars, screens, dash, instruments, seat, passage); flat fills with dark outlines on plain off-white; no scene outside the glass, no cast shadows. Fix last round's oddities: no boot-like shapes in the pilot's view (the pilot's own body is not drawn there), and a single seat in the top plan.
+
+Tolerance: proportions by eye; the drawing is a reference. Report: each change 1–6 PASS/FAIL with what you see; the labels present; at least about two-thirds of the pilot's view still open glass.

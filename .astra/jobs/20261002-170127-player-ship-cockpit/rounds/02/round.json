@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "codex",
+    "exec",
+    "resume",
+    "01a0fe6c-0bad-7233-b83a-5647e680b0f2",
+    "-m",
+    "gpt-6-astra",
+    "-c",
+    "model_reasoning_effort=\"medium\"",
+    "-c",
+    "mcp_servers.blender.enabled=false",
+    "-c",
+    "sandbox_mode=\"workspace-write\"",
+    "--json",
+    "-o",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-170127-player-ship-cockpit/rounds/02/result.json",
+    "--output-schema",
+    "/home/ax/projects/personal-os-improvements/astra-lane/skill/scripts/result.schema.json",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-170127-player-ship-cockpit/refs/cockpit-r01.png",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-170127-player-ship-cockpit/refs/cockpit-bubble-rebels.jpg",
+    "-"
+  ],
+  "exit": 0,
+  "timed_out": false,
+  "started": "2026-10-02T17:09:12",
+  "finished": "2026-10-02T17:13:00"
+}
