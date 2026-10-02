@@ -1,0 +1,34 @@
+{
+  "_about": "naming-prism-segments Phase 1 (AC-1) regression baseline: HashGridStarfield output for fixed queries, recorded from HEAD 320e6d2 BEFORE star identity was added (pristine git-archive export, scratchpad/phase1/gen/digest.mjs). sha256 of JSON.stringify of the pre-identity fields only (positions, seeds, types, dist, nav names; sky buffers + realStars). Do NOT regenerate to make the test pass: a mismatch means generation changed, which Phase 1 must not do.",
+  "recordedFrom": "320e6d29095058cd73a92bd2f02cd9b5e58422f2",
+  "cases": {
+    "prism-sol": {
+      "count": 306,
+      "sha256": "ad6eab80d5e065f564e0f4d6abf5034e8042b9618335592552d284ceb2707195"
+    },
+    "prism-sol-nav": {
+      "count": 2307,
+      "sha256": "9a2ed7ec7a2e0e563df7334a7d6f91ccbc7e2aa4abe803b1242ab9a943500bc9"
+    },
+    "prism-inner": {
+      "count": 5577,
+      "sha256": "76738857188e6710ac9f39af013f57ea45126458b1977f9421db621b033ff603"
+    },
+    "prism-rim": {
+      "count": 671,
+      "sha256": "2fca2f7f0a9c8407bb130337217f20b926797d1e9e339ca0d38204527228150d"
+    },
+    "radius-sol": {
+      "count": 214,
+      "sha256": "d2ae6bba10102c083b5e8b4a3deb3d0f929b7c424cc0af4768706564dd8cc275"
+    },
+    "cube-sol": {
+      "count": 56,
+      "sha256": "dd08127a191db5bdcb36491489db83a189ca6d61d108c404abf1f01087f77870"
+    },
+    "sky-sol": {
+      "count": 14112,
+      "sha256": "8913d24fc09293a073b05a96f048ae8e21a5ca4c61a4800c5539f33ec75594a2"
+    }
+  }
+}

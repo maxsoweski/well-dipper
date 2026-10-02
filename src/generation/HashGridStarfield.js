@@ -1,4 +1,5 @@
 import { GalacticMap } from './GalacticMap.js';
+import { starKey, addressOf, boundsOf, slotOf } from './GalaxyGrid.js';
 
 /**
  * HashGridStarfield — realistic-scale deterministic star generation.
@@ -88,6 +89,21 @@ const TYPE_CONFIG = {
 
 const ALL_TYPES = ['O', 'B', 'A', 'F', 'G', 'K', 'M', 'Kg', 'Gg', 'Mg'];
 const EVOLVED_TYPES = new Set(['Kg', 'Gg', 'Mg']);
+
+// Each tier's cell size, frozen alongside GalaxyGrid (plan §3.3): a star's
+// slot number counts cells of this size, so changing one renames that tier.
+export const TIER_CELL_KPC = Object.freeze(Object.fromEntries(ALL_TYPES.map(t => [t, TYPE_CONFIG[t].cell])));
+
+// Star identity (plan §3.2, naming-prism-segments AC-1): every star record
+// carries `ident` = its generating (tier, cell) slot, taken from the loop that
+// made it — NEVER recomputed from position (an offset-byte-255 star sits on
+// the next cell's face, so floor(pos / cell) would name the wrong cell) — and
+// `key` = starKey(ident). Consumers compare `key`, never the 32-bit seed.
+// Keys are stamped after the sort/truncate so dropped stars cost no string.
+function stampKeys(results) {
+  for (const s of results) s.key = starKey(s.ident);
+  return results;
+}
 
 // Frame-aligned yield: resume the next work slice at the start of the next
 // animation frame so the browser actually PAINTS between slices. Plain
@@ -221,6 +237,8 @@ export class HashGridStarfield {
           worldZ: s.worldZ,
           seed: s.seed,
           type: s.type,
+          ident: s.ident,
+          key: starKey(s.ident),
           featureContext: s.featureType ? {
             type: s.featureType,
           } : null,
@@ -391,6 +409,7 @@ export class HashGridStarfield {
             results.push({
               worldX: starX, worldY: starY, worldZ: starZ,
               type, appMag, seed, featureType,
+              ident: { tier: type, cx, cy, cz },
             });
           }
         }
@@ -505,6 +524,7 @@ export class HashGridStarfield {
             results.push({
               worldX: starX, worldY: starY, worldZ: starZ,
               seed, type, dist: Math.sqrt(distSq),
+              ident: { tier: type, cx: cellX, cy: cellY, cz: cellZ },
             });
           }
         }
@@ -514,7 +534,7 @@ export class HashGridStarfield {
     // Sort by distance and truncate
     results.sort((a, b) => a.dist - b.dist);
     if (results.length > maxResults) results.length = maxResults;
-    return results;
+    return stampKeys(results);
   }
 
   /**
@@ -617,6 +637,7 @@ export class HashGridStarfield {
             results.push({
               worldX: starX, worldY: starY, worldZ: starZ,
               seed, type, dist: Math.sqrt(sdx * sdx + sdy * sdy + sdz * sdz),
+              ident: { tier: type, cx: cellX, cy: cellY, cz: cellZ },
             });
           }
         }
@@ -625,7 +646,7 @@ export class HashGridStarfield {
 
     results.sort((a, b) => a.dist - b.dist);
     if (results.length > maxResults) results.length = maxResults;
-    return results;
+    return stampKeys(results);
   }
 
   /**
@@ -731,6 +752,7 @@ export class HashGridStarfield {
             results.push({
               worldX: starX, worldY: starY, worldZ: starZ,
               seed, type, dist: Math.sqrt(sdx * sdx + sdy * sdy + sdz * sdz),
+              ident: { tier: type, cx: cellX, cy: cellY, cz: cellZ },
             });
           }
         }
@@ -739,7 +761,7 @@ export class HashGridStarfield {
 
     results.sort((a, b) => a.dist - b.dist);
     if (results.length > maxResults) results.length = maxResults;
-    return results;
+    return stampKeys(results);
   }
 
   /**
@@ -762,6 +784,20 @@ export class HashGridStarfield {
       density += mult * Math.pow(1 + distSq / epsSq, -2.5);
     }
     return density;
+  }
+
+  /**
+   * A procedural star's one owner (plan §3.1, §3.3): the box comes from its
+   * POSITION (half-open, so a point has exactly one), the slot from its
+   * CARRIED ident — counted among every cell of its tier that can place a
+   * star in that box, coarse tiers' boundary-touching cells included.
+   * @param {{ worldX, worldY, worldZ, ident }} star — a record this class returned
+   * @returns {{ address, slot:number, count:number }}
+   */
+  static ownerOf(star) {
+    const address = addressOf(star.worldX, star.worldY, star.worldZ);
+    const { slot, count } = slotOf(star.ident, TIER_CELL_KPC[star.ident.tier], boundsOf(address));
+    return { address, slot, count };
   }
 
   /**

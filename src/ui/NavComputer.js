@@ -2,7 +2,7 @@ import { generateSystemName } from '../generation/NameGenerator.js';  import { d
 import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
-import { realStarSeed } from '../generation/realStarSeed.js';
+import { realStarSeed } from '../generation/realStarSeed.js';  import { realStarKey } from '../generation/GalaxyGrid.js';   // ⚠ second statement on this line to keep line numbers stable
 import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';
 import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
@@ -3812,7 +3812,7 @@ export class NavComputer {
           ls.name = rs.name;
           ls.isReal = true;
           ls.wx = rs.x; ls.wy = rs.y; ls.wz = rs.z;
-          ls.seed = realStarSeed(rs.x, rs.y, rs.z);
+          ls.seed = realStarSeed(rs.x, rs.y, rs.z); ls.key = realStarKey(rs); ls.ident = null;   /* naming-prism-segments AC-2: the row IS the catalogue star now, so it takes the catalogue's key and drops the replaced (tier, cell) slot */
           const dx = rs.x - this._playerX, dy = rs.y - this._playerY, dz = rs.z - this._playerZ;
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
           ls.dist = dist;
@@ -3834,7 +3834,7 @@ export class NavComputer {
             // collided catastrophically).
             seed: realStarSeed(rs.x, rs.y, rs.z),
             dist, distPc: (dist * 1000).toFixed(0),
-            isReal: true,
+            isReal: true, key: realStarKey(rs),
           });
         }
       }
