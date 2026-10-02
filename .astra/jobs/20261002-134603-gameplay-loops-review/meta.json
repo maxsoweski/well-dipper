@@ -1,0 +1,18 @@
+{
+  "type": "review",
+  "project": "/home/ax/projects/well-dipper-trunk",
+  "project_slug": "well-dipper-trunk",
+  "name": "gameplay-loops-review",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "sandbox": "read-only",
+  "codex_version": "codex-cli 0.155.1",
+  "created": "2026-10-02T13:46:03",
+  "rounds": 1,
+  "auto_retries": 0,
+  "thread_lineage": [
+    "01a0fdb9-208b-7de3-96f8-b3f9f2c01024"
+  ],
+  "last_status": "complete",
+  "missing_artifacts": []
+}
