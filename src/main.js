@@ -767,6 +767,9 @@ function setScManual(on) {
   // sites gated eleven times is a gate that gets forgotten once. Each class
   // owns its own suppression; this only tells them which station we are at.
   if (typeof _syncRetiredOverlaysToMode === 'function') _syncRetiredOverlaysToMode();
+  // UAT walk 2026-09-30 (fix C): the nav's commit VERB follows the regime from
+  // this same flip point — GO TO in ORRERY, BURN TO in HELM (`_syncNavCommitVerb`).
+  if (typeof _syncNavCommitVerb === 'function') _syncNavCommitVerb();
 }
 
 /**
@@ -5754,6 +5757,61 @@ function _syncNavExternalTarget(nav) {
 }
 
 /**
+ * The `warpTarget.navStarData` object the pilot's last STARFIELD CLICK produced
+ * (`trySelectWarpTarget`) — held by IDENTITY, never copied. A later nav pick, an
+ * auto-selected screensaver target or a cleared target each REPLACE that object,
+ * so a reference compare answers "is the warp target still the star the pilot
+ * clicked" with no flag to clear on every path that touches `warpTarget`.
+ */
+let _skyPickedStarData = null;
+
+/**
+ * The pilot's sky-clicked star, shaped as the nav computer's own star entry — or
+ * null when the warp target is not one (nothing picked, a feature, a galaxy, a
+ * nav pick, the screensaver's auto-pick).
+ */
+function _skyTargetNavStar() {
+  const d = warpTarget.navStarData;
+  if (!d || d !== _skyPickedStarData || !warpTarget.direction || warpTarget.destType) return null;
+  if (!Number.isFinite(d.worldX) || !Number.isFinite(d.worldZ)) return null;
+  const p = playerGalacticPos || { x: 8, y: 0, z: 0 };
+  const wy = d.worldY || 0;
+  const spectral = d.type || 'G';
+  return {
+    wx: d.worldX, wy, wz: d.worldZ, seed: d.seed, name: warpTarget.name || d.name || '', spectral,
+    color: NavComputer._SPECTRAL_COLORS?.[spectral] || '#ffefb0',
+    dist: Math.hypot(d.worldX - p.x, wy - (p.y || 0), d.worldZ - p.z),
+  };
+}
+
+/**
+ * ⭐ A STAR CLICKED IN THE SKY IS THE NAV'S TARGET — UAT walk 2026-09-30, fix D.
+ *
+ * Max: the nav *"is not picking up targets that I make when I'm actually in a
+ * star system by clicking on a star in the star field. This should be fixable
+ * because I know that the game actually is targeting a star when I do that."*
+ *
+ * Cause: the click DID reach the nav, as `_externalTarget` (`_syncNavExternalTarget`),
+ * but every open pre-selects the CURRENT system's star (`openToCurrentSystem` →
+ * `_selectedNavStar`), and both the designs' `D.target` and the driver's `commit()`
+ * read the selection FIRST — so the nav said `TGT —` and Enter refused "the system
+ * you are in". The click now becomes the selection too; `setExternalTarget` runs
+ * after, so a loaded PRISM row at the same spot (within 1 pc) replaces the copy.
+ *
+ * Called at the click (both instances — the glass is live and is not re-opened
+ * fresh) and on every overlay open (the overlay re-selects home on each open).
+ * Non-goals · features / galaxies (not stars — no nav row to arm), and the
+ * screensaver's auto-pick (`_skyPickedStarData` identity) are left as they were.
+ */
+function _adoptSkyTargetInNav(nav) {
+  const s = nav ? _skyTargetNavStar() : null;
+  if (!s) return false;
+  nav._selectedNavStar = s;
+  nav.setExternalTarget({ x: s.wx, y: s.wy, z: s.wz }, s.name);
+  return true;
+}
+
+/**
  * ⭐ ARRIVAL. Everything that is true because the ship is somewhere ELSE now.
  *
  * ⚠ THE SPLIT FROM `_applyNavFocus` IS THE POINT, and it is not stylistic.
@@ -5835,6 +5893,30 @@ function _installNavCallbacks(nav) {
     else stopFlythrough();
     nav.setAutopilotState(enable);
   });
+
+  // The commit verb, from birth. Both instances come through this installer, so
+  // neither can be built reading BURN TO in ORRERY until the next regime flip.
+  _syncNavCommitVerb();
+}
+
+/**
+ * ⭐ THE NAV'S COMMIT VERB — UAT walk 2026-09-30, fix C (the HOST half of the seam).
+ *
+ * Max: *"I want the nav view to work in Orrery. The 'GPS line' in the nav view
+ * should work no matter where we're at in the system or in what mode"*, and "yes"
+ * to the reconciliation: HELM Enter BURNS; ORRERY Enter GLIDES THE VIEW and the
+ * commit reads GO TO <body>. `nav.commitIsView` is the one boolean the designs
+ * read to print that verb; `dispatchNavAction` decides what the commit DOES.
+ *
+ * ⛔ ONE PREDICATE FOR BOTH HALVES. It is `!burnWorkflowAvailable(...)` on the
+ * same regime expression `dispatchNavAction` gates on, so the row cannot say
+ * BURN while the dispatcher glides, or GO TO while it burns.
+ * Called from `setScManual` (every regime flip) and `_installNavCallbacks` (every
+ * instance's birth). Non-goal: the legacy nav (V) keeps its own button text.
+ */
+function _syncNavCommitVerb() {
+  const isView = !burnWorkflowAvailable({ regime: _scManual ? 'helm' : 'orrery' });
+  for (const nav of _navComputers()) nav.commitIsView = isView;
 }
 
 /**
@@ -5936,6 +6018,8 @@ function openNavComputer() {
   // moment ago, so the destructive applier is exactly right here — this IS its
   // original home. The glass gets it at system arrival instead.
   _applyNavArrival(_domNavComputer);
+  // Fix D: the arrival just re-selected home; a star the pilot clicked in the sky wins it back.
+  _adoptSkyTargetInNav(_domNavComputer);
   _applyNavFocus(_domNavComputer);
   _domNavComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
 
@@ -5973,10 +6057,13 @@ function dispatchNavAction(action) {
 
   if (action.type === 'burn') {
     // orrery-coherence-2026-07-15 W4b (burnWorkflowAvailable, seam map §5): the
-    // nav-computer burn ACTION is available only in HELM. In ORRERY it is inert —
-    // nothing flies in ORRERY; a nav 'burn' resolves to view-only elsewhere.
+    // nav-computer burn ACTION is available only in HELM — nothing flies in ORRERY.
+    // ⭐ UAT walk 2026-09-30, fix C: in ORRERY it is no longer INERT. Max: "the 'GPS
+    // line' in the nav view should work no matter where we're at in the system or in
+    // what mode" — the commit reads GO TO (`_syncNavCommitVerb`) and GLIDES THE VIEW
+    // to the body, the same glide ORRERY's click-2 does. The ship still never flies.
     if (!burnWorkflowAvailable({ regime: _scManual ? 'helm' : 'orrery' })) {
-      console.log('[NAV] burn inert in ORRERY — nothing flies in ORRERY (burnWorkflowAvailable)');
+      _glideViewToNavBody(action);
       return;
     }
     // Stop autopilot so the travelComplete handler uses the manual path
@@ -6044,7 +6131,14 @@ function dispatchNavAction(action) {
     _manualBurnOrbiting = false;
     // Inter-system warp. _setWarpTargetFromNavStar sets the SAME warpTarget
     // (navStarData) both the cinematic and the instant-cut resolve from.
-    _setWarpTargetFromNavStar({
+    // Fix D (UAT walk 2026-09-30): when the nav commits the very star the pilot
+    // clicked in the sky, the sky's warpTarget is KEPT — it is the richer record
+    // (the starfield's own starData, real-star flags included), so Enter and Space
+    // warp to one identical target rather than to two copies of it.
+    const _sky = _skyTargetNavStar();
+    const _isSkyStar = !!_sky && Math.abs(_sky.wx - action.star.wx) < 1e-9
+      && Math.abs(_sky.wy - (action.star.wy || 0)) < 1e-9 && Math.abs(_sky.wz - action.star.wz) < 1e-9;
+    if (!_isSkyStar) _setWarpTargetFromNavStar({
       worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
       seed: action.star.seed, name: action.star.name, type: action.star.spectral,
     });
@@ -6058,6 +6152,40 @@ function dispatchNavAction(action) {
       setTimeout(() => beginWarpTurn(), 500);
     }
   }
+}
+
+/**
+ * ⭐ ORRERY's nav GO TO — UAT walk 2026-09-30, fix C. A nav 'burn' in ORRERY,
+ * turned into the VIEW glide ORRERY's click-2 already does (`bodyClickAction`
+ * 'glide-view', the body-click handler's `[ORRERY] click-2 VIEW glide`): select
+ * the body, then `cameraController.glideFocus` to its per-kind standoff.
+ *
+ * Function · resolve the action's star / planet / moon to the live body and glide.
+ * Intent · Max's ruling: HELM Enter BURNS; ORRERY Enter glides the view along the
+ *   line to the selected body. The July orrery-coherence rule stays: NOTHING FLIES
+ *   — `bypassed` stays false, never `flyTo`, never `focusPlanet` / `focusMoon`.
+ * Non-goals · no new glide: the steps are click-2's, in click-2's order, so the two
+ *   doors cannot frame one body differently. A body that does not resolve (no
+ *   system, a stale index), or a camera mid-flythrough, stays inert and SAYS so.
+ * @returns {boolean} true when a glide was armed.
+ */
+function _glideViewToNavBody(action) {
+  let body = null;
+  if (action.target === 'star') body = _makeTarget('star', { starIndex: action.starIndex || 0 });
+  else if (action.target === 'planet') body = _makeTarget('planet', { planetIndex: action.planetIndex });
+  else if (action.target === 'moon') body = _makeTarget('moon', { planetIndex: action.planetIndex, moonIndex: action.moonIndex });
+  if (!body || !body.mesh || cameraController.bypassed) {
+    console.log(`[NAV] GO TO inert in ORRERY — no live ${action.target} to glide to (nothing flies in ORRERY)`);
+    return false;
+  }
+  // Click-1 (select: reticle, info, pivot ease) then click-2 (the glide, which
+  // cancels the pivot ease it would otherwise race) — as one press.
+  scControls.selectTarget(body);
+  cameraController.setFocusMinDistance(body.radius, body.mesh.position);
+  // The LIVE mesh.position, not a clone — a moving moon is met, not chased.
+  cameraController.glideFocus(body.mesh.position, orreryStandoff(body.kind, body.radius));
+  console.log(`[ORRERY] nav GO TO VIEW glide → ${body.name} — nothing flew (burnWorkflowAvailable false)`);
+  return true;
 }
 
 // Legacy toggle for keybind compatibility. "Open" is either surface now.
@@ -14331,6 +14459,12 @@ function trySelectWarpTarget(rayDir) {
 
   warpTarget.blinkTimer = 0;
   warpTarget.blinkOn = true;
+
+  // ⭐ UAT walk 2026-09-30, fix D: the star the pilot just clicked is the NAV's
+  // target too, on both instances (see `_adoptSkyTargetInNav`). Recorded by
+  // identity, so only THIS click's star data is ever adopted.
+  _skyPickedStarData = warpTarget.navStarData;
+  for (const nav of _navComputers()) _adoptSkyTargetInNav(nav);
 }
 
 /**

@@ -179,7 +179,7 @@ export class NavComputer {
 
     // ── Warp target bridge ──
     this._selectedNavStar = null;   // star selected BY user in prism view { wx, wy, wz, seed, name }
-    this._externalTarget = null;    // warp target SET from outside { x, y, z } in galactic kpc
+    this.commitIsView = false;  /* ⭐ SEAM (UAT walk 2026-09-30, fix C): HOST-owned. main.js `_syncNavCommitVerb` sets it true in ORRERY (false in HELM) on every regime flip and at birth; the designs read it to print GO TO / BURN TO. The commit action itself stays 'burn' — main.js `dispatchNavAction` decides what it does. Folded: this file is line-frozen at 4711. */  this._externalTarget = null;    // warp target SET from outside { x, y, z } in galactic kpc
 
     // ── System view (level 4) ──
     this._systemStar = null;        // star data from prism view click
