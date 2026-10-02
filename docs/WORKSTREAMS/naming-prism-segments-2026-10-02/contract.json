@@ -8,14 +8,68 @@
   "lane": "A — feature/world-engine-production-L1",
   "decisions": "Max 2026-10-02 'go with recs': D0 option D (provisional until AC-6 passes in-browser), D1 rename once, D2 'Sector Column N1 M-955', D3 drop survey names, D4 100 pc slabs, D7 fine gauge follows the view. Build with workflows; Astra as checker / second opinion / tester.",
   "phases": [
-    { "phase": 0, "acs": ["AC-0"], "note": "ground truth — no game code" },
-    { "phase": 1, "acs": ["AC-1", "AC-2"], "note": "fixed grid + canonical star identity (the gate)" },
-    { "phase": 2, "acs": ["AC-3", "AC-4", "AC-5"], "note": "one cell = one place on every screen and entry path" },
-    { "phase": 3, "acs": ["AC-6", "AC-7", "AC-8"], "note": "slab loader + segment bar; option D confirmed or reopened here" },
-    { "phase": 4, "acs": ["AC-9"], "note": "vocabulary — only after AC-1/AC-2 and AC-6 pass" },
-    { "phase": 5, "acs": ["AC-10", "AC-11"], "note": "name switch" },
-    { "phase": 6, "acs": ["AC-12"], "note": "where-am-I label" },
-    { "phase": "close", "acs": ["AC-13"], "note": "Max's UAT" }
+    {
+      "phase": 0,
+      "acs": [
+        "AC-0"
+      ],
+      "note": "ground truth — no game code"
+    },
+    {
+      "phase": 1,
+      "acs": [
+        "AC-1",
+        "AC-2"
+      ],
+      "note": "fixed grid + canonical star identity (the gate)"
+    },
+    {
+      "phase": 2,
+      "acs": [
+        "AC-3",
+        "AC-4",
+        "AC-5"
+      ],
+      "note": "one cell = one place on every screen and entry path"
+    },
+    {
+      "phase": 3,
+      "acs": [
+        "AC-6",
+        "AC-7",
+        "AC-8"
+      ],
+      "note": "slab loader + segment bar; option D confirmed or reopened here"
+    },
+    {
+      "phase": 4,
+      "acs": [
+        "AC-9"
+      ],
+      "note": "vocabulary — only after AC-1/AC-2 and AC-6 pass"
+    },
+    {
+      "phase": 5,
+      "acs": [
+        "AC-10",
+        "AC-11"
+      ],
+      "note": "name switch"
+    },
+    {
+      "phase": 6,
+      "acs": [
+        "AC-12"
+      ],
+      "note": "where-am-I label"
+    },
+    {
+      "phase": "close",
+      "acs": [
+        "AC-13"
+      ],
+      "note": "Max's UAT"
+    }
   ],
   "acceptanceCriteria": [
     {
@@ -85,7 +139,8 @@
         "observable": "No main-thread task longer than 50 ms in any trace (long-task list empty above 50 ms); keys pressed during loading act within one frame of being pressed (no queued burst)."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "maxRuling2026-10-02": "\"let's try to make the system work without this, but if needed we can come up with some kind of aesthetic-appropriate 'scanning' screen for loading windows\" — target: NO loading screen (sliced loader keeps every task < 50 ms and the view live). Fallback only if that cannot be met: a 4th-gen-menu-style 'SCANNING' screen/overlay for the load window (see memory well-dipper-aesthetic-generations); it does not relax the 50 ms main-thread rule."
     },
     {
       "id": "AC-7",
