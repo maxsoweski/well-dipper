@@ -14,18 +14,20 @@
     "sandbox_mode=\"workspace-write\"",
     "--json",
     "-o",
-    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/rounds/04/result.json",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/rounds/05/result.json",
     "--output-schema",
     "/home/ax/projects/personal-os-improvements/astra-lane/skill/scripts/result.schema.json",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/ext-v2-r04.png",
     "-i",
     "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/ext-v2-r03.png",
     "-"
   ],
   "exit": 0,
   "timed_out": false,
-  "started": "2026-10-02T14:11:12",
-  "finished": "2026-10-02T14:14:14",
+  "started": "2026-10-02T14:24:15",
+  "finished": "2026-10-02T14:27:48",
   "archived": [
-    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/r04/player-ship-ext-sheet.png"
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/r05/player-ship-ext-sheet.png"
   ]
 }
