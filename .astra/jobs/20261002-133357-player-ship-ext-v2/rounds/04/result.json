@@ -1,0 +1,42 @@
+{
+  "status": "complete",
+  "report": "Made one edit. The hanging bubble now reads as a rounded block, and magenta manoeuvring-thruster markings and a ninth legend entry are present. Socket depth and minimum diameter are not consistently clear.\n\nProvenance: output_hint source `/home/ax/.codex/generated_images/01a0fdae-12f7-7da1-a242-86bcea6d477c/exec-bdce5ad4-1560-4ce4-9852-79cad4e86c2b.png` → `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png`; 1,391,521 bytes; 1942 × 809 pixels; SHA256 `94d8c08c5d82ab88db8230d795983261323f979ca6df68a877c8d361c4c69f74`. Copy verified byte-identical. Calls: 1 edit this round, 6 cumulative.\n\n1. **FAIL** — Four named principal views retain the shared baseline and corner three-quarter view; existing scale mismatch remains.\n2. **PASS** — Black human retained beside side view.\n3. **PASS** — Both dimension labels and all five part callouts retained.\n4. **PASS** — Stacked deck rolls, raised spine and underslung modules preserved.\n5. **PASS** — Approximately 11.3 human heights long, within the previous round's ±20% tolerance.\n6. **FAIL** — Pale-blue hanging glass and cream frame retained; two distinct thick pillars remain unclear across views, and bubble height exceeds the original 'human plus a little' criterion.\n7. **FAIL** — Part colours match the legend without paint bands; subtle tonal variation remains instead of strictly flat fills.\n8. **PASS** — Solid black silhouette retained with a blockier cockpit profile.\n9. **PASS** — No extraneous scene, insignia, flames, exhaust or cast shadows; text is limited to labels and legend.\n10. **PASS** — Rear view retains four face-on main nozzle sockets.\n11. **PASS** — Main engines remain rear-facing; newly added side-facing ports are manoeuvring thrusters.\n12. **FAIL** — Bubble hangs below the forward hull, but the central teal module remains lower in side view.\n13. **PASS** — All nine part colours are named in the legend.\n14. **PASS** — Bubble now has flatter sides and bottom with rounded corners, visibly a capsule/block rather than a sphere.\n15. **FAIL** — Magenta ports appear on front, top and visible side near corners and ends; opposite-side and bottom coverage can be inferred as permitted. Legend correctly reads MANOEUVRING THRUSTERS. No obvious protruding hardware, but several ports read as magenta discs rather than dark recessed sockets. The smallest appear below 30 cm at the labelled scale.\n\nPreservation: overall layout, hull massing, colours, labels, four main nozzles and hatch remain unchanged to the eye. Pixel-size and proportion observations are visual estimates, not geometry measurements.\n\nEdit prompt, verbatim:\n\nEdit the previous sheet. Everything not named below stays as it is.\n\nChange only these two things, in every view (side, front, rear, top, three-quarter, silhouette):\n1. BUBBLE SHAPE: the hanging cockpit glass is no longer a sphere. Reshape it in the same language as the rest of the craft: a fat, rounded, pillowy capsule or rounded block, like the stacked deck rolls, still clear pale-blue glass held in its cream frame with two thick pillars, still hanging under the front of the hull, still 2.6 m wide (label unchanged).\n2. MANOEUVRING THRUSTERS: add small recessed thruster sockets on the ship's other faces — front, top, bottom, left and right (the rear already has the main engines) — grouped in small clusters near the corners and ends of the hull, the way a real spacecraft places attitude thrusters. Each is a dark round socket sunk into the hull, nothing protruding, no flame or exhaust. Each socket at least 30 cm across. Give them a new part colour, magenta, and add \"MANOEUVRING THRUSTERS\" to the legend.\n\nKEEP: side, front, rear and top views, orthographic, same scale, one baseline, with view names; small three-quarter view; small black silhouette; the 1.8 m human figure; the labels \"LENGTH 18 m\" and \"BUBBLE 2.6 m\" and the part callouts; the overall massing (stacked fat deck rolls, raised spine, teal underslung modules, grey engine block with four rear nozzles, red hatch); the part-colour scheme and legend; flat fills with dark outlines on plain off-white; no numbers, insignia, flames, exhaust, scene or cast shadows. Add nothing not listed above.\n\nTolerance: unchanged to the eye apart from the two changes; a few pixels' drift is not a failure. Bottom and left manoeuvring thrusters may be inferred from symmetry where no view shows them. Keep the silhouette solid black, updating only the bubble shape; recessed thrusters do not change its outline.",
+  "artifacts": [
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png",
+      "what": "Round 04 concept sheet, copied unmodified from the image tool's edit result."
+    }
+  ],
+  "decisions": [
+    "Preserved existing scale and proportion issues because this round limits changes to the cockpit and manoeuvring thrusters.",
+    "Kept the silhouette solid black; recessed ports do not alter its outline.",
+    "Used the permitted symmetry inference for faces not directly shown."
+  ],
+  "questions": [],
+  "blocked_reason": "",
+  "checkpoint": {
+    "artifact_versions": [
+      "out/player-ship-ext-sheet.png: round 04; SHA256 94d8c08c5d82ab88db8230d795983261323f979ca6df68a877c8d361c4c69f74"
+    ],
+    "invariants": [
+      "LENGTH 18 m and BUBBLE 2.6 m remain authoritative.",
+      "Preserve rounded layered massing, four rear main nozzles, hatch, modules and sheet layout.",
+      "Hanging cockpit now uses a rounded-block shape.",
+      "Nine-colour part map includes magenta MANOEUVRING THRUSTERS."
+    ],
+    "accepted_decisions": [
+      "One edit performed for round 04."
+    ],
+    "rejected_approaches": [
+      "No unrelated proportion corrections.",
+      "No code-based image modification."
+    ],
+    "unresolved": [
+      "Some manoeuvring ports lack clearly dark recessed interiors and appear smaller than 30 cm.",
+      "Existing view-scale mismatch remains.",
+      "Central module remains lower than cockpit in side view.",
+      "Two cockpit pillars are not consistently clear; subtle shading remains."
+    ],
+    "next_action": "Reviewer evaluates the rounded-block cockpit and manoeuvring-thruster treatment."
+  }
+}

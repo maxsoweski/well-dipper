@@ -1,36 +1,43 @@
-# Round 03 — complete
+# Round 04 — complete
 
-Generated the new sheet and used one edit for arrangement and labels. Rear-facing sockets, a hanging cockpit and the eight-colour part legend are present. Remaining failures are listed below.
+Made one edit. The hanging bubble now reads as a rounded block, and magenta manoeuvring-thruster markings and a ninth legend entry are present. Socket depth and minimum diameter are not consistently clear.
 
-Provenance: output_hint source `/home/ax/.codex/generated_images/01a0fdae-12f7-7da1-a242-86bcea6d477c/exec-e380a8f3-cf6f-4cf3-87e3-3b47368d3f16.png` → `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png`; 1,254,264 bytes; 1944 × 809 pixels; SHA256 `4b7462bd3220ebe73fd6f9c8fe43604e7f314134fc110b841c1ed66694cb7eac`. Copy verified byte-identical. Calls: 2 this round (generation + edit), 5 cumulative. Generation prompt was rewritten for round 03's new requirements.
+Provenance: output_hint source `/home/ax/.codex/generated_images/01a0fdae-12f7-7da1-a242-86bcea6d477c/exec-bdce5ad4-1560-4ce4-9852-79cad4e86c2b.png` → `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png`; 1,391,521 bytes; 1942 × 809 pixels; SHA256 `94d8c08c5d82ab88db8230d795983261323f979ca6df68a877c8d361c4c69f74`. Copy verified byte-identical. Calls: 1 edit this round, 6 cumulative.
 
-1. **FAIL** — Four principal views share a baseline, with a corner three-quarter view. Common scale remains inconsistent: side length approximately 590 px, top approximately 505 px.
-2. **PASS** — Plain black human beside side view represents 1.8 m.
-3. **PASS** — Exact LENGTH 18 m and BUBBLE 2.6 m labels; BUBBLE, SPINE, DECKS, ENGINES and HATCH callouts present.
-4. **PASS** — Raised orange spine, stacked yellow rolls and chunky teal underslung modules remain distinct.
-5. **PASS** — Approximately 590 px length / 52 px human height = 11.3 figure-heights, within the revised ±20% tolerance.
-6. **FAIL** — Hanging glass bubble and cream framing are present, but two distinct thick pillars are not consistently legible across views; bubble height remains about twice the human's height.
-7. **FAIL** — All eight part colours match the legend and paint bands are removed. Subtle tonal variation remains, so fills are not strictly flat.
-8. **PASS** — Small solid black side silhouette retained, including the hanging bubble.
-9. **PASS** — No insignia, flames, exhaust, scene or cast shadows; text consists of dimension, view, part and legend labels.
-10. **PASS** — Rear view present with four dark nozzle sockets visible face-on.
-11. **PASS** — No face-on nozzle mouths in side or top views; engine block appears in profile, consistent with backward-facing nozzles.
-12. **FAIL** — Bubble clearly hangs beneath the forward hull. In the side view, the central teal module extends approximately 7 px below the bubble, so the bubble is not consistently the lowest point.
-13. **PASS** — Legend contains all eight requested swatches and names.
+1. **FAIL** — Four named principal views retain the shared baseline and corner three-quarter view; existing scale mismatch remains.
+2. **PASS** — Black human retained beside side view.
+3. **PASS** — Both dimension labels and all five part callouts retained.
+4. **PASS** — Stacked deck rolls, raised spine and underslung modules preserved.
+5. **PASS** — Approximately 11.3 human heights long, within the previous round's ±20% tolerance.
+6. **FAIL** — Pale-blue hanging glass and cream frame retained; two distinct thick pillars remain unclear across views, and bubble height exceeds the original 'human plus a little' criterion.
+7. **FAIL** — Part colours match the legend without paint bands; subtle tonal variation remains instead of strictly flat fills.
+8. **PASS** — Solid black silhouette retained with a blockier cockpit profile.
+9. **PASS** — No extraneous scene, insignia, flames, exhaust or cast shadows; text is limited to labels and legend.
+10. **PASS** — Rear view retains four face-on main nozzle sockets.
+11. **PASS** — Main engines remain rear-facing; newly added side-facing ports are manoeuvring thrusters.
+12. **FAIL** — Bubble hangs below the forward hull, but the central teal module remains lower in side view.
+13. **PASS** — All nine part colours are named in the legend.
+14. **PASS** — Bubble now has flatter sides and bottom with rounded corners, visibly a capsule/block rather than a sphere.
+15. **FAIL** — Magenta ports appear on front, top and visible side near corners and ends; opposite-side and bottom coverage can be inferred as permitted. Legend correctly reads MANOEUVRING THRUSTERS. No obvious protruding hardware, but several ports read as magenta discs rather than dark recessed sockets. The smallest appear below 30 cm at the labelled scale.
 
-Visual measurements are approximate image inspection, not a geometry probe. The sheet retains the rounded layered massing, but adds more underslung modules than round 02.
+Preservation: overall layout, hull massing, colours, labels, four main nozzles and hatch remain unchanged to the eye. Pixel-size and proportion observations are visual estimates, not geometry measurements.
 
 Edit prompt, verbatim:
 
-Change only the arrangement and labels: uniformly resize and reposition the four orthographic views to one common scale on their shared baseline, so the 18 m side and top views have equal nose-to-tail length. Preserve each drawing's proportions. Add a HATCH callout pointing to the red hatch in the side view. Retain the full eight-entry colour legend, rear view, small three-quarter view and black silhouette.
+Edit the previous sheet. Everything not named below stays as it is.
 
-KEEP: side, front, rear and top orthographic views on one baseline at one scale; small three-quarter view; small black silhouette; the 1.8 m human figure beside the side view; the labels "LENGTH 18 m" and "BUBBLE 2.6 m" and the part names BUBBLE, SPINE, DECKS, ENGINES, HATCH; the ship about ten figure-heights long; the stacked fat rounded rolls, raised spine, chunky underslung hardware and overall massing; the hanging pale blue bubble cockpit with two thick cream frame pillars; recessed rear-facing nozzle sockets visible face-on only in the rear view, not sideways in side or top views; the eight part colours and their complete legend: BUBBLE pale blue, COCKPIT FRAME cream, SPINE orange, DECKS yellow, UNDERSLUNG MODULES teal, ENGINE BLOCK mid grey, NOZZLES near-black, HATCH red; no paint stripes or bands; flat colour fills with dark outlines on a plain off-white background; no numbers, insignia, flames or exhaust, no scene, no cast shadows. Add nothing not listed above.
+Change only these two things, in every view (side, front, rear, top, three-quarter, silhouette):
+1. BUBBLE SHAPE: the hanging cockpit glass is no longer a sphere. Reshape it in the same language as the rest of the craft: a fat, rounded, pillowy capsule or rounded block, like the stacked deck rolls, still clear pale-blue glass held in its cream frame with two thick pillars, still hanging under the front of the hull, still 2.6 m wide (label unchanged).
+2. MANOEUVRING THRUSTERS: add small recessed thruster sockets on the ship's other faces — front, top, bottom, left and right (the rear already has the main engines) — grouped in small clusters near the corners and ends of the hull, the way a real spacecraft places attitude thrusters. Each is a dark round socket sunk into the hull, nothing protruding, no flame or exhaust. Each socket at least 30 cm across. Give them a new part colour, magenta, and add "MANOEUVRING THRUSTERS" to the legend.
+
+KEEP: side, front, rear and top views, orthographic, same scale, one baseline, with view names; small three-quarter view; small black silhouette; the 1.8 m human figure; the labels "LENGTH 18 m" and "BUBBLE 2.6 m" and the part callouts; the overall massing (stacked fat deck rolls, raised spine, teal underslung modules, grey engine block with four rear nozzles, red hatch); the part-colour scheme and legend; flat fills with dark outlines on plain off-white; no numbers, insignia, flames, exhaust, scene or cast shadows. Add nothing not listed above.
+
+Tolerance: unchanged to the eye apart from the two changes; a few pixels' drift is not a failure. Bottom and left manoeuvring thrusters may be inferred from symmetry where no view shows them. Keep the silhouette solid black, updating only the bubble shape; recessed thrusters do not change its outline.
 
 ## Decisions
-- Round 03's part colours supersede the previous orange/navy/cream paint bands.
-- Added view labels to distinguish the new rear view.
-- Used four recessed nozzle sockets; nozzle count was unspecified.
-- Spent the single edit on common-scale arrangement and a direct HATCH callout.
+- Preserved existing scale and proportion issues because this round limits changes to the cockpit and manoeuvring thrusters.
+- Kept the silhouette solid black; recessed ports do not alter its outline.
+- Used the permitted symmetry inference for faces not directly shown.
 
 ## Artifacts
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png` — Round 03 selected concept sheet, copied unmodified from the edit result.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/player-ship-ext-sheet.png` — Round 04 concept sheet, copied unmodified from the image tool's edit result.

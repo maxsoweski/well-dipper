@@ -30,5 +30,8 @@
   "exit": 0,
   "timed_out": false,
   "started": "2026-10-02T13:56:18",
-  "finished": "2026-10-02T13:59:41"
+  "finished": "2026-10-02T13:59:41",
+  "archived": [
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/r03/player-ship-ext-sheet.png"
+  ]
 }
