@@ -1,3 +1,7 @@
+# Round 03 feedback
+
+Max's words, verbatim (this is the acceptance criterion for this round):
+
 Max, verbatim: "This is a lot better, yes. Main change I want to see is, let's move the planet screen to the right side instead of the left. And then the throttle and speed indicator. Let's make that extend out from the center of the circle rather than at an angle like it does now. And let's have its overall shape be like a chevron that comes to a rounded edge. But not actually rounded, smoothly rounded like a, you know, polygonal representation of that."
 
 Edit the previous sheet (attached). Change only these two things:
@@ -11,3 +15,38 @@ Edit the previous sheet (attached). Change only these two things:
 KEEP: everything else exactly as it is — the bubble, pillars and overhead beam, the SYSTEM SCREEN and its orbit map, the pixelated planet on the target screen, the engine gauge design ("FTL", tick ring), warp glyph, spares, the dash and its post, all views and their names, all labels, the seated figure and EYE, the legend, flat fills with dark outlines on plain off-white, no scene, no shadows. Add nothing not listed above.
 
 Tolerance: unchanged to the eye apart from the two changes. Report (1) target screen on the right pillar in every view that shows it, (2) bar centred on the circle's centre line, horizontal, symmetric, (3) chevron outline with a faceted (straight-edged) blunt tip, (4) everything else unchanged.
+
+---
+
+# Checkpoint — after round 02
+
+## artifact versions
+- out/player-ship-cockpit-sheet.png: SHA256 cb83c2d8346fa14afc036ec434570ee0b6c846e8db913d925fa48192952f2884
+- out/round-02-prompts.txt: Round 02 generation and correction prompts
+
+## invariants
+- Rounded-cube bubble, narrow waist-level dash on post, single seat and rear passage.
+- Cream pillars bending into overhead beam.
+- Wide overhead SYSTEM SCREEN and smaller left-pillar TARGET SCREEN.
+- Overlapping round gauge and rising bar; glyph and two spares.
+- Four named views and required labels.
+
+## accepted decisions
+- Expressive sample displays replace blank faces.
+- No pilot body in first-person view.
+- Final generated image copied without modification.
+
+## rejected approaches
+- Dark smoky presentation background replaced with off-white.
+
+## unresolved
+- Open glass remains below approximately two-thirds.
+- 60% bar illumination is inconsistent across views.
+- Minor shading and teal instrument legend swatch remain.
+
+## next action
+Await Max's review of Round 02.
+
+---
+
+Reply with the same JSON result contract as before (status / report / artifacts / decisions / questions / checkpoint).
