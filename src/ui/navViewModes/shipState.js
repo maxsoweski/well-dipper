@@ -27,7 +27,8 @@
  *    position relative to a planet (`rel`), never from a "which body am I near" verdict. The only
  *    body identity derived here is ARRIVAL (`at`): the ship is within `SHIP_ARRIVE_K` body radii of
  *    a body, which is the distance every burn and every ORRERY "go to" parks at. A body you have
- *    arrived at is where the diamond snaps and is the one body that gets no line.
+ *    arrived at is the one body that gets no line, and where the diamond snaps on every picture
+ *    EXCEPT that planet's own moon sub-view, which is drawn at moon scale and places it from `rel`.
  *
  * Deliberate non-goals · no height above the plane on any picture (all are top-down), no binary
  *   star identity (both designs draw one star at the centre; the star range is to the barycentre),
@@ -37,13 +38,28 @@ import { AU_TO_SCENE, EARTH_RADIUS_AU, earthRadiiToScene, solarRadiiToScene } fr
 
 const E_SCENE = earthRadiiToScene(1);
 
-/** A ship within this many body radii of a body has ARRIVED there. ⚠ 8, not 5: an ORRERY "go to"
- *  frames a planet from `max(6R, 0.02)` (`main.js` focusPlanet's `orbitDist`), and a pilot parked
- *  there is at that planet — a 5R test would draw a stub "route" to the body filling his view. Every
- *  pilot hold (`SupercruisePilot` 2.6R) and moon framing (5R) is inside it, and it stays small
- *  against the gaps between bodies: Earth's 8R is 0.34 scene units, and the Moon is 60 Earth radii
- *  (2.56 units) out, 7.5x further. A ship halfway to the Moon is NOT at Earth (Astra's point 1). */
+/** A ship within this many body radii of a body has ARRIVED there. ⚠ 8, not 5, and measured from
+ *  what the game actually parks at, not from what it computes and drops: the ORRERY "go to" glides the
+ *  VIEW to about 6R of a planet (live, 2026-10-02: Jupiter framed at 6 radii), and a burn's pilot
+ *  holds at `max(R·HOLD_VIEW_FRAC, 1.05R)` = 2.6R (`SupercruisePilot.js:229-231`) because `flyTo` is
+ *  never handed main.js's `orbitDist`/`viewDist` (Astra's point 7 — the earlier comment here cited
+ *  those and was wrong). Both are inside 8R; a moon framing (5R of the moon) is inside the moon's.
+ *  It stays small against the gaps between bodies: Earth's 8R is 0.34 scene units and the Moon is
+ *  60 Earth radii (2.56 units) out, so a ship halfway to the Moon is NOT at Earth.
+ *  ⛔ NO CAP AT A GIANT'S INNER MOONS (live finding 1, 2026-10-02). The first build capped a planet's
+ *     radius at 0.4x its innermost moon's orbit so that "halfway to Io" was not "at Jupiter"; in Sol
+ *     that cap is ~1 radius at Jupiter (Amalthea), Mars and Saturn, so NO park ever counted as arrived
+ *     and selecting the giant you were parked at drew a stub and `SHIP 67R⊕`. What Astra's point 1
+ *     actually guards — a ship drawn ON the planet in its own moon picture while it is out among the
+ *     moons — is now the painters' rule: a planet's own sub-view never snaps onto that planet (`subP`)
+ *     and draws the ship from `rel`. At system scale 8R of a giant is far under a texel either way.
+ *  ⭐ A MOON BEATS ITS PLANET: a ship inside a moon's own radius is at the MOON, even though it is
+ *     also inside the parent's 8R (Io sits at 5.9 Jupiter radii). */
 export const SHIP_ARRIVE_K = 8;
+/** HYSTERESIS (Astra's point 7): once arrived, a ship stays arrived until it is this much further out
+ *  than the arrival radius, so a ship parked on the boundary cannot flick the diamond and the route
+ *  between "at" and "open space" every frame. */
+export const SHIP_LEAVE_K = 1.25;
 /** The floor every burn's park distance uses (`Math.max(..., 0.02)`), in scene units. */
 export const SHIP_ARRIVE_FLOOR = 0.02;
 
@@ -122,20 +138,26 @@ const hyp3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
  * `D.ship` from a publication.
  * @param {object} pub  `navShipPublication`'s answer
  * @param {object} sys  the `_systemData` the position is in
+ * @param {object} [prevAt]  last frame's `at` IN THIS SYSTEM (the caller drops it on a system change),
+ *   for the hysteresis — `null` for a one-off derivation
  * @returns {object|null} `{ live:true, au:{x,z}, rel:[{x,y,z}] (Earth radii, per planet index),
  *   range:{ star, p:[], m:{'i.j'} } (AU, 3D), at:{kind,pIdx,mIdx}|null, planetIndex, moonIndex }`
  */
-export function deriveShip(pub, sys) {
+export function deriveShip(pub, sys, prevAt = null) {
   if (!pub || !finite3(pub.pos) || !sys) return null;
   const o = finite3(pub.origin) ? pub.origin : { x: 0, y: 0, z: 0 };
   const T = { x: pub.pos.x + o.x, y: pub.pos.y + o.y, z: pub.pos.z + o.z };
   const ZERO = { x: 0, y: 0, z: 0 };
   const range = { star: hyp3(T, ZERO) / AU_TO_SCENE, p: [], m: {} };
   const rel = [];
-  let at = null, best = Infinity;
-  const consider = (kind, pIdx, mIdx, d, R, cap = Infinity) => {
-    const lim = Math.max(Math.min(SHIP_ARRIVE_K * (Number(R) > 0 ? R : 0), cap), SHIP_ARRIVE_FLOOR);
-    if (d < lim && d / lim < best) { best = d / lim; at = { kind, pIdx, mIdx }; }
+  let at = null, best = Infinity, bestRank = -1;
+  const RANK = { star: 0, planet: 1, moon: 2 };
+  const consider = (kind, pIdx, mIdx, d, R) => {
+    let lim = Math.max(SHIP_ARRIVE_K * (Number(R) > 0 ? R : 0), SHIP_ARRIVE_FLOOR);
+    if (prevAt && prevAt.kind === kind && prevAt.pIdx === pIdx && prevAt.mIdx === mIdx) lim *= SHIP_LEAVE_K;
+    if (!(d < lim)) return;
+    const rk = RANK[kind], q = d / lim;
+    if (rk > bestRank || (rk === bestRank && q < best)) { bestRank = rk; best = q; at = { kind, pIdx, mIdx }; }
   };
   const st = sys.star || {};
   consider('star', -1, -1, range.star * AU_TO_SCENE,
@@ -147,13 +169,7 @@ export function deriveShip(pub, sys) {
     const dp = Math.hypot(d.x, d.y, d.z);
     range.p[i] = dp / AU_TO_SCENE;
     const liveR = p && p._live && p._live.planet && p._live.planet.data && p._live.planet.data.radius;
-    // ⛔ CAPPED AT 0.4 x THE INNERMOST MOON'S ORBIT. A giant's 8R reaches past its inner moons (Jupiter:
-    //    88 Earth radii against Io at 66), so without the cap a ship halfway to Io would be "at Jupiter"
-    //    and snap onto the moon ladder's head — Astra's point 1 again, one planet class up. Halfway to
-    //    the innermost moon (0.5) is always outside the cap.
-    const orbits = ((p && p.moons) || []).map((m, j) => { const r = moonRelScene(p, j); return Math.hypot(r.x, r.y, r.z); });
-    const cap = orbits.length ? 0.4 * Math.min(...orbits) : Infinity;
-    consider('planet', i, -1, dp, Number(liveR) > 0 ? liveR : (Number(p && p.planetData && p.planetData.radiusEarth) || 1) * E_SCENE, cap);
+    consider('planet', i, -1, dp, Number(liveR) > 0 ? liveR : (Number(p && p.planetData && p.planetData.radiusEarth) || 1) * E_SCENE);
     ((p && p.moons) || []).forEach((m, j) => {
       const M = moonRelScene(p, j);
       const dm = Math.hypot(d.x - M.x, d.y - M.y, d.z - M.z);

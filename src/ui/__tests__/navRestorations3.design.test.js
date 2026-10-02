@@ -229,8 +229,9 @@ const shipFills = (p) => p.fills.filter((f) => f.ink === p.d.INK.SHIP);
  *   bottom rows, the only two 1-wide rows of the diamond.
  */
 function trajectoryDots(p) {
-  const word = p.lines.find((l) => l.s === 'SHIP');
-  const box = word ? { x: word.x - 1, y: word.y - 1, w: measurePixelText('SHIP') + 2, h: FACE.h + 2 } : null;
+  // ⚠ ANY `SHIP…` WORD, not only a bare `SHIP` (Astra's point 9): the GPS line's word can carry a range.
+  const word = p.lines.find((l) => /^SHIP\b/.test(l.s));
+  const box = word ? { x: word.x - 1, y: word.y - 1, w: measurePixelText(word.s) + 2, h: FACE.h + 2 } : null;
   return p.fills.filter((f) => f.ink === p.d.INK.SHIP && f.w === 1 && f.h === 1
     && !(box && f.x >= box.x && f.x < box.x + box.w && f.y >= box.y && f.y < box.y + box.h));
 }

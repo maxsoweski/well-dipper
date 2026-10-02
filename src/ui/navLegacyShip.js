@@ -34,7 +34,10 @@ export function legacyShip(nav) {
   const pub = nav._shipState;
   if (pub === undefined) return focusShip(nav._currentFocusIndex, nav._currentMoonIndex);
   const sys = nav._systemData;
-  return (pub && sys && pub.sysKey === sys) ? deriveShip(pub, sys) : null;
+  const memo = nav._shipAtMemo;
+  const sh = (pub && sys && pub.sysKey === sys) ? deriveShip(pub, sys, (memo && memo.sys === sys) ? memo.at : null) : null;
+  nav._shipAtMemo = sh ? { sys, at: sh.at } : null;   // the arrival hysteresis's memory, per system
+  return sh;
 }
 
 /** A planet's angle NOW — the scene's live orbit, else the generator's. ⚠ `??` then `|| 0`: a live 0
@@ -138,7 +141,10 @@ function screenDir(project, bx, bz) {
 export function legacyDetailShip(sh, idx, p, project, w, h) {
   if (!sh) return null;
   const at = sh.at, moons = (p && p.moons) || [];
-  if (at && at.pIdx === idx && at.kind === 'planet') return project(0, 0, 0);
+  // ⛔ A LIVE SHIP ARRIVED AT THIS PLANET IS STILL PLACED BY ITS OFFSET: this picture is at moon scale,
+  //    and a giant's 8R reaches its inner moons' orbits (live finding 1, Astra's point 1). Only the old
+  //    focus path, which has no position, puts the ship on the centre.
+  if (at && at.pIdx === idx && at.kind === 'planet' && !sh.live) return project(0, 0, 0);
   if (at && at.pIdx === idx && at.kind === 'moon' && at.mIdx >= 0 && at.mIdx < moons.length) return legacyDetailMoonPoint(p, at.mIdx, project);
   if (!sh.live) return null;      // the old focus path: the ship is elsewhere, which legacy never drew
   const rel = sh.rel && sh.rel[idx];

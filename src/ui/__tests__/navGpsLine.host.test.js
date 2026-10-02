@@ -9,7 +9,11 @@
  *   H1  the published position is rebased back into the system frame (`pos + origin`), so a world
  *       rebase cannot move the ship on the glass.
  *   H2  which object IS the ship: the flight body in FLIGHT mode, else the camera.
- *   H3  ARRIVAL: halfway to the Moon is NOT "at Earth" (Astra's point 1), parked at 2.6R is.
+ *   H3  ARRIVAL: halfway to the Moon is NOT "at Earth", parked at 2.6R is; a giant's GO TO framing
+ *       (6R) and pilot hold (2.6R) are arrivals even with an inner moon at 2.5R (live finding 1), and
+ *       a moon beats its planet.
+ *   H3b HYSTERESIS (Astra's point 7): once arrived, the ship stays arrived out to 1.25x — in the pure
+ *       helper, through state.js's per-system memory, and through legacy's.
  *   H4  `D.ship` comes from the publication once there is one, never from the focus pair — mid-burn
  *       the focus already names the destination; and a publication from another system draws nothing.
  *   H5  the ladder interpolation lands a ship ON a stop that the separation pass pushed, and shares a
@@ -25,8 +29,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   shipOwnerPosition, navShipPublication, deriveShip, ladderShipV, orreryShipRadius, fmtShipRange,
-  planetTrueScene, moonRelScene, shipRangeTo, SHIP_ARRIVE_K,
+  planetTrueScene, moonRelScene, shipRangeTo, SHIP_ARRIVE_K, SHIP_LEAVE_K,
 } from '../navViewModes/shipState.js';
+import { legacyShip, legacyDetailShip } from '../navLegacyShip.js';
 import { makeHeadlessNav } from './helpers/headlessNav.mjs';
 import { AU_TO_SCENE, earthRadiiToScene } from '../../core/ScaleConstants.js';
 
@@ -75,9 +80,10 @@ describe('GPS line — the host publication and D.ship', () => {
   });
 
   it('H3 ⛔ HALFWAY TO THE MOON IS OPEN SPACE; PARKED AT 2.6R IS EARTH; AT THE MOON IS THE MOON', () => {
-    // ⛔ SABOTAGE RUN: removing the planet's cap (0.4 x its innermost moon's orbit) → a ship halfway
-    //    to a giant's inner moon (inside the giant's 8R) reads `at: the giant` — the proposal's own
-    //    BLOCKER, Astra's point 1, one planet class up — red.
+    // ⛔ SABOTAGE RUN (fixup 2026-10-02): re-adding the first build's cap (0.4 x the innermost moon's
+    //    orbit) → a giant framed at 6R, or held at 2.6R, with a moon at 2.5R reads `at: null` — live
+    //    finding 1 — red. SECOND SABOTAGE RUN: dropping the moon-beats-planet rank → a ship parked at
+    //    Io (inside Jupiter's 8R, and closer to it in radii) reads `at: Jupiter`, red.
     const O = { x: 0, y: 0, z: 0 };
     const P = planetTrueScene(EARTH_MOON.planets[1], O);
     const M = moonRelScene(EARTH_MOON.planets[1], 0);
@@ -90,14 +96,73 @@ describe('GPS line — the host publication and D.ship', () => {
     const moon = deriveShip(pub({ x: P.x + M.x + 0.27 * E * 3, y: P.y + M.y, z: P.z + M.z }), EARTH_MOON);
     expect(moon.at).toEqual({ kind: 'moon', pIdx: 1, mIdx: 0 });
     expect(SHIP_ARRIVE_K).toBeLessThan(15);
-    // a Jupiter: R = 11.2 Earth radii, Io at 66 — 8R (90) reaches past Io, the cap does not
+    // ⭐ A Jupiter as Sol has it: R = 11.2 Earth radii, Amalthea at 2.54R (28.4), Io at 5.9R (66).
+    //    Live finding 1: the GO TO framing (6R) and the pilot hold (2.6R) must both count as ARRIVED.
+    //    (A ship out among the moons is kept off the planet's mark by the SUB-VIEW, not by `at` —
+    //    `navGpsLine.design.test.js` G5a.)
     const JUP = { star: { type: 'G', radiusSolar: 1 }, planets: [{ orbitRadiusAU: 5.2, orbitAngle: 0, planetData: { radiusEarth: 11.2 },
-                  moons: [{ orbitRadiusEarth: 66, startAngle: 0, radiusEarth: 0.29 }] }] };
+                  moons: [{ orbitRadiusEarth: 28.4, startAngle: 2.0, radiusEarth: 0.013 },
+                          { orbitRadiusEarth: 66, startAngle: 0, radiusEarth: 0.29 }] }] };
     const J = planetTrueScene(JUP.planets[0], O);
-    const halfIo = deriveShip({ pos: { x: J.x + 33 * E, y: 0, z: J.z }, origin: O, sysKey: JUP }, JUP);
-    expect(halfIo.at, 'halfway to Io is NOT at Jupiter').toBeNull();
+    const atJ = (k) => deriveShip({ pos: { x: J.x, y: 0, z: J.z + k * 11.2 * E }, origin: O, sysKey: JUP }, JUP).at;
+    expect(atJ(6), 'framed at 6 Jupiter radii is AT Jupiter').toEqual({ kind: 'planet', pIdx: 0, mIdx: -1 });
+    expect(atJ(2.6), 'held at 2.6 radii is AT Jupiter').toEqual({ kind: 'planet', pIdx: 0, mIdx: -1 });
+    expect(atJ(8.5), 'past 8 radii is open space').toBeNull();
+    // ⭐ a moon beats its planet: 7 Io radii from Io is inside Io's 8R (7/8 of it) and deeper inside
+    //    Jupiter's (5.9/8 of it) — by ratio alone it would read Jupiter
+    const io = moonRelScene(JUP.planets[0], 1);
+    const atIo = deriveShip({ pos: { x: J.x + io.x + 7 * 0.29 * E, y: io.y, z: J.z + io.z }, origin: O, sysKey: JUP }, JUP);
+    expect(atIo.at, 'parked at Io is AT Io').toEqual({ kind: 'moon', pIdx: 0, mIdx: 1 });
     // the 3D range to the Moon from the halfway point is half the Moon's distance
     expect(shipRangeTo(half, { kind: 'moon', pIdx: 1, mIdx: 0 }) * AU_TO_SCENE).toBeCloseTo(Math.hypot(M.x, M.y, M.z) / 2, 6);
+  });
+
+  it('H3b ⛔ HYSTERESIS: ARRIVED STAYS ARRIVED TO 1.25x, IN THE HELPER, IN state.js AND IN LEGACY', async () => {
+    // ⛔ SABOTAGE RUN (a): `deriveShip` ignoring `prevAt` → the 9R case reads null in every half, red.
+    //    (b): state.js passing `null` for the memory → the nav half reads null at 9R, red.
+    //    (c): `legacyShip` passing `null` for the memory → the legacy half reads null at 9R, red.
+    const O2 = { x: 0, y: 0, z: 0 };
+    const Pe = planetTrueScene(EARTH_MOON.planets[1], O2);
+    const pubAt = (k, sysKey = EARTH_MOON) => ({ pos: { x: Pe.x, y: 0, z: Pe.z + k * E }, origin: O2, sysKey });
+    const EARTH = { kind: 'planet', pIdx: 1, mIdx: -1 };
+    expect(SHIP_LEAVE_K).toBeGreaterThan(1);
+    expect(deriveShip(pubAt(9), EARTH_MOON).at, 'arriving at 9R: not yet').toBeNull();
+    expect(deriveShip(pubAt(9), EARTH_MOON, EARTH).at, 'leaving at 9R: still there').toEqual(EARTH);
+    expect(deriveShip(pubAt(10.5), EARTH_MOON, EARTH).at, 'past 1.25 x 8R: gone').toBeNull();
+    // through the real nav: 6R (arrive) → 9R (stay) → 10.5R (leave) → 9R (not re-arrived)
+    const h = await makeHeadlessNav({ width: 417, height: 240 });
+    const nav = h.nav;
+    nav._viewModesEnabled = true; nav.viewMode = 'rail'; nav._levelIndex = 3; nav.render();
+    nav._systemStar = nav._localStars.reduce((m, s) => (m == null || s.dist < m.dist ? s : m), null);
+    nav._playerX = nav._systemStar.wx; nav._playerY = nav._systemStar.wy; nav._playerZ = nav._systemStar.wz;
+    nav._systemData = EARTH_MOON; nav._currentSystemData = EARTH_MOON; nav._levelIndex = 4;
+    const seq = [];
+    for (const k of [6, 9, 10.5, 9]) { nav.setShipState(pubAt(k)); nav.render(); seq.push(nav._viewDriverInst.D.ship.at); }
+    expect(seq).toEqual([EARTH, EARTH, null, null]);
+    // legacy keeps its own memory, per system
+    const fake = { _systemData: EARTH_MOON, _shipState: pubAt(6) };
+    expect(legacyShip(fake).at).toEqual(EARTH);
+    fake._shipState = pubAt(9);
+    expect(legacyShip(fake).at, 'legacy: leaving at 9R, still there').toEqual(EARTH);
+    const OTHER = JSON.parse(JSON.stringify(EARTH_MOON));
+    fake._systemData = OTHER; fake._shipState = pubAt(9, OTHER);
+    expect(legacyShip(fake).at, 'a new system starts with no memory').toBeNull();
+  });
+
+  it('H3c ⛔ LEGACY PLANET DETAIL: A LIVE SHIP ARRIVED AT THIS PLANET IS STILL PLACED BY ITS OFFSET', () => {
+    // ⛔ SABOTAGE RUN: dropping `&& !sh.live` from `legacyDetailShip`'s planet snap → the ship framed
+    //    at 6R out among the moons is drawn on the centre planet, red.
+    const O = { x: 0, y: 0, z: 0 };
+    const p = EARTH_MOON.planets[1];
+    const project = (x, y, z) => ({ x: 300 + x * 20, y: 200 + z * 20 });
+    const Pe = planetTrueScene(p, O);
+    const sh = deriveShip({ pos: { x: Pe.x + 6 * E, y: 0, z: Pe.z }, origin: O, sysKey: EARTH_MOON }, EARTH_MOON);
+    expect(sh.at).toEqual({ kind: 'planet', pIdx: 1, mIdx: -1 });
+    const pt = legacyDetailShip(sh, 1, p, project, 614, 512);
+    expect(pt.x, 'sqrt(6) world units out along +x').toBeCloseTo(300 + Math.sqrt(6) * 20, 6);
+    expect(pt.y).toBeCloseTo(200, 6);
+    // the old focus path (no position) still stands on the centre
+    expect(legacyDetailShip({ live: false, at: { kind: 'planet', pIdx: 1, mIdx: -1 } }, 1, p, project, 614, 512)).toEqual({ x: 300, y: 200 });
   });
 
   it('H4 ⛔ MID-BURN THE DIAMOND IS WHERE THE SHIP IS, NOT THE DESTINATION; A STALE SYSTEM DRAWS NOTHING', async () => {

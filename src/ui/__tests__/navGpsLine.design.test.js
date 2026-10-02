@@ -52,12 +52,13 @@ function paint(nav, design) {
   S.design = design;
   d.resetRegions(); d.resetViolations();
   if (design === 1) d.drawDesign1(ctx, W, H); else d.drawDesign2(ctx, W, H);
-  return { fills, lines, viol, violations: d.violations(), regions: d.regions(), d, S, D,
+  // ⚠ `labelHits` is SNAPSHOT: `S` is the nav's own object, so a second paint would overwrite it.
+  return { fills, lines, viol, violations: d.violations(), regions: d.regions(), d, S, D, labelHits: (S.labelHits || []).slice(),
            INK: d.INK, text: lines.map((l) => l.s).join('\n') };
 }
 
-/** Eight planets; moons with real orbits on planet 2 (one) and planets 4-7 (three each). Planet 4's
- *  innermost moon is at 40 Earth radii, so its arrival radius is capped at 16 (shipState.js). */
+/** Eight planets; moons with real orbits on planet 2 (one) and planets 4-7 (three each). Planet 4 is
+ *  10 Earth radii and its innermost moon is at 40 (4R), INSIDE its 8R arrival radius — a giant's shape. */
 const moonsOf = (orbits) => orbits.map((o, j) => ({ type: 'rock', radiusEarth: 0.3, T_eq: 100,
                                                      orbitRadiusEarth: o, startAngle: 0.4 + j * 1.7 }));
 function makeSys() {
@@ -200,8 +201,29 @@ describe('GPS line — the ship is drawn from where it IS', () => {
       const z = stopOf(p.S, i), ex = (i === 5 ? 4 : (z.ref.rE > 4 ? 2 : 1));
       expect(dots.filter((f) => Math.abs(f.x - z.x) <= ex && Math.abs(f.y - z.y) <= 2).length, `nothing on planet ${i}`).toBe(0);
     }
+    // ⚠ FIXUP (live finding 3): the belt is protected as its seven DOTS, so the track runs through
+    //   the gaps between them instead of vanishing for 13 texels.
+    // ⛔ FIXUP SABOTAGE RUN: `routeDash` without the slide (phase advanced on a refused texel) → the
+    //    dashes fall on the belt dots' own parity and fewer than 3 show through the belt, red.
     const belt = (p.S.bodyHits || []).find((z) => z.ref && z.ref.kind === 'belt');
-    expect(dots.filter((f) => f.y === axisY && Math.abs(f.x - belt.x) <= 6).length, 'nothing on the belt').toBe(0);
+    expect(dots.filter((f) => f.y === axisY && Math.abs(f.x - belt.x) <= 6 && (f.x - belt.x) % 2 === 0).length, 'nothing on a belt dot').toBe(0);
+    expect(dots.filter((f) => f.y === axisY && Math.abs(f.x - belt.x) <= 6).length, 'the track shows through the belt').toBeGreaterThanOrEqual(3);
+  }, 120000);
+
+  it('G3c ⛔ LIVE FINDING 3 — THE TRACK STARTS AT THE DIAMOND, NOT PAST THE BELT', async () => {
+    // ⛔ SABOTAGE RUN: the ladder belt boxed as one 13-texel run again (`[6, 0]`) → the first lit
+    //    texel on the star side is 7+ texels from the diamond, red.
+    const nav = await at('rail');
+    select(nav, { type: 'star' });
+    publish(nav, { x: 2700 * Math.cos(2.2), y: 0, z: 2700 * Math.sin(2.2) });   // in the belt, at no planet
+    const p = paint(nav, 1);
+    expect(p.D.ship.at).toBeNull();
+    const axisY = p.S.ladderCaps.axisY, c = shipCentre(p), dots = routeDots(p).filter((f) => f.y === axisY);
+    const belt = (p.S.bodyHits || []).find((z) => z.ref && z.ref.kind === 'belt');
+    expect(Math.abs(c.x - belt.x), 'the diamond stands in the belt').toBeLessThanOrEqual(4);
+    const nearest = Math.max(...dots.filter((f) => f.x < c.x).map((f) => f.x));
+    expect(c.x - nearest, 'the first lit texel on the star side is right beside the diamond').toBeLessThanOrEqual(4);
+    expect(dots.filter((f) => Math.abs(f.x - belt.x) <= 6 && f.x < c.x - 2).length, 'dashes in the belt gaps').toBeGreaterThanOrEqual(2);
   }, 120000);
 
   it('G3b ⭐ AT ANOTHER PLANET → A MOON (ladder): along the axis, then up the moon\'s planet\'s pip column', async () => {
@@ -250,13 +272,17 @@ describe('GPS line — the ship is drawn from where it IS', () => {
   it('G5a ⭐ SUB-VIEW, HALFWAY BETWEEN THE PLANET AND ITS INNER MOON: between them on both pictures, not on the planet', async () => {
     // ⛔ SABOTAGE RUN: the moon ladder's `freeV` and the moon orrery's `free` returning nothing → no
     //    diamond in the sub-view, red. (Astra's point 1, the halfway case, at the picture level.)
+    // ⛔ FIXUP SABOTAGE RUN: dropping the `subP` exemption in `drawShipLadder` / `drawShipOrrery` →
+    //    the arrived ship snaps onto the planet's head in both sub-views, red.
     for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
       const nav = await at(mode);
       const half = plus(P(nav, 4), moonRelScene(nav._systemData.planets[4], 0), 0.5);
       publish(nav, half);
       openDetail(nav, 4);
       const p = paint(nav, design);
-      expect(p.D.ship.at, 'halfway is open space').toBeNull();
+      // ⚠ FIXUP (live finding 1): 20 Earth radii is 2R of this giant, so the ship has ARRIVED at it
+      //   (8R, no inner-moon cap) — and the sub-view still draws it out among the moons.
+      expect(p.D.ship.at, 'arrived at the giant').toEqual({ kind: 'planet', pIdx: 4, mIdx: -1 });
       const c = shipCentre(p);
       expect(c, `design ${design}: a diamond in the sub-view`).toBeTruthy();
       const head = (p.S.bodyHits || []).find((z) => z.ref && z.ref.kind === 'planet' && !(z.moon >= 0));
@@ -364,6 +390,8 @@ describe('GPS line — the ship is drawn from where it IS', () => {
 
   it('G7 ⛔ THE FAR SIDE OF THE STAR: the ladder cannot show the trip, so a stub and the true range', async () => {
     // ⛔ SABOTAGE RUN: deleting the stub branch in `drawShipLadder` → no chevron and a bare SHIP, red.
+    // ⚠ FIXUP (live finding 4): the stub comes from ABOVE, pointing down — it was a right-pointing
+    //   chevron at `t.x - 6`, which sat on the wrong side of a target left of the ship.
     const nav = await at('rail');
     select(nav, { type: 'planet', planetIndex: 2 });
     const P2 = P(nav, 2);
@@ -372,7 +400,41 @@ describe('GPS line — the ship is drawn from where it IS', () => {
     const axisY = p.S.ladderCaps.axisY, t = stopOf(p.S, 2);
     expect(shipCentre(p).x, 'the ship projects onto the target\'s own stop').toBe(t.x);
     expect(wordOf(p) && wordOf(p).s, 'the word carries the 3D range').toBe('SHIP 2.0AU');
-    expect(has(routeDots(p), t.x - 6, axisY), 'a stub chevron at the framed target').toBe(true);
+    expect(has(routeDots(p), t.x, axisY - 6), 'a stub chevron above the framed target').toBe(true);
+  }, 120000);
+
+  it('G7b ⛔ LIVE FINDING 4 — A TARGET JUST LEFT OF THE SHIP: the stub is above it, never on its far side', async () => {
+    // ⛔ SABOTAGE RUN: the old stub (`routeChevron(st, t.x - 6, axisY, 1, 0)`, pointing right) → no tip
+    //    above the target and texels left of it, on the side away from the ship, red.
+    const nav = await at('rail');
+    select(nav, { type: 'planet', planetIndex: 3 });
+    const a = nav._systemData.planets[3].orbitAngle + 0.3;
+    publish(nav, { x: 1750 * Math.cos(a), y: 0, z: 1750 * Math.sin(a) });   // 1.75 AU, off planet 3's bearing
+    const p = paint(nav, 1);
+    expect(p.D.ship.at).toBeNull();
+    const axisY = p.S.ladderCaps.axisY, t = stopOf(p.S, 3), c = shipCentre(p), dots = routeDots(p);
+    expect(c.x > t.x, `the ship (${c.x}) is right of the target (${t.x})`).toBe(true);
+    expect(/^SHIP \d/.test(wordOf(p) && wordOf(p).s), 'a stub, with the range in the word').toBe(true);
+    expect(has(dots, t.x, axisY - 6), 'the tip above the framed target').toBe(true);
+    expect(dots.filter((f) => f.x < t.x - 1).length, 'nothing on the far side of the target').toBe(0);
+  }, 120000);
+
+  it('G9 ⛔ LIVE FINDING 1 — PARKED AT A GIANT WITH CLOSE MOONS IS ARRIVED: no route, no range', async () => {
+    // ⛔ SABOTAGE RUN: re-adding the 0.4 x innermost-moon cap in `deriveShip` → at 6R and at 2.6R the
+    //    ship is open space, a stub draws and the word reads `SHIP …R⊕`, red.
+    for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
+      for (const k of [6, 2.6]) {
+        const nav = await at(mode);
+        select(nav, { type: 'planet', planetIndex: 4 });
+        publish(nav, plus(P(nav, 4), { x: 0, y: 0, z: k * 10 * E }));
+        const p = paint(nav, design);
+        expect(p.D.ship.at, `design ${design}, ${k}R: arrived`).toEqual({ kind: 'planet', pIdx: 4, mIdx: -1 });
+        const c = shipCentre(p), s = stopOf(p.S, 4);
+        expect([c.x, c.y], 'the diamond on the giant').toEqual([s.x, s.y]);
+        expect(routeDots(p).length, 'no line to where you are').toBe(0);
+        expect(wordOf(p) && wordOf(p).s, 'and no range').toBe('SHIP');
+      }
+    }
   }, 120000);
 
   it('G8 ⛔ FAR OUT PAST THE LAST STOP: an edge chevron above the axis and `SHIP 60AU`', async () => {
@@ -400,13 +462,18 @@ describe('GPS line — the route never erases a mark', () => {
     }
     return g;
   }
-  it('N1 ⛔ EVERY MARK AND LABEL TEXEL OF THE ROUTE-LESS FRAME IS UNCHANGED, in four routes across both designs', async () => {
-    // ⭐ THE BASELINE IS THE SAME FRAME WITH `D.ship` NULLED — same selection, same labels, same
-    //    pip inks — so every difference is the ship's. Texels allowed to differ: the diamond's
-    //    footprint and the SHIP word's plate. Everything else that was not glass (BG) or rule
-    //    (RULE / GRID, which the axis track is allowed to light) must be the same ink.
+  it('N1 ⛔ EVERY MARK TEXEL OF THE ROUTE-LESS FRAME IS UNCHANGED, AND NO ROUTE TEXEL IS ON A NAME, in four routes across both designs', async () => {
+    // ⭐ THE BASELINE IS THE SAME FRAME WITH `D.ship` NULLED — same selection, same pip inks — so
+    //    every difference is the ship's. Texels allowed to differ: the diamond's footprint, the SHIP
+    //    word's plate, and the NAME plates of either frame — since live finding 2 the names are placed
+    //    off the route, so a name may take another slot when a route exists. Everything else that was
+    //    not glass (BG) or rule (RULE / GRID, which the axis track is allowed to light) must be the
+    //    same ink, and no route texel may land inside a name plate of the routed frame.
     // ⛔ SABOTAGE RUN: `routePut` ignoring the protected boxes → planet, belt, frame and label texels
-    //    are overwritten in SHIP ink, red.
+    //    are overwritten in SHIP ink, red. FIXUP SABOTAGE RUN: every painter placing names against
+    //    `hits` alone AND the route ignoring name plates → route texels on a name plate, red. (Either
+    //    half alone stays green: the dry run keeps names off the line, and the plate mask keeps the
+    //    line off any name — two guards for one rule.)
     const cases = [
       ['rail', 1, { type: 'planet', planetIndex: 7 }, (n) => plus(P(n, 0), { x: 3 * E, y: 0, z: 0 }), -1],
       ['rail', 1, { type: 'moon', planetIndex: 6, moonIndex: 2 }, (n) => plus(P(n, 1), { x: 3 * E, y: 0, z: 0 }), -1],
@@ -430,15 +497,47 @@ describe('GPS line — the route never erases a mark', () => {
       const INK = withRoute.INK, free = new Set([INK.BG, INK.RULE, INK.GRID]);
       const c = shipCentre(withRoute);
       const words = withRoute.lines.filter((l) => /^SHIP/.test(l.s)).map((l) => [l.x - 1, l.y - 1, l.x + measurePixelText(l.s), l.y + FACE.h]);
+      const plates = (q) => q.labelHits.map((l) => [l.x - 1, l.y - 1, l.x + l.w, l.y + FACE.h]);
+      const names = [...plates(base), ...plates(withRoute)];
+      const inAny = (rs, x, y) => rs.some((r) => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]);
       const bad = [];
       for (const [k, ink] of a) {
         if (free.has(ink)) continue;
         const x = k % W, y = (k - x) / W;
         if (c && Math.abs(x - c.x) + Math.abs(y - c.y) <= 2) continue;
-        if (words.some((r) => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])) continue;
+        if (inAny(words, x, y) || inAny(names, x, y)) continue;
         if (b.get(k) !== ink) bad.push(`(${x},${y}) ${ink}→${b.get(k)}`);
       }
       expect(bad, `D${design} ${JSON.stringify(sel)}: ${bad.slice(0, 6).join(' ')}`).toEqual([]);
+      const onName = routeDots(withRoute).filter((f) => inAny(plates(withRoute), f.x, f.y));
+      expect(onName.map((f) => `(${f.x},${f.y})`), `D${design}: route texels on a name plate`).toEqual([]);
     }
   }, 180000);
+
+  it('N2 ⛔ LIVE FINDING 2 — A NAME NEVER COVERS THE ROUTE: the ship in the belt, the star selected', async () => {
+    // ⭐ The shape Max's walk measured on Sol (ship at Ceres, star selected, the MARS plate over all
+    //    but two texels of the line), on this fixture: found by sweeping ship × target × azimuth with
+    //    the dry run removed — this is a case where a neighbour's name lands on the line.
+    // ⛔ SABOTAGE RUN: `d2System` placing names against `hits` alone (no dry-run route) → planet c's
+    //    plate sits across the route a texel in from its edge, red.
+    const nav = await at('bars');
+    nav._systemRotY = 1; nav.render();
+    select(nav, { type: 'star' });
+    publish(nav, { x: 2700 * Math.cos(1), y: 0, z: 2700 * Math.sin(1) });
+    const p = paint(nav, 2);
+    const c = shipCentre(p), s = starOf(p.S);
+    expect(c && s, 'a diamond and a star').toBeTruthy();
+    const L = Math.hypot(s.x - c.x, s.y - c.y), hit = [];
+    for (const lh of p.labelHits) {
+      // the plate's INTERIOR (one texel in), so a rounding graze along an edge is not a cover
+      const r = [lh.x, lh.y, lh.x + lh.w - 1, lh.y + FACE.h - 1];
+      for (let d = 4; d <= L - 7; d += 0.5) {
+        const x = Math.round(c.x + (s.x - c.x) * d / L), y = Math.round(c.y + (s.y - c.y) * d / L);
+        if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) { hit.push(`${lh.ref && lh.ref.name} at (${x},${y})`); break; }
+      }
+    }
+    expect(hit, 'no name plate across the route').toEqual([]);
+    expect(routeDots(p).length, 'and the route is drawn').toBeGreaterThan(10);
+    expect(p.violations).toBe(0);
+  }, 120000);
 });

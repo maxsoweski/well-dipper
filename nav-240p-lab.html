@@ -2005,11 +2005,35 @@ function d1Ladder(g, mapW, mapY, mapH) {
    *    routes through `bodyIdentity` to the same "no identity, clear the selection" its dots give.
    *  Deliberate non-goals · no leader lines, no second tag, no re-ordering of the axis (AC-20's AU
    *    order is untouched), and no name on the system star — AC-8 gives the star a LINE, not a label. */
+  if (scroll > 0) routeMask.push([x0, axisY, x0 + 4, axisY]);
+  if (scroll < maxScroll) routeMask.push([x1 - 5, axisY, x1 - 1, axisY]);
+  const stopsAU = [{ val: 0, v: 0 }, ...shown.map((b, i) => ({ val: Number(b.au) || 0, v: vx[i] }))];
+  const shipGeo = {
+    axisY, x0, x1, sx, vis, mask: routeMask, capsL: scroll > 0, capsR: scroll < maxScroll,
+    stopX(t) {
+      if (t.kind === 'star') return { x: sx(0), y: axisY, framed: D.selBody?.kind === 'star', off: !vis(sx(0)) };
+      const i = shown.findIndex((b) => b.kind === 'planet' && b.pIdx === t.pIdx);
+      if (i < 0) return null;
+      const b = shown[i], x = sx(vx[i]);
+      if (t.kind === 'moon' && t.mIdx >= 0 && t.mIdx < b.moons) {
+        return { x, y: axisY - 7 - t.mIdx * 3, pip: true, framedParent: b === D.selBody, off: !vis(x) };
+      }
+      return { x, y: axisY, framed: b === D.selBody, off: !vis(x) };
+    },
+    freeV() {
+      const au = D.ship && D.ship.au;
+      return au ? ladderShipV(Math.hypot(au.x, au.z), stopsAU, vpx).v : NaN;
+    },
+    originRange: () => (D.ship && D.ship.range ? D.ship.range.star : NaN),
+  };
+  // ⭐ LIVE FINDING 2 (2026-10-02) — THE ROUTE RUNS DRY BEFORE THE NAMES ARE PLACED, so a name plate
+  //    takes another slot (or yields to its fallback) rather than covering the line. See `routeMarks`.
+  const nameMarks = hits.concat(routeMarks(drawShipLadder(null, hits, [], shipGeo, true)));
   const taken = tagPlates.slice();
   for (const q of bodyLabelOrder(nameQ)) {
     const txt = fit(bodyLabelText(q.b), mapW - 8);
     if (!txt) continue;
-    const pos = placeLabel(taken, hits, q.x, axisY, 4, -14, measurePixelText(txt), REGIONS.map, q.b);
+    const pos = placeLabel(taken, nameMarks, q.x, axisY, 4, -14, measurePixelText(txt), REGIONS.map, q.b);
     if (!pos) continue;
     S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
                                  'map', 'ladder name ' + txt), ref: q.b, kind: 'body' });
@@ -2029,27 +2053,7 @@ function d1Ladder(g, mapW, mapY, mapH) {
   // ⭐⭐ THE GPS LINE (2026-10-02) — the ship from where it IS, and the route as a track along the
   //    axis (Leg A) plus, for a moon, a riser up its planet's pip column (Leg B). See
   //    `drawShipLadder`. Every closure below is THIS painter's own geometry: `sx`, `vx`, the scroll.
-  if (scroll > 0) routeMask.push([x0, axisY, x0 + 4, axisY]);
-  if (scroll < maxScroll) routeMask.push([x1 - 5, axisY, x1 - 1, axisY]);
-  const stopsAU = [{ val: 0, v: 0 }, ...shown.map((b, i) => ({ val: Number(b.au) || 0, v: vx[i] }))];
-  drawShipLadder(g, hits, taken, {
-    axisY, x0, x1, sx, vis, mask: routeMask, capsL: scroll > 0, capsR: scroll < maxScroll,
-    stopX(t) {
-      if (t.kind === 'star') return { x: sx(0), y: axisY, framed: D.selBody?.kind === 'star', off: !vis(sx(0)) };
-      const i = shown.findIndex((b) => b.kind === 'planet' && b.pIdx === t.pIdx);
-      if (i < 0) return null;
-      const b = shown[i], x = sx(vx[i]);
-      if (t.kind === 'moon' && t.mIdx >= 0 && t.mIdx < b.moons) {
-        return { x, y: axisY - 7 - t.mIdx * 3, pip: true, framedParent: b === D.selBody, off: !vis(x) };
-      }
-      return { x, y: axisY, framed: b === D.selBody, off: !vis(x) };
-    },
-    freeV() {
-      const au = D.ship && D.ship.au;
-      return au ? ladderShipV(Math.hypot(au.x, au.z), stopsAU, vpx).v : NaN;
-    },
-    originRange: () => (D.ship && D.ship.range ? D.ship.range.star : NaN),
-  });
+  drawShipLadder(g, hits, taken, shipGeo);
   S.bodyHits = hits;
 }
 
@@ -2143,27 +2147,12 @@ function d1MoonLadder(g, mapW, mapY, mapH, det) {
     S.ladderCounterRect = { x: x1 - 4 - cW, y: axisY + 16, w: cW, h: FACE.h };
   }
   // ── THE NAMES, placed by `placeLabel` against the finished mark list — AC-7's rule, unchanged ──
-  const taken = tagPlates.slice();
-  for (const q of bodyLabelOrder(nameQ)) {
-    const txt = fit(bodyLabelText(q.b), mapW - 8);
-    if (!txt) continue;
-    const pos = placeLabel(taken, hits, q.x, axisY, 4, -14, measurePixelText(txt), REGIONS.map, q.b);
-    if (!pos) continue;
-    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
-                                 'map', 'moon ladder name ' + txt), ref: q.b, kind: 'body' });
-  }
-  // ⭐⭐ THE GPS LINE (2026-10-02) — THE SHIP IS BACK ON THIS LADDER, IN ITS OWN FRAME. The old
-  //    suppression's reason (`D.ship` named a body in the SYSTEM's frame) is gone: `D.ship.rel[pIdx]`
-  //    is the ship's offset from THIS planet in Earth radii, the unit this axis is measured in. At the
-  //    open planet it stands on the head, at one of its moons on that moon's stop, inside the moon
-  //    system between them, and anywhere else past the right cap with its distance in the word.
-  //    A target this ladder does not show (the star, another planet, another planet's moon) is "the
-  //    right cap" — further out than every moon on it.
   const capMask = [];
   if (scroll > 0) capMask.push([x0, axisY, x0 + 4, axisY]);
   if (scroll < maxScroll) capMask.push([x1 - 5, axisY, x1 - 1, axisY]);
   const stopsE = [{ val: 0, v: vx[0] }, ...det.moons.map((m, i) => ({ val: m.orbitR, v: vx[i + 1] }))];
-  drawShipLadder(g, hits, taken, {
+  const shipGeo = {
+    subP: det.pIdx,   // ⛔ the open planet: the ship is never snapped onto it here (see the painter)
     axisY, x0, x1, sx, vis, mask: capMask, capsL: scroll > 0, capsR: scroll < maxScroll,
     stopX(t) {
       if (t.pIdx !== det.pIdx) return null;
@@ -2179,7 +2168,27 @@ function d1MoonLadder(g, mapW, mapY, mapH, det) {
       return r ? ladderShipV(Math.hypot(r.x, r.z), stopsE, vpx).v : NaN;
     },
     originRange: () => (D.ship && D.ship.range ? D.ship.range.p[det.pIdx] : NaN),
-  });
+  };
+  // ⭐ LIVE FINDING 2 (2026-10-02) — THE ROUTE RUNS DRY BEFORE THE NAMES ARE PLACED, so a name plate
+  //    takes another slot (or yields to its fallback) rather than covering the line. See `routeMarks`.
+  const nameMarks = hits.concat(routeMarks(drawShipLadder(null, hits, [], shipGeo, true)));
+  const taken = tagPlates.slice();
+  for (const q of bodyLabelOrder(nameQ)) {
+    const txt = fit(bodyLabelText(q.b), mapW - 8);
+    if (!txt) continue;
+    const pos = placeLabel(taken, nameMarks, q.x, axisY, 4, -14, measurePixelText(txt), REGIONS.map, q.b);
+    if (!pos) continue;
+    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
+                                 'map', 'moon ladder name ' + txt), ref: q.b, kind: 'body' });
+  }
+  // ⭐⭐ THE GPS LINE (2026-10-02) — THE SHIP IS BACK ON THIS LADDER, IN ITS OWN FRAME. The old
+  //    suppression's reason (`D.ship` named a body in the SYSTEM's frame) is gone: `D.ship.rel[pIdx]`
+  //    is the ship's offset from THIS planet in Earth radii, the unit this axis is measured in. At the
+  //    open planet it stands on the head, at one of its moons on that moon's stop, inside the moon
+  //    system between them, and anywhere else past the right cap with its distance in the word.
+  //    A target this ladder does not show (the star, another planet, another planet's moon) is "the
+  //    right cap" — further out than every moon on it.
+  drawShipLadder(g, hits, taken, shipGeo);
   S.bodyHits = hits;
 }
 
@@ -2821,7 +2830,7 @@ function markExt(z, look) {
   if (!b) return [1, 1];
   if (z.type === 'moon') return b === D.selBody ? [4, 4] : [1, 1];       // a moon's own mark (sub-views)
   if (z.moon >= 0) return [0, 0];                                          // a whole-system pip
-  if (b.kind === 'belt') return look === 'ladder' ? [6, 0] : [0, 0];
+  if (b.kind === 'belt') return [0, 0];     // ⚠ the ladder's 7 belt dots are boxed one by one in `routeInk`
   if (b === D.selBody) return [4, 4];
   let ex = b.rE > 4 ? 2 : 1, ey = ex;
   if (b.rings) { if (look === 'ladder') ex = Math.max(ex, 4); else { ex = Math.max(ex, 3); ey = Math.max(ey, 2); } }
@@ -2829,29 +2838,43 @@ function markExt(z, look) {
   return [ex, ey];
 }
 /** A route's pen: the pane clip, the protected boxes, and the dash phase carried across legs. */
-function routeInk(g, cl, hits, taken, look, extra) {
+function routeInk(g, cl, hits, taken, look, extra, dry) {
   const boxes = [];
   for (const z of hits || []) {
     if (!Number.isFinite(z.x) || !Number.isFinite(z.y)) continue;
     const e = markExt(z, look), x = Math.round(z.x), y = Math.round(z.y);
+    // ⛔ LIVE FINDING 3 (2026-10-02): a ladder belt is seven DIM texels two apart on the axis row
+    //    (`d1Ladder`'s `k = -6..6 step 2`), and boxing it as one 13-texel run hid up to 23 texels of track
+    //    beside the diamond — the route seemed to start at Mars. Each dot is protected, the gaps are not.
+    if (look === 'ladder' && z.ref && z.ref.kind === 'belt' && !(z.moon >= 0)) {
+      for (let k = -6; k <= 6; k += 2) boxes.push([x + k, y, x + k, y]);
+      continue;
+    }
     boxes.push([x - e[0], y - e[1], x + e[0], y + e[1]]);
   }
   // `taken` entries are `placeLabel`'s `{ x: x-2, y, w: w+4 }`; the plate `plated()` lays is
   // `x-1 .. x+w` by `y-1 .. y+FACE.h`.
   for (const t of taken || []) boxes.push([t.x + 1, t.y - 1, t.x + t.w - 2, t.y + FACE.h]);
   for (const b of extra || []) boxes.push(b);
-  return { g, cl, boxes, phase: 0, n: 0, lx: NaN, ly: NaN };
+  // ⭐ `path` collects every texel the route lit (or, `dry`, every texel it RUNS through) as `{x, y, r}`
+  //    marks, so a label placer can be told where the line is — see `routeMarks`.
+  return { g, cl, boxes, phase: 0, n: 0, lx: NaN, ly: NaN, dry: !!dry, path: [] };
 }
 function routePut(st, x, y) {
   x = Math.round(x); y = Math.round(y);
+  if (st.dry) { st.path.push({ x, y, r: 0.5 }); return true; }
   const cl = st.cl;
   if (cl && (x < cl.x || x >= cl.x + cl.w || y < cl.y || y >= cl.y + cl.h)) return false;
   for (const b of st.boxes) if (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) return false;
   rect(st.g, x, y, 1, 1, INK.SHIP);
   st.n++;
+  st.path.push({ x, y, r: 0.5 });
   return true;
 }
-/** One dashed leg, every other texel, the phase continuing from the previous leg. */
+/** One dashed leg, every other texel, the phase continuing from the previous leg.
+ *  ⭐ A DASH A MARK REFUSES SLIDES TO THE NEXT FREE TEXEL (live finding 3): the phase only advances on
+ *    a texel that was lit or deliberately left dark, so the track resumes right beside a mark instead of
+ *    losing a texel of gap to the parity. */
 function routeDash(st, x0, y0, x1, y1) {
   if (![x0, y0, x1, y1].every(Number.isFinite)) return;
   const steps = Math.min(2048, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
@@ -2860,8 +2883,20 @@ function routeDash(st, x0, y0, x1, y1) {
     const x = Math.round(x0 + (x1 - x0) * t), y = Math.round(y0 + (y1 - y0) * t);
     if (x === st.lx && y === st.ly) continue;
     st.lx = x; st.ly = y;
-    if ((st.phase++ & 1) === 0) routePut(st, x, y);
+    if (st.dry) { routePut(st, x, y); continue; }
+    if ((st.phase & 1) === 0 && !routePut(st, x, y)) continue;
+    st.phase++;
   }
+}
+/*  Function · the ROUTE as label obstacles: run the painter dry, return its path and the diamond.
+ *  Intent · live finding 2 (2026-10-02): on design 2, with the ship at Ceres and the star selected,
+ *    the MARS plate covered all but two texels of the route and its arrowhead. Labels were placed
+ *    first and the route yielded to them. A destination line is what the pilot is reading off this
+ *    screen; a name has other slots and a fallback. So every painter runs its route DRY before its
+ *    names are placed, hands `placeLabel` these texels as foreign marks, then paints for real.
+ *  ⛔ The dry path is the WHOLE line, both dash phases, so a plate can never sit in a dash gap. */
+function routeMarks(dry) {
+  return Array.isArray(dry) ? dry : [];
 }
 /** ⭐ THE ARROWHEAD IS THREE TEXELS — a tip and two flanks `back` behind it, `side` off the line.
  *  Today's ±2 on the orreries; the ladder's moon approach uses 1/1 so its flanks fall between pips. */
@@ -2893,7 +2928,7 @@ function shipWord(g, hits, taken, ax, ay, word) {
   // ⚠ BELOW FIRST (today's slot, so an uncrowded frame is unchanged), THEN ABOVE: on a ladder the room
   //   under the axis is the names' (`gy = -14`), and a word carrying a range is worth a second try.
   const w = measurePixelText(txt);
-  const pos = placeLabel(taken, hits, ax, ay, 4, -10, w, cl, null) || placeLabel(taken, hits, ax, ay, 4, 18, w, cl, null);
+  const pos = placeLabel(taken, hits, ax, ay, 4, -10, w, cl, null) || placeLabel(taken, hits, ax, ay, 4, 18, w, cl, null);   // `hits` carries the lit route (the callers pass `hits.concat(st.path)`)
   if (pos) plated(g, txt, pos.x, pos.y, INK.SHIP, 'map', 'ship label');
 }
 
@@ -2907,15 +2942,20 @@ function shipWord(g, hits, taken, ax, ay, word) {
  *    direction to a body off the picture), `free()` (the ship from coordinates) and `originRange()`.
  *  ⛔ BACK = 4 FROM A PLAIN MARK, 6 FROM A FRAMED ONE (the frame's rim is at ±4): the arrowhead must
  *    say which body it means without standing on its frame. */
-function drawShipOrrery(g, hits, taken, geo) {
-  if (!D.ship || !isHere() || !geo) return;
+function drawShipOrrery(g, hits, taken, geo, dry) {
+  if (!D.ship || !isHere() || !geo) return null;
   const cl = REGIONS.map;
-  if (!cl) return;
+  if (!cl) return null;
   const inPane = (x, y) => x >= cl.x && x < cl.x + cl.w && y >= cl.y && y < cl.y + cl.h;
   const live = !!D.ship.live;
   const at = shipAt();
   let sp = null, edge = null;
-  const am = at ? geo.markOf(at) : null;
+  // ⛔ IN A PLANET'S OWN SUB-VIEW THE SHIP IS NEVER SNAPPED ONTO THAT PLANET (`geo.subP`). Arriving is
+  //    8 radii, and at a giant that reaches its inner moons' orbits (Jupiter: Amalthea 2.5R, Io 5.9R),
+  //    so a snap would draw a ship halfway to Io on Jupiter — Astra's point 1. Here the picture is at
+  //    moon scale and the ship is drawn from `rel`; a snap onto a MOON stays (a moon's 8R is small).
+  const snapAt = (at && live && geo.subP != null && at.kind === 'planet' && at.pIdx === geo.subP) ? null : at;
+  const am = snapAt ? geo.markOf(snapAt) : null;
   if (am && !am.off && inPane(am.x, am.y)) sp = { x: am.x, y: am.y };
   else if (live) {
     const f = geo.free();
@@ -2924,11 +2964,11 @@ function drawShipOrrery(g, hits, taken, geo) {
       else edge = edgeAlong(geo.cx, geo.cy, f.x - geo.cx, f.y - geo.cy, cl, 2);
     } else if (am && am.off) edge = edgeAlong(geo.cx, geo.cy, am.x - geo.cx, am.y - geo.cy, cl, 2);
   }
-  if (!sp && !edge) return;
+  if (!sp && !edge) return null;
   const from = sp || edge;
   let word = 'SHIP';
   if (edge) { const r = geo.originRange(); if (Number.isFinite(r)) word += ' ' + fmtShipRange(r); }
-  const st = routeInk(g, cl, hits, taken, 'orrery', null);
+  const st = routeInk(g, cl, hits, taken, 'orrery', null, dry);
   const t = routeTarget();
   if (t && !(at && sameBody(t, at))) {
     const pip = (t.kind === 'moon' && geo.pipOf) ? geo.pipOf(t) : null;
@@ -2994,13 +3034,19 @@ function drawShipOrrery(g, hits, taken, geo) {
       }
     }
   }
+  if (dry) {
+    if (sp) st.path.push({ x: Math.round(sp.x), y: Math.round(sp.y), r: 2 });   // the diamond's 5x5
+    else routeChevron(st, edge.x, edge.y, edge.ux, edge.uy);
+    return st.path;
+  }
   if (sp) {
     const box = spriteClip(g, sp.x, sp.y, SP.diam5, INK.SHIP, cl);
     if (box.w > 0 && box.h > 0) assertMark('ship diamond', 'map', box.x, box.y, box.w, box.h);
   } else {
     routeChevron(st, edge.x, edge.y, edge.ux, edge.uy);
   }
-  shipWord(g, hits, taken, Math.round(from.x), Math.round(from.y), word);
+  shipWord(g, hits.concat(st.path), taken, Math.round(from.x), Math.round(from.y), word);
+  return null;
 }
 
 /*  Function · the ship and its route on design 1's two LADDERS (the system by AU, a planet's moons by
@@ -3017,13 +3063,15 @@ function drawShipOrrery(g, hits, taken, geo) {
  *  @param {object} L  the painter's closures — `axisY, x0, x1, sx, vis`, `stopX(t)` (`{x, y, pip,
  *    framed, framedParent, off}` or `null` for a body this ladder does not show), `freeV()` (the
  *    ship's virtual x from coordinates), `originRange()`, and `mask` (extra protected boxes). */
-function drawShipLadder(g, hits, taken, L) {
-  if (!D.ship || !isHere() || !L) return;
+function drawShipLadder(g, hits, taken, L, dry) {
+  if (!D.ship || !isHere() || !L) return null;
   const cl = REGIONS.map;
-  if (!cl) return;
+  if (!cl) return null;
   const live = !!D.ship.live, at = shipAt(), axisY = L.axisY;
   let sp = null, edgeSide = 0;
-  const am = at ? L.stopX(at) : null;
+  // ⛔ NEVER SNAPPED ONTO THE OPEN PLANET IN ITS OWN MOON LADDER (`L.subP`) — `drawShipOrrery`'s rule.
+  const snapAt = (at && live && L.subP != null && at.kind === 'planet' && at.pIdx === L.subP) ? null : at;
+  const am = snapAt ? L.stopX(snapAt) : null;
   if (am && !am.off) sp = { x: am.x, y: am.y, pip: !!am.pip, framed: !!am.framed };
   else if (live) {
     const v = L.freeV();
@@ -3033,14 +3081,14 @@ function drawShipLadder(g, hits, taken, L) {
       else edgeSide = x < L.x0 ? -1 : 1;
     }
   }
-  if (!sp && !edgeSide) return;
+  if (!sp && !edgeSide) return null;
   // ⚠ The route's two ends on the axis stop short of the `...` caps when they are drawn, and run to
   //   the window's own edge when they are not (the last stop of an unscrolled ladder is at `x1 - 8`).
   const capL = L.capsL ? L.x0 + 6 : L.x0 + 2, capR = L.capsR ? L.x1 - 7 : L.x1 - 2;
   const shipX = sp ? Math.round(sp.x) : (edgeSide < 0 ? capL : capR);
   let word = 'SHIP';
   if (edgeSide) { const r = L.originRange(); if (Number.isFinite(r)) word += ' ' + fmtShipRange(r); }
-  const st = routeInk(g, cl, hits, taken, 'ladder', L.mask);
+  const st = routeInk(g, cl, hits, taken, 'ladder', L.mask, dry);
   const t = routeTarget();
   if (t && !(at && sameBody(t, at))) {
     const tp = L.stopX(t);
@@ -3098,12 +3146,22 @@ function drawShipLadder(g, hits, taken, L) {
     if (!drew && live && tp && !tp.off) {
       const rg = shipRangeTo(D.ship, t);
       if (Number.isFinite(rg)) {
-        routeChevron(st, Math.round(tp.x) - (tp.framed ? 6 : 4), axisY, 1, 0);
+        // ⛔ LIVE FINDING 4: this chevron was hard-coded to point RIGHT, so a target LEFT of the ship
+        //    (Ceres, from open space past it) got an arrow on its far side. The stub only draws when the
+        //    ship is too close along the axis for a track, so it comes from ABOVE, pointing down at the
+        //    target — never under the diamond, on either side.
+        const tx = Math.round(tp.x), bk = tp.framed ? 6 : 4;
+        routeChevron(st, tx, axisY - bk, 0, 1, 1, 1);
         word = 'SHIP ' + fmtShipRange(rg);
       }
     }
   }
   let ax = shipX, ay = axisY;
+  if (dry) {
+    if (sp) st.path.push({ x: Math.round(sp.x), y: Math.round(sp.y), r: 2 });   // the diamond's 5x5
+    else routeChevron(st, edgeSide < 0 ? L.x0 + 2 : L.x1 - 2, axisY - 3, edgeSide, 0);
+    return st.path;
+  }
   if (sp) {
     const box = spriteClip(g, sp.x, sp.y, SP.diam5, INK.SHIP, cl);
     if (box.w > 0 && box.h > 0) assertMark('ship diamond', 'map', box.x, box.y, box.w, box.h);
@@ -3114,7 +3172,8 @@ function drawShipLadder(g, hits, taken, L) {
     ax = edgeSide < 0 ? L.x0 + 2 : L.x1 - 2; ay = axisY - 3;
     routeChevron(st, ax, ay, edgeSide, 0);
   }
-  shipWord(g, hits, taken, ax, ay, word);
+  shipWord(g, hits.concat(st.path), taken, ax, ay, word);
+  return null;
 }
 
 // ── ⭐⭐ AC-1 — THE HOVER CALLOUT, ONE BLOCK FOR TEN SCREENS ───────────────────────────────────────
@@ -4102,33 +4161,10 @@ function d2System(g, W, mapY, mapH) {
    *  ⚠ THE QUEUE IS RE-ORDERED BEFORE IT IS PLACED (`bodyLabelOrder`): selected first, then the body
    *    the ship is at, then outward by AU. `placeLabel` is first-come-first-served, so the order IS
    *    the priority. */
-  for (const q of bodyLabelOrder(tagQueue)) {
-    const name = fit(bodyLabelText(q.b), W - 8);
-    let txt = '', pos = null;
-    if (name) { pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(name), REGIONS.map, q.b); txt = name; }
-    if (!pos && q.tag) { pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b); txt = q.tag; }
-    if (!pos || !txt) continue;
-    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.DIM, 'map', 'body label ' + txt),
-                       ref: q.b, kind: 'body' });
-  }
-  // ⭐⭐ AC-5 (restorations) — AND THE NUMBER TO GUESS FROM NOW EXISTS, SO THE DIAMOND MOVED.
-  //   What stood here was `sprite(g, cxp + 8, cyp, SP.diam5, INK.TARGET)` — a bare screen offset
-  //   whose own note read *"the ONE mark on this orrery that visibly refuses to move… giving it a
-  //   position would be this page guessing where the ship is, and there is no such number in the
-  //   pipeline to guess from."* `D.ship` (SEAM §2, `state.js:945`) IS that number: the game's
-  //   `_currentFocusIndex` / `_currentMoonIndex`, the same pair legacy places its diamond from. So
-  //   the fixed offset is GONE and the diamond stands on the focused body's own drawn point, out of
-  //   `hits`. ⛔ It is drawn AFTER the labels because the word `SHIP` has to yield to a body's name,
-  //   and the dashed line crossing a label plate is legacy's own order too (`:2959`, after `:2833`).
-  // ⚠ The ring bars, the moon pips and the habitability cross above are SCREEN-SPACE BADGES and stay
-  //   that way, as do the selection frames. That is the low-fi idiom, not a mark that failed to turn.
-  // ⭐⭐ THE GPS LINE (2026-10-02) — and now the diamond stands where the ship IS: on the body it has
-  //   arrived at, else at its own system-centred position through THIS orrery's `rOf`, `TILT` and
-  //   azimuth, so a drag or a wheel notch moves it with everything else. See `drawShipOrrery`.
   const auIn = (() => { const ps = D.bodies.filter((b) => b.kind === 'planet' && b.au > 0).map((b) => b.au);
                         return ps.length ? Math.min(...ps) : auMax; })();   // ⚠ a planetless system anchors on `auMax`
   const planetRow = (pIdx) => D.bodies.find((b) => b.kind === 'planet' && b.pIdx === pIdx) || null;
-  drawShipOrrery(g, hits, tagsTaken, {
+  const shipGeo = {
     cx: cxp, cy: cyp,
     markOf(t) {
       if (t.kind === 'star') return { x: cxp, y: cyp, framed: D.selBody?.kind === 'star' };
@@ -4153,7 +4189,34 @@ function d2System(g, W, mapY, mapH) {
       return { x: cxp + Math.cos(a) * Rs, y: cyp + Math.sin(a) * Rs * TILT };
     },
     originRange: () => (D.ship && D.ship.range ? D.ship.range.star : NaN),
-  });
+  };
+  // ⭐ LIVE FINDING 2 (2026-10-02) — THE ROUTE RUNS DRY BEFORE THE NAMES ARE PLACED, so a name plate
+  //    takes another slot (or yields to its fallback) rather than covering the line. See `routeMarks`.
+  const nameMarks = hits.concat(routeMarks(drawShipOrrery(null, hits, [], shipGeo, true)));
+  for (const q of bodyLabelOrder(tagQueue)) {
+    const name = fit(bodyLabelText(q.b), W - 8);
+    let txt = '', pos = null;
+    if (name) { pos = placeLabel(tagsTaken, nameMarks, q.x, q.y, 4, 8, measurePixelText(name), REGIONS.map, q.b); txt = name; }
+    if (!pos && q.tag) { pos = placeLabel(tagsTaken, nameMarks, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b); txt = q.tag; }
+    if (!pos || !txt) continue;
+    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.DIM, 'map', 'body label ' + txt),
+                       ref: q.b, kind: 'body' });
+  }
+  // ⭐⭐ AC-5 (restorations) — AND THE NUMBER TO GUESS FROM NOW EXISTS, SO THE DIAMOND MOVED.
+  //   What stood here was `sprite(g, cxp + 8, cyp, SP.diam5, INK.TARGET)` — a bare screen offset
+  //   whose own note read *"the ONE mark on this orrery that visibly refuses to move… giving it a
+  //   position would be this page guessing where the ship is, and there is no such number in the
+  //   pipeline to guess from."* `D.ship` (SEAM §2, `state.js:945`) IS that number: the game's
+  //   `_currentFocusIndex` / `_currentMoonIndex`, the same pair legacy places its diamond from. So
+  //   the fixed offset is GONE and the diamond stands on the focused body's own drawn point, out of
+  //   `hits`. ⛔ It is drawn AFTER the labels because the word `SHIP` has to yield to a body's name,
+  //   and the dashed line crossing a label plate is legacy's own order too (`:2959`, after `:2833`).
+  // ⚠ The ring bars, the moon pips and the habitability cross above are SCREEN-SPACE BADGES and stay
+  //   that way, as do the selection frames. That is the low-fi idiom, not a mark that failed to turn.
+  // ⭐⭐ THE GPS LINE (2026-10-02) — and now the diamond stands where the ship IS: on the body it has
+  //   arrived at, else at its own system-centred position through THIS orrery's `rOf`, `TILT` and
+  //   azimuth, so a drag or a wheel notch moves it with everything else. See `drawShipOrrery`.
+  drawShipOrrery(g, hits, tagsTaken, shipGeo);
   // ⭐ AC-6 — THE ZOOM GAUGE, LAST ON THE MAP AND ONLY ON THIS DESIGN'S SYSTEM SCREEN. Drawn after
   //    everything it reports on, so its plate wins where it meets a ring or a label.
   zoomGauge(g, W, mapY, mapH, zoom);
@@ -4266,24 +4329,12 @@ function d2MoonSystem(g, W, mapY, mapH, det) {
     tagQueue.push({ b: m.row, tag: roman(m.mIdx + 1), x, y });
   });
   // ── THE NAMES, wave 1b's own pass: the name in the slot, the ordinal as the fallback ─────────
-  for (const q of bodyLabelOrder(tagQueue)) {
-    const name = fit(bodyLabelText(q.b), W - 8);
-    let txt = '', pos = null;
-    if (name) { pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(name), REGIONS.map, q.b); txt = name; }
-    if (!pos && q.tag) { pos = placeLabel(tagsTaken, hits, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b); txt = q.tag; }
-    if (!pos || !txt) continue;
-    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
-                                 'map', 'moon label ' + txt), ref: q.b, kind: 'body' });
-  }
-  // ⭐⭐ THE GPS LINE (2026-10-02) — the ship in this planet's own frame, and a route to any target:
-  //    the planet and its moons are on this picture; the star, another planet or another planet's
-  //    moon is OFF it, so its route runs to the pane's edge along the true bearing — turned by this
-  //    orrery's own azimuth and tilted by its own `TILT`, like every mark on it (Astra's point 5).
   const trueAU = (row) => { const a = Number(row && row.ang) || 0, r = Number(row && row.au) || 0;
                             return { x: Math.cos(a) * r, z: Math.sin(a) * r }; };
   const toScreen = (bx, bz) => { const a = Math.atan2(bz, bx) + sysRotY; return { dx: Math.cos(a), dy: Math.sin(a) * TILT }; };
   const eIn = det.moons.length ? Math.max(1e-6, det.moons[0].orbitR) : 1;
-  drawShipOrrery(g, hits, tagsTaken, {
+  const shipGeo = {
+    subP: det.pIdx,   // ⛔ the open planet: the ship is never snapped onto it here (see the painter)
     cx: cxp, cy: cyp,
     markOf(t) {
       if (t.pIdx !== det.pIdx) return null;
@@ -4305,7 +4356,24 @@ function d2MoonSystem(g, W, mapY, mapH, det) {
       return { x: cxp + Math.cos(a) * Rs, y: cyp + Math.sin(a) * Rs * TILT };
     },
     originRange: () => (D.ship && D.ship.range ? D.ship.range.p[det.pIdx] : NaN),
-  });
+  };
+  // ⭐ LIVE FINDING 2 (2026-10-02) — THE ROUTE RUNS DRY BEFORE THE NAMES ARE PLACED, so a name plate
+  //    takes another slot (or yields to its fallback) rather than covering the line. See `routeMarks`.
+  const nameMarks = hits.concat(routeMarks(drawShipOrrery(null, hits, [], shipGeo, true)));
+  for (const q of bodyLabelOrder(tagQueue)) {
+    const name = fit(bodyLabelText(q.b), W - 8);
+    let txt = '', pos = null;
+    if (name) { pos = placeLabel(tagsTaken, nameMarks, q.x, q.y, 4, 8, measurePixelText(name), REGIONS.map, q.b); txt = name; }
+    if (!pos && q.tag) { pos = placeLabel(tagsTaken, nameMarks, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b); txt = q.tag; }
+    if (!pos || !txt) continue;
+    S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
+                                 'map', 'moon label ' + txt), ref: q.b, kind: 'body' });
+  }
+  // ⭐⭐ THE GPS LINE (2026-10-02) — the ship in this planet's own frame, and a route to any target:
+  //    the planet and its moons are on this picture; the star, another planet or another planet's
+  //    moon is OFF it, so its route runs to the pane's edge along the true bearing — turned by this
+  //    orrery's own azimuth and tilted by its own `TILT`, like every mark on it (Astra's point 5).
+  drawShipOrrery(g, hits, tagsTaken, shipGeo);
   // ⭐ AC-6 — THE ZOOM GAUGE STAYS (the seam's PAINT row): the wheel and the drag still magnify this
   //    picture, so the instrument that reports them has to be on the glass that they move.
   zoomGauge(g, W, mapY, mapH, zoom);

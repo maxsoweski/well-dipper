@@ -1097,7 +1097,11 @@ export function makeViewState() {
       : pub === undefined
         ? { planetIndex: Number.isFinite(nav._currentFocusIndex) ? nav._currentFocusIndex : -1,
             moonIndex: Number.isFinite(nav._currentMoonIndex) ? nav._currentMoonIndex : -1 }
-        : (pub && D.sys && pub.sysKey === D.sys) ? deriveShip(pub, D.sys) : null;
+        : (pub && D.sys && pub.sysKey === D.sys)
+          ? deriveShip(pub, D.sys, (cache.shipAt && cache.shipAt.sys === D.sys) ? cache.shipAt.at : null) : null;
+    // ⭐ the arrival HYSTERESIS's memory (shipState.js `SHIP_LEAVE_K`) — keyed to the system, so a
+    //    jump can never carry "arrived at planet 3" into the next system's planet 3.
+    cache.shipAt = (D.ship && D.ship.live) ? { sys: D.sys, at: D.ship.at } : null;
     const bodyKey = sortKeyFor(S, 4);
     if (cache.sysRef !== D.sys) {
       cache.sysRef = D.sys; cache.bodySortId = null;
