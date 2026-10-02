@@ -14,18 +14,17 @@
     "sandbox_mode=\"workspace-write\"",
     "--json",
     "-o",
-    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/rounds/06/result.json",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/rounds/07/result.json",
     "--output-schema",
     "/home/ax/projects/personal-os-improvements/astra-lane/skill/scripts/result.schema.json",
     "-i",
-    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/ext-v2-r05.png",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/ext-v2-r06.png",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/refs/foss-1-21st-century-foss-cover.jpg",
     "-"
   ],
-  "exit": 0,
+  "exit": 1,
   "timed_out": false,
-  "started": "2026-10-02T14:28:11",
-  "finished": "2026-10-02T14:31:10",
-  "archived": [
-    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-133357-player-ship-ext-v2/out/r06/player-ship-ext-sheet.png"
-  ]
+  "started": "2026-10-02T15:14:24",
+  "finished": "2026-10-02T15:16:07"
 }
