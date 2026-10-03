@@ -13,7 +13,7 @@ import { HashGridStarfield } from './src/generation/HashGridStarfield.js';
 import { Settings } from './src/ui/Settings.js';
 import { mountGalacticEngine } from './src/rendering/galactic/mountGalacticEngine.js';
 import { findCloudSubjects, OBSERVER_PRESETS, presetDistancePc, observerPositionFor, approachDirection } from './src/galactic/subjects.js';
-import { TUNABLES, renderPackOverrides, tuningValues, COLOUR_MODES } from './src/galactic/renderPacks.js';
+import { TUNABLES, renderPackOverrides, tuningValues, COLOUR_MODES, SHAPE_VERSIONS } from './src/galactic/renderPacks.js';
 
 // ── The game's render path (same constructor arguments as src/main.js) ──
 const settings = new Settings();
@@ -28,7 +28,7 @@ const galacticMap = new GalacticMap();
 const sky = new SkyRenderer(galacticMap, StarfieldGenerator, settings.get('starDensity'));
 const subjects = findCloudSubjects(galacticMap);
 
-const state = { subject: subjects.procedural ? 'procedural' : 'orion', preset: '100 pc', distancePc: 100, mode: 'photo', volume: true, liveMarch: false, dust: true };
+const state = { subject: subjects.procedural ? 'procedural' : 'orion', preset: '100 pc', distancePc: 100, mode: 'photo', shape: 2, volume: true, liveMarch: false, dust: true };
 const feature = () => subjects[state.subject];
 const observer = () => observerPositionFor(feature(), state.distancePc);
 
@@ -38,6 +38,7 @@ retro.setSkyRenderer(sky);
 const api = mountGalacticEngine({ skyRenderer: sky, retroRenderer: retro, galacticMap, ctx: { label: 'lab', bakeTilesPerFrame: 8 }, force: true });
 api.pin(feature());
 api.setColourMode(state.mode);
+api.setShape(state.shape);
 
 // ── Camera: look toward the nebula centre along the approach line; drag to look around ──
 function aimAtCentre() {
@@ -78,6 +79,7 @@ view.add(state, 'distancePc', 0, 3000, 0.5).name('distance (pc)')
   .onChange(() => api.controller.setObserver(observer()))
   .onFinishChange(rebuildSky);
 view.add(state, 'mode', COLOUR_MODES).name('colour (U)').onChange((m) => api.setColourMode(m));
+view.add(state, 'shape', SHAPE_VERSIONS).name('shape (V): 1 ring / 2 new').onChange((v) => api.setShape(Number(v)));
 view.add(state, 'volume').name('volume (J = A/B)').onChange((on) => api.setEnabled(on));
 view.add(api.controller.ctx, 'steps', 8, 128, 1).name('ray steps (ctx)').onFinishChange(() => api.controller.refresh());
 view.add(state, 'liveMarch').name('live march (reference)').onChange((on) => api.setSource(on ? 'live' : 'bake'));
@@ -100,10 +102,10 @@ tune.add({ reset() {
   api.controller.refresh();
 } }, 'reset').name('reset overrides');
 
-// Keep the GUI in step with the J/U keys (they act on the controller directly).
+// Keep the GUI in step with the J/U/V keys (they act on the controller directly).
 addEventListener('keyup', () => {
   const s = api.controller.snapshot();
-  state.mode = s.mode; state.volume = s.enabled;
+  state.mode = s.mode; state.volume = s.enabled; state.shape = s.shape;
   view.controllers.forEach((c) => c.updateDisplay());
 });
 
@@ -127,7 +129,7 @@ function frame() {
     hudAt = t;
     const s = api.snapshot();
     const gpu = s.gpuMs ? `gpu composite ${s.gpuMs.composite?.toFixed(3) ?? '–'} ms · bake tile ${s.gpuMs.bakeTile?.toFixed(3) ?? '–'} ms` : 'gpu timer n/a';
-    hud.textContent = `${s.featureId}\n${s.active ? 'VOLUME' : 'billboard'} (${s.source}) · ${s.mode} · d=${s.distancePc?.toFixed(1)} pc · inside=${s.insideCloud}\nR=${s.radiusPc?.toFixed(1)} pc · params ${s.paramsHash} · bake ${s.bake.state} ${s.bake.faces} gen ${s.bake.generation}/${s.bake.publishedGeneration} · ${s.bake.faceSize}px faces\nstars: ${s.starDust} · ${(s.textureBytes / 1048576).toFixed(1)} MB · ${gpu}`;
+    hud.textContent = `${s.featureId}\n${s.active ? 'VOLUME' : 'billboard'} (${s.source}) · ${s.mode} · shape v${s.shape} · d=${s.distancePc?.toFixed(1)} pc · inside=${s.insideCloud}\nR=${s.radiusPc?.toFixed(1)} pc · params ${s.paramsHash} · bake ${s.bake.state} ${s.bake.faces} gen ${s.bake.generation}/${s.bake.publishedGeneration} · ${s.bake.faceSize}px faces\nstars: ${s.starDust} · ${(s.textureBytes / 1048576).toFixed(1)} MB · ${gpu}`;
   }
   requestAnimationFrame(frame);
 }

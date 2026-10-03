@@ -27,7 +27,8 @@ function checkLabBoundary(source) {
 
 // ── Fence 2: each cloud shader chunk exists in exactly one file ──
 const SHADER_MARKERS = ['void integrateCloud(', 'float logStructure(', 'uint hashU(', 'void sampleMedium(', 'vec3 applyColourMode(',
-  'vec3 cloudAtlasDirection(', 'vec2 cloudAtlasUV(', 'float cloudDepthCDF(', 'vec3 cloudStarTransmittance('];
+  'vec3 cloudAtlasDirection(', 'vec2 cloudAtlasUV(', 'float cloudDepthCDF(', 'vec3 cloudStarTransmittance(',
+  'float cloudEnvelopeV2(', 'bool cloudDensityPartsV2(', 'void sampleMediumV2('];
 const SHADER_HOME = 'src/galactic/shaders/cloudField.glsl.js';
 
 function listSources() {
@@ -58,10 +59,10 @@ function gameEntryFeature(subject) {
   // The game's entry: you warped to it, so the sky is rebuilt AT its centre and the picker chooses it.
   return pickVolumeFeature(gm.findNearbyFeatures(subject.position, 3.0));
 }
-function checkPackParity(labFeature, gameFeature, mode) {
-  const a = serializePack(buildPack(labFeature, mode));
-  const b = serializePack(buildPack(gameFeature, mode));
-  if (a !== b) throw new Error(`pack parity broken for ${labFeature.seed} (${mode})`);
+function checkPackParity(labFeature, gameFeature, mode, shape) {
+  const a = serializePack(buildPack(labFeature, mode, shape));
+  const b = serializePack(buildPack(gameFeature, mode, shape));
+  if (a !== b) throw new Error(`pack parity broken for ${labFeature.seed} (${mode}, shape v${shape})`);
 }
 
 // ── Fence 4: Realistic vs Photo — less saturated, same luminance ──
@@ -120,16 +121,18 @@ describe('fence: the cloud GLSL exists in exactly one file', () => {
 describe('fence: lab entry and game entry give identical render params', () => {
   for (const name of ['procedural', 'orion']) {
     for (const mode of ['realistic', 'photo']) {
-      it(`${name} (${mode})`, () => {
-        const g = gameEntryFeature(lab[name]);
-        expect(g.seed).toBe(lab[name].seed);
-        expect(() => checkPackParity(lab[name], g, mode)).not.toThrow();
-      });
+      for (const shape of [1, 2]) {
+        it(`${name} (${mode}, shape v${shape})`, () => {
+          const g = gameEntryFeature(lab[name]);
+          expect(g.seed).toBe(lab[name].seed);
+          expect(() => checkPackParity(lab[name], g, mode, shape)).not.toThrow();
+        });
+      }
     }
   }
   it('BROKEN CONTROL: an altered input (radius) fails parity by name', () => {
     const altered = { ...lab.procedural, radius: lab.procedural.radius * 1.01 };
-    expect(() => checkPackParity(lab.procedural, altered, 'photo')).toThrow(/pack parity broken for .*emission-nebula/);
+    expect(() => checkPackParity(lab.procedural, altered, 'photo', 2)).toThrow(/pack parity broken for .*emission-nebula/);
   });
 });
 
@@ -161,5 +164,52 @@ describe('volume ray basis', () => {
   it('the volume shader never builds rays from the inverse projection', () => {
     expect(CLOUD_VOLUME_FRAG).not.toMatch(/uInvProjection|projectionMatrixInverse/);
     expect(CLOUD_VOLUME_FRAG).toMatch(/uTanHalf/);
+  });
+});
+
+// ── Fence: every uniform the cloud field declares is fed by the controller, and a v2 pack reaches the GPU whole ──
+import { CLOUD_FIELD_GLSL } from '../src/galactic/shaders/cloudField.glsl.js';
+import { GalacticController } from '../src/rendering/galactic/GalacticController.js';
+function checkUniformsFed(glsl, uniforms) {
+  const declared = [...glsl.matchAll(/^uniform\s+\w+\s+(\w+);/gm)].map((m) => m[1]);
+  const missing = declared.filter((u) => !(u in uniforms));
+  if (missing.length) throw new Error(`uniforms declared in the cloud field but never fed: ${missing.join(', ')}`);
+  return declared;
+}
+describe('fence: the cloud field\'s uniforms are all fed by the controller', () => {
+  const c = new GalacticController({});
+  it('every declared uniform has a controller slot', () => {
+    expect(checkUniformsFed(CLOUD_FIELD_GLSL, c._volumeUniforms).length).toBeGreaterThan(30);
+  });
+  it('BROKEN CONTROL: a new uniform with no controller slot fails', () => {
+    expect(() => checkUniformsFed(CLOUD_FIELD_GLSL + '\nuniform float uForgotten;\n', c._volumeUniforms)).toThrow(/uForgotten/);
+  });
+  it('a v2 pack uploads its shape (uShape 2) and a v1 pack switches it back (uShape 1)', () => {
+    const p2 = buildPack(lab.orion, 'photo', 2), p1 = buildPack(lab.orion, 'photo', 1);
+    const U = c._volumeUniforms;
+    c._uploadPack(p2);
+    expect(U.uShape.value).toBe(2);
+    expect(U.uBoundRadius.value).toBe(p2.boundRadiusPc);
+    expect(U.uFrontRadius.value).toBe(p2.shape.frontRadiusPc);
+    expect(U.uWallGradient.value).toBe(p2.shape.wallGradient);
+    expect(U.uOpenDir.value.toArray()).toEqual(p2.shape.openDir);
+    expect(U.uInvAxes.value.toArray()).toEqual(p2.shape.invAxes);
+    expect(U.uLobeOffset.value.toArray()).toEqual(p2.shape.lobeOffset);
+    c._uploadPack(p1);
+    expect(U.uShape.value).toBe(1);
+    expect(U.uBoundRadius.value).toBe(p1.boundRadiusPc);
+  });
+  it('flipping the shape re-bakes (new pack hash, new generation); flipping back restores the v1 pack', () => {
+    const k = new GalacticController({});
+    k.setTarget(lab.orion, { x: lab.orion.position.x + 0.1, y: lab.orion.position.y, z: lab.orion.position.z });
+    const g0 = k.snapshot().bake.generation, h2 = k.snapshot().paramsHash;
+    expect(k.snapshot().shape).toBe(2);
+    k.setShapeVersion(1);
+    expect(k.snapshot().shape).toBe(1);
+    expect(k.snapshot().bake.generation).toBeGreaterThan(g0);
+    expect(k.snapshot().paramsHash).not.toBe(h2);
+    expect(serializePack(k.getPack())).toBe(serializePack(buildPack(lab.orion, 'photo', 1)));
+    expect(() => k.setShapeVersion(3)).toThrow(/setShapeVersion/);
+    k.dispose();
   });
 });

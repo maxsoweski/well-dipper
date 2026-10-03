@@ -6,17 +6,19 @@
 // Keys (free in main.js as of 2026-10-03 — N and M are taken):
 //   J — A/B: volume ↔ the old billboard for the volume's feature
 //   U — colour mode: realistic ↔ photo
+//   V — cloud shape: v1 (the step-1 ring) ↔ v2 (reshaped: blister, ionization front, neutral dust, lobed outline)
 
 import { GalacticController, DEFAULT_CTX } from './GalacticController.js';
 import { galacticEngineFlag } from '../../galactic/galacticEngineFlag.js';
 import { findCloudSubjects, OBSERVER_PRESETS, presetDistancePc, approachDirection } from '../../galactic/subjects.js';
-import { COLOUR_MODES } from '../../galactic/renderPacks.js';
+import { COLOUR_MODES, SHAPE_VERSIONS } from '../../galactic/renderPacks.js';
 import { starTransmittance } from '../../galactic/cubeAtlas.js';
 import { cameraTanHalf } from './GalacticController.js';
 import * as THREE from 'three';
 
 export const AB_KEY = 'KeyJ';
 export const COLOUR_KEY = 'KeyU';
+export const SHAPE_KEY = 'KeyV';
 
 /**
  * @param {{skyRenderer, retroRenderer, galacticMap?, ctx?: object, force?: boolean, win?: Window}} opts
@@ -39,6 +41,8 @@ export function mountGalacticEngine({ skyRenderer, retroRenderer, galacticMap = 
   const setColourMode = (mode) => { controller.setColourMode(mode); return controller.snapshot(); };
   const toggleAB = () => setEnabled(!controller.isEnabled());
   const toggleColour = () => setColourMode(controller.getColourMode() === 'photo' ? 'realistic' : 'photo');
+  const setShape = (v) => { controller.setShapeVersion(v); return controller.snapshot(); };
+  const toggleShape = () => setShape(controller.getShapeVersion() === 2 ? 1 : 2);
 
   const onKey = (e) => {
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
@@ -46,6 +50,7 @@ export function mountGalacticEngine({ skyRenderer, retroRenderer, galacticMap = 
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
     if (e.code === AB_KEY) console.log('[galactic] A/B →', toggleAB().active ? 'volume' : 'billboard');
     else if (e.code === COLOUR_KEY) console.log('[galactic] colour →', toggleColour().mode);
+    else if (e.code === SHAPE_KEY) console.log('[galactic] shape → v' + toggleShape().shape + ' (re-baking)');
   };
   win.addEventListener('keydown', onKey);
 
@@ -54,13 +59,17 @@ export function mountGalacticEngine({ skyRenderer, retroRenderer, galacticMap = 
     controller,
     skyRenderer,     // debug access for live checks (pixel read-backs of retroRenderer.bgTarget)
     retroRenderer,
-    keys: { ab: AB_KEY, colour: COLOUR_KEY },
+    keys: { ab: AB_KEY, colour: COLOUR_KEY, shape: SHAPE_KEY },
     colourModes: COLOUR_MODES,
+    shapeVersions: SHAPE_VERSIONS,
     snapshot: () => ({ flag, mounted: true, ...controller.snapshot() }),
     setEnabled,
     setColourMode,
     toggleAB,
     toggleColour,
+    /** Cloud shape A/B: 1 = step-1 field (ring), 2 = reshaped. Re-bakes (the field changes). */
+    setShape,
+    toggleShape,
     /** Force the volume onto a subject ('procedural' | 'orion' | a feature record | null = automatic). */
     pin(subject) {
       let f = subject;
@@ -121,6 +130,6 @@ export function mountGalacticEngine({ skyRenderer, retroRenderer, galacticMap = 
     },
   };
   win._galactic = api;
-  console.log(`[galactic] mounted (${flag.source}); keys: J = volume/billboard A/B, U = realistic/photo`);
+  console.log(`[galactic] mounted (${flag.source}); keys: J = volume/billboard A/B, U = realistic/photo, V = shape v1/v2`);
   return api;
 }

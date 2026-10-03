@@ -36,6 +36,19 @@ uniform vec3 uOiii;
 uniform float uExtScale;
 uniform vec3 uExtRGB;
 uniform int uSteps;
+// Shape v2 (renderPacks shapeVersion 2; uShape 1 = the step-1 field, bit-for-bit as before).
+uniform int uShape;
+uniform vec3 uInvAxes;
+uniform float uLobeAmp;
+uniform float uLobeFreq;
+uniform vec3 uLobeOffset;
+uniform vec3 uOpenDir;
+uniform float uBlister;
+uniform float uWallGradient;
+uniform float uFrontRadius;
+uniform vec2 uFront;
+uniform float uFrontClump;
+uniform float uDustDestroy;
 
 const vec3 CLOUD_LUMA = vec3(${f(LUMA[0])}, ${f(LUMA[1])}, ${f(LUMA[2])});
 
@@ -90,7 +103,41 @@ float cloudEnvelope(float r) {
   return 1.0 - smoothstep(1.0 - uSoftness, 1.0, r / uRadius);
 }
 
+// Shape v2 (R4): triaxial envelope with a low-frequency lobed edge, in the nebula-local frame.
+float cloudEnvelopeV2(vec3 pl) {
+  vec3 q = pl * uInvAxes / uRadius;
+  float r = length(q);
+  if (r >= 1.0 + uLobeAmp) return 0.0;
+  float rr = max(r, 1e-6);
+  float edge = 1.0 + uLobeAmp * (2.0 * valueNoise((q / rr) * uLobeFreq + uLobeOffset) - 1.0);
+  if (uSoftness <= 0.0) return r < edge ? 1.0 : 0.0;
+  return 1.0 - smoothstep(1.0 - uSoftness, 1.0, r / edge);
+}
+
+// Shape v2 density split as rho = large * exp(lg): the smooth part (envelope x opened cavity x the cloud wall
+// behind the blister) and the small-scale structure. Returns false outside the envelope.
+bool cloudDensityPartsV2(vec3 pl, out float large, out float lg) {
+  large = 0.0;
+  lg = 0.0;
+  float env = cloudEnvelopeV2(pl);
+  if (env <= 0.0) return false;
+  float wall = -uWallGradient * (dot(pl, uOpenDir) / uRadius);
+  float cav = 1.0;
+  if (uCavityRadius > 0.0) {
+    vec3 dc = pl - uCavityCentre;
+    float d = length(dc) - uBlister * max(0.0, dot(dc, uOpenDir));
+    cav = mix(1.0 - uCavityDepth, 1.0, smoothstep(0.6 * uCavityRadius, uCavityRadius, d));
+  }
+  large = env * cav * exp(wall);
+  lg = logStructure(pl);
+  return true;
+}
+
 float cloudDensity(vec3 p) {
+  if (uShape == 2) {
+    float large, lg;
+    return cloudDensityPartsV2(uRot * p, large, lg) ? large * exp(lg) : 0.0;
+  }
   float env = cloudEnvelope(length(p));
   if (env <= 0.0) return 0.0;
   vec3 pl = uRot * p;
@@ -100,7 +147,28 @@ float cloudDensity(vec3 p) {
   return env * cav * exp(logStructure(pl));
 }
 
+// Shape v2 medium (R2 + R3): ionization front u = (ds/Rs)·(large·exp(frontClump·lg))^(2/3); emission ∝ rho²·x;
+// [O III] inside the same front; dust only in the neutral gas.
+void sampleMediumV2(vec3 p, out vec3 j, out vec3 k) {
+  j = vec3(0.0);
+  k = vec3(0.0);
+  vec3 pl = uRot * p;
+  float large, lg;
+  if (!cloudDensityPartsV2(pl, large, lg)) return;
+  float rho = large * exp(lg);
+  float ds = distance(pl, uIonCentre);
+  float u = (ds / uFrontRadius) * pow(large * exp(uFrontClump * lg), ${f(2 / 3)});
+  float x = 1.0 - smoothstep(uFront.x, uFront.y, u);
+  float w = uHardness * (1.0 - smoothstep(0.0, uFront.x, u));
+  j = uEmissionScale * rho * rho * x * mix(uHa, uOiii, w);
+  k = uExtScale * rho * (1.0 - x * uDustDestroy) * uExtRGB;
+}
+
 void sampleMedium(vec3 p, out vec3 j, out vec3 k) {
+  if (uShape == 2) {
+    sampleMediumV2(p, j, k);
+    return;
+  }
   float rho = cloudDensity(p);
   j = vec3(0.0);
   k = vec3(0.0);

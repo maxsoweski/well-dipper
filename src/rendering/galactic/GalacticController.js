@@ -17,7 +17,7 @@
 
 import * as THREE from 'three';
 import { featureHistory, featureKeyOf } from '../../galactic/featureHistory.js';
-import { renderPack, packHash, COLOUR_MODES, DEFAULT_COLOUR_MODE } from '../../galactic/renderPacks.js';
+import { renderPack, packHash, COLOUR_MODES, DEFAULT_COLOUR_MODE, SHAPE_VERSIONS, DEFAULT_SHAPE_VERSION } from '../../galactic/renderPacks.js';
 import { pickVolumeFeature } from '../../galactic/subjects.js';
 import { integrateRay, applyColourMode } from '../../galactic/cloudFieldCPU.js';
 import { atlasSize, atlasUV, texelCoord } from '../../galactic/cubeAtlas.js';
@@ -43,8 +43,8 @@ export const DEFAULT_CTX = Object.freeze({
 });
 
 /** The single place a feature becomes GPU parameters: lab and game both go through here. */
-export function buildPack(feature, colourMode) {
-  return renderPack(featureHistory(feature), { colourMode });
+export function buildPack(feature, colourMode, shapeVersion = DEFAULT_SHAPE_VERSION) {
+  return renderPack(featureHistory(feature), { colourMode, shapeVersion });
 }
 
 /** Hash of the parts of a pack the BAKE depends on (colour mode is applied at composite time). */
@@ -113,6 +113,7 @@ export class GalacticController {
     this._enabled = true;
     this._dust = true;
     this._mode = DEFAULT_COLOUR_MODE;
+    this._shape = DEFAULT_SHAPE_VERSION;
     this._feature = null;
     this._pinned = null;
     this._observerKpc = null;
@@ -231,6 +232,16 @@ export class GalacticController {
   }
   getColourMode() { return this._mode; }
 
+  /** A/B of the cloud shape model: 1 = the step-1 field (reads as a ring), 2 = reshaped (blister, ionization front,
+   *  neutral dust, lobed outline). The shape changes the field, so the pack hash changes and the sky re-bakes. */
+  setShapeVersion(v) {
+    const n = Number(v);
+    if (!SHAPE_VERSIONS.includes(n)) throw new Error(`setShapeVersion: '${v}' is not one of ${SHAPE_VERSIONS.join(', ')}`);
+    this._shape = n;
+    this.refresh();
+  }
+  getShapeVersion() { return this._shape; }
+
   /** Debug (AC-9): hold every bake tile — a deliberately delayed bake. */
   setBakeStalled(on) { this.scheduler.stalled = !!on; }
 
@@ -242,7 +253,7 @@ export class GalacticController {
 
   /** Rebuild the pack (history → params), request a bake if anything the bake depends on changed. */
   refresh() {
-    this._pack = this._feature ? buildPack(this._feature, this._mode) : null;
+    this._pack = this._feature ? buildPack(this._feature, this._mode, this._shape) : null;
     this._hash = this._pack ? packHash(this._pack) : null;
     if (this._pack) {
       this._uploadPack(this._pack);
@@ -302,6 +313,9 @@ export class GalacticController {
       uEmissionScale: u(0), uHa: u(new THREE.Vector3()), uOiii: u(new THREE.Vector3()),
       uExtScale: u(0), uExtRGB: u(new THREE.Vector3()),
       uSteps: u(Math.min(this.ctx.steps, MAX_STEPS)),
+      uShape: u(1), uInvAxes: u(new THREE.Vector3(1, 1, 1)), uLobeAmp: u(0), uLobeFreq: u(2), uLobeOffset: u(new THREE.Vector3()),
+      uOpenDir: u(new THREE.Vector3(0, 0, 1)), uBlister: u(0), uWallGradient: u(0), uFrontRadius: u(1),
+      uFront: u(new THREE.Vector2(0.7, 1.3)), uFrontClump: u(0), uDustDestroy: u(0),
       uTanHalf: u(new THREE.Vector2(1, 1)), uCameraWorld: u(new THREE.Matrix4()),
       uAtlasN: u(this.ctx.bakeFaceSize),
     };
@@ -357,6 +371,21 @@ export class GalacticController {
     U.uOiii.value.fromArray(p.emission.oiii);
     U.uExtScale.value = p.extinction.scale;
     U.uExtRGB.value.fromArray(p.extinction.rgb);
+    const sh = p.shapeVersion === 2 ? p.shape : null;
+    U.uShape.value = sh ? 2 : 1;
+    if (sh) {
+      U.uInvAxes.value.fromArray(sh.invAxes);
+      U.uLobeAmp.value = sh.lobeAmp;
+      U.uLobeFreq.value = sh.lobeFreq;
+      U.uLobeOffset.value.fromArray(sh.lobeOffset);
+      U.uOpenDir.value.fromArray(sh.openDir);
+      U.uBlister.value = sh.blister;
+      U.uWallGradient.value = sh.wallGradient;
+      U.uFrontRadius.value = sh.frontRadiusPc;
+      U.uFront.value.fromArray(sh.front);
+      U.uFrontClump.value = sh.frontClump;
+      U.uDustDestroy.value = sh.dustDestroy;
+    }
   }
 
   /** Composite-time display parameters (colour mode + the extinction colour T is rebuilt from). */
@@ -690,11 +719,13 @@ export class GalacticController {
       active: this.isActive(),
       source: this._source(),
       mode: this._mode,
+      shape: this._shape,                      // 1 = step-1 field (ring), 2 = reshaped (R1-R4)
       dust: this._dust,
       featureId: this.featureKey,
       drawnFeatureId: this.skipKey(),
       pinned: !!this._pinned,
       radiusPc: r,
+      boundRadiusPc: this._pack ? this._pack.boundRadiusPc : null,
       observerRelPc: rel,
       distancePc: rel ? Math.hypot(rel[0], rel[1], rel[2]) : null,
       insideCloud: rel && r ? Math.hypot(rel[0], rel[1], rel[2]) < r : false,

@@ -9,7 +9,7 @@
 
 import { SeededRandom } from '../generation/SeededRandom.js';
 
-export const HISTORY_VERSION = 1;
+export const HISTORY_VERSION = 2; // 2: + blister, axes, lobeAmp (shape v2; render pack shapeVersion 1 ignores them)
 
 /** Stable identity for a GalacticMap feature record (type + seed are unique per placement). */
 export function featureKeyOf(feature) {
@@ -21,7 +21,9 @@ export function featureKeyOf(feature) {
 const CATALOG_FACTS = {
   // Orion Nebula Cluster is ~1-3 Myr old; Orion's gas is close to solar abundance. Trapezium (theta1 Ori C)
   // dominates the ionizing output; M42 is a blister on the near face of its cloud.
-  M42: { ageMyr: 2, metallicity: 0.0, ionizingStrength: 1.0, sourceOffsetFrac: 0.35, note: 'ONC age ~1-3 Myr; near-solar gas' },
+  // blister 0.9: M42 is the textbook blister H II region — an ionized bowl on the near face of the Orion
+  // Molecular Cloud, open toward us (the standard model of the nebula; value is a display choice, not measured).
+  M42: { ageMyr: 2, metallicity: 0.0, ionizingStrength: 1.0, sourceOffsetFrac: 0.35, blister: 0.9, note: 'ONC age ~1-3 Myr; near-solar gas; blister on the cloud face' },
 };
 
 // Assumed values when a known emission nebula has no catalogue entry: H II regions are young by definition.
@@ -39,6 +41,7 @@ function unitVector(rng) {
 }
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const smoothstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
 
 /**
  * @param {object} feature — a GalacticMap feature record ({type, position, radius (kpc), seed, color, context, ...})
@@ -84,6 +87,15 @@ export function featureHistory(feature) {
   const oriRng = streamFor(key, 'orientation');
   const orientation = [oriRng.range(0, Math.PI * 2), Math.acos(oriRng.range(-1, 1)), oriRng.range(0, Math.PI * 2)];
 
+  // ── Shape (render-pack shapeVersion 2; reshaping guide R1 + R4) ──
+  // blister: how far the ionized cavity has broken out of the cloud (champagne flow). It takes a few Myr for an
+  // H II region to reach the cloud surface, and a stronger source gets there sooner. Deterministic (no draw).
+  const blister = facts?.blister ?? clamp(smoothstep(0.5, 4, ageMyr) * strength, 0, 1);
+  // axes: the cloud is a triaxial blob, not a sphere (major axis = radiusPc); lobeAmp: low-frequency edge lobes.
+  const shapeRng = streamFor(key, 'shape');
+  const axes = [1, shapeRng.range(0.4, 0.9), shapeRng.range(0.25, 0.7)];
+  const lobeAmp = shapeRng.range(0.2, 0.45);
+
   return {
     version: HISTORY_VERSION,
     kind: 'emission-nebula',
@@ -99,6 +111,9 @@ export function featureHistory(feature) {
       hardness,
     },
     dustToGas,
+    blister,
+    axes,
+    lobeAmp,
     orientation, // ZYZ Euler angles (rad): the noise frame relative to galactic axes
     provenance: {
       source: isCatalog ? 'catalog' : 'procedural',

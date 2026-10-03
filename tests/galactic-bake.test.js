@@ -223,14 +223,33 @@ describe('stars are dimmed by the dust in front of THEM', () => {
     expect(Tfull[1]).toBeLessThan(0.99); // the column has real dust
     expect(() => checkStarDust(T(50), T(2000), Tfull)).not.toThrow();
   });
-  it('a star inside the cloud gets partial dust, close to an exact march to its distance', () => {
+  it('a star inside the cloud gets partial dust, close to an exact march to its distance (shape v1: within 0.03)', () => {
+    const p1 = renderPack(featureHistory(feature), { overrides: {}, shapeVersion: 1 });
+    const r1 = integrateRay(p1, obs, toCentre, STEPS);
+    for (const d of [100 - 0.5 * R, 100, 100 + 0.5 * R]) {
+      const exact = integrateRay(p1, obs, toCentre, 4 * STEPS, 0, d).T;
+      const approx = starTransmittance(toCentre, d, r1.tau, r1.G, obs, p1.boundRadiusPc, p1.extinction.rgb);
+      for (let c = 0; c < 3; c++) {
+        expect(approx[c]).toBeLessThanOrEqual(1);
+        expect(approx[c]).toBeGreaterThanOrEqual(r1.T[c] - 1e-9);
+        expect(Math.abs(approx[c] - exact[c])).toBeLessThan(0.03);
+      }
+    }
+  });
+  it('shape v2: partial dust within the 4-knot CDF\'s own resolution (one knot interval\'s transmittance change)', () => {
+    // v2 keeps dust only in the neutral gas (a wall), so tau is concentrated along the chord and a piecewise-linear
+    // CDF through 4 knots is coarser than for v1 (measured 2026-10-03: worst 0.048 vs v1's 0.026). Linear
+    // interpolation inside one knot interval cannot be off by more than that interval's own transmittance change;
+    // +0.005 covers the 48- vs 192-step march difference.
+    const knots = [0, ...ray.G, 1];
+    const maxDTau = Math.max(...knots.slice(1).map((g, k) => (g - knots[k]) * ray.tau));
     for (const d of [100 - 0.5 * R, 100, 100 + 0.5 * R]) {
       const exact = integrateRay(pack, obs, toCentre, 4 * STEPS, 0, d).T;
       const approx = T(d);
       for (let c = 0; c < 3; c++) {
         expect(approx[c]).toBeLessThanOrEqual(1);
         expect(approx[c]).toBeGreaterThanOrEqual(Tfull[c] - 1e-9);
-        expect(Math.abs(approx[c] - exact[c])).toBeLessThan(0.03);
+        expect(Math.abs(approx[c] - exact[c])).toBeLessThan(1 - Math.exp(-maxDTau * pack.extinction.rgb[c]) + 0.005);
       }
     }
   });

@@ -81,6 +81,7 @@ const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 /** Gas density (dimensionless, ~1 = mean) at a point p (pc, galactic axes, relative to the centre). */
 export function density(p, pack) {
+  if (pack.shapeVersion === 2) return densityV2(toLocal(p, pack.rotation), pack);
   const env = envelope(Math.hypot(p[0], p[1], p[2]), pack);
   if (env <= 0) return 0;
   const pl = toLocal(p, pack.rotation);
@@ -89,9 +90,48 @@ export function density(p, pack) {
   return env * cav * Math.exp(logStructure(pl, pack));
 }
 
+/** Shape v2 (R4): triaxial envelope with a low-frequency lobed edge, in the nebula-local frame. */
+export function envelopeV2(pl, pack) {
+  const sh = pack.shape, R = pack.radiusPc;
+  const qx = (pl[0] * sh.invAxes[0]) / R, qy = (pl[1] * sh.invAxes[1]) / R, qz = (pl[2] * sh.invAxes[2]) / R;
+  const r = Math.hypot(qx, qy, qz);
+  if (r >= 1 + sh.lobeAmp) return 0; // past the largest possible edge (also skips the lobe noise)
+  const rr = Math.max(r, 1e-6);
+  const edge = 1 + sh.lobeAmp * (2 * valueNoise(
+    (qx / rr) * sh.lobeFreq + sh.lobeOffset[0], (qy / rr) * sh.lobeFreq + sh.lobeOffset[1], (qz / rr) * sh.lobeFreq + sh.lobeOffset[2]) - 1);
+  const s = pack.envelopeSoftness;
+  if (s <= 0) return r < edge ? 1 : 0;
+  return 1 - smoothstep(1 - s, 1, r / edge);
+}
+
+/** Shape v2 density at a nebula-local point, split as {large, log}: rho = large·exp(log). `large` is the smooth
+ *  part (envelope × opened cavity × the cloud wall behind the blister), `log` the small-scale structure. */
+export function densityPartsV2(pl, pack) {
+  const env = envelopeV2(pl, pack);
+  if (env <= 0) return null;
+  const c = pack.cavity, sh = pack.shape;
+  // The molecular cloud behind the blister: log-density falls toward the open side (along openDir).
+  const wall = -sh.wallGradient * ((pl[0] * sh.openDir[0] + pl[1] * sh.openDir[1] + pl[2] * sh.openDir[2]) / pack.radiusPc);
+  let cav = 1;
+  if (c.radiusPc > 0) {
+    const dx = pl[0] - c.centrePc[0], dy = pl[1] - c.centrePc[1], dz = pl[2] - c.centrePc[2];
+    const along = dx * sh.openDir[0] + dy * sh.openDir[1] + dz * sh.openDir[2];
+    const d = Math.hypot(dx, dy, dz) - sh.blister * Math.max(0, along);
+    cav = mix(1 - c.depth, 1, smoothstep(0.6 * c.radiusPc, c.radiusPc, d));
+  }
+  return { large: env * cav * Math.exp(wall), log: logStructure(pl, pack) };
+}
+
+/** Shape v2 density at a nebula-local point (R1: the cavity is opened along the source direction). */
+export function densityV2(pl, pack) {
+  const d = densityPartsV2(pl, pack);
+  return d ? d.large * Math.exp(d.log) : 0;
+}
+
 /** Emission (RGB per pc) and extinction (RGB per pc) at p. Colours are luminance-normalised, so the line mix
  *  changes hue only. */
 export function sampleMedium(p, pack) {
+  if (pack.shapeVersion === 2) return sampleMediumV2(p, pack);
   const rho = density(p, pack);
   if (rho <= 0) return { j: [0, 0, 0], k: [0, 0, 0] };
   const pl = toLocal(p, pack.rotation);
@@ -102,6 +142,29 @@ export function sampleMedium(p, pack) {
   const w = ion.hardness * Math.exp(-ds / ion.oiiiRadiusPc);
   const e = pack.emission.scale * rho * x;
   const ex = pack.extinction.scale * rho;
+  const ha = pack.emission.ha, o3 = pack.emission.oiii, kr = pack.extinction.rgb;
+  return {
+    j: [e * mix(ha[0], o3[0], w), e * mix(ha[1], o3[1], w), e * mix(ha[2], o3[2], w)],
+    k: [ex * kr[0], ex * kr[1], ex * kr[2]],
+  };
+}
+
+/** Shape v2 medium (R2 + R3): ionization front u = (ds/Rs)·rho^(2/3); emission ∝ rho²·x; [O III] inside the
+ *  same front; dust only in the neutral gas. */
+export function sampleMediumV2(p, pack) {
+  const pl = toLocal(p, pack.rotation);
+  const dp = densityPartsV2(pl, pack);
+  if (!dp) return { j: [0, 0, 0], k: [0, 0, 0] };
+  const rho = dp.large * Math.exp(dp.log);
+  const ion = pack.ionizing, sh = pack.shape;
+  const ds = dist3(pl, ion.centrePc);
+  // The front sees the large-scale density and only a fraction of the clumping (frontClump): with the full
+  // local density every clump gets a neutral core inside a bright skin, which projects as a small ring.
+  const u = (ds / sh.frontRadiusPc) * Math.pow(dp.large * Math.exp(sh.frontClump * dp.log), 2 / 3);
+  const x = 1 - smoothstep(sh.front[0], sh.front[1], u);
+  const w = ion.hardness * (1 - smoothstep(0, sh.front[0], u));
+  const e = pack.emission.scale * rho * rho * x;
+  const ex = pack.extinction.scale * rho * (1 - x * sh.dustDestroy);
   const ha = pack.emission.ha, o3 = pack.emission.oiii, kr = pack.extinction.rgb;
   return {
     j: [e * mix(ha[0], o3[0], w), e * mix(ha[1], o3[1], w), e * mix(ha[2], o3[2], w)],

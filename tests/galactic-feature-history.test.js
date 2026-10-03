@@ -72,6 +72,33 @@ describe('featureHistory', () => {
     expect(Math.hypot(...h.ionizing.offsetPc)).toBeLessThan(h.radiusPc);
     expect(h.dustToGas).toBeGreaterThan(0);
   });
+
+  it('shape fields (v2): blister in [0,1] (Orion from the catalogue), triaxial axes with major = 1, lobes in range', () => {
+    for (const f of [procedural, orion, ...emissionNebulae.slice(0, 20)]) {
+      const h = featureHistory(f);
+      expect(h.blister).toBeGreaterThanOrEqual(0);
+      expect(h.blister).toBeLessThanOrEqual(1);
+      expect(h.axes[0]).toBe(1);
+      expect(h.axes[1]).toBeGreaterThanOrEqual(0.4);
+      expect(h.axes[2]).toBeLessThanOrEqual(0.7);
+      expect(h.lobeAmp).toBeGreaterThanOrEqual(0.2);
+      expect(h.lobeAmp).toBeLessThanOrEqual(0.45);
+    }
+    expect(featureHistory(orion).blister).toBe(0.9);
+  });
+
+  it('declared direction: an older, stronger region has broken out further (higher blister)', () => {
+    const young = { ...procedural, context: { ...procedural.context, age: 0.0006 } }; // 0.6 Myr
+    const old = { ...procedural, context: { ...procedural.context, age: 0.02 } };     // 20 Myr
+    expect(featureHistory(old).blister).toBeGreaterThan(featureHistory(young).blister);
+  });
+
+  it('two different seeds give different shapes (axes / lobes), deterministically', () => {
+    const a = featureHistory(emissionNebulae[0]), b = featureHistory(emissionNebulae[1]);
+    expect(a.axes).not.toEqual(b.axes);
+    expect(a.lobeAmp).not.toBe(b.lobeAmp);
+    expect(featureHistory(emissionNebulae[0]).axes).toEqual(a.axes);
+  });
 });
 
 describe('renderPack', () => {
