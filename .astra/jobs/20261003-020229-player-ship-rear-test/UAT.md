@@ -12,5 +12,5 @@ Files: `C:\Users\Max\Documents\Blender\astra\well-dipper-trunk\player-ship\rear-
 | Seen and flagged | a sunken dent around a port on the side flank; top still lumpy under grey shading; rear reads as a tall narrow hood vs r10's broad rolled shoulders |
 The question for Max: are these surfaces coherent enough to build the whole hull this way? Max judges.
 
-## Max's verdict
-(pending)
+## Max's verdict, 2026-10-03 (chat) — NOT WORKING, verbatim
+"This looks better than what we had before if we just take the rear by itself.  But the big sloping shapes that the concept art has  terminating in the rear  aren't present here. And there are just lots of other little details that are off like the shapes are just not the same.  I'm looking at the way that you modified the  concept art to give instructions for the 3D modeling, but it's just not carrying over. We're gonna have to think of  some other solution here because this is just not working. Maybe you can brainstorm with Astra or do some research into how to prompt these models to output 3D models that are faithful to 2D concept art sheets."
