@@ -4,7 +4,7 @@
 > giant molecular clouds, dark clouds, supernova remnants, star-forming regions) — in the sky, up close, from
 > inside, and in the nav computer's maps. Sibling of the World Engine (the world/moon renderer).
 > Branch `feature/galactic-engine`, worktree `~/projects/wd-galactic`.
-> Status: **draft for Max + Astra review. No code yet. Scoping (`dev-collab-scope`) comes after Max reacts.**
+> Status: **v2 — revised after Astra review (`.astra/jobs/20261003-102428-galactic-engine-plan-review/report.md`). No code yet. Scoping (`dev-collab-scope`) comes after Max reacts.** Built under the `lab-wired-to-game` skill.
 
 ## 1. What Max wants (his words, 2026-10-03)
 
@@ -59,95 +59,113 @@ From `one-pipeline-two-frontends-PLAN.md` / `lab-pipeline-into-game-PLAN.md`:
 6. Material swaps silently dropped features. → **A parity ledger when we replace each old layer.**
 7. 1,500-line plans with citation rot. → **This plan stays short; detail lives in code + tests.**
 
-## 4. Architecture — one model, several views
+## 4. Architecture — one model, one integrator, one controller, several views
 
 Same layering as the World Engine: *procgen decides, the renderer expresses.*
 
 ```
- L0  GalacticMap (keep)           where things are: density model + feature placement + known objects
+ L0  GalacticMap (keep)            where things are: density model + feature placement + known objects
   │
- L1  featureHistory(feature)      the feature's STORY, derived once on the CPU, pure + headless:
-  │                                age, ionizing population (Q), gas density n, metallicity, dust-to-gas,
-  │                                supernova energy + time since, orientation, morphology seed
+ L1  featureHistory(feature)       the feature's STORY, pure + headless, typed units, three separate clocks
+  │                                 (star-population age, cloud age, time since explosion); ionizing sources
+  │                                 (position, luminosity, hardness); gas mass/extent, clumping, density gradient;
+  │                                 dust-to-gas; metallicity; orientation; provenance (procedural vs catalog).
+  │                                 Feature-keyed random streams, so adding a field never reshuffles the galaxy.
   │
- L2  render packs                 pure functions: history → render parameters, physically grounded:
-  │   (like driver packs)          Strömgren radius R_s=(3Q/4πn²α)^⅓ · Hα/[OIII]/[SII] line weights ·
-  │                                dust optical depth + reddening · shell radius (Sedov) · pillar/filament preset
+ L2  render packs                  history → render parameters. Physics says WHICH WAY each knob pushes;
+  │                                 a declared display palette says what colour that is (Hα red, [OIII] teal via an
+  │                                 explicit hardness mapping, dust reddening as RGB transmittance).
   │
- L3  GalacticField (GLSL, ONE    sampleMedium(p) → (emission RGB, extinction RGB)
-  │   source file)                 = analytic Milky Way (disc/bulge/bar/arms/dust) + catalog features read from a
-  │                                small data texture. Plus a CPU twin of the analytic part for tests.
+ L3  GalacticField (GLSL, once)    sampleMedium(p) → emission per unit length (RGB) + extinction (RGB, 1/length).
+  │   + CPU twin for tests          Analytic Milky Way (light weights per component — dark matter emits nothing)
+  │                                 + catalog features via spatial candidate lists, never "scan every feature".
   │
- L4  views (front-ends)           each supplies only a ctx: camera, scale, resolution, step budget
-       ├─ sky bake      per system, a cube map marched outward from the system (galaxy band + far features)
-       ├─ near volume   live raymarch of the 1–3 nearest features (approach, warp, parallax)
-       ├─ inside        local fog/glow + starfield extinction when the system sits inside a feature
-       ├─ nav map       galaxy / region / sector views: orthographic marches of the SAME field, cached as tiles
-       └─ lab page      any vantage point (inside the disc, at the edge, outside the galaxy), same code
+ L3b ONE integrator                 march(ray, interval) → radiance L (RGB) + transmittance T (RGB).
+  │                                 Segments compose:  L = L_near + T_near·L_far,  T = T_near·T_far.
+  │                                 Stars are dimmed by T only up to THEIR distance, not the full column.
+  │
+ L4  ONE production controller      owns prepare → upload → bake scheduling → atomic activation → disposal →
+  │   (game AND lab instantiate it) composition into RetroRenderer. Debug snapshot: input hash, bake origin,
+  │                                 candidates + omitted count, tiles done, timings, texture bytes.
+  │
+ L5  views (front-ends, ctx only)
+       ├─ sky bake      per system; stores L and T (two RGBA16F cubes; fallback format if float targets missing)
+       ├─ live interval  only where moving visibly changes the picture (projected-error budget, see §5)
+       ├─ nav map       galaxy / region / sector: orthographic use of the SAME field + integrator, cached tiles
+       └─ lab page      a camera + sliders over the controller, rendering through RetroRenderer
 ```
 
-**Why one field matters:** if the sky and the map both call `sampleMedium`, a nebula that is red with a teal core in
-the sky is red with a teal core on the map, and the arms are in the same place in both. Today they are not.
+**There is no "inside" renderer.** Being inside a cloud is just rays that start inside it
+(`entry = max(entry, 0)`). The bake already captures the cloud's structure around you; the inside/outside
+boundary is smooth because it is one volume. (Today's `insideFeature` switch is what makes nebulae vanish.)
 
-**Code boundary:** `src/galactic/` is headless (history, packs, CPU field twin — no three.js). GLSL lives once in
-`src/galactic/shaders/`. GPU-coupled code (bakers, materials) goes in `src/rendering/galactic/`. Fence test: no
-shader text duplicated, lab imports only from `src/`.
+**Precision:** positions are subtracted in CPU doubles; the GPU gets feature-relative and system-relative
+coordinates. (float32 at 8 kpc resolves only ~197 AU.)
 
-## 5. When each view is used — distance criteria
+**Code boundary:** `src/galactic/` is headless (history, packs, CPU field twin). GLSL lives once in
+`src/galactic/shaders/`. Controller, bakers, compositor in `src/rendering/galactic/`. RetroRenderer stops reaching
+into the sky layers' private fields and talks to the controller's interface.
 
-The deciding number (research, arithmetic): at 240p, a pixel is ~0.004 rad. Moving 100 AU inside a system shifts
-anything beyond ~0.4 light-years by less than a pixel. So **almost everything can be baked once per system** —
-which is also much cheaper than today's every-pixel-every-frame march.
+## 5. When to bake vs draw live — measured, not assumed
 
-| Player's situation | What draws it | Cost |
-|---|---|---|
-| Feature far away (small patch in the sky) | sky bake | once per warp, hidden by the warp |
-| Feature big in the sky but > a few ly away | sky bake (bigger, more detail) | same |
-| System within a few ly of a feature's edge | near volume (real parallax as you fly) | live, low-res, 32–64 steps |
-| System inside a feature | inside: glow all around, starfield dimmed/reddened by dust, bake shows the rest | ~free |
-| In warp, crossing light-years | near volume for features you pass, bake crossfade | live |
-| Outside the galaxy / at the edge | sky bake shows the whole galaxy's shape from that angle | once per warp |
-| Nav galaxy view | orthographic march, cached texture | once |
-| Nav region / sector view | orthographic march of features in the box, cached tiles | per tile, cached |
+Rule: bake everything that would not visibly change as you move around the system. "Visibly" = projected error
+in screen pixels, from the bake origin, at the current FOV, for the closest meaningful structure (not the
+feature's centre), with hysteresis. Rough guide only: 100 AU of travel moves things beyond ~0.4 ly by under one
+pixel at 240p — so most systems need nothing live. Live drawing is for systems right next to structure.
 
-The retro look helps: 240p is ~27× fewer pixels than 1080p, and the existing Bayer dither hides low step counts.
+Cost is bounded by design: spatial candidates per ray, ray-vs-bounds intervals (64 uniform steps over 30 kpc
+would skip anything smaller than ~470 pc), a visible overflow counter instead of silent truncation.
+Benchmarks (16/32/64 bake candidates; 1/3/8 live) are measured in S1a, not promised now.
 
-## 6. Slices — each one visible IN THE GAME and in the lab on the day it lands
+**Warp:** the bake runs as bounded tiles across FOLD/ENTER/HYPER (≈ 8.5 s), against the real dual-portal
+lifecycle: immutable origin/destination snapshots, a generation token, programs pre-compiled, a cube is shown
+only when every face is done, defined timeout + fallback, no stale completions. Flying THROUGH clouds during warp
+is deferred until warp has a real path through galactic space.
 
-**S1 — One galaxy.** Build `GalacticField` (analytic Milky Way only) + the per-system sky bake. In the game, behind
-flag `wd.galacticEngine` with an A/B key, it replaces `ProceduralGlowLayer`'s band. The nav galaxy backdrop switches
-to the same field. The lab page shows the same field from inside, the edge and outside. Fences: sky/map/CPU arms
-agree; bake ≈ live-march reference; frame-time measured on Max's machine.
-*Visible result:* the Milky Way band in-game, from any system, drawn by the new engine; the nav map and the sky now
-agree; flying far out of the disc shows the galaxy's shape.
+**Sky resolution:** today the sky renders at full resolution. The new medium pass renders low-res and dithers in
+screen space after composition (never per cube face — faces would show seams).
 
-**S2 — Nebulae with a story.** `featureHistory` + render packs for emission nebulae (H II regions); features enter
-the bake. Replaces far billboards. *Visible:* nebulae whose colour and size come from their star population, age and
-dust — not 6 stock shapes.
+## 6. Slices — each visible IN THE GAME and in the lab the day it lands
 
-**S3 — Getting close and inside.** Near-volume view + inside view. Warping to a nebula no longer makes it vanish; the
-star field takes on its colour; structure has parallax. *Visible:* Max's core ask.
+**S1a — One galaxy, end to end.** Simple analytic Milky Way + integrator + bake + controller + game flag
+`wd.galacticEngine` with an A/B key + lab on RetroRenderer. Includes a test sphere of glowing/absorbing gas to
+prove composition before any nebula exists. *Visible:* the Milky Way band in-game, drawn by the new engine.
 
-**S4 — The dark side.** Dark nebulae / giant molecular clouds (one system, not two), dust reddening of the
-starfield, reflection nebulae, supernova remnants, planetary nebulae, pillars at ionization fronts.
+**S1b — The galaxy agrees with itself.** CPU/GPU field agreement against `GalacticMap` (fixes the 14° arm
+offset — a declared change to every system's sky), views from outside the galaxy, and the nav galaxy backdrop
+switched to the same field. *Visible:* nav map and sky match; fly out of the disc and see the galaxy's shape.
 
-**S5 — Maps.** Region and sector nav views draw features from the same field.
+**S2 — One cloud, far → near → inside.** One emission nebula with dust, from its history, correct far away, at
+its edge and inside, with the star field reddened/dimmed by its dust. A small top-down view of it too.
+*Visible:* Max's core ask, on one cloud.
 
-## 7. Risks (stated up front)
+**S3 — The family.** Dark clouds / GMCs (one system replaces today's two), reflection nebulae, supernova
+remnants, planetary nebulae, real catalog objects with real-ish histories (today every known object gets
+age 10 and metallicity 0 — placeholders that must not become "history").
 
-- **Performance is unmeasured.** The research numbers are sample counts, not milliseconds. S1 measures on Max's
-  laptop before anything else is built on top. Mobile may need smaller bakes (128² faces).
-- **Bake time during warp.** A cube bake must fit in the FOLD window; plan is one face per frame. Unmeasured.
-- **Dither "swimming" on a baked cube** when the camera turns — the dither must be applied in screen space after
-  sampling, or anchored to the sky. Needs a look test by Max.
-- **File collision with the nav-menu session** (other Claude): S1 touches `NavGalaxyRenderer.js` and possibly
-  `NavComputer.js`. Coordinate before S1 lands on master.
-- **Precision:** kpc-scale field, AU-scale camera. The field is sampled in system-relative coordinates.
-- **Physics fidelity is approximate by design** — real line ratios need photoionization codes; we use simple laws
-  tuned by eye. Max judges the look; the physics only supplies *which way* each variable pushes.
-- **"Fixing the arms" moves the sky** in every system (the 14° disagreement). That's an intended pixel change and
-  will be declared, not hidden.
+**S4 — Maps.** Region and sector nav views draw features from the same field.
 
-## 8. Open for Max
+**Later:** pillars at ionization fronts, fine filaments (need filtering at 240p or they sparkle), fly-through
+during warp.
 
-See the session recap — kept out of this doc so it does not rot.
+## 7. Acceptance gates for S1 (proposed; Max's UAT is separate and always last)
+
+- Six fixed poses (Sun's neighbourhood, galactic centre, disc edge, above the disc, outside face-on, outside
+  edge-on), six axis views each plus cube corners, identical inputs in lab and game.
+- 1,000 CPU/GPU field probes within `1e-4 + 1e-3·|ref|`, all finite and non-negative; reference = `GalacticMap`.
+- Test sphere within 1 % of its analytic answer; doubling steps changes the image ≤ 1 % RMS.
+- Bake vs converged live reference ≤ 1 % RMS, 99th percentile ≤ 3 %.
+- Lab vs game sky capture ≤ 1/255 per channel, same GPU, frozen state, including after rebasing and resize.
+- 20 consecutive warps incl. rapid retargeting and a deliberately slow bake: no partial cube, stale sky, or
+  leaked textures.
+- Performance on Max's desktop (RTX 5080) AND a phone: ≤ 2 ms p95 GPU per bake frame, ≤ 1 ms steady composition,
+  ≤ 1 s warm bake. Cold numbers recorded separately. Negative control: changing one arm parameter must fail parity.
+
+## 8. Risks still open
+
+- Performance is unmeasured until S1a runs. The phone is the real constraint, not the desktop.
+- File collision with the nav-menu session: S1b touches `NavGalaxyRenderer.js`. Coordinate before it merges.
+- Unresolved galaxy glow + individual stars need one shared brightness budget or starlight is counted twice.
+- Context loss, cache eviction, revisiting systems: ownership defined in the controller from S1a.
+- `findNearbyFeatures` only searches neighbouring 4 kpc regions — an outside-the-galaxy view needs a separate
+  coarse whole-galaxy representation.
