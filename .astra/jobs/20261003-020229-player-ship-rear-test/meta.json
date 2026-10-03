@@ -2,16 +2,16 @@
   "type": "3d",
   "project": "/home/ax/projects/well-dipper-trunk",
   "project_slug": "well-dipper-trunk",
-  "name": "player-ship-envelope",
+  "name": "player-ship-rear-test",
   "model": "gpt-6-astra",
   "effort": "high",
   "sandbox": "workspace-write",
   "codex_version": "codex-cli 0.155.1",
-  "created": "2026-10-02T23:46:34",
-  "rounds": 2,
+  "created": "2026-10-03T02:02:29",
+  "rounds": 1,
   "auto_retries": 0,
   "thread_lineage": [
-    "01a0ffde-efa6-7c63-be30-ac2d1856f8f4"
+    "01a1005b-5acb-7461-a93f-63d8a6577b2f"
   ],
   "last_status": "complete",
   "missing_artifacts": []

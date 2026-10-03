@@ -1,0 +1,153 @@
+{
+  "status": "complete",
+  "report": "**Technical checks passed.** B has 2,092 triangles, 17 objects and 10 materials. Bounds remain 18.025 × 10.900 × 10.400 m; bubble width remains 2.950 m. Largest mirrored vertex mismatch: **0.000000 m**; unmatched mirrored material triangles: **0**.\n\nDelivered the rounded rear lip, clear carrier opening, two six-module keel rows, hanging cockpit, mirrored red hatches, and 20 shallow recesses with non-emissive `engine_glow` backs. All 20 backs passed visibility checks; rear-opening probes found 0 yellow obstructions in 353 samples. All nine A files and A’s geometry signature remain unchanged.\n\n**Remaining differences:** ports and rounded surfaces remain faceted; port centres were adjusted locally to exposed hull faces. Previously accepted shell-profile differences from r10 remain. Details and three review passes are documented in report.md.\n\n**Approval:** ready for Max’s visual review; no new approval is claimed.",
+  "artifacts": [
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope.blend",
+      "what": "Updated B and preserved A, with packed blueprints."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B.glb",
+      "what": "Verified B export; 2,092 triangles."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-34.png",
+      "what": "Re-imported GLB three-quarter render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-side.png",
+      "what": "Side orthographic render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-front.png",
+      "what": "Front orthographic render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-top.png",
+      "what": "Top orthographic render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-rear.png",
+      "what": "Rear carrier and lip verification render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-underside.png",
+      "what": "Additional centre-gap and belly-port verification render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-symmetry.png",
+      "what": "Front render blended with its mirror at 50%."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-side.png",
+      "what": "Registered side overlay, 1600 pixels wide."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-front.png",
+      "what": "Registered front overlay, 1600 pixels wide."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-top.png",
+      "what": "Registered top overlay, 1600 pixels wide."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/report.md",
+      "what": "Acceptance report, object counts, port coordinates, review log and remaining differences."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/round02-acceptance.json",
+      "what": "Independent GLB geometry, symmetry and material audit."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/round02-evidence.zip",
+      "what": "Baseline blend, three-pass review evidence, probes, logs and source copies."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/fix_b_round02.py",
+      "what": "B-only geometry modification and export source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/prepare_b_round02.py",
+      "what": "Canonical GLB naming and binary validation source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/render_b_round02.py",
+      "what": "B-only re-import and rendering source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/compose_b_round02.py",
+      "what": "Registered overlay composition source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/inspect_b_round02.py",
+      "what": "Geometry retention, centre clearance and port visibility probes."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/finish_b_round02.py",
+      "what": "Packaging, acceptance reporting and artifact verification source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/report.md",
+      "what": "Job-local round-two report."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/round02/A-before.json",
+      "what": "Protected A file hashes."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/round02/acceptance.json",
+      "what": "Job-local GLB audit results."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/round02/artifact-manifest.json",
+      "what": "Verified paths, sizes and SHA-256 hashes."
+    }
+  ],
+  "decisions": [
+    "Triangulated one half and explicitly mirrored material-tagged triangles, including ports, hatches and cockpit facets.",
+    "Used six thinner modules per side, leaving a 5.15 m minimum centre gap and retaining the previous lowest height.",
+    "Kept the bubble’s dimensions and placement; shortened the head so the cabin projects 1.625 m ahead.",
+    "Placed smaller oblique head ports to reduce the face-like reading; fitted port centres to exposed facets in the mapped regions.",
+    "Used one engine_glow material across 20 separate recessed back surfaces, with no emission in the file.",
+    "Rebuilt main nozzle openings into the grey carrier plane with 0.10 m recess depth.",
+    "Mirrored the red side hatch to retain complete material symmetry.",
+    "Removed three fully buried end caps to fund added geometry without altering the visible shell silhouette.",
+    "Preserved intentional buried shell overlaps; corrected visible carrier and port obstruction.",
+    "Used symmetric preview lighting for the mirrored-front comparison."
+  ],
+  "questions": [],
+  "blocked_reason": "",
+  "checkpoint": {
+    "artifact_versions": [
+      "Round 02 final geometry: review pass 3, 2,092 triangles.",
+      "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B.glb SHA-256 981f545fbe9d30d1a4e8b63c6aa95413ef8edced6fd6502c0fba31493b9b55ce",
+      "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A.glb unchanged SHA-256 ad90e42a6cd50d9e452b6969bfb7485ad4d37d01faded7b7f6777b4c12c7562e",
+      "25 round-two artifacts verified; baseline and intermediate evidence are archived in round02-evidence.zip."
+    ],
+    "invariants": [
+      "B is the selected player ship; preserve A.",
+      "Preserve origin, metre scale, Blender +Y forward and glTF −Z forward.",
+      "Bubble_MAIN remains 2.95 m wide at its original placement.",
+      "Maintain exact reflected geometry and material facets.",
+      "Maintain the open centre, attached module rows, shallow recesses and non-emissive engine_glow slot.",
+      "Retain the approved shell and spine massing outside explicitly requested fixes."
+    ],
+    "accepted_decisions": [
+      "Max chose B and accepted its starting silhouette.",
+      "This round implements Max’s seven requested fixes.",
+      "A remains available unchanged for another use."
+    ],
+    "rejected_approaches": [
+      "Independent automatic triangulation on both halves: produced mismatched facets.",
+      "Nozzle mouths standing proud of a recessed grey plate: replaced with actual openings.",
+      "Port placement beneath overlapping yellow surfaces: moved to exposed host faces.",
+      "A central belly pod: replaced with paired segmented keel rows."
+    ],
+    "unresolved": [
+      "Max’s visual judgement of the revised head and rounded lip.",
+      "Exact port-centre refinement beyond the recorded coarse-facet placements.",
+      "Previously accepted differences between the shell profile and r10 remain intentionally unchanged."
+    ],
+    "next_action": "Review B’s three-quarter, rear, symmetry and underside images with Max. Use his next feedback to revise the existing B; extract the archived baseline when rebuilding with the round-two script."
+  }
+}

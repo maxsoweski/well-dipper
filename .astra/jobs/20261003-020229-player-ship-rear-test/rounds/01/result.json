@@ -1,0 +1,118 @@
+{
+  "status": "complete",
+  "report": "Delivered 18 verified files after 6 review passes.\n\nTechnical checks: **720/800 triangles**, 8 required materials, one connected hull, **0.000000 m** mirror mismatch, 0 detected intersections, 0 degenerate or sliver triangles. Blender dimensions: **9.255 × 6.025 × 10.250 m**.\n\n**480/508** traced samples fall within 0.3 m. All 28 exceptions concern top-view L10, with maximum error **1.523 m**; B’s tail limit was retained. The shoulder arch remains flatter and the socket mouths smaller than r10. These likeness differences are documented, not passed.\n\nThe report contains the complete loop log, measurements, remaining differences, and file inventory. **No approval by Max is claimed.**",
+  "artifacts": [
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test.glb",
+      "what": "Final 720-triangle rear test"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test.blend",
+      "what": "Editable connected mesh and review scene"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-34.png",
+      "what": "Re-imported GLB, behind-left at 20 degrees"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-rear.png",
+      "what": "Rear render"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-side.png",
+      "what": "Side render"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-top.png",
+      "what": "Top render"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-grey-34.png",
+      "what": "Neutral-grey behind-left render"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-grey-side.png",
+      "what": "Neutral-grey side render"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-lines-side.png",
+      "what": "Registered side crease overlay"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-lines-top.png",
+      "what": "Registered top crease overlay"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-lines-rear.png",
+      "what": "Registered rear crease overlay"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-review.png",
+      "what": "Final eight-view review sheet"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-audit.json",
+      "what": "Geometry, Blender, GLB, and line measurements"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-evidence.zip",
+      "what": "Six passes: 48 renders, 18 overlays, review sheets, and audits"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/rear-test-source.zip",
+      "what": "Builder, rendering, probing, and packaging scripts"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/report.md",
+      "what": "Acceptance findings, loop log, and remaining differences"
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/rear-test/artifact-manifest.json",
+      "what": "Verified artifact sizes and SHA-256 hashes"
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261003-020229-player-ship-rear-test/report.md",
+      "what": "Job-local acceptance report"
+    }
+  ],
+  "decisions": [
+    "Cut the test at 12.000 m from the bubble front and retain B’s origin and 18.025 m tail limit.",
+    "Leave the forward cut open; its 20 boundary edges are intentional.",
+    "Represent L3’s side deck crease and top spine boundary as distinct physical features.",
+    "Prioritize the retained tail limit and annotated rear-plane construction over top-view L10 registration.",
+    "Include four neighboring belly modules and two mirrored body ports; omit module thrusters.",
+    "Use 0.90 m socket-mouth radius to remove narrow carrier triangles.",
+    "Measure traced-reference coverage separately from untraced feature continuations."
+  ],
+  "questions": [],
+  "blocked_reason": "",
+  "checkpoint": {
+    "artifact_versions": [
+      "rear-test.glb pass 6; SHA-256 512e5eeb8909c8df99a9d138f0657700e7a280064d8ecaf8670448fc4d9f747e",
+      "rear-test.blend pass 6; SHA-256 84dd724db38536a907ddaa9875090df4144cb5da42443b7182af1fdb501f8b09",
+      "Absolute paths and remaining hashes are recorded in artifact-manifest.json."
+    ],
+    "invariants": [
+      "Rear-only scope; original B coordinate frame; Blender +Y forward.",
+      "RearHull_MAIN connected; mirror symmetry; eight required material names.",
+      "Triangle ceiling 800; flat shading; no module thrusters.",
+      "Do not modify the envelope directory or supplied references."
+    ],
+    "accepted_decisions": [
+      "Scripted construction was explicitly authorized in the brief.",
+      "Six required geometry/render review passes are complete."
+    ],
+    "rejected_approaches": [
+      "Intersecting hull volumes: replaced with shared mesh edges.",
+      "Pointed crown: replaced with a flat plateau.",
+      "Warped port-neighbor facets: adjusted geometry onto planes.",
+      "Narrow carrier webs: widened by reducing socket radius."
+    ],
+    "unresolved": [
+      "Top-view L10 maximum registration error remains 1.523 m.",
+      "Rear shoulder arch is flatter/narrower and sockets smaller than r10.",
+      "Visual approval remains pending."
+    ],
+    "next_action": "Review the final sheet and overlays with Max. For further geometry changes, extract rear-test-source.zip and continue from PASS=6 using his feedback."
+  }
+}

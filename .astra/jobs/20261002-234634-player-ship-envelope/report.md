@@ -1,65 +1,48 @@
-# Round 01 — complete
+# Round 02 — complete
 
-Created and verified both variants after six review passes.
+**Technical checks passed.** B has 2,092 triangles, 17 objects and 10 materials. Bounds remain 18.025 × 10.900 × 10.400 m; bubble width remains 2.950 m. Largest mirrored vertex mismatch: **0.000000 m**; unmatched mirrored material triangles: **0**.
 
-| Check | A | B |
-|---|---:|---:|
-| Objects | 14 | 14 |
-| Triangles | 1,450 | 1,450 |
-| Materials | 7 | 7 |
-| Length × height × width | 18.025 × 10.900 × 10.400 m | 18.025 × 10.900 × 10.400 m |
-| Bubble outer width | 5.100 m | 2.950 m |
-| Bubble_MAIN glTF z-range | −11.155549 to −7.700549 m | −11.155549 to −7.700549 m |
+Delivered the rounded rear lip, clear carrier opening, two six-module keel rows, hanging cockpit, mirrored red hatches, and 20 shallow recesses with non-emissive `engine_glow` backs. All 20 backs passed visibility checks; rear-opening probes found 0 yellow obstructions in 353 samples. All nine A files and A’s geometry signature remain unchanged.
 
-Technical checks passed, including GLB re-import, flat corner normals, exact material values, and identical geometry for all 12 shared parts. All required renders and overlays exist; 36 pass overlays are archived.
+**Remaining differences:** ports and rounded surfaces remain faceted; port centres were adjusted locally to exposed hull faces. Previously accepted shell-profile differences from r10 remain. Details and three review passes are documented in report.md.
 
-Remaining differences include A’s raised brow and larger cabin, the disputed spine start, faceted shell boundaries, and local module/rear silhouette differences. The full per-part findings and six-pass loop log are in report.md. Visual approval remains with Max.
+**Approval:** ready for Max’s visual review; no new approval is claimed.
 
 ## Decisions
-- Used intersecting longitudinal hull volumes and shallow overlaps for the continuous body.
-- Used three paired module groups; exact individual module count remains deferred.
-- Used a common structural-volume centroid as the origin proxy; physical mass distribution is unspecified.
-- Registered the front centreline at crop x=145 and baseline y=307; retained each supplied uniform scale.
-- Followed the visible early orange side shape with a 1.65 m spine start instead of the map’s textual 5.3 m landmark; documented the conflict.
-- Made A’s cabin 5.10 m wide and approximately 4.02 m high; raised its brow to clear it.
-- Made B’s cabin 2.95 m wide and approximately 2.15 m high; lowered its inner brow to meet the roof.
-- Interpreted the approximate glass-width figures as opening cues rather than the bounding width of all wraparound glazing.
-- Kept aft shoulder and engine surround separate; recessed four sockets within the rear envelope.
-- Used packed Blender image-reference planes implemented as image empties.
-- Composited blueprints at 50% and model overlays at 60% opacity for boundary inspection.
-- Measured 125° azimuth from Blender +X toward +Y; used a 53 m camera distance to frame the complete ship.
-- Stopped at six review passes and documented remaining differences without claiming visual approval.
+- Triangulated one half and explicitly mirrored material-tagged triangles, including ports, hatches and cockpit facets.
+- Used six thinner modules per side, leaving a 5.15 m minimum centre gap and retaining the previous lowest height.
+- Kept the bubble’s dimensions and placement; shortened the head so the cabin projects 1.625 m ahead.
+- Placed smaller oblique head ports to reduce the face-like reading; fitted port centres to exposed facets in the mapped regions.
+- Used one engine_glow material across 20 separate recessed back surfaces, with no emission in the file.
+- Rebuilt main nozzle openings into the grey carrier plane with 0.10 m recess depth.
+- Mirrored the red side hatch to retain complete material symmetry.
+- Removed three fully buried end caps to fund added geometry without altering the visible shell silhouette.
+- Preserved intentional buried shell overlaps; corrected visible carrier and port obstruction.
+- Used symmetric preview lighting for the mirrored-front comparison.
 
 ## Artifacts
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope.blend` — Both variants, presentation setup, and four packed blueprint references.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A.glb` — Variant A; 1,450 triangles.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B.glb` — Variant B; 1,450 triangles.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-34.png` — 960×540 re-imported A three-quarter render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-side.png` — 960×540 A side render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-front.png` — 960×540 A front render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-top.png` — 960×540 A top render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-rear.png` — Additional A rear verification render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-overlay-side.png` — 1600-pixel-wide registered A side overlay.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-overlay-front.png` — 1600-pixel-wide registered A front overlay.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-overlay-top.png` — 1600-pixel-wide registered A top overlay.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-34.png` — 960×540 re-imported B three-quarter render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-side.png` — 960×540 B side render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-front.png` — 960×540 B front render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-top.png` — 960×540 B top render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-rear.png` — Additional B rear verification render.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-side.png` — 1600-pixel-wide registered B side overlay.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-front.png` — 1600-pixel-wide registered B front overlay.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-top.png` — 1600-pixel-wide registered B top overlay.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-comparison.png` — r10 beside both variant previews.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/acceptance.json` — Binary GLB audit: objects, triangles, bounds, materials, normals, and shared geometry.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-evidence.zip` — Six-pass overlays, raw renders, review sheets, logs, registration, re-import checks, and source copies.
-- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/report.md` — Full acceptance report, loop log, remaining differences, decisions, and file inventory.
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/build_envelope.py` — Final Blender geometry and export source.
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/render_envelope.py` — GLB re-import and rendering source.
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/composite.py` — Registered overlay composition source.
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/audit.py` — Independent binary GLB validation source.
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/inspect_blend.py` — Saved Blender file inspection source.
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/finish.py` — Packaging, report generation, and artifact verification source.
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/report.md` — Job-local acceptance report.
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/audit-summary.json` — Job-local binary audit results.
-- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/artifact-manifest.json` — Verified absolute paths, sizes, and SHA-256 hashes.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope.blend` — Updated B and preserved A, with packed blueprints.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B.glb` — Verified B export; 2,092 triangles.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-34.png` — Re-imported GLB three-quarter render.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-side.png` — Side orthographic render.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-front.png` — Front orthographic render.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-top.png` — Top orthographic render.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-rear.png` — Rear carrier and lip verification render.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-underside.png` — Additional centre-gap and belly-port verification render.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-symmetry.png` — Front render blended with its mirror at 50%.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-side.png` — Registered side overlay, 1600 pixels wide.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-front.png` — Registered front overlay, 1600 pixels wide.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-top.png` — Registered top overlay, 1600 pixels wide.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/report.md` — Acceptance report, object counts, port coordinates, review log and remaining differences.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/round02-acceptance.json` — Independent GLB geometry, symmetry and material audit.
+- `/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/round02-evidence.zip` — Baseline blend, three-pass review evidence, probes, logs and source copies.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/fix_b_round02.py` — B-only geometry modification and export source.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/prepare_b_round02.py` — Canonical GLB naming and binary validation source.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/render_b_round02.py` — B-only re-import and rendering source.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/compose_b_round02.py` — Registered overlay composition source.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/inspect_b_round02.py` — Geometry retention, centre clearance and port visibility probes.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/finish_b_round02.py` — Packaging, acceptance reporting and artifact verification source.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/report.md` — Job-local round-two report.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/round02/A-before.json` — Protected A file hashes.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/round02/acceptance.json` — Job-local GLB audit results.
+- `/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/round02/artifact-manifest.json` — Verified paths, sizes and SHA-256 hashes.

@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "codex",
+    "exec",
+    "-C",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261003-015721-player-ship-rear-detail",
+    "-m",
+    "gpt-6-astra",
+    "-c",
+    "model_reasoning_effort=\"medium\"",
+    "-c",
+    "mcp_servers.blender.enabled=false",
+    "-s",
+    "workspace-write",
+    "--json",
+    "-o",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261003-015721-player-ship-rear-detail/rounds/01/result.json",
+    "--output-schema",
+    "/home/ax/projects/personal-os-improvements/astra-lane/skill/scripts/result.schema.json",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261003-015721-player-ship-rear-detail/refs/player-ship-ext-sheet.png",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261003-015721-player-ship-rear-detail/refs/lines-r10.png",
+    "-"
+  ],
+  "exit": 0,
+  "timed_out": false,
+  "started": "2026-10-03T01:57:21",
+  "finished": "2026-10-03T02:00:45"
+}

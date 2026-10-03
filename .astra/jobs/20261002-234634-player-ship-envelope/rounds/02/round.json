@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "codex",
+    "exec",
+    "resume",
+    "01a0ffde-efa6-7c63-be30-ac2d1856f8f4",
+    "-m",
+    "gpt-6-astra",
+    "-c",
+    "model_reasoning_effort=\"high\"",
+    "-c",
+    "sandbox_workspace_write.writable_roots=[\"/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope\", \"/mnt/c/Users/Max/...\"]",
+    "-c",
+    "sandbox_mode=\"workspace-write\"",
+    "--json",
+    "-o",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/rounds/02/result.json",
+    "--output-schema",
+    "/home/ax/projects/personal-os-improvements/astra-lane/skill/scripts/result.schema.json",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/refs/envelope-B-34.png",
+    "-i",
+    "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/refs/envelope-B-overlay-front.png",
+    "-"
+  ],
+  "exit": 0,
+  "timed_out": false,
+  "started": "2026-10-03T01:02:43",
+  "finished": "2026-10-03T01:30:57"
+}
