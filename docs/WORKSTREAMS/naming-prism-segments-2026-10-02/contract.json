@@ -261,8 +261,9 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "OPEN",
-      "batch": 2
+      "status": "VERIFIED_PENDING_MAX b674e1e",
+      "batch": 2,
+      "progress": "BUILT 6458206 (designs) + 20b9927 (legacy), FIXUP b674e1e (2026-10-03). Live at 20b9927 (:5175, Sol + Sirius, levels 0-4, designs 1/2 + legacy): 0 YOU/SHIP words, 0 draws in retired #00ff80/#00d4ff, every CURRENT/TARGET draw exact (Sirius d1 PRISM 457/457 CURRENT, 332/332 TARGET); chip clicks 6/6 ring the right cell (GALAXY N10/L9, SECTOR H9/P16, REGION P1/P4); s-search highlight + selection TARGET. 4 FAILs at 20b9927, all fixed in b674e1e and re-checked live after a hard reload: (1) d1 SECTOR/REGION detail now 'TARGET H9 SIRIUS' / 'TARGET P1 SIRIUS' in TARGET ink; (2) Sol selected at PRISM: SOL label 34/34 texels CURRENT in both designs, 0 TARGET texels on the frame outside the TARGET chip's own diamond (also fixed the segment-bar tick, y-gauge tick and column outline found live); (3) legacy SYSTEM at Sirius: title CURRENT, drawn under the search box (box bottom 45 px, title baseline 65); legacy PRISM names neutral #c8d6e8 (0 gold), own star CURRENT, no WARP TARGET banner after a warp; (4) d2 SYSTEM at Sirius: CURRENT word whole, 0 CURRENT word texels on the legend band in 36 rotation/zoom frames (the only band texels were the off-pane chevron at x 220-229). Also live: TARGET click at home SYSTEM with a star target blinks the WARP commit (8/16 samples on, then cleared). Astra 7 (chips vs tabs at 300/320) verified headless only - the browser window would not resize below 390-wide buffer. OPEN FOR MAX (scope, not defects): clickable chips on the LEGACY look (not built; designs only); a body picked in your own system drops out of the TARGET chip above SYSTEM because the chip mirrors what Enter does there. Tests: 16 new, 22 sabotages red."
     },
     {
       "id": "AC-16",
@@ -273,8 +274,9 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "OPEN",
-      "batch": 2
+      "status": "VERIFIED_PENDING_MAX b674e1e",
+      "batch": 2,
+      "progress": "BUILT 6458206, FIXUP b674e1e. Live at 20b9927: leaders on GALAXY (both designs) + SECTOR rows; hover label vs highlighted cell 0 px overlap in 20/20 probes, inside the window, highlight frame and (x, z) line both #d8fbff; screen door: background noise 7.54 -> 1.11 (mean abs Laplacian), spike pixels 44.5% -> 6.8% (design 2 SECTOR, filter bypassed vs shipped); nothing outside the grid on GALAXY/SECTOR/REGION or mid-drag; mid-drag neighbour cells dotted, boundary line, labels moved exactly +25 texels; rail header EST SYSTEMS. Fixup: on the player's own cell the hover/click KEY frame steps one texel inside (live: top edge stays CURRENT, KEY at the inset row, both designs); dequant window slides inward at image edges so a flat dithered field is flat to the border (headless 110/110 whole image; not re-captured live); the real blit path now has a test (it was never run headlessly)."
     },
     {
       "id": "AC-17",
@@ -285,8 +287,9 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "OPEN",
-      "batch": 2
+      "status": "VERIFIED_PENDING_MAX b674e1e",
+      "batch": 2,
+      "progress": "BUILT 6458206 (+ legacy 20b9927). One meaning: the ship's true 3D range to the route target (hovered body, else selected), worded 'CURRENT <range> TO <NAME>' (fallback 'TO TGT', then bare 'CURRENT'; no number with no target). Live at 20b9927: Sirius SYSTEM with Sirius B targeted 'CURRENT 277AU TO SIRIUS B' vs computed 276.77 AU; Sol Jupiter moon close-up 'CURRENT 15AU TO JUPITER' vs 15.48 AU; no target 'CURRENT'; both designs. Note: the commit row's 'x.xx AU' on the same screen is the body's orbit radius (not a range) - unchanged, not part of this AC."
     },
     {
       "id": "AC-18",
@@ -297,8 +300,9 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "OPEN",
-      "batch": 2
+      "status": "VERIFIED_PENDING_MAX b674e1e",
+      "batch": 2,
+      "progress": "BUILT 6458206 + 20b9927, FIXUP b674e1e. (a) Live: HELM -> zoom nav -> ORRERY leaves zoomedRole null and N opens the overlay; fixup also settles the mover on the gallery/sky-debug early return. (b) Not reproduced in 10 HELM<->ORRERY round trips with N (window in front, DevTools attached, no trace): overlay 10/10, no context loss, no window.error, geometries/textures/programs flat 109/14/27, JS heap 127.8-153.6 MB ending 136.8 vs 137.4 start; background-tab and tracing conditions not tried; cause still undetermined. (c) Hiding the ship in ORRERY (Sol, 300 frames each, vsync 8.33 ms): hidden 19 draw calls / 15,738 tris / CPU 0.18 ms mean vs drawn 59 / 16,436 / 0.32 ms - saves 40 draw calls, 698 triangles, ~0.14 ms CPU per frame (GPU not measured). (d) Live at 390 wide: design 2 legend inside the frame on every level and PRISM list mode (rightmost text 236 of 390), ESC CLOSE always kept; headless 417/390/340/300."
     }
   ],
   "architecturalConnections": {
