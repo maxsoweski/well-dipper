@@ -1,0 +1,186 @@
+{
+  "status": "complete",
+  "report": "Created and verified both variants after six review passes.\n\n| Check | A | B |\n|---|---:|---:|\n| Objects | 14 | 14 |\n| Triangles | 1,450 | 1,450 |\n| Materials | 7 | 7 |\n| Length × height × width | 18.025 × 10.900 × 10.400 m | 18.025 × 10.900 × 10.400 m |\n| Bubble outer width | 5.100 m | 2.950 m |\n| Bubble_MAIN glTF z-range | −11.155549 to −7.700549 m | −11.155549 to −7.700549 m |\n\nTechnical checks passed, including GLB re-import, flat corner normals, exact material values, and identical geometry for all 12 shared parts. All required renders and overlays exist; 36 pass overlays are archived.\n\nRemaining differences include A’s raised brow and larger cabin, the disputed spine start, faceted shell boundaries, and local module/rear silhouette differences. The full per-part findings and six-pass loop log are in report.md. Visual approval remains with Max.",
+  "artifacts": [
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope.blend",
+      "what": "Both variants, presentation setup, and four packed blueprint references."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A.glb",
+      "what": "Variant A; 1,450 triangles."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B.glb",
+      "what": "Variant B; 1,450 triangles."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-34.png",
+      "what": "960×540 re-imported A three-quarter render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-side.png",
+      "what": "960×540 A side render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-front.png",
+      "what": "960×540 A front render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-top.png",
+      "what": "960×540 A top render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-rear.png",
+      "what": "Additional A rear verification render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-overlay-side.png",
+      "what": "1600-pixel-wide registered A side overlay."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-overlay-front.png",
+      "what": "1600-pixel-wide registered A front overlay."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A-overlay-top.png",
+      "what": "1600-pixel-wide registered A top overlay."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-34.png",
+      "what": "960×540 re-imported B three-quarter render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-side.png",
+      "what": "960×540 B side render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-front.png",
+      "what": "960×540 B front render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-top.png",
+      "what": "960×540 B top render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-rear.png",
+      "what": "Additional B rear verification render."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-side.png",
+      "what": "1600-pixel-wide registered B side overlay."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-front.png",
+      "what": "1600-pixel-wide registered B front overlay."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B-overlay-top.png",
+      "what": "1600-pixel-wide registered B top overlay."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-comparison.png",
+      "what": "r10 beside both variant previews."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/acceptance.json",
+      "what": "Binary GLB audit: objects, triangles, bounds, materials, normals, and shared geometry."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-evidence.zip",
+      "what": "Six-pass overlays, raw renders, review sheets, logs, registration, re-import checks, and source copies."
+    },
+    {
+      "path": "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/report.md",
+      "what": "Full acceptance report, loop log, remaining differences, decisions, and file inventory."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/build_envelope.py",
+      "what": "Final Blender geometry and export source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/render_envelope.py",
+      "what": "GLB re-import and rendering source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/composite.py",
+      "what": "Registered overlay composition source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/audit.py",
+      "what": "Independent binary GLB validation source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/inspect_blend.py",
+      "what": "Saved Blender file inspection source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/finish.py",
+      "what": "Packaging, report generation, and artifact verification source."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/report.md",
+      "what": "Job-local acceptance report."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/audit-summary.json",
+      "what": "Job-local binary audit results."
+    },
+    {
+      "path": "/home/ax/projects/well-dipper-trunk/.astra/jobs/20261002-234634-player-ship-envelope/out/artifact-manifest.json",
+      "what": "Verified absolute paths, sizes, and SHA-256 hashes."
+    }
+  ],
+  "decisions": [
+    "Used intersecting longitudinal hull volumes and shallow overlaps for the continuous body.",
+    "Used three paired module groups; exact individual module count remains deferred.",
+    "Used a common structural-volume centroid as the origin proxy; physical mass distribution is unspecified.",
+    "Registered the front centreline at crop x=145 and baseline y=307; retained each supplied uniform scale.",
+    "Followed the visible early orange side shape with a 1.65 m spine start instead of the map’s textual 5.3 m landmark; documented the conflict.",
+    "Made A’s cabin 5.10 m wide and approximately 4.02 m high; raised its brow to clear it.",
+    "Made B’s cabin 2.95 m wide and approximately 2.15 m high; lowered its inner brow to meet the roof.",
+    "Interpreted the approximate glass-width figures as opening cues rather than the bounding width of all wraparound glazing.",
+    "Kept aft shoulder and engine surround separate; recessed four sockets within the rear envelope.",
+    "Used packed Blender image-reference planes implemented as image empties.",
+    "Composited blueprints at 50% and model overlays at 60% opacity for boundary inspection.",
+    "Measured 125° azimuth from Blender +X toward +Y; used a 53 m camera distance to frame the complete ship.",
+    "Stopped at six review passes and documented remaining differences without claiming visual approval."
+  ],
+  "questions": [],
+  "blocked_reason": "",
+  "checkpoint": {
+    "artifact_versions": [
+      "Final geometry: pass 6.",
+      "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-A.glb SHA-256 ad90e42a6cd50d9e452b6969bfb7485ad4d37d01faded7b7f6777b4c12c7562e",
+      "/mnt/c/Users/Max/Documents/Blender/astra/well-dipper-trunk/player-ship/envelope/envelope-B.glb SHA-256 6551ef767b11560e17331a1480c9170ba03820d7a36c8f3adc8efcdf2e56ed7f",
+      "All 32 loose artifacts verified; manifest contains hashes for the other 31 files."
+    ],
+    "invariants": [
+      "r10 remains the shape authority; no old sculpt or earlier model was used.",
+      "Each variant has 14 objects, 1,450 triangles, and seven exact materials.",
+      "Blender +Y forward, glTF −Z forward, metre units.",
+      "Only Bubble_MAIN and P05_Head differ between variants.",
+      "Preserve flat normals, recessed engines, attached undercarriage, and continuous swept hull masses."
+    ],
+    "accepted_decisions": [
+      "Scripted modelling was explicitly authorized.",
+      "Two cabin variants are required for Max’s visual choice.",
+      "Hatch, thrusters, detailed modules, and interior remain deferred."
+    ],
+    "rejected_approaches": [
+      "Stacked horizontal shells and separate leg-like supports.",
+      "Closed rear hull surfaces obscuring engine sockets.",
+      "Low common nose volume intersecting A’s cabin.",
+      "Color-mask silhouette metrics: cream-frame gaps produced false boundaries.",
+      "Using imported smooth-polygon flags as the flat-shading test; exported corner normals were checked directly."
+    ],
+    "unresolved": [
+      "Max’s A/B choice and visual approval.",
+      "Early spine-start interpretation versus the map’s 5.3 m landmark.",
+      "A’s raised brow and large cabin departures from side/top r10.",
+      "Coarse shell boundaries, rear-cap curvature, and local module silhouette differences listed in report.md.",
+      "Physical centre of mass requires an interior and mass distribution."
+    ],
+    "next_action": "Review envelope-comparison.png and the registered overlays with Max; apply his feedback to the existing source and chosen variant."
+  }
+}
