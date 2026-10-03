@@ -115,8 +115,13 @@ describe('AC-5 — here is the player, worked out from the player', () => {
     expect(b.max.x - b.min.x).toBe(PRISM_KPC);
     expect(navGrid.sameAddress(drv.S.prismColumn, navGrid.parentAt(3, nav._localCenter.x, nav._localCenter.z))).toBe(true);
     expect(drv.D.starRows.length, 'the column is empty — the case is vacuous').toBeGreaterThan(3);
+    // ⭐ naming-prism-segments Phase 3 (AC-6): the slab loader now applies the half-open ownership rule
+    //   AT SOURCE (prismLoader.js: a slab's rows are exactly the stars its column and slab own), so the
+    //   loaded rows themselves are all inside — the old control (the loader over-fetched and the glass
+    //   filtered) no longer has an over-fetch to find. The per-row checks below still hold the glass.
     const outside = nav._localStars.filter((s) => !navGrid.inFootprint(b, s.wx, s.wz));
-    expect(outside.length, 'control: the loader brought in stars outside the column').toBeGreaterThan(0);
+    expect(outside.length, 'the loader published stars outside the column').toBe(0);
+    expect(nav._localStars.length, 'the loader published nothing — the case is vacuous').toBeGreaterThan(3);
     for (const r of drv.D.starRows) {
       expect(navGrid.inFootprint(b, r.wx, r.wz), `${r.key} is outside the column on the glass`).toBe(true);
       const d = Math.hypot(r.wx - nav._playerX, r.wy - nav._playerY, r.wz - nav._playerZ);

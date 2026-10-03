@@ -659,109 +659,42 @@ export class HashGridStarfield {
    * @param {number} [maxResults=3000]
    */
   static findStarsInPrism(galacticMap, center, xzHalf, yHalf, maxResults = 3000) {
-    const cx = center.x, cy = center.y || 0, cz = center.z || 0;
-    const results = [];
-
-    const featureRadius = Math.max(xzHalf, yHalf) * 1.5;
-    const proceduralFeatures = galacticMap.findNearbyFeatures(center, Math.max(featureRadius, 0.5));
-    const realFeatures = this.realFeatureCatalog?.loaded
-      ? this.realFeatureCatalog.findNearby(center, Math.max(featureRadius, 0.5))
-      : [];
-    const cachedFeatures = [...proceduralFeatures, ...realFeatures];
-
-    for (let ti = 0; ti < ALL_TYPES.length; ti++) {
-      const type = ALL_TYPES[ti];
-      const cfg = TYPE_CONFIG[type];
-      const cellSize = cfg.cell;
-
-      // Check cell counts for each axis independently
-      const xzCells = Math.ceil(xzHalf / cellSize);
-      const yCells = Math.ceil(yHalf / cellSize);
-      // Skip if grid is too dense on any axis
-      if (xzCells > 200) continue;
-      if (yCells > 200) continue;
-      const ySearch = yCells;
-
-      const gcx = Math.floor(cx / cellSize);
-      const gcy = Math.floor(cy / cellSize);
-      const gcz = Math.floor(cz / cellSize);
-
-      for (let dx = -xzCells; dx <= xzCells; dx++) {
-        for (let dy = -ySearch; dy <= ySearch; dy++) {
-          for (let dz = -xzCells; dz <= xzCells; dz++) {
-            const cellX = gcx + dx;
-            const cellY = gcy + dy;
-            const cellZ = gcz + dz;
-
-            const wx = (cellX + 0.5) * cellSize;
-            const wy = (cellY + 0.5) * cellSize;
-            const wz = (cellZ + 0.5) * cellSize;
-
-            if (Math.abs(wx - cx) > xzHalf * 1.1) continue;
-            if (Math.abs(wy - cy) > yHalf * 1.1) continue;
-            if (Math.abs(wz - cz) > xzHalf * 1.1) continue;
-
-            const R = Math.sqrt(wx * wx + wz * wz);
-            if (R > GalacticMap.GALAXY_RADIUS * 1.2) continue;
-
-            const typeOffset = ti * 100003;
-            const h = this._hashCell(cellX, cellY, cellZ, typeOffset);
-            const armTheta = Math.atan2(wz, wx || 1e-10);
-            const densities = galacticMap.potentialDerivedDensity(R, wy, armTheta);
-            const armStr = galacticMap.spiralArmStrength(R, armTheta);
-            const armInfo = galacticMap.nearestArmInfo(R, armTheta);
-            const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
-            let totalDensity = densities.totalDensity * typeMultiplier;
-            totalDensity += this._featureDensityCached(cachedFeatures, wx, wy, wz);
-
-            let acceptProb = Math.min(1.0, totalDensity * cfg.acceptNorm);
-
-            if (EVOLVED_TYPES.has(type)) {
-              const haloWeight = densities.halo || 0;
-              const bulgeWeight = densities.bulge || 0;
-              const oldFraction = haloWeight + bulgeWeight * 0.8; // match render path (_searchTypeIterator) — WU7-5
-              let featureGiantBoost = 1.0;
-              for (const feat of cachedFeatures) {
-                if (feat.type !== 'globular-cluster') continue;
-                const fdx = wx - feat.position.x, fdy = wy - feat.position.y, fdz = wz - feat.position.z;
-                if (fdx * fdx + fdy * fdy + fdz * fdz < feat.radius * feat.radius * 9) {
-                  featureGiantBoost = Math.max(featureGiantBoost, 15.0);
-                }
-              }
-              acceptProb *= (0.1 + oldFraction * 5.0) * featureGiantBoost;
-              acceptProb = Math.min(1.0, acceptProb);
-            }
-
-            const hashNorm = (h & 0xFFFF) / 65536;
-            if (hashNorm > acceptProb) continue;
-
-            const offX = ((h >> 8) & 0xFF) / 255 - 0.5;
-            const offY = ((h >> 16) & 0xFF) / 255 - 0.5;
-            const offZ = ((h >> 24) & 0xFF) / 255 - 0.5;
-            const starX = wx + offX * cellSize;
-            const starY = wy + offY * cellSize;
-            const starZ = wz + offZ * cellSize;
-
-            if (Math.abs(starX - cx) > xzHalf) continue;
-            if (Math.abs(starY - cy) > yHalf) continue;
-            if (Math.abs(starZ - cz) > xzHalf) continue;
-
-            const sdx = starX - cx, sdy = starY - cy, sdz = starZ - cz;
-            const seed = GalacticMap.hashCombine(h, cellX * 31 + cellZ * 997);
-
-            results.push({
-              worldX: starX, worldY: starY, worldZ: starZ,
-              seed, type, dist: Math.sqrt(sdx * sdx + sdy * sdy + sdz * sdz),
-              ident: { tier: type, cx: cellX, cy: cellY, cz: cellZ },
-            });
-          }
-        }
-      }
-    }
-
+    // naming-prism-segments AC-6: ONE body for the whole query and for the sliced loader — this is
+    // `prismQuery` run to completion in a single call, then sorted and truncated exactly as before,
+    // so the Phase 1 regression baselines (identity test) pin both paths at once.
+    const q = this.prismQuery(galacticMap, center, xzHalf, yHalf);
+    q.step(null);
+    const results = q.results;
     results.sort((a, b) => a.dist - b.dist);
     if (results.length > maxResults) results.length = maxResults;
-    return stampKeys(results);
+    return results;   // keys were stamped by the query
+  }
+
+  /**
+   * ⭐ naming-prism-segments AC-6 — the prism query as a RESUMABLE object (plan §8, PHASE0 §7.1).
+   *
+   * `step(stop)` visits cells until `stop()` returns true (checked every 32 cell visits, ≈ 0.1 ms
+   * at ~3 µs per density call in Chrome), saves its cursor (tier, x, y, z) and returns false; call
+   * it again to resume exactly where it stopped. `step(null)` runs to the end in one go. It returns
+   * true once every cell has been visited; `results` then holds the stars in visiting order, each
+   * with `key` stamped (unsorted, untruncated — the caller decides).
+   *
+   * The per-cell arithmetic is the one `findStarsInPrism` has always used, operation for operation,
+   * so a star found by both is the same record.
+   *
+   * @param {object} [opts]
+   * @param {boolean} [opts.extent=false] keep a cell when its star's possible EXTENT reaches the
+   *   box, not when its centre is inside 1.1 × the box — the bright-star fix (plan §8 "Bright-star
+   *   defect"): an O or giant cell is 50–74 pc, so in a 7.8 pc column its centre is almost never
+   *   inside and its star was dropped even when it sat in the box. The generated star is unchanged;
+   *   only which cells are visited differs. Off by default so `findStarsInPrism` stays byte-identical.
+   *
+   * The feature list is gathered on the first `step()` (GalacticMap.findNearbyFeatures around the
+   * centre). A sliced caller builds any missing feature regions first, one per slice
+   * (`featureRegions()` + GalacticMap.prefetchFeatureRegion), so that call is all cache hits.
+   */
+  static prismQuery(galacticMap, center, xzHalf, yHalf, opts = {}) {
+    return new PrismQuery(this, galacticMap, center, xzHalf, yHalf, opts);
   }
 
   /**
@@ -808,5 +741,166 @@ export class HashGridStarfield {
     h = GalacticMap.hashCombine(h, cz + 500000);
     h = GalacticMap.hashCombine(h, typeOffset);
     return h;
+  }
+}
+
+/**
+ * The resumable prism query (see `HashGridStarfield.prismQuery`). Cursor = (tier index, cell x,
+ * cell y, cell z); the loop order is the original's (x outer, y, z inner) so `results` comes out in
+ * the same order `findStarsInPrism` always produced before its stable sort.
+ */
+class PrismQuery {
+  constructor(HGS, gm, center, xzHalf, yHalf, { extent = false } = {}) {
+    this.HGS = HGS; this.gm = gm;
+    this.cx = center.x; this.cy = center.y || 0; this.cz = center.z || 0;
+    this.center = { x: this.cx, y: this.cy, z: this.cz };
+    this.xzHalf = xzHalf; this.yHalf = yHalf; this.extent = !!extent;
+    this.featureRadius = Math.max(Math.max(xzHalf, yHalf) * 1.5, 0.5);
+    this.features = null;
+    this.results = [];
+    this.done = false;
+    this.cellsVisited = 0;
+    // Per-tier cell ranges, fixed up front. Same skip rule as always: a tier with more than 200
+    // cells per half-axis is skipped (the guard that drops M dwarfs from very tall queries).
+    const pad = this.extent ? 1 : 0;
+    this.tiers = [];
+    for (let ti = 0; ti < ALL_TYPES.length; ti++) {
+      const type = ALL_TYPES[ti];
+      const cfg = TYPE_CONFIG[type];
+      const cellSize = cfg.cell;
+      const xzCells = Math.ceil(xzHalf / cellSize);
+      const yCells = Math.ceil(yHalf / cellSize);
+      if (xzCells > 200) continue;
+      if (yCells > 200) continue;
+      const gcx = Math.floor(this.cx / cellSize), gcy = Math.floor(this.cy / cellSize), gcz = Math.floor(this.cz / cellSize);
+      this.tiers.push({ ti, type, cfg, cellSize,
+        xLo: gcx - xzCells - pad, xHi: gcx + xzCells + pad,
+        yLo: gcy - yCells - pad, yHi: gcy + yCells + pad,
+        zLo: gcz - xzCells - pad, zHi: gcz + xzCells + pad });
+    }
+    this.t = 0; this.ix = null; this.iy = 0; this.iz = 0;
+  }
+
+  /** The feature-region index triples the first step will read (GalacticMap.featureRegionsAround). */
+  featureRegions() {
+    return typeof this.gm.featureRegionsAround === 'function' ? this.gm.featureRegionsAround(this.center) : [];
+  }
+
+  _gatherFeatures() {
+    const HGS = this.HGS;
+    const proceduralFeatures = this.gm.findNearbyFeatures(this.center, this.featureRadius);
+    const realFeatures = HGS.realFeatureCatalog?.loaded
+      ? HGS.realFeatureCatalog.findNearby(this.center, this.featureRadius)
+      : [];
+    this.features = [...proceduralFeatures, ...realFeatures];
+  }
+
+  /** @param {(() => boolean) | null} stop  @returns {boolean} true when the query is complete */
+  step(stop) {
+    if (this.done) return true;
+    if (this.features === null) {
+      this._gatherFeatures();
+      if (stop !== null && stop()) return false;
+    }
+    const tiers = this.tiers;
+    let n = 0;
+    for (; this.t < tiers.length; this.t++, this.ix = null) {
+      const T = tiers[this.t];
+      if (this.ix === null) { this.ix = T.xLo; this.iy = T.yLo; this.iz = T.zLo; }
+      let ix = this.ix, iy = this.iy, iz = this.iz;
+      for (; ix <= T.xHi; ix++, iy = T.yLo) {
+        for (; iy <= T.yHi; iy++, iz = T.zLo) {
+          for (; iz <= T.zHi; iz++) {
+            if (stop !== null && (++n & 31) === 0 && stop()) {
+              this.ix = ix; this.iy = iy; this.iz = iz;
+              return false;
+            }
+            this.cellsVisited++;
+            this._cell(T, ix, iy, iz);
+          }
+        }
+      }
+    }
+    stampKeys(this.results);
+    this.done = true;
+    return true;
+  }
+
+  // One cell — the original findStarsInPrism body, unchanged arithmetic.
+  _cell(T, cellX, cellY, cellZ) {
+    const HGS = this.HGS, galacticMap = this.gm, cachedFeatures = this.features;
+    const { ti, type, cfg, cellSize } = T;
+    const cx = this.cx, cy = this.cy, cz = this.cz, xzHalf = this.xzHalf, yHalf = this.yHalf;
+
+    const wx = (cellX + 0.5) * cellSize;
+    const wy = (cellY + 0.5) * cellSize;
+    const wz = (cellZ + 0.5) * cellSize;
+
+    if (this.extent) {
+      // The star sits within half a cell of the centre (offset bytes 0…255), so this keeps every
+      // cell whose star could pass the precise test below, and only those (plus a 1e-12 margin).
+      const reach = cellSize * 0.5 + 1e-12;
+      if (Math.abs(wx - cx) > xzHalf + reach) return;
+      if (Math.abs(wy - cy) > yHalf + reach) return;
+      if (Math.abs(wz - cz) > xzHalf + reach) return;
+    } else {
+      if (Math.abs(wx - cx) > xzHalf * 1.1) return;
+      if (Math.abs(wy - cy) > yHalf * 1.1) return;
+      if (Math.abs(wz - cz) > xzHalf * 1.1) return;
+    }
+
+    const R = Math.sqrt(wx * wx + wz * wz);
+    if (R > GalacticMap.GALAXY_RADIUS * 1.2) return;
+
+    const typeOffset = ti * 100003;
+    const h = HGS._hashCell(cellX, cellY, cellZ, typeOffset);
+    const armTheta = Math.atan2(wz, wx || 1e-10);
+    const densities = galacticMap.potentialDerivedDensity(R, wy, armTheta);
+    const armStr = galacticMap.spiralArmStrength(R, armTheta);
+    const armInfo = galacticMap.nearestArmInfo(R, armTheta);
+    const typeMultiplier = galacticMap.starTypeDensityMultiplier(type, densities, armStr, armInfo);
+    let totalDensity = densities.totalDensity * typeMultiplier;
+    totalDensity += HGS._featureDensityCached(cachedFeatures, wx, wy, wz);
+
+    let acceptProb = Math.min(1.0, totalDensity * cfg.acceptNorm);
+
+    if (EVOLVED_TYPES.has(type)) {
+      const haloWeight = densities.halo || 0;
+      const bulgeWeight = densities.bulge || 0;
+      const oldFraction = haloWeight + bulgeWeight * 0.8; // match render path (_searchTypeIterator) — WU7-5
+      let featureGiantBoost = 1.0;
+      for (const feat of cachedFeatures) {
+        if (feat.type !== 'globular-cluster') continue;
+        const fdx = wx - feat.position.x, fdy = wy - feat.position.y, fdz = wz - feat.position.z;
+        if (fdx * fdx + fdy * fdy + fdz * fdz < feat.radius * feat.radius * 9) {
+          featureGiantBoost = Math.max(featureGiantBoost, 15.0);
+        }
+      }
+      acceptProb *= (0.1 + oldFraction * 5.0) * featureGiantBoost;
+      acceptProb = Math.min(1.0, acceptProb);
+    }
+
+    const hashNorm = (h & 0xFFFF) / 65536;
+    if (hashNorm > acceptProb) return;
+
+    const offX = ((h >> 8) & 0xFF) / 255 - 0.5;
+    const offY = ((h >> 16) & 0xFF) / 255 - 0.5;
+    const offZ = ((h >> 24) & 0xFF) / 255 - 0.5;
+    const starX = wx + offX * cellSize;
+    const starY = wy + offY * cellSize;
+    const starZ = wz + offZ * cellSize;
+
+    if (Math.abs(starX - cx) > xzHalf) return;
+    if (Math.abs(starY - cy) > yHalf) return;
+    if (Math.abs(starZ - cz) > xzHalf) return;
+
+    const sdx = starX - cx, sdy = starY - cy, sdz = starZ - cz;
+    const seed = GalacticMap.hashCombine(h, cellX * 31 + cellZ * 997);
+
+    this.results.push({
+      worldX: starX, worldY: starY, worldZ: starZ,
+      seed, type, dist: Math.sqrt(sdx * sdx + sdy * sdy + sdz * sdz),
+      ident: { tier: type, cx: cellX, cy: cellY, cz: cellZ },
+    });
   }
 }

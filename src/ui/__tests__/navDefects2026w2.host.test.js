@@ -539,7 +539,7 @@ const LEGACY_TEXT = {
   0: '47d6cec9a9b899c1',
   1: 'e63f073b4e55394d',
   2: '9790b13f56eb7849',
-  3: 'e0159ebab2298b53',
+  3: '7b80bae89ca839f9',   // re-pinned naming-prism-segments Phase 3 (AC-6): the slab loader — the y-axis labels read the loaded slabs (S1+N1, ±100 pc, was the ±20 pc first band) and the block estimate uses the grid column under the camera (3.906 pc half-width, was the 5 pc no-column fallback); text otherwise identical
   4: 'd9934e059a736f56',
 };
 // ⚠ RE-PINNED 2026-10-02 — naming-prism-segments Phase 2 (AC-3), RULING NOTED. Plan §6: "the legacy

@@ -31,6 +31,7 @@ import { SeededRandom } from '../../generation/SeededRandom.js';
 import { GalacticMap } from '../../generation/GalacticMap.js';
 import { burnWorkflowAvailable, navDispatchDuringWarp, systemEntryStyle } from '../../flight/flightModes.js';
 import { POSITION_MATCH_TOL } from '../../generation/RealStarCatalog.js';
+import * as navGrid from '../navGrid.js';  import { slabRef, addressOf } from '../../generation/GalaxyGrid.js';
 
 // ── main.js, extracted (same technique as navUatWalk2026.host.test.js) ─────────────────────────────
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -277,17 +278,21 @@ describe('⛔ the memos are keyed by the star, not the seed (state.js nameFor / 
   }, 60000);
 });
 
-describe('⛔ the loader de-duplicates by identity (NavComputer.js:3755)', () => {
+describe('⛔ the loader de-duplicates by identity (prismLoader.js, naming-prism-segments AC-6)', () => {
+  // The slab loader (Phase 3) owns rows by the grid's half-open rule: slab k's rows are exactly the
+  // stars its column and slab own, so dedup is structural. These are the Phase 2 cases re-driven
+  // through the real loader (jumpToSlab + render) instead of the retired `_queryYRange`.
   it('two real generator twins — same seed, same X to 6 dp — both load', async () => {
     // FOUND, NOT BUILT: measured 2026-10-02, the inner-galaxy column at (1.5, 0.3) holds
     // p:M:1366:-407:271 and p:M:1366:-242:271, one seed (3375394016) and one X (1.502729), 181 pc apart.
     const { nav } = await makeHeadlessNav({ width: 427, height: 240 });
     nav._gm = new GalacticMap('well-dipper-galaxy-1');
     nav._realStarCatalog = null;
-    nav._localStars = []; nav._loadedSeen = new Set(); nav._loadedYMin = null; nav._loadedYMax = null;
-    nav._loadBlockCenter = { x: 1.5, z: 0.3 }; nav._loadBlockHalf = 0.0039;
-    nav._queryYRange(-0.46, -0.44);
-    nav._queryYRange(-0.28, -0.26);
+    const col = navGrid.enterColumn(navGrid.parentAt(3, 1.502729, 271.5 * 0.0011));
+    nav._prismColumn = col; nav._localCubeSize = col.halfWidth;
+    nav._levelIndex = 3; nav._localCenter = { x: col.center.x, y: -0.27, z: col.center.z };
+    nav.render();                                   // S3 (the harness loads the viewed slab in render)
+    nav.jumpToSlab('S5'); nav.render();
     const pair = nav._localStars.filter((s) => s.key === 'p:M:1366:-407:271' || s.key === 'p:M:1366:-242:271');
     expect(pair.map((s) => s.key).sort()).toEqual(['p:M:1366:-242:271', 'p:M:1366:-407:271']);
     expect(pair[0].seed).toBe(pair[1].seed);
@@ -296,17 +301,19 @@ describe('⛔ the loader de-duplicates by identity (NavComputer.js:3755)', () =>
     for (const s of pair) expect(s.ident).toEqual({ tier: 'M', cx: 1366, cy: Number(s.key.split(':')[3]), cz: 271 });
   }, 60000);
 
-  it('the same star returned by two overlapping queries still loads once', async () => {
+  it('a star found by two neighbouring slab queries (closed boxes) loads once, in the slab that owns it', async () => {
     const { nav } = await makeHeadlessNav({ width: 427, height: 240 });
     nav._realStarCatalog = null;
-    nav._localStars = []; nav._loadedSeen = new Set(); nav._loadedYMin = null; nav._loadedYMax = null;
-    nav._loadBlockCenter = { x: 8, z: 0 }; nav._loadBlockHalf = 0.005;
-    nav._queryYRange(-0.05, 0.05);
+    const col = navGrid.enterColumn(navGrid.parentAt(3, 8, 0));
+    nav._prismColumn = col; nav._localCubeSize = col.halfWidth;
+    // the camera window straddles y = 0, so S1 and N1 both load — their query boxes share the face
+    nav._levelIndex = 3; nav._localCenter = { x: col.center.x, y: 0, z: col.center.z }; nav._localRadius = 0.0015;
+    nav.render();
+    expect(nav.slabLoad.loadedSlabs.has('S1') && nav.slabLoad.loadedSlabs.has('N1'), 'both slabs at the plane').toBe(true);
     const n = nav._localStars.length;
     expect(n).toBeGreaterThan(0);
-    nav._queryYRange(-0.05, 0.05);
-    expect(nav._localStars.length).toBe(n);
     expect(new Set(nav._localStars.map((s) => s.key)).size).toBe(n);
+    for (const s of nav._localStars) expect(s.slab, `${s.key} is listed under the wrong slab`).toBe(slabRef(addressOf(s.wx, s.wy, s.wz)));
   }, 60000);
 });
 

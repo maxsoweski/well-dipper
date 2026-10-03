@@ -15,7 +15,7 @@ import { KnownSystems } from '../generation/KnownSystems.js';
 /* naming-prism-segments Phase 2: GalacticSectors (the 775-sector density quadtree) is no longer constructed here — every sector is a cell of the fixed grid (navGrid / GalaxyGrid) */
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer, mapKey } from '../rendering/NavGalaxyRenderer.js';
-import alea from 'alea';
+import alea from 'alea';  import { loaderFor, prismLoadScheduler, parseSlab, indexOfSlab, slabIndexOfY, slabOfIndex, slabYRange, IDLE_STATUS } from './prismLoader.js';   // ⚠ second statement on this line to keep line numbers stable (naming-prism-segments AC-6)
 import { simClockMs } from '../core/SimClock.js';  import { navTabHeight, navChromeReserve, navDrawH, navMapOriginY, navMapSize, navCommitButton, navTextInset } from './navLayout.js';  import { wrapPixelTypeCtx, navUnitCap } from './navPixelType.js';  import { prismMarkerMayShow } from './navPrismCull.js';  import { makeViewModeDriver, nextViewMode, loadViewMode, saveViewMode, applySurface } from './navViewModes/index.js';  import * as navGrid from './navGrid.js';  import * as navDrill from './navDrill.js';   // ⚠ appended to this line, not added as new lines: ~700 line-anchored citations ride this file
 
 /**
@@ -160,15 +160,15 @@ export class NavComputer {
     this._localRotY = 0.3;
     this._hoveredLocalStar = null;
 
-    // ── On-demand prism loading ──
-    // Only loads stars within the visible Y range. Expands as user scrolls.
-    this._loadedYMin = null; // lowest Y (kpc) we've queried
-    this._loadedYMax = null; // highest Y (kpc) we've queried
-    this._loadedSeen = new Set(); // dedup keys for stars already in _localStars
-    this._loadBlockCenter = null; // block center for current prism
-    this._loadBlockHalf = null;   // block half-size for current prism
-    this._bgLoadTimer = null;     // background expansion timer
-    this._estimatedBlockStars = null; // estimated total stars in full prism
+    // ── PRISM slab loader (naming-prism-segments AC-6; the loader itself is ./prismLoader.js) ──
+    // `_localStars` is an ACCESSOR (see `set _localStars`): every replacement bumps `_rowsRev`,
+    // the one signal the designs rebuild rows on. The loader publishes a new array per slab batch.
+    this._loadedYMin = null; // lowest Y (kpc) of the published slabs (legacy HUD / tests)
+    this._loadedYMax = null; // highest Y (kpc) of the published slabs
+    this._loadSuspended = false; // main.js: true on the cockpit instance while its glass is not drawn
+    this._prismLoader = null;     // created lazily by prismLoader.loaderFor(this)
+    this._hereSlabHint = null;    // (reserved)
+    this._estimatedBlockStars = null; // estimated total stars in the column (legacy HUD)
 
     // ── Player ──
     this._playerX = 8;
@@ -3689,216 +3689,216 @@ export class NavComputer {
   };
 
   /**
-   * Ensure stars are loaded for the visible Y range around viewY ± yHalf.
-   * On first call, queries the visible range synchronously (fast, small window).
-   * Then schedules background expansion to pre-load above and below.
+   * ⭐⭐ naming-prism-segments AC-6 / AC-7 / AC-8 — PRISM LOADS ONE 100 pc SLAB AT A TIME, SLICED
+   * UNDER ONE 8 ms DEADLINE PER FRAME SHARED BY EVERY NAV INSTANCE (plan §8; PHASE0 §7).
+   *
+   * Max: "The update build for the prism nav view needs to include performance optimization", and
+   * on a loading screen: "let's try to make the system work without this". So nothing here loads
+   * synchronously. This method only POINTS the loader (`./prismLoader.js`) at the column on the
+   * glass and the slab the camera is in; the loader works in its own frame callback, the viewed
+   * slab first, then its neighbours outward to S30…N30, and publishes rows as slabs finish.
+   *
+   * WHAT IT REPLACED (and why): the old loader ran one synchronous query for the visible band and
+   * then ~30 background `setTimeout` steps of 100 pc each, each one a single task — 4 s per task at
+   * XIGMAG-2AE101G, ~2 minutes of freezes per column (PHASE0 §2), and the cockpit's copy kept
+   * running after HELM was left (§5). Every unit of work now fits under the deadline: feature
+   * regions one per unit, the cell scan resumable mid-tier (`HashGridStarfield.prismQuery`), real
+   * stars' twin searches, naming + multiplicity a few rows at a time, the publish and the sorts.
+   *
+   * ⭐ AC-8: a real catalogue star replaces its TWIN — the nearest procedural star within 2 pc in a
+   * full 3D neighbourhood generated from the hash grid, ties by key — decided per real star and
+   * cached by its key, so which procedural star is hidden never depends on what loaded first (the
+   * old merge searched only rows already loaded and stopped at a name key).
+   *
+   * Identity: rows of slab k are exactly the stars this column and slab OWN (GalaxyGrid's
+   * half-open rule), so no star can be loaded twice and `_loadedSeen` is gone.
+   *
+   * `yHalf` (the camera's visible half-height) only says which OTHER slab is on screen too — when
+   * the window straddles a slab edge both are loaded first; the slab, not the zoom, is the unit.
    */
   _ensureStarsLoaded(cx, cy, cz, yHalf) {
-    const blockCenter = this._prismColumn?.center || { x: cx, z: cz };   /* ⭐ naming-prism-segments AC-3: TODAY'S LOADER, POINTED AT THE FIXED COLUMN — `_prismColumn` (navGrid.enterColumn) and its half-width (`_localCubeSize` = 3.90625 pc, navDrill.setColumn). Phase 3 replaces the loader itself with the slab loader; until then its box is exactly the column the screen names, not a density-sized box around the clicked point (plan §2.4). */
-    const blockHalf = this._localCubeSize || 0.005;
+    loaderFor(this).ensure(cy, yHalf);
+  }
 
-    // If block changed (navigated to new block), reset everything
-    if (!this._loadBlockCenter ||
-        this._loadBlockCenter.x !== blockCenter.x ||
-        this._loadBlockCenter.z !== blockCenter.z) {
-      this._localStars = [];
-      this._loadedSeen = new Set();
-      this._loadedYMin = null;
-      this._loadedYMax = null;
-      this._loadBlockCenter = { ...blockCenter };
-      this._loadBlockHalf = blockHalf;
-      this._estimatedBlockStars = this._estimateBlockStarCount(blockCenter, blockHalf);
-      this._cancelBgExpand();
-    }
-
-    // Add margin so scrolling doesn't immediately need a new query
-    const margin = yHalf;
-    const needMin = cy - yHalf - margin;
-    const needMax = cy + yHalf + margin;
-
-    if (this._loadedYMin === null) {
-      // First load — query the visible range synchronously
-      this._queryYRange(needMin, needMax);
-      console.log(`[NAV] Initial load: ${this._localStars.length} stars (Y: ${(needMin * 1000).toFixed(0)} to ${(needMax * 1000).toFixed(0)} pc)`);
-      this._tryAutoSelectExternalTarget();
-      // Start background expansion
-      this._scheduleBgExpand();
-      return;
-    }
-
-    // Extend if the view has scrolled beyond loaded range
-    if (needMin < this._loadedYMin) {
-      this._queryYRange(needMin, this._loadedYMin);
-    }
-    if (needMax > this._loadedYMax) {
-      this._queryYRange(this._loadedYMax, needMax);
-    }
+  /** Full reset — forgets every loaded slab and drops the work in flight (callers clear `_localStars`). */
+  _resetPrismLoad() {
+    if (this._prismLoader) this._prismLoader.reset();
+    this._loadedYMin = null;
+    this._loadedYMax = null;
+    this._estimatedBlockStars = null;
   }
 
   /**
-   * Query the hash grid for stars in a Y band and merge into _localStars.
-   * Updates _loadedYMin/_loadedYMax to track the total loaded range.
+   * The published rows. An ACCESSOR, so EVERY replacement — the loader's publish, or any caller's
+   * `nav._localStars = []` (navDrill, the designs' HERE, leaving PRISM) — bumps `_rowsRev`, and the
+   * designs can rebuild on the revision alone (the old cache keyed on array + length, which a slab
+   * swapped for one of the same size would fool — plan §8, Astra).
    */
-  _queryYRange(yMin, yMax) {
-    const bc = this._loadBlockCenter;
-    const bh = this._loadBlockHalf;
-    const centerY = (yMin + yMax) / 2;
-    const halfY = (yMax - yMin) / 2;
+  get _localStars() { return this._rowsArr; }
+  set _localStars(v) { this._rowsArr = v; this._rowsRev = (this._rowsRev || 0) + 1; }
 
-    if (halfY <= 0) return;
-
-    const stars = HashGridStarfield.findStarsInPrism(
-      this._gm, { x: bc.x, y: centerY, z: bc.z }, bh, halfY, 50000
-    );
-
-    for (const s of stars) {
-      const key = s.key;   /* naming-prism-segments AC-2: the generator's (tier, cell) identity — the old `${seed}-${x.toFixed(6)}` ignored Y, Z and tier */
-      if (!this._loadedSeen.has(key) && (!this._prismColumn || navGrid.inFootprint(this._prismColumn.bounds, s.worldX, s.worldZ))) {   /* naming-prism-segments AC-3: the query box is closed, the grid's boxes are half-open — a star on a shared face belongs to exactly ONE column */
-        this._loadedSeen.add(key);
-        let name = '';
-        try { name = generateSystemName(this._makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch (e) {
-          // Naming throws only on a missing/invalid position (D5 invariant) —
-          // a caller bug worth surfacing, not silently blank-naming the star.
-          console.warn('[NavComputer] generateSystemName failed for star', s.seed, e);
-        }
-        this._localStars.push({
-          wx: s.worldX, wy: s.worldY, wz: s.worldZ,
-          name, spectral: s.type,
-          color: NavComputer._SPECTRAL_COLORS[s.type] || '#ff9664',
-          seed: s.seed, key: s.key, ident: s.ident, dist: navDrill.playerDistKpc(this, s.worldX, s.worldY, s.worldZ),   /* naming-prism-segments AC-5 (plan §6): `dist` is from the PLAYER, not the query's centre — once the pilot browses a column that is not his, the query centre is a stranger */
-          distPc: (navDrill.playerDistKpc(this, s.worldX, s.worldY, s.worldZ) * 1000).toFixed(0),
-        });
-      }
-    }
-
-    // ── Real star overlay ──
-    // Check if any named real stars fall within this block volume.
-    // If a real star is near an existing hash-grid star (within 2 pc = 0.002 kpc),
-    // replace that star's name. Otherwise, add the real star as a new entry.
-    if (this._realStarCatalog && this._realStarCatalog.loaded) {
-      const realStars = this._realStarCatalog.findInVolume(
-        { x: bc.x, y: centerY, z: bc.z }, bh, halfY
-      );
-      const MATCH_DIST = 0.002; // 2 pc in kpc
-      for (const rs of realStars) {
-        // Skip unnamed catalog entries, including the pre-regen hyg-stars.json
-        // '"' artifact (AC9 regen eliminates it; guard here defensively since
-        // that regen lands in parallel with this fix, not before it).
-        if (!rs.name || rs.name === '"') continue;  if (this._prismColumn && !navGrid.inFootprint(this._prismColumn.bounds, rs.x, rs.z)) continue;   /* naming-prism-segments Phase 2 fixup (Astra finding 7): a catalogue star belongs to ONE column too — findInVolume's box is closed, the grid's is half-open, so a star on the column's upper face is the neighbour's */
-        const realKey = realStarKey(rs);   /* naming-prism-segments AC-2: the catalogue IDENTITY — by name, the second of two same-name records (12 names repeat) never loaded */
-        if (this._loadedSeen.has(realKey)) continue;
-        this._loadedSeen.add(realKey);
-
-        // Try to find the nearest hash-grid star to replace
-        let bestIdx = -1, bestDist = MATCH_DIST;
-        for (let i = 0; i < this._localStars.length; i++) {
-          const ls = this._localStars[i];
-          if (ls.isReal) continue; // don't match against other real stars
-          const dx = ls.wx - rs.x, dy = ls.wy - rs.y, dz = ls.wz - rs.z;
-          const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          if (d < bestDist) { bestDist = d; bestIdx = i; }
-        }
-
-        if (bestIdx >= 0) {
-          // Replace the matched hash-grid star's identity with the real star.
-          // Interview ruling 1 + AC1 (design fact 3 / D2): the rendered position
-          // and distance must come from the CATALOG, never the hash grid — so
-          // ALSO overwrite wx/wy/wz with the real position and recompute
-          // dist/distPc from the player (same math as the unmatched branch
-          // below). FIX-1 (AC1): the seed must be the canonical F1 of the
-          // CATALOG position — overwrite the retained grid seed so this path
-          // agrees with search/sky/arrival identity.
-          const ls = this._localStars[bestIdx];
-          ls.name = rs.name;
-          ls.isReal = true;
-          ls.wx = rs.x; ls.wy = rs.y; ls.wz = rs.z;
-          ls.seed = realStarSeed(rs.x, rs.y, rs.z); ls.key = realStarKey(rs); ls.ident = null;   /* naming-prism-segments AC-2: the row IS the catalogue star now, so it takes the catalogue's key and drops the replaced (tier, cell) slot */
-          const dx = rs.x - this._playerX, dy = rs.y - this._playerY, dz = rs.z - this._playerZ;
-          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          ls.dist = dist;
-          ls.distPc = (dist * 1000).toFixed(0);
-          if (rs.spect) {
-            ls.spectral = rs.spect;
-            ls.color = NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664';
-          }
-        } else {
-          // No nearby match — add as a new star entry
-          const dx = rs.x - this._playerX, dy = rs.y - this._playerY, dz = rs.z - this._playerZ;
-          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          this._localStars.push({
-            wx: rs.x, wy: rs.y, wz: rs.z,
-            name: rs.name, spectral: rs.spect || '?',
-            color: NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664',
-            // FIX-1 (AC1): canonical F1 seed of the catalog position (was a
-            // degenerate round(x*1e4) ^ round(z*1e4) XOR that ignored y and
-            // collided catastrophically).
-            seed: realStarSeed(rs.x, rs.y, rs.z),
-            dist, distPc: (dist * 1000).toFixed(0),
-            isReal: true, key: realStarKey(rs),
-          });
-        }
-      }
-    }
-
-    // Expand tracked range
-    if (this._loadedYMin === null) {
-      this._loadedYMin = yMin;
-      this._loadedYMax = yMax;
-    } else {
-      this._loadedYMin = Math.min(this._loadedYMin, yMin);
-      this._loadedYMax = Math.max(this._loadedYMax, yMax);
-    }
+  /** ⭐ SEAM (Phase 3): the slab the view is in — from the CAMERA height, GalaxyGrid's half-open rule — { hemi, n }. */
+  get slab() {
+    const y = this._localCenter && Number.isFinite(this._localCenter.y) ? this._localCenter.y : 0;
+    return slabOfIndex(slabIndexOfY(y));
   }
 
-  /** Background-expand the loaded range one step at a time. */
-  _scheduleBgExpand() {
-    this._cancelBgExpand();
-    const MAX_Y = 3.0; // GalacticMap.GALAXY_HEIGHT
-    const STEP = 0.1;  // 100 pc per background step
-
-    this._bgLoadTimer = setTimeout(() => {
-      this._bgLoadTimer = null;
-      if (this._loadedYMin === null) return;
-
-      let expanded = false;
-      // Expand downward
-      if (this._loadedYMin > -MAX_Y) {
-        const newMin = Math.max(-MAX_Y, this._loadedYMin - STEP);
-        this._queryYRange(newMin, this._loadedYMin);
-        expanded = true;
-      }
-      // Expand upward
-      if (this._loadedYMax < MAX_Y) {
-        const newMax = Math.min(MAX_Y, this._loadedYMax + STEP);
-        this._queryYRange(this._loadedYMax, newMax);
-        expanded = true;
-      }
-
-      if (expanded) {
-        this._scheduleBgExpand(); // continue expanding
-      } else {
-        console.log(`[NAV] Prism fully loaded: ${this._localStars.length} stars`);
-      }
-    }, 0);
+  /**
+   * ⭐ SEAM (Phase 3): jump the view to slab `ref` ('N16', 'S3' or { hemi, n }): the camera height
+   * goes to that slab's centre (inside its half-open bounds by construction) and the loader starts
+   * on it at once, ahead of everything else. R/F keep their continuous pan; this is the segment
+   * bar's big step. Returns the slab, or null for a malformed ref.
+   */
+  jumpToSlab(ref) {
+    const s = parseSlab(ref);
+    if (!s) return null;
+    const [y0, y1] = slabYRange(indexOfSlab(s));
+    if (!this._localCenter) this._localCenter = { x: 8, y: 0, z: 0 };
+    this._localCenter.y = (y0 + y1) / 2;
+    if (this._levelIndex === 3) loaderFor(this).ensure(this._localCenter.y);
+    return s;
   }
 
-  _cancelBgExpand() {
-    if (this._bgLoadTimer !== null) {
-      clearTimeout(this._bgLoadTimer);
-      this._bgLoadTimer = null;
-    }
+  /**
+   * ⭐ SEAM (Phase 3): { state:'idle'|'loading'|'ready', loadedSlabs:Set<ref>, progress:0..1,
+   * emptySlabs:Set<ref>, viewSlab, viewReady, suspended, rev }. A NEW object whenever anything in it
+   * changes, so a caller may compare by identity or by `rev`. `loadedSlabs` = slabs whose rows are
+   * published; `progress` counts S30…N30.
+   */
+  get slabLoad() { return this._prismLoader ? this._prismLoader.status : IDLE_STATUS; }
+
+  /**
+   * ⭐ SEAM (Phase 3): the published rows sorted by `cmp` (one of state.js's SORT_KEYS), built in
+   * slices under the shared deadline — { rows|null, rev, ready }. While a new order is being built
+   * this returns the last finished one with ready:false. After a publish that only added slabs the
+   * new rows are sorted alone and merged in, so a sort never costs one long task.
+   */
+  sortedRows(id, cmp) { return loaderFor(this).sortedRows(id, cmp); }
+
+  /** main.js: suspend (true) / resume (false) this instance's loading — the cockpit's while its glass is not drawn (PHASE0 §5). */
+  setLoadSuspended(on) {
+    const v = !!on;
+    if (v === !!this._loadSuspended) return;
+    this._loadSuspended = v;
+    if (this._prismLoader) { this._prismLoader.refreshStatus(); if (!v) prismLoadScheduler.wake(); }
   }
 
-  /** Full reset — clears all loaded stars and prism state. */
-  _resetPrismLoad() {
-    this._cancelBgExpand();
-    this._loadedYMin = null;
-    this._loadedYMax = null;
-    this._loadedSeen = new Set();
-    this._loadBlockCenter = null;
-    this._loadBlockHalf = null;
-    this._estimatedBlockStars = null;
-  }
+  // ── PRISM LOADER NOTES (naming-prism-segments Phase 3; the code is ./prismLoader.js) ─────────────────
+  // NavComputer.js is line-frozen at 4711 (~700 line-anchored citations ride it), so the old loader's
+  // lines are kept as these notes rather than deleted.
+  //
+  // ⭐ ONE FRAME OF LOADING
+  //   prismLoadScheduler (one per page, shared by the DOM overlay and the cockpit glass) runs in its
+  //   own requestAnimationFrame callback while anybody has work: deadline = now + 8 ms; loaders take
+  //   turns (start rotates per frame) until the deadline. Each loader works in this order:
+  //     1. the slabs on screen (the camera's slab, and the other one when the window straddles an edge)
+  //     2. the sorted view the designs last asked for (sortedRows)
+  //     3. a publish, if slabs finished since the last one (at most every 100 ms, at once for 1.)
+  //     4. the next background slab, outward from the camera, to S30 … N30
+  //   A slab job: feature regions (one per unit, PHASE0 §6's cold cost) → catalogue scan (one unit)
+  //   → cell scan (HashGridStarfield.prismQuery, 32 cells per check) → each nearby real star's twin
+  //   (AC-8, its own small sliced query) → own + name + multiplicity (8 rows per check) → nearest-first.
+  //
+  // ⭐ WHAT THE DESIGNS CAN READ (the seam, all on this instance)
+  //   nav.slab            { hemi, n } from the camera height (GalaxyGrid's half-open rule)
+  //   nav.jumpToSlab(ref) 'N16' | 'S3' | { hemi, n } → camera y = the slab's centre; loads it first
+  //   nav.slabLoad        { state, loadedSlabs, emptySlabs, progress, viewSlab, viewReady, suspended,
+  //                         rev } — a NEW object whenever it changes; loadedSlabs = PUBLISHED slabs
+  //   nav._rowsRev        bumps on EVERY replacement of `_localStars` (it is an accessor), and only then
+  //   nav.sortedRows(id, cmp) { rows|null, rev, ready } — state.js's SORT_KEYS comparators work on the
+  //                         rows as published; while a new order builds, the last finished one comes
+  //                         back with ready:false (null before the first). Rows added by a publish are
+  //                         sorted alone and merged in; a sort in flight is never restarted.
+  //   Each row: wx wy wz name spectral color seed key ident dist distPc mult slab (+ isReal). `dist`
+  //   is from the player (navDrill.playerDistKpc); `mult` is multiplicityForSeed's count with the
+  //   same arguments state.js's multFor uses, so a design may read row.mult instead of re-rolling it;
+  //   `slab` is the owning slab's ref. `_localStars` lists the camera's slab first, then outward,
+  //   each slab nearest-the-player first; its order is not otherwise a contract.
+  //   ⚠ Rows of a slab are exactly the stars its column AND slab own (half-open), so the designs'
+  //   footprint filter is now a no-op on loader rows (kept: it is the glass's own guarantee).
+  //
+  // ⭐ CANCEL / RESUME / SUSPEND
+  //   _resetPrismLoad() (leaving PRISM, a new column, setPlayerPosition, HERE) bumps the loader's
+  //   generation and drops every partial job; nothing it had started can publish afterwards. A jump
+  //   only re-prioritises: half-done slabs keep their cursors and resume later. Off level 3 the loader
+  //   holds its place. main.js sets setLoadSuspended(!_cockpitShouldRender()) on the cockpit instance
+  //   every frame, so the glass's loader never runs behind the overlay's (PHASE0 §5).
+  //
+  // ⭐ AC-8 (real stars) — twin(R) = nearest procedural star within 2 pc of real star R, from a full
+  //   3D neighbourhood generated straight from the hash grid (extent-tested cells, so a 50–74 pc
+  //   O / giant cell next door counts), ties by key; cached per GalacticMap by R's key. A procedural
+  //   star is hidden iff it is someone's twin, so the rows never depend on load order. A real star's
+  //   row is its catalogue position, name, key, F1 seed; class from the catalogue, else its twin's.
+  //
+  // ⭐ ALSO CHANGED WITH THE LOADER
+  //   · Slab queries use prismQuery's `extent` cell test — the bright-star fix (plan §8): a coarse
+  //     cell whose centre is outside the box but whose star is inside is no longer dropped. The
+  //     generator's arithmetic is untouched (Phase 1 baselines green); only which cells are visited.
+  //   · The slab box is padded by 1e-9 kpc: centre ± half does not reproduce the edge doubles, and a
+  //     star exactly on a face was dropped by BOTH neighbours (found by prismLoader.test.js).
+  //   · GalacticMap keeps 64 feature regions (was 32; a column straddling y = 0 needs 36).
+  //
+  // ⭐ MEASURED HEADLESS (node 24, this PC, 2026-10-03; Chrome measured ~1.5–1.65× slower in PHASE0)
+  //   whole column S30…N30, 8 ms frames:   Sol 6,075 rows in 131 frames (119 warm) · inner R≈1.5
+  //   84,913 rows in 163 (148) · XIGMAG rim 654 rows in 121 (118) · bulge R≈0.3 172,246 rows in 116 (102)
+  //   first rows on screen after: cold 6–14 frames, warm 2–5 · a jump publishes its slab in 2–3 frames
+  //   unit between deadline checks: p99 ≤ 0.065 ms; max warm 0.7–5.2 ms; max cold 9–13 ms (one
+  //   feature region / first-call JIT) · frame max warm 8.1–9.9 ms, cold 11.7–16.8 ms
+  //   cancel (reset) ≤ 0.02 ms · NAME sort of 172k rows: 52 frames of ≤ 8.1 ms (85k: 12 frames)
+  //
+  // ⚠ NOT DONE HERE (other lanes / later): the segment bar and fine gauge (UI lane, AC-7); the rows'
+  //   rebuild in state.js still copies every row per rebuild — at the inner galaxy (85k rows) and the
+  //   bulge (172k) that rebuild, not this loader, is the remaining long-task risk on a publish.
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
 
   /**
    * Estimate total star count in the full block prism by integrating

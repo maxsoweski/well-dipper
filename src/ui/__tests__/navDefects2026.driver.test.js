@@ -496,7 +496,10 @@ describe('AC-10 — every star row carries its multiplicity, and COMPS orders by
   /** The prism loader runs in chunks; this drives it to the end so the case is about a real catalogue. */
   async function fullPrism() {
     const h = await designNav({ mode: 'rail', level: 3 });
-    for (let i = 0; i < 80; i++) { h.nav.render(); await new Promise((r) => setTimeout(r, 0)); }
+    // naming-prism-segments AC-6: the loader runs in frame slices on a shared scheduler; the headless
+    // harness runs no frames, so the test drains it (the whole column: S30 … N30).
+    const { prismLoadScheduler } = await import('../prismLoader.js');
+    h.nav.render(); prismLoadScheduler.drain(); h.nav.render();
     return h;
   }
 

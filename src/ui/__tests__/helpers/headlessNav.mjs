@@ -127,6 +127,13 @@ export async function makeHeadlessNav({ width = 614, height = 512 } = {}) {
   installDom(ctx);
 
   const { NavComputer } = await import('../../NavComputer.js');
+  // naming-prism-segments AC-6: PRISM now loads in frame slices (prismLoader.js). Headless there are
+  // no frames, so the harness loads the VIEWED slab synchronously inside render() (what the old
+  // loader's first query did) and runs no background frames — a test that wants more drains
+  // `prismLoadScheduler` itself.
+  const { prismLoadScheduler } = await import('../../prismLoader.js');
+  prismLoadScheduler.configure({ requestFrame: null });
+  prismLoadScheduler.syncView = true;
   const { GalacticMap } = await import('../../../generation/GalacticMap.js');
 
   const nav = new NavComputer(canvas, new GalacticMap(), null);

@@ -13333,7 +13333,7 @@ function renderFrame(alpha) {
   // Who owns WASD / R / F this frame. Asked here, beside the cockpit's own
   // gate, because both answers come from the same two facts and neither may be
   // decided anywhere a later un-zoom would not re-decide. See the applier.
-  _syncCockpitNavKeys();  _syncNavShip();   // ⭐ GPS line — the ship's position, once per RAF, ungated: the DOM overlay and the cockpit glass both read it
+  _syncCockpitNavKeys();  _syncNavShip();  _cockpitNavComputer?.setLoadSuspended?.(!_cockpitShouldRender());   // ⭐ GPS line — the ship's position, once per RAF, ungated: the DOM overlay and the cockpit glass both read it · ⭐ setLoadSuspended (naming-prism-segments AC-6 (PHASE0 §5): the glass's PRISM loader works ONLY while the glass is drawn — in ORRERY it kept loading behind the overlay's, two 4 s chains interleaved. Suspended, not reset: back in HELM it resumes where it stopped.)
 
   if (_cockpitShouldRender()) {
     // The on-glass AUTOPILOT label is a MIRROR (`_autopilotActive`), written

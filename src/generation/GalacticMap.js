@@ -174,7 +174,7 @@ export class GalacticMap {
     // Each region contains 0-N positioned features (nebulae, clusters, etc.)
     this._featureRegionCache = new Map();
     this._featureRegionSize = 4.0; // kpc — 8× sector size, covers many sectors
-    this._maxFeatureRegions = 32;
+    this._maxFeatureRegions = 64;   // naming-prism-segments AC-6 (PHASE0 §7.2): a lookup reads 27 regions and slabs either side of y = 0 need 36 together; at 32 the LRU rebuilt 9 regions per query when a column's slabs alternated across the plane
 
     // Known galactic objects (Messier/NGC) — pre-indexed by feature region
     // so _generateFeatureRegion can inject them without scanning every time.
@@ -1578,6 +1578,27 @@ export class GalacticMap {
     ];
     entries.sort((a, b) => b[1] - a[1]);
     return entries[0][0];
+  }
+
+  /** The 27 feature-region index triples around a position (see findNearbyFeatures). */
+  featureRegionsAround(position) {
+    // naming-prism-segments AC-6: the 27 regions `findNearbyFeatures(position)` reads, so a sliced
+    // loader can build the missing ones one per slice (`prefetchFeatureRegion`) instead of inline
+    // inside its first query (PHASE0 §6: up to ~42 ms on a cold cache).
+    const { rx, ry, rz } = this._featureRegionIndices(position.x, position.y, position.z);
+    const out = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) out.push([rx + dx, ry + dy, rz + dz]);
+    return out;
+  }
+
+  /** Is this feature region cached? (No LRU touch.) */
+  hasFeatureRegion(rx, ry, rz) {
+    return this._featureRegionCache.has(`fr:${rx},${ry},${rz}`);
+  }
+
+  /** Build (or touch) one feature region — the unit of work a sliced loader schedules. */
+  prefetchFeatureRegion(rx, ry, rz) {
+    this._getFeatureRegion(rx, ry, rz);
   }
 
   /**
