@@ -157,7 +157,10 @@
       },
       "layer": "integration",
       "live": true,
-      "maxRuling2026-10-02": "\"let's try to make the system work without this, but if needed we can come up with some kind of aesthetic-appropriate 'scanning' screen for loading windows\" — target: NO loading screen (sliced loader keeps every task < 50 ms and the view live). Fallback only if that cannot be met: a 4th-gen-menu-style 'SCANNING' screen/overlay for the load window (see memory well-dipper-aesthetic-generations); it does not relax the 50 ms main-thread rule."
+      "maxRuling2026-10-02": "\"let's try to make the system work without this, but if needed we can come up with some kind of aesthetic-appropriate 'scanning' screen for loading windows\" — target: NO loading screen (sliced loader keeps every task < 50 ms and the view live). Fallback only if that cannot be met: a 4th-gen-menu-style 'SCANNING' screen/overlay for the load window (see memory well-dipper-aesthetic-generations); it does not relax the 50 ms main-thread rule.",
+      "progress": "BUILT 1bc14c2 + b1ab325, FIXUP 7bcdaae (2026-10-03). Live at b1ab325 (Chrome 154, :5175, both designs, cockpit instance suspended mid-load): Sol 0 tasks > 50 ms; XIGMAG 1 task, 62.5 ms at +2.04 s on the first REGION screen after page load = the nav galaxy shader's first-use link (NavGalaxyRenderer.render -> three onFirstUse -> getProgramInfoLog 57%), not loader work; no long task from the loader, the sorts or the publish in any trace; keys pressed while loading acted within one frame (] 5.6/9.9 ms input delay, R next frame, no queued burst); whole column ready 1.3-2.1 s after entry; leave mid-load -> idle, re-enter restarts. Fixup (Astra findings 1-4): legacy PRISM paint skipped under a design (load still runs); here/selection identity scans read only nearby slabs; design 2 list starfield pane-bounded and memoised (same pixels); feature regions held per slab job incl. every row's context lookup; cold regions only started with 6 ms left; twin cache + loader keyed by the generator's inputs; multiplicity now position-aware; nav galaxy shader compiled at boot via compileAsync. Headless (node, recording off) at the 172k-row bulge column: render on a publish frame 20.6 ms -> 2-6 ms, list mode top-down widest 45 ms -> 7 ms while panning, worst scheduler frame 10-14 ms (p99 8.9 ms, overruns = GC), cold region <= 5.7 ms. MISSING for VERIFIED: (1) no Chrome trace yet of the FIXED build at XIGMAG and Sol (nor the bulge); (2) the shader warm-up is unverified live - Chrome's shader cache hides a cold start after a reload, so it needs a fresh-profile cold trace or Max's ruling that a one-off boot shader link outside the loader does not count. Tests: prismPhase3Fixup.test.js + suites green; 20 mutants red.",
+      "status": "INCOMPLETE - live re-trace of 7bcdaae at XIGMAG + Sol needed; 62.5 ms shader-link task at XIGMAG (fix in, unverified cold)",
+      "optionD": "CONFIRMED (2026-10-03, fixup 7bcdaae): no long task anywhere comes from the 7.8125 pc column geometry or the slab loader - live Sol/XIGMAG traces had none, and headless the 172k-row bulge column (worst case) loads in units <= ~14 ms node. The only unsliceable task left is a one-off WebGL shader link, unrelated to the geometry and now started at boot. No SCANNING fallback built or needed."
     },
     {
       "id": "AC-7",
@@ -167,7 +170,9 @@
         "observable": "One click moves the view to the clicked slab (camera y within that slab's bounds) and highlights its cell; dragging steps slab by slab; R/F move continuously within the slab as today; grabbing the fine gauge after a jump does NOT throw the view back to the ship's height; the bar never overlaps design 2's minimap (no shared texels)."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "progress": "BUILT b1ab325, FIXUP 7bcdaae. Live at b1ab325 all PASS in both designs: click N1->N20 put camera y = 1.95 inside [1.9, 2.0) with N20's cell lit KEY (S10 -> -0.95); drag stepped N1..N5 then down through the plane to S3, no slab skipped; R/F continuous (+/-0.015 pc steps) staying in N3; fine gauge after a jump centred on the view (1.95) and dragging kept N20 (1.95005 / 1.94990), ship shown as a YOU edge arrow; bar vs design 2 minimap 0 shared texels (minimap x 337-360, bar 362-367) incl. list mode, where the bar is drawn and S5 -> -0.45; neighbour prism outlines matched GalaxyGrid bounds exactly (1995 lattice pixels, 0 unexplained, 1480 on neighbours; 3/16-prism shift drops match 78% -> 6%); plane grid moves with a pan (2052/2052 on grid lines). Fixup (Astra 5-8): drag now moves the view/highlight and loads on release (plan 7.3); above/below marks past N30/S30 in the bar's end insets (plan 4.5); side-on (tilt 0) keeps the neighbour pillars; design 2 minimap YOU dot only on the ship's column. Tests: navSlabBar (drag asserts no load/publish while held; V via the real key path ends the drag), prismPhase3Fixup (edge-on, beyond marks, minimap dot), all sabotage-checked. Old ink conflicts (selected star KEY, YOU on level tabs) left for the next batch's colour rule.",
+      "status": "VERIFIED_PENDING_MAX 7bcdaae"
     },
     {
       "id": "AC-8",
@@ -176,7 +181,9 @@
         "input": "Headless: load the same column's slabs in three different orders, including a real star within 2 pc of a column or slab edge.",
         "observable": "The set of replaced procedural identities and resulting rows is identical across all orders."
       },
-      "layer": "integration"
+      "layer": "integration",
+      "progress": "BUILT 1bc14c2, FIXUP 7bcdaae. Headless: twin(R) = nearest procedural star within 2 pc over the full 3D neighbourhood from the hash grid, ties by key, suppression keyed by identity; prismLoader.test.js loads the same column in three orders incl. real stars beside column and slab faces, warm/cold twin cache, neighbouring column first, contested twin - rows identical. Fixup (Astra 4): twin cache and loader now keyed by the generator's inputs, so a real-feature catalogue arriving after a load re-decides every twin (test: a globular cluster at a real star changes its twin; the reloaded rows equal a cold load; both mutants red).",
+      "status": "VERIFIED_PENDING_MAX 7bcdaae"
     },
     {
       "id": "AC-14",
