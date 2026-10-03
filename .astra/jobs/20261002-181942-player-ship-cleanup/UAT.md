@@ -32,3 +32,15 @@ Max judges on the review page https://claude.ai/artifact/9b2gLE86hupgbSuzBiLPN3 
 
 ## Max's verdict on round 03 ("Round 2" on the review page), 2026-10-03, verbatim (no pass/fix chosen)
 "I said the last one was a bit too sleek, but the new one looks like Gore-Tex again. These rows of large pancake shapes stacked on top of each other. It creates this effect that is just not as good looking. So actually round one was mostly better. Something is off here big time when compared against comparable sign and frontal views of the concept images. These lines just don't even follow remotely closely. I'm actually kind of concerned about our process and think maybe... I don't know, do we need to go back to the on-GPU model to output a new base model? Or can we give Astra better instructions for where to take that first model that it created but be better? I mean, really the first round was significantly better than the second round. I mean, it really didn't match the silhouette very well before either, but it's even further off here. Like before, there was the issue of it looking like those underslung modules were like little feet and legs or something, but now the top as well is way off base."
+
+## Process decision after round 03, 2026-10-02 (Max, verbatim)
+Context: CC proposed a panel-by-panel build (parts map → coarse whole-ship envelope → parts in place in groups →
+assembly), setting aside the GPU-sculpt rule for THIS asset; Astra critiqued it (`consult-after-r03.md`).
+Max: "I'm open to putting this together panel by panel if we can find a process to do that, like to get the shapes
+right individually and then put them together."
+Max: "The interior is going to have to be rebuilt anyway. The basic components that were created are fine. They can be
+scaled up or down if necessary, and mostly I was going to ask for a bunch of changes to how they are oriented and where
+they are placed, at what angle, and so on within the cockpit. So I'm not so worried about that. We can change the
+overall shape of the concept at this early phase, and it won't be majorly impactful. So yeah, this sounds good to me."
+→ This cleanup job closes here. Next: parts map (CC, Astra-checked) → new Astra 3D job, scripted road authorised by the
+quotes above; the Hunyuan sculpt is archived provenance only.
