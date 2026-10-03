@@ -35,6 +35,7 @@ export class RetroRenderer {
     // New: SkyRenderer owns the sky scene via setSkyRenderer().
     this.starfieldScene = new THREE.Scene();
     this._skyRenderer = null;
+    this._skyVolume = null; // Galactic Engine volume, see setSkyVolume()
 
     // HUD (system map) — set via setHud()
     this._hudScene = null;
@@ -79,6 +80,15 @@ export class RetroRenderer {
    */
   setSkyRenderer(skyRenderer) {
     this._skyRenderer = skyRenderer;
+  }
+
+  /**
+   * Galactic Engine sky volume (flag 'wd.galacticEngine'): an object with isActive() and
+   * render(renderer, camera, skyTarget, pixelScale). Drawn into the sky target after glow + stars and
+   * before the feature billboards. null (the default) leaves the sky pass exactly as it was.
+   */
+  setSkyVolume(volume) {
+    this._skyVolume = volume || null;
   }
 
   /**
@@ -905,6 +915,11 @@ export class RetroRenderer {
       if (glowHidden && glowMesh) glowMesh.visible = false;
       if (featureGroup) featureGroup.visible = false;
       r.render(skyScene, this.camera);
+
+      // Galactic Engine volume: sky * T + L over glow + stars (flag-gated; null when off).
+      if (this._skyVolume && this._skyVolume.isActive()) {
+        this._skyVolume.render(r, this.camera, this.bgTarget, this.pixelScale);
+      }
 
       // Now show features (absorption + emission), render on top
       if (featureGroup) featureGroup.visible = true;

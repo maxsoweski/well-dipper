@@ -28,6 +28,17 @@ export default ({ command }) => ({
       allow: [path.resolve(__dirname)],
     },
   },
+  // LAB PAGES are served by the dev server at /well-dipper/<name>.html with no registration. A production
+  // build only includes them on request — `WD_BUILD_LABS=1 npx vite build` — so dist/ (the live site) is
+  // unchanged by default. Galactic Engine §6b: the review page embeds a built snapshot of the cloud lab.
+  build: process.env.WD_BUILD_LABS === '1' ? {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        'galactic-cloud-lab': path.resolve(__dirname, 'galactic-cloud-lab.html'),
+      },
+    },
+  } : {},
   resolve: {
     alias: {
       // motion-test-kit consumed via git submodule. Alias resolves bare

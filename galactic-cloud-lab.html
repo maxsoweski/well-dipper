@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Galactic cloud lab</title>
+  <!--
+    galactic-cloud-lab.html — Galactic Engine S1 cloud lab (lab-wired-to-game).
+    A camera + sliders over the GAME's code: RetroRenderer, SkyRenderer and the production
+    GalacticController, mounted by the same mountGalacticEngine() the game calls.
+    Sidecar: galactic-cloud-lab.main.js (imports only from ./src). Served by the Vite dev server at
+    /well-dipper/galactic-cloud-lab.html. Keys: J = volume/billboard A/B, U = realistic/photo.
+    Drag to look around. Debug hooks: window._galactic (same as the game).
+  -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: ui-monospace, monospace; }
+    #canvas { display: block; width: 100vw; height: 100vh; cursor: grab; }
+    #hud { position: fixed; left: 8px; bottom: 8px; color: #9fd; font-size: 11px; line-height: 1.4;
+           background: rgba(0, 0, 0, .6); padding: 6px 8px; border-radius: 4px; white-space: pre; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud">booting…</div>
+  <script type="module" src="./galactic-cloud-lab.main.js"></script>
+</body>
+</html>

@@ -79,6 +79,40 @@ export class SkyRenderer {
 
     // Current player position
     this._playerPos = null;
+
+    // Galactic Engine volume controller (flag 'wd.galacticEngine'; null = off, sky exactly as before).
+    // It picks one feature to draw as a volume each time the sky is (re)built; that feature's billboard
+    // is skipped. _activeFeatures/_activePos remember the live sky's inputs for A/B rebuilds.
+    this._volume = null;
+    this._activeFeatures = null;
+    this._activePos = null;
+  }
+
+  /** Attach the Galactic Engine controller and re-pick against the sky that is already live. */
+  setVolumeController(controller) {
+    this._volume = controller || null;
+    this.reselectVolumeFeature();
+  }
+
+  /** Let the controller pick again from the live sky's features, then rebuild the billboards. */
+  reselectVolumeFeature() {
+    if (this._volume) this._volume.onSkyFeatures(this._activeFeatures || [], this._activePos);
+    this.refreshVolumeFeature();
+  }
+
+  /** Rebuild the live billboards so the volume's feature is skipped only while the volume is drawing it
+   *  (the A/B key flips between the two). */
+  refreshVolumeFeature() {
+    if (!this._featureLayer || !this._activeFeatures || this._activeFeatures.length === 0) return;
+    const skipKey = this._volume && this._volume.isActive() ? this._volume.featureKey : null;
+    this._featureLayer.setFeatures(this._activeFeatures, this._activePos, skipKey);
+  }
+
+  /** Called where the live sky's features are (re)built: remember them and get the skip key. */
+  _volumeSkipKey(features, playerPos) {
+    this._activeFeatures = features;
+    this._activePos = playerPos;
+    return this._volume ? this._volume.onSkyFeatures(features || [], playerPos) : null;
   }
 
   /**
@@ -172,8 +206,9 @@ export class SkyRenderer {
 
       // Sky features (nebulae, clusters, etc.)
       this._featureLayer = new SkyFeatureLayer(this._brightnessConfig.features);
+      const skipKey = this._volumeSkipKey(this._pendingFeatures, this._playerPos);
       if (this._pendingFeatures && this._pendingFeatures.length > 0) {
-        this._featureLayer.setFeatures(this._pendingFeatures, this._playerPos);
+        this._featureLayer.setFeatures(this._pendingFeatures, this._playerPos, skipKey);
         // Nebula billboards now handle their own glow absorption via
         // premultiplied alpha + Beer-Lambert — no glow shader absorption needed.
       }
@@ -330,8 +365,9 @@ export class SkyRenderer {
       }
 
       this._featureLayer = new SkyFeatureLayer(this._brightnessConfig.features);
+      const skipKey = this._volumeSkipKey(this._pendingFeatures, this._playerPos);
       if (this._pendingFeatures && this._pendingFeatures.length > 0) {
-        this._featureLayer.setFeatures(this._pendingFeatures, this._playerPos);
+        this._featureLayer.setFeatures(this._pendingFeatures, this._playerPos, skipKey);
       }
 
       this._starfieldLayer = new StarfieldLayer(

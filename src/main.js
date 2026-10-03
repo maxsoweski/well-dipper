@@ -123,7 +123,7 @@ import { generateSystemNames, generateSystemName } from './generation/NameGenera
 import { GalacticMap } from './generation/GalacticMap.js';
 import { NavComputer } from './ui/NavComputer.js';
 import { StarfieldGenerator } from './generation/StarfieldGenerator.js';
-import { SkyRenderer } from './rendering/SkyRenderer.js';
+import { SkyRenderer } from './rendering/SkyRenderer.js'; import { mountGalacticEngine } from './rendering/galactic/mountGalacticEngine.js'; // galactic-engine S1 — rides this line (main.js line-anchored citations)
 import { SkyFeatureLayer } from './rendering/sky/SkyFeatureLayer.js';
 import { KNOWN_OBJECT_PROFILES } from './data/KnownObjectProfiles.js';
 import { ShipSpawner } from './objects/ShipSpawner.js';
@@ -293,7 +293,7 @@ let currentGalaxyStar = null; // the GalacticMap star entry we're currently at
 const skyRenderer = new SkyRenderer(galacticMap, StarfieldGenerator, settings.get('starDensity'));
 skyRenderer.prepareForPosition(playerGalacticPos);
 skyRenderer.activate();
-retroRenderer.setSkyRenderer(skyRenderer);
+retroRenderer.setSkyRenderer(skyRenderer); mountGalacticEngine({ skyRenderer, retroRenderer, galacticMap }); // galactic-engine S1: no-op unless flag 'wd.galacticEngine' / ?galactic=1 — rides this line (line-anchored citations)
 
 // ── Real Star Catalog ──
 // Load the HYG database (15,598 real naked-eye stars with names and positions).

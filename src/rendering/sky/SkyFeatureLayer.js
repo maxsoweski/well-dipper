@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assignName } from '../../util/scene-naming.js';
+import { featureKeyOf } from '../../galactic/featureHistory.js';
 
 /**
  * SkyFeatureLayer — renders nearby galactic features as sky overlays.
@@ -72,8 +73,10 @@ export class SkyFeatureLayer {
    * Update features for a new player position.
    * @param {Array} features — from GalacticMap.findNearbyFeatures()
    * @param {{ x: number, y: number, z: number }} playerPos — galactic position
+   * @param {string|null} [skipKey] — featureKeyOf() of the one feature the Galactic Engine draws as a volume;
+   *   it gets no billboard and no inside-tint (the volume handles both outside and inside).
    */
-  setFeatures(features, playerPos) {
+  setFeatures(features, playerPos, skipKey = null) {
     this._clear();
     this.ambientTint = null;
 
@@ -90,6 +93,8 @@ export class SkyFeatureLayer {
       .slice(0, MAX_FEATURES);
 
     for (const feature of scored) {
+      if (skipKey && featureKeyOf(feature) === skipKey) continue;
+
       // Skip features we're inside — don't render as a distant billboard.
       // The ambient tint handles the "you're inside this" indication.
       // Future: immersive mode wraps the feature around you instead.
