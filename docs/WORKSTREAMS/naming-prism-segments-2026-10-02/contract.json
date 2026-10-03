@@ -121,7 +121,9 @@
         "observable": "GALAXY draws 19×19 cells and each drawn cell's bounds equal exactly one sector's; SECTOR and REGION draw 16×16 world-locked cells; every click drills to exactly the clicked cell's bounds (published S.mapProj / drill target compared numerically); after a drag the same world point is under the same cell id; every row and column carries an edge label."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "progress": "LIVE + HEADLESS, built 9284e8e + 2840168, fixup e0e5c15 (2026-10-02). navGrid.js is the one answer to what each screen shows (viewForAddress, cellAt, childGrid, enterColumn over GalaxyGrid); the designs (made in nav-240p-lab.html, extracted), NavComputer's drill/default views/legacy grids and the autopilot all call it. Live at 2840168 (Chrome, :5175, designs 1 and 2 and legacy): GALAXY draws 293 of the 19x19 sectors (R <= 18), every drawn cell's bounds equal GalaxyGrid.boundsOf (maxErr 0), Sol = N10, centre = J10; SECTOR and REGION draw 256 world-locked cells; drills at Sol N10 H9 P1, the rim S7, the core J10 and corner M1 land on exactly the clicked cell's box; after a drag the same world point sits in the same cell; letters across and numbers down on every grid; PRISM is the fixed 7.8125 pc column, WASD clamps at its edges, zoom 0.0015-0.015625 kpc. The fixup closed Astra's confirmed findings: HERE / Tab / the tab strip now keep the column, camera and saved screens in step (live at e0e5c15's code: foreign column P8 -> REGION -> HERE -> Tab PRISM lands on N10 H9 P1 with the camera at the player, both designs; GALAXY -> P8 then Tab gives P8 I8 and column P8 I8 I8); design edge labels stay whole and beside their parent after pans (live: 0 layout-guard errors over 4 pans x 3 levels x 2 designs, where design 2 logged 46 before); the density image is rendered at a texel-snapped key (continuous REGION pan: no frame over 50 ms); legacy GALAXY owns shared edges by the grid's half-open rule (live: 17 faces, 0 wrong); legacy grids are clipped to the map square; catalogue rows obey the column footprint. Tests: navGrid, navGridScreens.design, navGridDrill.host, navGridHost, navPhase2Fixup (23, each case sabotage-checked). Open for Max (not a defect): neighbouring parents are drawn as dimmed, labelled, unclickable blocks, as specified; Astra read plan section 6 as 'show their dimmed cells and let me click them'. Legacy is kept correct, not restyled (no edge labels by design).",
+      "status": "VERIFIED_PENDING_MAX e0e5c15"
     },
     {
       "id": "AC-4",
@@ -130,7 +132,9 @@
         "input": "Run the autopilot's nav drill sequence to a destination; separately drill manually to the same destination.",
         "observable": "The sequence of cells the autopilot shows at each level equals the manual drill's cell ids exactly; the hover highlight and the animation use the same grid."
       },
-      "layer": "integration"
+      "layer": "integration",
+      "progress": "LIVE + HEADLESS, built 2840168, fixup e0e5c15 (2026-10-02). The autopilot's private 8x8 / 44 kpc grid and adaptive PRISM box are gone: each step lights navGrid.drillPath(dest)[level].child and drills it with navDrill.drillInto, the function a pilot's click calls; direct entries use navDrill.jumpTo -> navGrid.enterColumn. Live at 2840168 to destination (-5.31, 7.73): full_journey lit G6 -> G6 N11 -> G6 N11 H4, a manual click drill lit the same three cells, _viewStack (centres, sizes 38 / 2 / 0.125) and _prismColumn identical, the autopilot cursor inside the drawn rect of the highlighted cell in both designs, sector_hop and region_browse also end in G6 N11 H4. Fixup (Astra finding 5): the highlight now lasts through the hover AND the zoom (showPick carries holdMs = hover + drill + 100 ms; the designs' 700 ms backstop honours it; the pointer cannot replace a held pick) - live at e0e5c15's code: design 1 pick still lit at 1000 ms and gone at 1800 ms; legacy GALAXY held P8 under a pointer parked on N10 and returned to N10 after the hold. Tests: AutopilotNavSequence.drill (catalogue exemption removed), navPhase2Fixup finding 5 (3 cases incl. the autopilot's own step at all three levels), sabotage-checked. Not part of this AC but seen live: the autopilot picks its star by horizontal distance only, so in a 7.8 pc column the height is effectively random (picks at y = +2.75 / -1.63 / -2.45 kpc) - a star-selection follow-up, not the drill.",
+      "status": "VERIFIED_PENDING_MAX e0e5c15"
     },
     {
       "id": "AC-5",
@@ -140,7 +144,9 @@
         "observable": "Own column: the here-mark sits on the player's star and the label names the current system; other column: no here-mark, and the where-am-I label still names the current system (never the nearest browsed row)."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "progress": "LIVE + HEADLESS, built 9284e8e + 2840168, fixup e0e5c15 (2026-10-02). Here is the player, never the nearest browsed row: the player's column is navGrid.parentAt(3, player); on it the here-row is the player's own star; on any other column there is none; dist is measured from the player. Fixup (Astra finding 2): ONE resolver (starIdentity.playerStarOf / isHereStar / hereRowOf) now serves design 1 and 2's here-mark, the legacy here-star, the target styling (D.targetIsHere) and commit()'s self-warp guard - the star the game arrived at (openToCurrentSystem records its key) while the player is at it, else the nearest row within 0.1 pc; no name matching anywhere (a same-name star 2 pc away is not here; an alias at the player's position cannot be warped to). Live at 2840168 and re-checked at e0e5c15's code: Sol's column N10 H9 P1 shows the here-mark on Sol (r:Sol@8,0.025,0), the label says Sol, Enter on Sol is refused; neighbouring column O1 shows no here-mark, hereColumn false, the label still says Sol, and Sol's target card now reads CATALOG there (it read PROCEDURAL). Legacy: hereStar = Sol on Sol's column, null on J10 H9 H4. Tests: navHere, navGridHost, navPhase2Fixup finding 2 (4 cases), navAffordances and navUatWalk2026 rewritten to the identity rule with the ruling noted; all sabotage-checked.",
+      "status": "VERIFIED_PENDING_MAX e0e5c15"
     },
     {
       "id": "AC-6",
