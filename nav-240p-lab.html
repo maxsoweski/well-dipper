@@ -117,6 +117,10 @@ import { ladderShipV, orreryShipRadius, fmtShipRange, shipRangeTo, deriveShip, p
 // ⭐ THE FIXED GRID'S SCREENS (naming-prism-segments Phase 2): what each 2D screen shows and which cell
 //    is under a point. The designs call it under this name here and in the game (designs.header.js).
 import * as navGrid from './src/ui/navGrid.js';
+// ⭐ THE SEGMENT BAR'S ONE GEOMETRY AND THE ONE LAYER FUNCTION (naming-prism-segments Phase 3, AC-7):
+//    the bar's paint below and the driver's hit-test (index.js) both read this module, so the cell a
+//    click lands on is the cell that was drawn there. The game imports it under the same name.
+import * as slabBarGeo from './src/ui/navViewModes/slabBar.js';
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 // THE GUARD.  cockpit-panel-budget-lab.html's assertFits, generalised from "one row" to "any ink in
@@ -303,6 +307,9 @@ const INK = {
   // not representable (see this table's own note), so each one becomes a literal dark tone that sits
   // BELOW `RULE` — the dimmest ink the designs already own — so the marks still win the eye.
   GRID:   '#0f2430',   // the 1 pc plane lattice, under everything
+  LATTICE: '#18323f',  // ⭐ naming-prism-segments Phase 3 — every eighth lattice line (a PRISM BOUNDARY), the
+                       //    neighbouring prisms' pillars and the slab's faces: a tone above GRID, below RULE
+                       //    (RULE stays the column's own edge and every star's foot dot)
   ABOVE:  '#1f6b52',   // a drop line standing a mark UP off the plane   (legacy's green)
   BELOW:  '#6b2f28',   // …and one hanging it BELOW                       (legacy's red)
   HALO:   '#6b4a18',   // the catalogue ring, design 1                    (legacy's amber glow)
@@ -314,6 +321,13 @@ const INK = {
   // the ink is legacy's own literal rather than a shade of `YOU`, and the two never share a picture:
   // `YOU` does not appear at SYSTEM in either design.
   SHIP:   '#00ff80',   // the ship diamond, its word and its trajectory    (legacy's own)
+  // ── naming-prism-segments AC-7 — THE SEGMENT BAR'S THREE LAYERS (plan §7.1: "coloured thin /
+  //    thick / halo"). ⛔ NONE OF THEM IS `YOU` OR `TARGET`: those two are reserved for CURRENT and
+  //    TARGET on every screen (Max, 2026-10-03), and the bar marks both with them. A loaded slab is
+  //    the solid ink, an unloaded one the same ink in `checker` — the era's third tone, no alpha.
+  THIN:   '#3a74b4',   // N1–N3 / S1–S3        |y| < 0.3 kpc  (plan §7.2)
+  THICK:  '#6650a8',   // N4–N10 / S4–S10      |y| < 1.0 kpc
+  HALOL:  '#8a4878',   // N11–N30 / S11–S30    the halo     (`HALO` is the catalogue ring's ink)
 };
 /** BURN or WARP is not "which level am I on" — it is NavComputer._isCurrentSystem() (:1098-1105), a
  *  0.1 pc identity test. Browsing a foreign system from SYSTEM still arms a WARP. */
@@ -518,6 +532,13 @@ function fit(s, maxTexels, scale = 1) {
 }
 const pad = (s, n) => String(s).slice(0, n).padEnd(n, ' ');
 const rpad = (s, n) => String(s).slice(0, n).padStart(n, ' ');
+/** ⭐ naming-prism-segments AC-6 — A ROW'S DISTANCE IN PC AND LY, WHICHEVER SHAPE IT ARRIVED IN. The
+ *  driver used to COPY every loaded star into a row carrying `pc` / `ly`, on every load step — a whole
+ *  column of copies per publish, the long task PHASE0 §3 measured. It now hands over the loader's own
+ *  rows (`dist` in kpc, no `pc` / `ly`), so the few rows actually PRINTED derive the two numbers here,
+ *  with the arithmetic `state.js` used to make them (1000 pc and 3261.56 ly to the kpc). */
+const pcOf = (r) => (r && Number.isFinite(r.pc)) ? r.pc : (r && Number.isFinite(r.dist)) ? r.dist * 1000 : 0;
+const lyOf = (r) => (r && Number.isFinite(r.ly)) ? r.ly : (r && Number.isFinite(r.dist)) ? r.dist * 3261.56 : 0;
 /**
  * ⭐⭐ ONE LABEL SLOT SOLVER, SHARED BY EVERY DESIGN THAT PUTS NAMES ON A MAP — AC-14.
  *
@@ -645,6 +666,7 @@ function buildData() {
   //    shape the driver builds in state.js: `{ id, name, centerX, centerZ, size, address }`.
   D.playerSector = labSectorRow(navGrid.parentAt(1, D.player.x, D.player.z));
   D.column = navGrid.enterColumn(navGrid.parentAt(3, D.player.x, D.player.z));
+  D.slabLoad = labSlabLoad();
   // ⭐ THE PAGE'S DEFAULT CAMERA AND FRAME, AND BOTH ARE THE GAME'S ENTRY STATE EXACTLY. On entering
   // PRISM the game sets `_localCenter` to the player and `_localRadius` to 0.0015, which IS
   // ZOOM_STOPS[0]; `_setupViewStackForPlayer` builds the player's sector and a tileSize*16 block,
@@ -686,6 +708,19 @@ function buildData() {
 
   // ── SYSTEM.  The exact call NavComputer.js:2458 makes.
   pickSystem(0);
+}
+
+/** ⭐ AC-7 — A LOADER STATUS FOR THE SEGMENT BAR, in the HOST's shape (`nav.slabLoad`). This page has no
+ *  loader, so it shows the bar mid-load: the eleven slabs around the camera's in, two of them empty
+ *  (the far halo, as a column really can be), the rest still arriving — every state a cell can be in,
+ *  on one picture. ⚠ A FIXTURE: in the game these sets come from the loader, slab by slab. */
+function labSlabLoad() {
+  const kv = slabBarGeo.slabIndexOfY(S.cam && Number.isFinite(S.cam.y) ? S.cam.y : 0);
+  const loaded = new Set(), empty = new Set();
+  for (let k = kv - 5; k <= kv + 5; k++) if (k >= -30 && k <= 29) loaded.add(slabBarGeo.refOfIndex(k));
+  for (const ref of ['N29', 'N30']) { loaded.add(ref); empty.add(ref); }
+  return { state: 'loading', loadedSlabs: loaded, emptySlabs: empty, progress: loaded.size / 60,
+           viewSlab: slabBarGeo.refOfIndex(kv), viewReady: true, suspended: false, rev: 1 };
 }
 
 function makeRng(seed) {                                       // NavComputer.js:315-327, verbatim shape
@@ -963,43 +998,85 @@ function projectPrism(s, cx, cy, halfW, halfH) {
            py: cy + az * halfH * tilt, depth: az };
 }
 
-/*  Function · the 1 pc lattice on the prism's plane, drawn UNDER the marks and clipped to the pane.
- *  Intent · AC-2 (restorations), the page's prism table: legacy draws a plane grid at
- *    `_localGridCell` (NavComputer.js:1191 = 0.001 kpc = 1 pc) across the whole view
- *    (:1994-2014); neither design draws one, and without it a field of bare dots has no surface to
- *    be above or below. Max: *"height above the plane is the prism's whole point."*
- *  ⛔ IT IS DRAWN ON THE PLANE THE FEET ARE ON, WHICH IS THE CAMERA'S, NOT LEGACY'S y = 0.
- *    `projectPrism`'s `py` is the star projected with `dy` zeroed — i.e. at `S.cam.y` — so every
- *    plane dot in both designs already sits on the camera's plane. A lattice drawn at the GALACTIC
- *    plane would be a second, contradictory horizon that the feet visibly did not touch, and the
- *    drop line (below) would end nowhere. One plane, and it is the one the picture already uses.
- *  ⛔ AND THE INVERSE PROJECTION IS USED ONLY TO CHOOSE WHICH LINES CAN REACH THE PANE. The line
- *    itself is drawn through the SAME forward arithmetic `projectPrism` uses, spelled once here, so
- *    a grid line through a star's foot passes through that foot.
- *  ⚠ EDGE-ON IS A REAL STATE AND IT DIVIDES BY ZERO. The game clamps the prism's elevation to
- *    [0, pi/2] and at 0 the tilt is `K*sin(0)` = 0: the plane collapses to a horizontal line and the
- *    inverse's `az` term goes to Infinity. There is no lattice to draw there, so there is none.
- *  Deliberate non-goals · no player-cell highlight (legacy's is debug-mode only, :1938-1950), no
- *    horizon fade, no axis labels, no second cell size at zoom — 1 pc is legacy's own constant. */
-const PLANE_CELL_KPC = 0.001;    // NavComputer.js:1191 `_localGridCell`, verbatim — 1 pc
+/*  Function · THE CHEAP REJECT — is a row DEFINITELY off the pane? Built once per frame, asked per row.
+ *  Intent · naming-prism-segments AC-6 (Max: *"needs to include performance optimization"*). The
+ *    painters walk `D.starRows` until their draw cap, projecting every row — and `projectPrism` returns a
+ *    fresh object per call. A loaded column is 85k rows at the inner galaxy and 172k in the bulge
+ *    (HOST lane, headless), and once the view has jumped away from the ship's slab the nearest-first
+ *    rows are all off the pane, so the walk projected the whole column every frame: measured headless,
+ *    20–48 ms of paint per frame at 172k rows (×1.5–1.65 in Chrome, PHASE0 §4) — a long task, every
+ *    frame. This is the same forward arithmetic, inlined, with no allocation, and it says "off" only
+ *    with 4 texels of margin beyond the pane, so it can never drop a row the real cull would keep:
+ *    the bounds test after `projectPrism` stays the one that decides.
+ *  Deliberate non-goals · no spatial index (rows carry their slab, but top-down every slab lands on the
+ *    plane, so a slab filter would be wrong there); the order of the walk is untouched. */
+function prismCull(cx, cy, halfW, halfH, x0, y0, x1, y1) {
+  const cam = S.cam, r = Math.max(cam.radius, 1e-9), rx = 0.92;
+  const rotX = cam.rotX === undefined ? PRISM_ROTX0 : cam.rotX;
+  const rotY = cam.rotY === undefined ? PRISM_ROTY0 : cam.rotY;
+  const def = (rotX === PRISM_ROTX0 && rotY === PRISM_ROTY0);
+  const ca = def ? 1 : Math.cos(rotY), sa = def ? 0 : Math.sin(rotY);
+  const tilt = def ? PRISM_TILT0 : PRISM_K * Math.sin(rotX), rise = def ? PRISM_RISE0 : PRISM_K * Math.cos(rotX);
+  const lx = x0 - 4, hx = x1 + 4, ly = y0 - 4, hy = y1 + 4;
+  return (s) => {
+    const dx = (s.wx - cam.x) / r, dz = (s.wz - cam.z) / r, dy = (s.wy - cam.y) / r;
+    const x = cx + (dx * ca - dz * sa) * halfW * rx;
+    const y = cy + (dx * sa + dz * ca) * halfH * tilt - dy * halfH * rise;
+    return x < lx || x > hx || y < ly || y > hy;
+  };
+}
+
+/*  Function · THE PLANE LATTICE, ON THE REAL PRISM GRID — drawn UNDER the marks and clipped to the pane.
+ *  Intent · AC-2 (restorations) gave the prism a floor: legacy drew a 1 pc grid (`_localGridCell`,
+ *    NavComputer.js:1191) and without one a field of bare dots has no surface to be above or below.
+ *    ⭐ naming-prism-segments Phase 3 (Max, 2026-10-03): *"that grid in the background is actually not
+ *    contextual, but the plane grid would be and so would be geometrically aligned prisms in the
+ *    matrix surrounding the one that we're in."* The old lattice was 1 pc counted from x = 0 — a
+ *    texture, aligned to nothing on any other screen. It is now the FIXED GRID's own lattice: an
+ *    eighth of a prism (0.977 pc, so the default picture keeps legacy's ~1 pc floor) counted from a
+ *    corner of the column on the glass, and EVERY EIGHTH LINE IS A PRISM BOUNDARY, drawn a tone up in
+ *    `LATTICE`. Pull the camera back and the boundaries of the neighbouring prisms are the lines you see.
+ *  ⛔ IT IS DRAWN ON THE PLANE THE FEET ARE ON, WHICH IS THE CAMERA'S, NOT y = 0. `projectPrism`'s `py`
+ *    is the star projected with `dy` zeroed — i.e. at `S.cam.y` — so every plane dot already sits on the
+ *    camera's plane; a lattice at another height would be a horizon the feet visibly do not touch. The
+ *    galactic plane and the slab's own faces are drawn by `prismCells` (below), as what they are.
+ *  ⛔ THE INVERSE PROJECTION ONLY CHOOSES WHICH LINES CAN REACH THE PANE. Each line is drawn through the
+ *    SAME forward arithmetic `projectPrism` uses, so a grid line through a star's foot passes through it.
+ *  ⚠ EDGE-ON IS A REAL STATE AND IT DIVIDES BY ZERO: at elevation 0 the tilt is 0, the plane is a line
+ *    and the inverse's `az` term is Infinity. There is no lattice to draw there, so there is none.
+ *  Deliberate non-goals · no player-cell fill, no horizon fade, no axis labels. */
+const PLANE_SUB = 8;             // lattice lines per prism: 7.8125 pc / 8 = 0.977 pc, legacy's ~1 pc floor
 const PLANE_MAX_LINES = 48;      // a bound on the loop at the widest zoom stop, not a picture choice
 const PLANE_MIN_TEXELS = 8;      // ⛔ below this a lattice is a FILL — see `prismPlane`'s doubling
 const PLANE_DOT = 3;             // the lattice's dot pitch; the drop line's is 1 or 2 (`prismDrop`)
-function prismPlane(g, cxp, cyp, halfW, halfH, cl) {
+/** The camera's projection, spelled once for the three lattice painters: forward maps (with and without
+ *  height), the inverse on the plane, and the lattice's anchor — a corner of the column on the glass. */
+function prismFrame(cxp, cyp, halfW, halfH) {
   const cam = S.cam, r = Math.max(cam.radius, 1e-9);
-  if (!cl || !(halfW > 0) || !(halfH > 0) || !Number.isFinite(cam.x) || !Number.isFinite(cam.z)) return;
+  if (!(halfW > 0) || !(halfH > 0) || !Number.isFinite(cam.x) || !Number.isFinite(cam.z)) return null;
   const rx = 0.92;                                   // the horizontal gain, as in `projectPrism`
   const rotX = cam.rotX === undefined ? PRISM_ROTX0 : cam.rotX;
   const rotY = cam.rotY === undefined ? PRISM_ROTY0 : cam.rotY;
   const def = (rotX === PRISM_ROTX0 && rotY === PRISM_ROTY0);
   const tilt = def ? PRISM_TILT0 : PRISM_K * Math.sin(rotX);
-  if (!(Math.abs(tilt) > 1e-6)) return;              // edge-on: the plane IS a line
+  const rise = def ? PRISM_RISE0 : PRISM_K * Math.cos(rotX);
+  if (!(Math.abs(tilt) > 1e-6)) return null;         // edge-on: the plane IS a line
   const ca = def ? 1 : Math.cos(rotY), sa = def ? 0 : Math.sin(rotY);
+  const camY = Number.isFinite(cam.y) ? cam.y : 0;
+  // dx, dz in camera radii from the camera; wy in kpc
   const fx = (dx, dz) => cxp + (dx * ca - dz * sa) * halfW * rx;
-  const fy = (dx, dz) => cyp + (dx * sa + dz * ca) * halfH * tilt;
-  // …and the inverse, for the pane's four corners only.
+  const fy = (dx, dz, wy = camY) => cyp + (dx * sa + dz * ca) * halfH * tilt - ((wy - camY) / r) * halfH * rise;
   const back = (x, y) => { const ax = (x - cxp) / (halfW * rx), az = (y - cyp) / (halfH * tilt);
                            return { dx: ax * ca + az * sa, dz: -ax * sa + az * ca }; };
+  const col = D.column || navGrid.enterColumn(navGrid.parentAt(3, cam.x, cam.z));
+  const P = navGrid.childKpc(2);                     // one prism, 7.8125 pc — the grid's own pitch
+  return { cam, r, rx, tilt, rise, fx, fy, back, camY, col, P,
+           ox: col ? col.bounds.min.x : cam.x, oz: col ? col.bounds.min.z : cam.z };
+}
+function prismPlane(g, cxp, cyp, halfW, halfH, cl) {
+  const F = cl ? prismFrame(cxp, cyp, halfW, halfH) : null;
+  if (!F) return;
+  const { cam, r, rx, tilt, fx, fy, back } = F;
   let dxMin = Infinity, dxMax = -Infinity, dzMin = Infinity, dzMax = -Infinity;
   for (const [x, y] of [[cl.x, cl.y], [cl.x + cl.w, cl.y], [cl.x, cl.y + cl.h], [cl.x + cl.w, cl.y + cl.h]]) {
     const b = back(x, y);
@@ -1007,39 +1084,97 @@ function prismPlane(g, cxp, cyp, halfW, halfH, cl) {
     dxMin = Math.min(dxMin, b.dx); dxMax = Math.max(dxMax, b.dx);
     dzMin = Math.min(dzMin, b.dz); dzMax = Math.max(dzMax, b.dz);
   }
-  /*  ⛔ THE CELL IS 1 pc AT THE DEFAULT ZOOM AND DOUBLES AS THE CAMERA PULLS BACK, AND THAT IS A
-   *  MEASUREMENT, NOT A PREFERENCE. The prism's vertical gain is the tilt, so a cell that is 128
-   *  texels wide is only ~30 tall at the default stop — and at the widest stop (`ZOOM_STOPS[3]`,
-   *  0.01034 kpc) it is 3.6 texels tall. Measured at 417x240: a true 1 pc lattice there draws 13,093
-   *  texels of z-lines about seven texels apart, which at 240p is not a grid, it is a wash over the
-   *  starfield the grid exists to give a floor to — and it is 13x the fill count the whole frame had.
-   *  So the cell steps up in POWERS OF TWO (1, 2, 4, 8 pc) until the tighter of its two on-screen
-   *  spacings clears `PLANE_MIN_TEXELS`. ⭐ AT THE DEFAULT CAMERA THE MULTIPLIER IS 1 and the lattice
-   *  is exactly legacy's 1 pc; nothing about the picture Max will look at first is approximate.
-   *  ⚠ THE TWO SPACINGS ARE THE AXIS-ALIGNED ONES, USED AS A PROXY. Under a rotated azimuth the
-   *    lines are slanted and their true perpendicular spacing mixes both terms; the proxy is within a
-   *    factor of sqrt(2) of it, which is inside the doubling's own granularity. */
-  const unit = PLANE_CELL_KPC / r;                   // one 1 pc cell, in camera radii
+  /*  ⛔ THE CELL IS AN EIGHTH OF A PRISM AT THE DEFAULT ZOOM AND DOUBLES AS THE CAMERA PULLS BACK — a
+   *  measurement, not a preference: the vertical gain is the tilt, so at the widest stops a fine
+   *  lattice is a few texels tall and reads as a wash over the starfield it exists to give a floor to.
+   *  So the cell steps up in POWERS OF TWO (1/8, 1/4, 1/2, 1 prism …) until the tighter of its two
+   *  on-screen spacings clears `PLANE_MIN_TEXELS`. Every step keeps every prism boundary a line.
+   *  ⚠ THE TWO SPACINGS ARE THE AXIS-ALIGNED ONES, USED AS A PROXY (within √2 under a rotated azimuth,
+   *    inside the doubling's own granularity). */
+  const unit = (F.P / PLANE_SUB) / r;                // one lattice cell, in camera radii
   if (!(unit > 0)) return;
   const spX = unit * halfW * rx, spZ = unit * halfH * Math.abs(tilt);
   let mult = 1;
   while (mult < 64 && Math.min(spX, spZ) * mult < PLANE_MIN_TEXELS) mult *= 2;
   const cell = unit * mult;
   if ((dxMax - dxMin) / cell > PLANE_MAX_LINES * 4) return;   // absurd zoom: no lattice
+  const major = (i) => ((i * mult) % PLANE_SUB + PLANE_SUB) % PLANE_SUB === 0;   // a prism boundary
   const run = (lo, hi, draw) => {
     const i0 = Math.ceil(lo / cell), i1 = Math.floor(hi / cell);
-    for (let i = i0; i <= i1 && i - i0 < PLANE_MAX_LINES; i++) draw(i * cell);
+    for (let i = i0; i <= i1 && i - i0 < PLANE_MAX_LINES; i++) draw(i, i * cell);
   };
-  // the grid is anchored to the WORLD, not to the camera, so it slides under a pan instead of with it
-  const offX = cam.x / r, offZ = cam.z / r;
-  run(dxMin + offX, dxMax + offX, (wx) => {
-    const dx = wx - offX;
-    lineTexels(g, fx(dx, dzMin), fy(dx, dzMin), fx(dx, dzMax), fy(dx, dzMax), INK.GRID, cl, PLANE_DOT);
+  // the grid is anchored to the PRISM GRID, not to the camera, so it slides under a pan instead of with it
+  const offX = (cam.x - F.ox) / r, offZ = (cam.z - F.oz) / r;
+  run(dxMin + offX, dxMax + offX, (i, wx) => {
+    const dx = wx - offX, mj = major(i);
+    lineTexels(g, fx(dx, dzMin), fy(dx, dzMin), fx(dx, dzMax), fy(dx, dzMax), mj ? INK.LATTICE : INK.GRID, cl, mj ? 2 : PLANE_DOT);
   });
-  run(dzMin + offZ, dzMax + offZ, (wz) => {
-    const dz = wz - offZ;
-    lineTexels(g, fx(dxMin, dz), fy(dxMin, dz), fx(dxMax, dz), fy(dxMax, dz), INK.GRID, cl, PLANE_DOT);
+  run(dzMin + offZ, dzMax + offZ, (i, wz) => {
+    const dz = wz - offZ, mj = major(i);
+    lineTexels(g, fx(dxMin, dz), fy(dxMin, dz), fx(dxMax, dz), fy(dxMax, dz), mj ? INK.LATTICE : INK.GRID, cl, mj ? 2 : PLANE_DOT);
   });
+}
+
+/*  Function · THE NEIGHBOURING PRISMS, AS BOUNDARIES ONLY — the 5 × 5 columns around the one on the
+ *    glass, cut at the slab being viewed: their vertical edges, and the slab's two faces where they
+ *    come into view. No star inside any of them is loaded or drawn.
+ *  Intent · Max (2026-10-03): *"I also want to somehow be able to visualize the other prisms that are
+ *    around us without actually rendering the stars that are inside of them. I just want to render
+ *    the boundaries."* The plane lattice (`prismPlane`) already lays their footprints on the floor;
+ *    this stands them up: a dotted pillar at every prism corner, from the slab's floor to its ceiling,
+ *    and — when the camera is near enough to a face to see it — that face's prism lattice. The face at
+ *    y = 0 IS the galactic plane and is drawn in `DIM`, a tone above the other faces.
+ *  ⭐ CURRENT AND TARGET IN THEIR OWN INKS (Max, 2026-10-03: one colour always current, one target):
+ *    when the SHIP's column is one of the neighbours, its footprint is outlined in `YOU`; when the
+ *    selected star's is, in `TARGET`. The column on the glass keeps its solid `RULE` edge
+ *    (`prismColumnEdge`, drawn after this).
+ *  ⛔ ONE PROJECTION. Every point goes through `prismFrame`'s forward maps — the same arithmetic as
+ *    `projectPrism` with the height term in — so a pillar stands exactly on its lattice corner and a
+ *    star on a face sits on that face's line. ⚠ Top-down (rise ≈ 0) a pillar is a point: none drawn.
+ *  Deliberate non-goals · no labels on neighbours, no fill, no stars, no faces of other slabs. */
+const CELL_REACH = 2;            // columns each side of the one on the glass: a 5 × 5 neighbourhood
+function prismCells(g, cxp, cyp, halfW, halfH, cl) {
+  const F = cl ? prismFrame(cxp, cyp, halfW, halfH) : null;
+  if (!F || !F.col) return;
+  const { r, fx, fy, P, ox, oz, cam } = F;
+  const [y0, y1] = slabBarGeo.slabYRange(slabBarGeo.slabIndexOfY(F.camY));
+  const rel = (wx, wz) => [(wx - cam.x) / r, (wz - cam.z) / r];
+  const xs = [], zs = [];
+  for (let a = -CELL_REACH; a <= CELL_REACH + 1; a++) { xs.push(ox + a * P); zs.push(oz + a * P); }
+  // the pillars — prism corners, slab floor to slab ceiling (skipped top-down, where each is a point)
+  if (Math.abs(F.rise) > 1e-3) {
+    for (const wx of xs) for (const wz of zs) {
+      const [dx, dz] = rel(wx, wz);
+      const own = (wx === xs[CELL_REACH] || wx === xs[CELL_REACH + 1]) && (wz === zs[CELL_REACH] || wz === zs[CELL_REACH + 1]);
+      lineTexels(g, fx(dx, dz), fy(dx, dz, y0), fx(dx, dz), fy(dx, dz, y1), own ? INK.LATTICE : INK.GRID, cl, own ? 2 : PLANE_DOT);
+    }
+  }
+  // the slab's faces, when the camera is near enough to see one — the prism lattice on that plane
+  for (const wy of [y0, y1]) {
+    const shift = Math.abs(((wy - F.camY) / r) * halfH * F.rise);
+    if (shift > cl.h * 2) continue;
+    const ink = wy === 0 ? INK.DIM : INK.LATTICE;
+    const [ax, az] = rel(xs[0], zs[0]), [bx, bz] = rel(xs[xs.length - 1], zs[zs.length - 1]);
+    for (const wx of xs) { const [dx] = rel(wx, 0); lineTexels(g, fx(dx, az), fy(dx, az, wy), fx(dx, bz), fy(dx, bz, wy), ink, cl, 2); }
+    for (const wz of zs) { const [, dz] = rel(0, wz); lineTexels(g, fx(ax, dz), fy(ax, dz, wy), fx(bx, dz), fy(bx, dz, wy), ink, cl, 2); }
+  }
+  // CURRENT and TARGET columns, when they are neighbours (not the one on the glass)
+  const outline = (wx, wz, ink) => {
+    if (!Number.isFinite(wx) || !Number.isFinite(wz)) return;
+    const addr = navGrid.parentAt(3, wx, wz);
+    if (!addr || (F.col.address && navGrid.sameAddress(addr, F.col.address))) return;
+    const c = navGrid.enterColumn(addr);
+    if (!c) return;
+    const b = c.bounds;
+    const pts = [[b.min.x, b.min.z], [b.max.x, b.min.z], [b.max.x, b.max.z], [b.min.x, b.max.z]].map(([x, z]) => rel(x, z));
+    for (let k = 0; k < 4; k++) {
+      const [ax, az] = pts[k], [bx, bz] = pts[(k + 1) & 3];
+      lineTexels(g, fx(ax, az), fy(ax, az), fx(bx, bz), fy(bx, bz), ink, cl, 2);
+    }
+  };
+  if (D.player) outline(D.player.x, D.player.z, INK.YOU);
+  const tgt = D.selStar || D.target;
+  if (tgt) outline(tgt.wx, tgt.wz, INK.TARGET);
 }
 
 /*  Function · the PRISM column's own footprint, drawn on the plane the feet stand on.
@@ -1137,7 +1272,7 @@ function drawDesign1(g, W, H) {
   // ⛔ ASSIGNED TO `null`, NEVER DELETED, for the reason `S.labelHits = []` is an assignment: a
   //    picker dereferencing a field that is not there freezes the glass, and it freezes it LOOKING
   //    ALIVE — `PanelHost` catches a painter throw once and then stops uploading frames.
-  S.pagerRect = null; S.ladderCounterRect = null;
+  S.pagerRect = null; S.ladderCounterRect = null; S.slabBarRect = null;   // ⭐ AC-7: the segment bar is republished by the PRISM painter that draws it, and by nothing else
   // ⛔ AC-4's ROW LIST ON THE SAME RULE. `S.railBodies` is published only by the SUB-VIEW's rail
   //    branch, so without a clear here the rows of a planet the pilot left would stay on offer under
   //    the whole-system list — geometry out of nobody's paint, which is the defect this block names.
@@ -1150,13 +1285,17 @@ function drawDesign1(g, W, H) {
   const cols = Math.floor((W + 1) / CELL), rows = Math.floor(H / LEAD);
   const cx = (c) => c * CELL, ry = (r) => r * LEAD;
   const railC = Math.min(26, Math.max(10, Math.round(cols * 0.366)));
-  const mapC = cols - railC - 2;                      // -1 y-gauge, -1 rule
+  // ⭐ naming-prism-segments AC-7 (plan §7.3) — AT PRISM THE MAP GIVES UP ONE MORE CELL, for the
+  //    segment bar beside the fine gauge: map | gauge | bar | rule | rail. Every other level keeps the
+  //    layout it had, texel for texel; the rule stays where it always was (`ruleX` below).
+  const barC = S.level === 3 ? 1 : 0;
+  const mapC = cols - railC - 2 - barC;               // -1 y-gauge, -1 rule (and -1 segment bar at PRISM)
   const railX = cx(cols - railC), railW = railC * CELL - 1;
   // ⭐ 2026-10-02 (Max's UAT walk) — `ry(rows - 2)`, NOT `ry(rows - 3)`: the instruction row above the
   //    tab strip is gone (see the block where it was drawn), and its six texels go back to the map and
   //    the rail, which end at the rule over the tabs now.
   const mapW = mapC * CELL, mapY = ry(1), mapH = ry(rows - 2) - ry(1);
-  const gaugeX = cx(mapC), ruleX = cx(mapC + 1) + 2;
+  const gaugeX = cx(mapC), ruleX = cx(cols - railC - 1) + 2, barX = cx(mapC + 1);
 
   region('status', 0, 0, W, FACE.h);
   region('map', 0, mapY, mapW, mapH);
@@ -1176,7 +1315,7 @@ function drawDesign1(g, W, H) {
   const secW = T(g, fit((D.playerSector?.name || '').toUpperCase(), 17 * CELL), 1 + 17 * CELL, 0,
     { color: INK.DIM, rgn: 'status', what: 'status sector' });
   // ⭐ 2026-09-25 — THE SYSTEM YOU ARE IN IS NOT A TARGET (state.js `targetIsHere`): `TGT —`, not `TGT SOL  0.0 LY`.
-  const tgt = D.targetIsHere ? 'TGT —' : `TGT ${(D.target?.name || '—').toUpperCase()}  ${(D.target?.ly || 0).toFixed(1)} LY`;
+  const tgt = D.targetIsHere ? 'TGT —' : `TGT ${(D.target?.name || '—').toUpperCase()}  ${lyOf(D.target).toFixed(1)} LY`;
   const tgtW = measurePixelText(fit(tgt, 34 * CELL));
   T(g, fit(tgt, 34 * CELL), W - 1, 0, { color: INK.TARGET, align: 'right', rgn: 'status', what: 'status target' });
   assertClear('status ident/sector vs TGT', 'status',
@@ -1184,7 +1323,11 @@ function drawDesign1(g, W, H) {
 
   // ── THE MAP PANE ─────────────────────────────────────────────────────────────────────────────
   if (S.level <= 2) d1TwoD(g, mapW, mapY, mapH);
-  else if (S.level === 3) d1Prism(g, mapW, mapY, mapH, gaugeX);
+  else if (S.level === 3) {
+    d1Prism(g, mapW, mapY, mapH, gaugeX);
+    region('slabbar', barX, mapY, slabBarGeo.BAR_W, mapH);
+    slabBar(g, barX, mapY, mapH);                      // ⭐ AC-7 — beside the fine gauge (plan §7.3)
+  }
   else d1Ladder(g, mapW, mapY, mapH);
   // ⭐ 2026-10-02 — WHICH SYSTEM THIS IS, WHEN IT IS NOT YOURS (`foreignSysLines`). Top-left of the map,
   //    plated, in TARGET ink; the ladder's axis sits at 62% of the pane, so the corner is empty.
@@ -1277,7 +1420,7 @@ function drawDesign1(g, W, H) {
                         ? `${verb} ${(D.selBody.name || '—').toUpperCase()} · ${D.selBody.kind === 'star'
                             ? (D.selBody.cls || 'STAR').toUpperCase() : `${(D.selBody.au ?? 0).toFixed(2)} AU`} · ENTER`
                         : D.commitIsView ? 'SELECT A BODY TO GO TO' : 'SELECT A BODY TO BURN')
-                    : warpLive ? `WARP TO ${(D.target?.name || '—').toUpperCase()} · ${(D.target?.ly || 0).toFixed(1)} LY · ENTER`
+                    : warpLive ? `WARP TO ${(D.target?.name || '—').toUpperCase()} · ${lyOf(D.target).toFixed(1)} LY · ENTER`
                     : 'SELECT A STAR TO WARP';
   // ⭐⭐ AC-11 — THE BAR STARTS AT `ry(rows - 1)`, NOT ONE TEXEL ABOVE IT.
   //    `region('commit', …)` above declares row 39 (y 234 at 240p) and `geometry.js`'s `commitY` says
@@ -1607,7 +1750,9 @@ function d1TileOrder(rows) {
 function d1Prism(g, mapW, mapY, mapH, gaugeX) {
   const cxp = mapW / 2, cyp = mapY + mapH / 2;
   const shown = [];
+  const offPane = prismCull(cxp, cyp, mapW / 2, mapH / 2, 0, mapY, mapW, mapY + mapH);   // ⭐ AC-6 — no allocation for a row that cannot land
   for (const s of D.starRows) {
+    if (offPane(s)) continue;
     const p = projectPrism(s, cxp, cyp, mapW / 2, mapH / 2);
     if (p.x < 0 || p.x >= mapW || p.y < mapY || p.y >= mapY + mapH) continue;   // ⭐ THE BOUNDS CULL
     shown.push({ s, p });                                                       // (there is none today)
@@ -1628,6 +1773,7 @@ function d1Prism(g, mapW, mapY, mapH, gaugeX) {
    *    ruling on item 14: *"keep the low-fi marks"*), no z-buffer, no occlusion test. */
   shown.sort((a, b) => b.p.depth - a.p.depth);
   prismPlane(g, cxp, cyp, mapW / 2, mapH / 2, REGIONS.map);
+  prismCells(g, cxp, cyp, mapW / 2, mapH / 2, REGIONS.map);                     // ⭐ the neighbouring prisms, boundaries only
   prismColumnEdge(g, cxp, cyp, mapW / 2, mapH / 2, REGIONS.map);
   for (const { s, p } of shown) {
     prismDrop(g, p, REGIONS.map);                                                // the stem, under the mark
@@ -2349,7 +2495,7 @@ function d1Rail(g, x, y, w, cols, rowCount) {
   } else if (S.level === 3) {
     lines = D.starRows.slice(off, off + listRows).map((s, i) => ({
       txt: `${off + i < 8 && s !== D.here ? off + i + 1 : '·'} ${pad(s.name.toUpperCase() || 'UNNAMED', cols - 13)} ` +
-           `${rpad(s.pc.toFixed(1), 5)} ${pad(s.spectral, 2)} ${s.mult > 1 ? s.mult : '·'}`,
+           `${rpad(pcOf(s).toFixed(1), 5)} ${pad(s.spectral, 2)} ${s.mult > 1 ? s.mult : '·'}`,
       bar: 0, sel: s === D.selStar }));
     /*  Function · the camera block — where the eye is, in the units legacy used.
      *  Intent · AC-3 and AC-9 (restorations). Max, UAT 2026-08-01, on this very screen: *"I still
@@ -2367,11 +2513,14 @@ function d1Rail(g, x, y, w, cols, rowCount) {
      *    the idiom this same block already uses for `DIST … PC` / `      … LY`.
      *  Deliberate non-goals · no kpc, no gauge duplication, no plane-crossing alarm. */
     const pn = prismNumbers();
-    detail.push([pn.height, INK.BODY], [`       ${pn.region}`, INK.DIM],
+    // ⭐ AC-7 (plan §7.3) — THE SLAB ON THE GLASS AND ITS LAYER, "N16 · HALO", on the line that held the
+    //    layer alone: the bar beside this rail lights that cell, and this is its name. 23 characters at
+    //    the worst ("       S10 · THICK DISK") against the rail's 25.
+    detail.push([pn.height, INK.BODY], [`       ${pn.slab} · ${pn.region}`, INK.DIM],
       [pn.playerY, INK.BODY], [pn.yRange, INK.DIM], [pn.view, INK.BODY]);
     const s = D.selStar;
     if (s) detail.push([fit(s.name.toUpperCase(), w), INK.KEY], [`${s.spectral}   ${s.isReal ? 'CATALOG' : 'PROCEDURAL'}`, INK.BODY],
-      [`DIST   ${s.pc.toFixed(2)} PC`, INK.BODY], [`       ${s.ly.toFixed(1)} LY`, INK.BODY],
+      [`DIST   ${pcOf(s).toFixed(2)} PC`, INK.BODY], [`       ${lyOf(s).toFixed(1)} LY`, INK.BODY],
       [`PLANE  ${((s.wy - D.player.y) * 1000).toFixed(0)} PC`, INK.BODY],
       [`COMPS  ${s.mult > 1 ? 'MULTIPLE (' + s.mult + ')' : 'SINGLE'}`, INK.BODY],
       D.targetIsHere ? ['YOU ARE HERE', INK.YOU] : ['WARP ARMED', INK.TARGET]);
@@ -2594,10 +2743,14 @@ function prismNumbers() {
   const camY = (S.cam && Number.isFinite(S.cam.y)) ? S.cam.y : 0;
   const rad  = (S.cam && Number.isFinite(S.cam.radius)) ? S.cam.radius : 0;
   const pY   = (D.player && Number.isFinite(D.player.y)) ? D.player.y : 0;
-  const a = Math.abs(camY);
+  // ⭐ naming-prism-segments AC-7 (plan §7.2) — THE LAYER IS THE SLAB'S, through the ONE layer function
+  //    the segment bar colours by (`slabBarGeo.layerOfIndex`). The old `|y| < 0.3` test called y = −0.3
+  //    THICK while its slab, S3, is thin; one function, so the readout and the lit cell always agree.
+  const k = slabBarGeo.slabIndexOfY(camY);
   return {
     height:  `HEIGHT ${Math.round(camY * 1000)} PC ${camY >= 0 ? 'ABOVE' : 'BELOW'}`,
-    region:  a < 0.3 ? 'THIN DISK' : a < 1.0 ? 'THICK DISK' : 'HALO',
+    region:  slabBarGeo.LAYER_NAME[slabBarGeo.layerOfIndex(k)],
+    slab:    slabBarGeo.refOfIndex(k),
     playerY: `PLAYER Y ${Math.round(pY * 1000)} PC`,
     yRange:  `Y RANGE ${Math.round((pY - 2.0) * 1000)} TO ${Math.round((pY + 2.0) * 1000)} PC`,
     view:    `VIEW ${Math.round(rad * 3260)} LY`,
@@ -2624,17 +2777,91 @@ function prismNumbers() {
  *    `_localCenter` IS the player, so the default picture gains no mark in either design.
  *  Deliberate non-goals · no numbers on the strip (design 1's rail block and design 2's status line
  *    both print HEIGHT — AC-3), no thumb, no ticks, and no second gauge at any other level. */
+/*  ⭐⭐ naming-prism-segments AC-7, DECISION 7 = A (Max, 2026-10-02 "go with recs") — THE GAUGE
+ *    FOLLOWS THE VIEW, NOT THE SHIP.
+ *  Intent · plan §7.3: the strip used to be centred on the SHIP's height and its drag clamped to the
+ *    ship ±2 pc, so after a jump to N16 on the segment bar, grabbing it threw the view 1.5 kpc back
+ *    home. One rule now: the bar makes the big jumps, this strip the small moves, BOTH AROUND WHAT YOU
+ *    SEE. The ship (CURRENT, `YOU` ink) is a mark at its height, or an ARROW at the end it lies beyond
+ *    when it is more than 2 pc from the strip's centre.
+ *  ⭐ THE CENTRE (`S.gaugeBase`) IS RE-SET TO THE VIEW'S HEIGHT ONLY WHEN THE VIEW HAS LEFT THE STRIP —
+ *    a bar jump, R/F past either end, a new entry — and never while the strip is held. Inside its
+ *    ±2 pc the strip stands still, so a fine drag leaves the mark where the hand let go of it and R/F
+ *    walk the mark along it, exactly as before; past either end it pages to the new height.
+ *  ⛔ NEVER WHILE HELD: a centre that followed the camera DURING the drag would move the mapping under
+ *    a still pointer — `base + offset` → a new base → `base + offset` again — and the view would run
+ *    away while the hand held still. `base` is published so `gaugeDragTo` inverts what was drawn.
+ *  ⛔ AND THE DEFAULT PICTURE DOES NOT MOVE: at entry the view IS the ship's height, so the strip and the
+ *    `YOU` line at its centre are the same texels as before, and the `KEY` view mark appears only once
+ *    the view has left the ship's height, which is when it says anything.
+ *  Deliberate non-goals · the TARGET mark still pegs at the ends (unchanged); no numbers on the strip. */
 function yGauge(g, gx, gy, gh) {
   const GAUGE_HALF_KPC = 0.002, gaugeCy = gy + gh / 2, gaugeSpan = gh / 2;
-  const gaugeTexel = (kpc) => gaugeCy - Math.max(-gaugeSpan + 2, Math.min(gaugeSpan - 2,
-                                ((kpc - D.player.y) / GAUGE_HALF_KPC) * gaugeSpan));
-  rect(g, gx + 3, gy + 2, 1, gh - 4, INK.RULE);
-  rect(g, gx + 1, gaugeCy, 3, 1, INK.YOU);
-  if (D.selStar) rect(g, gx, gaugeTexel(D.selStar.wy), 5, 1, INK.TARGET);
   const camY = (S.cam && Number.isFinite(S.cam.y)) ? S.cam.y : D.player.y;
+  const held = !!(S.gaugeHold && S.gaugeHold.widget === 'gauge');
+  if (!held && (!Number.isFinite(S.gaugeBase) || Math.abs(camY - S.gaugeBase) > GAUGE_HALF_KPC)) S.gaugeBase = camY;
+  const base = Number.isFinite(S.gaugeBase) ? S.gaugeBase : camY;
+  const off = (kpc) => ((kpc - base) / GAUGE_HALF_KPC) * gaugeSpan;
+  const gaugeTexel = (kpc) => gaugeCy - Math.max(-gaugeSpan + 2, Math.min(gaugeSpan - 2, off(kpc)));
+  rect(g, gx + 3, gy + 2, 1, gh - 4, INK.RULE);
+  const po = off(D.player.y);
+  if (Math.abs(po) <= gaugeSpan - 2) rect(g, gx + 1, gaugeCy - po, 3, 1, INK.YOU);
+  else if (po > 0) { rect(g, gx + 2, gy + 1, 1, 1, INK.YOU); rect(g, gx + 1, gy + 2, 3, 1, INK.YOU); }   // ▲ the ship is above
+  else { rect(g, gx + 1, gy + gh - 3, 3, 1, INK.YOU); rect(g, gx + 2, gy + gh - 2, 1, 1, INK.YOU); }   // ▼ …or below
+  if (D.selStar) rect(g, gx, gaugeTexel(D.selStar.wy), 5, 1, INK.TARGET);
   if (Math.abs(camY - D.player.y) > 1e-9) rect(g, gx + 1, gaugeTexel(camY), 4, 1, INK.KEY);
   S.yGaugeRect = { x: gx, y: gy, w: 6, h: gh,
-                   cy: gaugeCy, span: gaugeSpan, halfKpc: GAUGE_HALF_KPC, base: D.player.y };
+                   cy: gaugeCy, span: gaugeSpan, halfKpc: GAUGE_HALF_KPC, base };
+}
+
+/*  Function · THE SEGMENT BAR — the column's 60 slabs, N30 at the top to S30 at the bottom, one cell
+ *    per slab (plan §7.1: "each bar cell is exactly one slab"), painted at `(bx, by, 6, bh)` and
+ *    published as `S.slabBarRect` for the driver's click and drag (`index.js`), which read the cells
+ *    through the SAME `slabBarGeo.barRow` this loop draws with.
+ *  Intent · AC-7. Max: *"you could see the un-highlighted segments in the nav bar and click or drag to
+ *    a new one quickly, or use existing R and F controls to slowly pan up or down."* And on loading:
+ *    *"let's try to make the system work without this"* — so the load state is shown HERE, subtly, and
+ *    nowhere as a screen.
+ *  ⭐ WHAT A CELL SAYS (plan §7.3 "current slab lit, loaded mid-tone, unloaded dim, empty slabs marked"):
+ *    · its LAYER is its ink — thin / thick / halo at 0.3 / 1.0 kpc, through the one layer function;
+ *    · LOADED is the solid ink, NOT YET LOADED the same ink in `checker` (the era's third tone, no alpha);
+ *    · loaded and EMPTY (no star in the column there) is hollow — its two side texels only;
+ *    · the slab ON THE GLASS is `KEY`, solid once its rows are in, checkered while they are still
+ *      arriving — the only "loading" this design shows, and it lasts a few frames.
+ *  ⭐ CURRENT AND TARGET IN THEIR OWN INKS (Max, 2026-10-03: one colour always current, one always
+ *    target): a `YOU` tick on the bar's left edge at the SHIP's slab, a `TARGET` tick on its right
+ *    edge at the selected star's. The galactic plane is the `DIM` rule between N1 and S1.
+ *  ⛔ NO LOAD INFORMATION (the lab, a bare instance) DRAWS EVERY CELL AS LOADED, never as missing: a
+ *    bar that showed the whole column unloaded on a page that has no loader would be a false alarm.
+ *  Deliberate non-goals · no labels on the bar (the slab's name is in design 1's rail and design 2's
+ *    status line), no hover on cells, no animation. */
+function slabBar(g, bx, by, bh) {
+  const r = { x: bx, y: by, w: slabBarGeo.BAR_W, h: bh };
+  const [top, span] = slabBarGeo.barSpan(r);
+  if (!(span >= slabBarGeo.BAR_CELLS * 2)) { S.slabBarRect = null; return; }   // under 2 texels a cell is not a control
+  const L = D.slabLoad || null;
+  const loaded = L && L.loadedSlabs, empty = L && L.emptySlabs;
+  const kView = slabBarGeo.slabIndexOfY((S.cam && Number.isFinite(S.cam.y)) ? S.cam.y : 0);
+  const kShip = D.player && Number.isFinite(D.player.y) ? slabBarGeo.slabIndexOfY(D.player.y) : null;
+  const tgt = D.selStar || D.target;
+  const kTgt = tgt && Number.isFinite(tgt.wy) ? slabBarGeo.slabIndexOfY(tgt.wy) : null;
+  const LAYER_INK = { thin: INK.THIN, thick: INK.THICK, halo: INK.HALOL };
+  for (let i = 0; i < slabBarGeo.BAR_CELLS; i++) {
+    const k = slabBarGeo.indexOfRow(i), ref = slabBarGeo.refOfIndex(k);
+    const [y0, y1] = slabBarGeo.barRow(i, top, span);
+    const h = y1 - y0 - 1;                                     // one texel of gap under every cell
+    const isLoaded = !L || (loaded && loaded.has(ref));
+    const ink = k === kView ? INK.KEY : LAYER_INK[slabBarGeo.layerOfIndex(k)];
+    if (!isLoaded) checker(g, bx + 1, y0, 4, h, ink, i & 1);
+    else if (empty && empty.has(ref) && k !== kView) { rect(g, bx + 1, y0, 1, h, ink); rect(g, bx + 4, y0, 1, h, ink); }
+    else rect(g, bx + 1, y0, 4, h, ink);
+    if (k === kShip) rect(g, bx, y0, 1, h, INK.YOU);
+    if (k === kTgt) rect(g, bx + 5, y0, 1, h, INK.TARGET);
+  }
+  const planeY = slabBarGeo.barRow(slabBarGeo.rowOfIndex(0), top, span)[1] - 1;   // the gap under N1
+  rect(g, bx + 1, planeY, 4, 1, INK.DIM);
+  assertMark('segment bar', 'slabbar', bx, by, slabBarGeo.BAR_W, bh);
+  S.slabBarRect = r;
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -3451,7 +3678,7 @@ function drawDesign2(g, W, H) {
   // reason `drawDesign1` clears design 2's. (The minimap publishes nothing — see `d2Prism`.)
   // ⚠ Measured redundant one by one and load-bearing as a set — see the note on `drawDesign1`'s.
   S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null; S.hoverCalloutRect = null;
-  S.pagerRect = null; S.ladderCounterRect = null;
+  S.pagerRect = null; S.ladderCounterRect = null; S.slabBarRect = null;   // ⭐ AC-7: the segment bar is republished by the PRISM painter that draws it, and by nothing else
   // ⛔ AC-4's ROW LIST ON THE SAME RULE. `S.railBodies` is published only by the SUB-VIEW's rail
   //    branch, so without a clear here the rows of a planet the pilot left would stay on offer under
   //    the whole-system list — geometry out of nobody's paint, which is the defect this block names.
@@ -3663,7 +3890,10 @@ function d2Status(avail = Infinity) {
   if (S.level === 3) {
     if (S.list) return ['LIST', `NEAREST ${D.starRows.length}`, 'L=MAP', d2SortHint(), '- = PAGE'];
     const pn = prismNumbers();
-    return ['PRISM', pn.view, pn.height, pn.region];
+    // ⭐ AC-7 (plan §7.3) — THE SLAB JOINS ITS LAYER IN ONE CLAUSE, "N16 HALO": the lit cell's name. ⚠ THE
+    //    HEIGHT STAYS (plan §7.3 had the slab replace it): it is AC-3's number, and the worst line,
+    //    `PRISM · VIEW 102 LY · HEIGHT -2950 PC BELOW · S10 THICK DISK`, is 58 characters of 60.
+    return ['PRISM', pn.view, pn.height, `${pn.slab} ${pn.region}`];
   }
   /*  Function · AC-4 — the bar while a planet is open.
    *  Intent · page item 16. This bar is the only place design 2 says anything, so the sub-view's
@@ -3719,7 +3949,9 @@ function d2Prism(g, W, mapY, mapH) {
   const cap = Math.max(200, Math.round(W * mapH / 160));
   let drawn = 0;
   const onScreen = [];
+  const offPane = prismCull(cxp, cyp, W / 2, mapH / 2, 0, mapY, W, mapY + mapH);        // ⭐ AC-6 — see `prismCull`
   for (const s of D.starRows) {
+    if (offPane(s)) continue;
     const p = projectPrism(s, cxp, cyp, W / 2, mapH / 2);
     if (p.x < -2 || p.x > W + 2 || p.y < mapY - 2 || p.y > mapY + mapH + 2) continue;
     onScreen.push({ s, p });
@@ -3738,6 +3970,7 @@ function d2Prism(g, W, mapY, mapH) {
   const byRank = onScreen.slice();
   onScreen.sort((a, b) => b.p.depth - a.p.depth);
   prismPlane(g, cxp, cyp, W / 2, mapH / 2, REGIONS.map);
+  prismCells(g, cxp, cyp, W / 2, mapH / 2, REGIONS.map);                         // ⭐ the neighbouring prisms, boundaries only
   prismColumnEdge(g, cxp, cyp, W / 2, mapH / 2, REGIONS.map);
   for (const { s, p } of onScreen) {
     prismDrop(g, p, REGIONS.map);                             // the stem — the dashed line, restored
@@ -3774,7 +4007,11 @@ function d2Prism(g, W, mapY, mapH) {
   }
   // the minimap — drawn AS SPECIFIED, a 40x24 widget in the corner of a design whose premise is
   // that there is no floating box anywhere. That contradiction is on the glass on purpose.
-  const mw = 24, mh = 24, mx = W - 44, my = mapY + mapH - mh - 5;
+  // ⭐ naming-prism-segments AC-7 (plan §7.3) — THE MINIMAP MOVED LEFT BY THE SEGMENT BAR'S WIDTH and
+  //    a texel of skirt, so the three right-edge widgets never share a texel or a click: minimap
+  //    `[W-53, W-29)`, bar `[W-28, W-22)` (clicks `[W-29, W-21)`), fine gauge `[W-20, W-14)` (clicks
+  //    `[W-21, W-13)`). It was `W - 44`, and a bar left of the gauge would have landed on it.
+  const mw = 24, mh = 24, mx = W - 53, my = mapY + mapH - mh - 5;
   for (const d of [[0,0],[mw-3,0],[0,mh-3],[mw-3,mh-3]]) { rect(g, mx+d[0], my+d[1], 3, 1, INK.DIM); rect(g, mx+d[0], my+d[1], 1, 3, INK.DIM); }
   rect(g, mx + mw / 2, my + mh / 2, 1, 1, INK.YOU);
   /*  Function · AC-10 — the 24-texel scale column beside the minimap becomes a REAL y-gauge,
@@ -3800,6 +4037,7 @@ function d2Prism(g, W, mapY, mapH) {
    *  Deliberate non-goals · the minimap is untouched (it still publishes no rectangle and eats no
    *    press — see the note below), and design 1 is untouched. */
   yGauge(g, W - 20, mapY, mapH);
+  d2SlabBar(g, W, mapY, mapH);                         // ⭐ AC-7 — left of the gauge (plan §7.3)
   // ⛔ AC-2 — THIS WIDGET PUBLISHES NO RECTANGLE AND EATS NO PRESS, AND FOR HALF A DAY IT DID BOTH.
   //    The first build (88510cb) published `S.minimapRect` and the driver swallowed every click inside
   //    it, on the plate rule (INTERFACE §6): texels belong to the thing drawn on them. The adversarial
@@ -3813,13 +4051,25 @@ function d2Prism(g, W, mapY, mapH) {
   //    widget itself DOES on a click is still nothing, and marking it visibly as a readout is a
   //    picture change that goes to Max, not into this pass.
 }
+/** ⭐ AC-7 — design 2's segment bar, at the one x both of its PRISM panes use (`W - 28`), so the bar
+ *  does not move when `L` swaps the map for the list. Plan §7.3: *"The segment bar is drawn in list
+ *  mode too, because changing slab is exactly what you want while reading a list; the fine gauge stays
+ *  map-only."* */
+const D2_BAR_FROM_RIGHT = 28;
+function d2SlabBar(g, W, mapY, mapH) {
+  const bx = W - D2_BAR_FROM_RIGHT;
+  region('slabbar', bx, mapY, slabBarGeo.BAR_W, mapH);
+  slabBar(g, bx, mapY, mapH);
+}
 /** DESIGN 2'S LIST MODE — 'L'. A 60% checker plate over the whole map plane (the starfield stays
  *  faintly behind it) and rows of real terminal at the repo's 6-texel pitch. ⛔ IT REPLACES THE MAP:
  *  that is the design, and it is the reason judge 2 rejected D2 as the base — a row cannot be
  *  cross-referenced against a dot when the dots are gone. Drawn so that objection is LOOKED AT. */
 function d2List(g, W, mapY, mapH) {
   const cxp = W / 2, cyp = mapY + mapH / 2;
+  const offPane = prismCull(cxp, cyp, W / 2, mapH / 2, 0, mapY, W, mapY + mapH);        // ⭐ AC-6 — see `prismCull`
   for (const s of D.starRows) {                      // the starfield, still there, knocked back
+    if (offPane(s)) continue;
     const p = projectPrism(s, cxp, cyp, W / 2, mapH / 2);
     if (p.x < 0 || p.x >= W || p.y < mapY || p.y >= mapY + mapH) continue;
     rect(g, p.x, p.y, 1, 1, INK.RULE);
@@ -3851,17 +4101,21 @@ function d2List(g, W, mapY, mapH) {
     const hw = T(g, h, cols[i], mapY + 4, { color: INK.DIM, rgn: 'map', what: 'list header ' + h });
     S.listHeaderRects.push({ x: cols[i], y: mapY + 4, w: hw, h: FACE.h, sortId: HDR_SORT[h] }); });
   const drawn = D.starRows.slice(off, off + rows);
+  // ⭐ AC-7 — THE ROWS STOP SHORT OF THE SEGMENT BAR (`W - 28`, one texel of skirt and one of air), so a
+  //    narrow buffer cannot run a row's text or its highlight under the bar. At Max's 417 the rows end
+  //    at 309 and nothing moves; at 320 the SYSTEM column is what `fit()` shortens.
+  const rowEdge = W - D2_BAR_FROM_RIGHT - 2;
   drawn.forEach((s, i) => {
     const y = mapY + 4 + (i + 1) * LEAD;
     const sel = s === D.selStar;
-    if (sel) rect(g, 2, y - 1, W - 4, LEAD, INK.KEY);
+    if (sel) rect(g, 2, y - 1, rowEdge - 2, LEAD, INK.KEY);
     const ink = sel ? INK.BG : (s.isReal ? INK.BODY : INK.DIM);
-    const put = (c, str, maxw) => cols[c] < W - 10 &&
-      T(g, fit(str, Math.min(maxw, W - cols[c] - 6)), cols[c], y, { color: ink, rgn: 'map', what: 'list row ' + i });
+    const put = (c, str, maxw) => cols[c] < W - 10 && cols[c] < rowEdge &&
+      T(g, fit(str, Math.min(maxw, W - cols[c] - 6, rowEdge - cols[c])), cols[c], y, { color: ink, rgn: 'map', what: 'list row ' + i });
     put(0, String(off + i + 1), 16);
     put(1, (s.name || 'UNNAMED').toUpperCase(), 119);
     put(2, s.spectral, 11);
-    put(3, s.pc.toFixed(2), 35);
+    put(3, pcOf(s).toFixed(2), 35);
     put(4, ((s.wy - D.player.y) * 1000).toFixed(0) + ' PC', 35);
     put(5, s.isReal ? 'CATALOG' : 'PROCEDURAL', 173);
   });
@@ -3870,6 +4124,7 @@ function d2List(g, W, mapY, mapH) {
   // `rows` here is what was DRAWN, not what would fit — the two differ at the end of the catalog,
   // and the difference is rows the pilot can click that carry nobody.
   if (drawn.length) S.listGeom = { top: mapY + 4, lead: LEAD, rows: drawn.length, x0: 2, x1: W - 2, offset: off, total };
+  d2SlabBar(g, W, mapY, mapH);                       // ⭐ AC-7 — over the list too (plan §7.3)
 }
 
 /**
@@ -4768,6 +5023,13 @@ addEventListener('keydown', (e) => {
   else if (k === 'ArrowLeft') { S.level = (S.level + 4) % 5; S.sortIdx = 0; S.sortLabel = ''; }
   else if (k === 'p' || k === 'P') S.lines = RENDER_LINE_OPTIONS[(RENDER_LINE_OPTIONS.indexOf(S.lines) + 1) % RENDER_LINE_OPTIONS.length];
   else if (k === 'z' || k === 'Z') { zoomIdx = (zoomIdx + 1) % ZOOM_STOPS.length; S.cam.radius = ZOOM_STOPS[zoomIdx]; }
+  // ⭐ AC-7 — the segment bar's big step, on this page: PageUp / PageDown jump the camera to the middle
+  //    of the next slab up / down (the game's `nav.jumpToSlab`, which the bar's click and drag call).
+  else if ((e.key === 'PageUp' || e.key === 'PageDown') && S.level === 3) {
+    const kk = slabBarGeo.slabIndexOfY(S.cam.y) + (e.key === 'PageUp' ? 1 : -1);
+    if (kk >= -30 && kk <= 29) { const [a, b] = slabBarGeo.slabYRange(kk); S.cam.y = (a + b) / 2; D.slabLoad = labSlabLoad(); }
+    e.preventDefault();
+  }
   // ⭐ THE SIX KEYS THE GLASS ADVERTISES, HONOURED HERE TOO. Both designs print `WASD PAN` and
   // design 2 prints `R/F UP`; a page that draws those words and does not move the picture is the
   // exact defect this workstream exists to close, and a spec that cannot be flown is not a spec.

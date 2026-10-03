@@ -744,7 +744,9 @@ describe('the corner widget lets its starfield through; the companion strip does
     const { nav, drv } = await loadedNav({ mode: 'bars' });
     const W = nav._canvas.width, H = nav._canvas.height;
     const m = drv.regions().map;
-    const box = { x: W - 44, y: m.y + m.h - 24 - 5, w: 24, h: 24 };
+    // ⚠ `W - 53`, NOT `W - 44`, SINCE naming-prism-segments AC-7: the minimap moved left by the segment
+    //   bar's width and a texel of skirt (plan §7.3), so bar and minimap never share a texel or a click.
+    const box = { x: W - 53, y: m.y + m.h - 24 - 5, w: 24, h: 24 };
     const { ctx, fills } = inkRecorder(W, H);
     drv.render(ctx, W, H);
     expect(fills.some((f) => f.ink === INK.DIM && f.x === box.x && f.y === box.y && f.w === 3 && f.h === 1),

@@ -123,6 +123,9 @@ import alea from 'alea';
 const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;
 /** kpc -> light years. */
 const KPC_TO_LY = 3261.56;
+/** naming-prism-segments AC-6 — at or under this many loader rows the list is sorted in-frame (≤ ~3 ms
+ *  in Chrome by NAME, PHASE0 §3); above it, `nav.sortedRows` builds the order in slices. */
+export const SYNC_SORT_MAX_ROWS = 4096;
 
 // ── ⭐⭐ THE ROTATION DEFAULTS, AND THE GAINS COME FIRST (INTERFACE §1) ──────────────────────────
 //
@@ -359,6 +362,17 @@ export function makeViewState() {
      *  not decoration: they are what lets the drag INVERT the paint's own arithmetic instead of
      *  restating it, which is the AC-4 defect shape. `null` everywhere else. */
     yGaugeRect: null,   // {x,y,w,h,cy,span,halfKpc,base} — level 3, design 1
+    /** ⭐ naming-prism-segments AC-7 — THE SEGMENT BAR, `{x,y,w,h}` as painted (`slabBar`), level 3 in
+     *  both designs (design 2's list mode too). `slabBar.js` turns a row of it into a slab for the click
+     *  and the drag, with the same arithmetic the paint drew the cells with. `null` everywhere else. */
+    slabBarRect: null,
+    /** ⭐ AC-7 — WHICH VERTICAL HANDLE THE PRESS TOOK: `{ widget: 'gauge'|'bar' }` from `gaugeGrab` at
+     *  the press, `null` once the host lets go (`nav._gaugeDrag` false). `gaugeDragTo` dispatches on it. */
+    gaugeHold: null,
+    /** ⭐ AC-7, DECISION 7 = A — THE FINE GAUGE'S CENTRE, in kpc: the VIEW's height, re-set by `yGauge`
+     *  only when the view leaves the strip's ±2 pc (a bar jump, R/F past an end) and never while held.
+     *  `null` on every level change, so each PRISM entry starts centred on the view. */
+    gaugeBase: null,
     /* Function · design 2's SYSTEM zoom gauge, the rect the paint drew the track at.
      * Intent · AC-6 (SEAM §2): the wheel already moved `nav._systemZoom` and nothing drew it, so
      *   there was no handle to grab either. `d2System` publishes `{x,y,w,h}` — the VERTICAL track in
@@ -562,6 +576,7 @@ export function makeViewState() {
     gm: null, sectors: null, lum: null, nav: null,
     player: null, playerSector: null,
     column: null,       // navGrid.enterColumn() of the column PRISM shows (naming-prism-segments AC-3)
+    slabLoad: null,     // nav.slabLoad — the segment bar's loaded / empty / view-ready marks (naming-prism-segments AC-7)
     hereColumn: false,  // is that column the PLAYER's own? (AC-5) — `here` exists only there
     sectorRows: [], stars: [], starRows: [], sys: null, bodies: [],
     target: null, selStar: null, selBody: null, sysStar: null, here: null,
@@ -941,7 +956,7 @@ export function makeViewState() {
     //    resolved at PRISM would still be on `S` when SECTOR painted, naming a star that is not on
     //    the glass. Cleared HERE, before the paint that reads it, and republished at the tail of the
     //    same frame by `resolveHover` if the pointer is on something at the new level.
-    if (cache.level !== S.level) { cache.level = S.level; S.sortIdx = 0; S.listOffset = 0; S.hover = null; }
+    if (cache.level !== S.level) { cache.level = S.level; S.sortIdx = 0; S.listOffset = 0; S.hover = null; S.gaugeBase = null; }
     /* Function · AC-4 (SEAM §2) — THE MOON SUB-VIEW DIES WITH THE PICTURE IT IS DRAWN IN.
      * Intent · `S.sysView` is a level-4 picture. Carrying it across a level change would reopen
      *   SYSTEM already inside some planet's moons — a screen the pilot never asked for, with a
@@ -1016,6 +1031,10 @@ export function makeViewState() {
     D.nav = nav._navGalaxyRenderer;
     D.player = { x: nav._playerX, y: nav._playerY, z: nav._playerZ };
     D.column = S.prismColumn ? navGrid.enterColumn(S.prismColumn) : null;
+    // ⭐ naming-prism-segments AC-7 — THE LOADER'S STATUS, FOR THE SEGMENT BAR (loaded / not yet / empty,
+    //    and whether the slab on the glass has arrived). The HOST's seam: `{ state, loadedSlabs:Set<ref>,
+    //    emptySlabs:Set<ref>, progress, viewSlab, viewReady, … }`, a new object whenever it changes.
+    D.slabLoad = nav.slabLoad || null;
 
     // ── SECTOR ROWS — THE 293 DRAWN SECTORS OF THE FIXED GRID (naming-prism-segments AC-3), not the
     //    775-sector density quadtree: a GALAXY row and a GALAXY cell are now one place, named by the
@@ -1056,8 +1075,61 @@ export function makeViewState() {
     const colKey = navGrid.addressKey(S.prismColumn);
     const playerKey = `${P.x},${P.y},${P.z}`;
     const starKey = sortKeyFor(S, 3);
-    if (cache.starsRef !== rawStars || cache.starsLen !== rawStars.length
-        || cache.colKey !== colKey || cache.playerKey !== playerKey) {
+    /* ⭐⭐ naming-prism-segments AC-6 — THE LOADER'S ROWS ARE TAKEN AS THEY ARE, AND RE-READ ONLY ON A
+     *   NEW REVISION. PHASE0 §3/§7 measured this block as the biggest long task left once the query was
+     *   sliced: it COPIED every loaded star into a decorated row and RE-SORTED the whole list on every
+     *   publish — 85k rows at the inner galaxy, 172k in the bulge, a NAME sort over 64k alone ~45 ms in
+     *   Chrome — while the loader publishes every 100 ms. The HOST's loader (prismLoader.js) now
+     *   publishes rows that already carry everything this block used to add: the name, `dist` from the
+     *   player, `mult` (the same `multiplicityForSeed` call `multFor` makes), and the column/slab
+     *   ownership that made the footprint filter below a no-op. So on loader rows:
+     *     · the base is `_localStars` ITSELF — no copy, no filter, no per-row work at all;
+     *     · it changes only when `nav._rowsRev` bumps (a slab swapped for one of the same size cannot
+     *       fool a revision, which is what the old array-and-length key could not promise — plan §8);
+     *     · the ORDER comes from `nav.sortedRows(id, cmp)`, which sorts in slices under the shared 8 ms
+     *       deadline and merges new slabs in. While a new order is still being built it hands back the
+     *       last finished one, and before any has finished this keeps showing the rows unsorted (viewed
+     *       slab first, nearest-first — the order they were published in) rather than nothing.
+     *   ⛔ `pc` / `ly` ARE NOT ADDED: the designs derive them for the rows they print (`pcOf` / `lyOf`).
+     *   ⚠ ANY OTHER ROWS (a test's fixture, a caller's plain array) still take the old path below. */
+    //   ⚠ THE LOADER MEASURES `dist` FROM THE PLAYER IT LOADED FOR, and resets when the player moves
+    //     (`setPlayerPosition` → `_resetPrismLoad`). A player moved WITHOUT that reset (a direct field
+    //     write) would leave every row's `dist` stale, so the fast path holds only while the player is
+    //     where it was when this loader generation was first seen; otherwise the old path re-measures.
+    const gen = nav._prismLoader ? nav._prismLoader.gen : null;
+    if (cache.loaderGen !== gen) { cache.loaderGen = gen; cache.loaderPlayerKey = playerKey; }
+    const loaderRows = typeof nav.sortedRows === 'function' && rawStars.length > 0
+      && typeof rawStars[0].slab === 'string' && Number.isFinite(nav._rowsRev)
+      && cache.loaderPlayerKey === playerKey;
+    if (loaderRows) {
+      // ⚠ THE LENGTH TOO: a caller that PUSHES into the published array (tests inject catalogue rows that
+      //   way) changes no revision, and a revision-only key would never show the rows it added.
+      if (cache.rowsRev !== nav._rowsRev || cache.starsRef !== rawStars || cache.starsLen !== rawStars.length
+          || cache.colKey !== colKey) {
+        cache.rowsRev = nav._rowsRev; cache.starsRef = rawStars; cache.starsLen = rawStars.length;
+        cache.colKey = colKey; cache.playerKey = playerKey;
+        cache.colStars = rawStars; cache.starRowsBase = null; cache.loaderSorted = null; cache.syncSortId = null;
+        D.starRows = rawStars;                       // complete and unsorted until an order is ready
+      }
+      D.stars = rawStars;
+      // ⭐ A SMALL LIST IS SORTED HERE, AT ONCE; ONLY A BIG ONE IS SLICED. Slicing buys nothing where the
+      //   whole sort is a couple of milliseconds (PHASE0 §3: 6k rows < 2 ms in any mode; NAME over 64k
+      //   28 ms node / ~45 ms Chrome, so ≤ 4,096 rows is ≤ ~3 ms Chrome even by NAME) — and an order
+      //   that arrives frames later is a list that visibly re-shuffles under the pilot's eye. Same
+      //   comparators, and both sorts are stable, so the two paths give the same order.
+      if (rawStars.length <= SYNC_SORT_MAX_ROWS) {
+        if (cache.syncSortId !== starKey.id) {
+          cache.syncSortId = starKey.id;
+          D.starRows = starKey.cmp ? rawStars.slice().sort(starKey.cmp) : rawStars.slice();
+        }
+      } else {
+        const sr = nav.sortedRows(starKey.id, starKey.cmp);
+        if (sr && sr.rows && sr.rows !== cache.loaderSorted) { cache.loaderSorted = sr.rows; D.starRows = sr.rows; }
+      }
+      cache.starSortId = starKey.id;
+    } else if (cache.starsRef !== rawStars || cache.starsLen !== rawStars.length
+        || cache.colKey !== colKey || cache.playerKey !== playerKey || cache.rowsRev !== undefined) {
+      cache.rowsRev = undefined; cache.loaderSorted = null;
       cache.starsRef = rawStars; cache.starsLen = rawStars.length; cache.starSortId = null;
       cache.colKey = colKey; cache.playerKey = playerKey;
       const cb = D.column && D.column.bounds;
@@ -1079,12 +1151,12 @@ export function makeViewState() {
     //   without a map holds placeholder 1s; `multGm` is the only thing that can tell them apart, and
     //   without this the COMPS sort would be the identity for as long as that base survived. One pass,
     //   at most once, and it re-ranks by clearing the sort id the way a key change does.
-    if (cache.starRowsBase && D.gm && cache.multGm !== D.gm) {
+    if (!loaderRows && cache.starRowsBase && D.gm && cache.multGm !== D.gm) {
       cache.multGm = D.gm; cache.multByStar.clear(); cache.starSortId = null;
       for (const row of cache.starRowsBase) row.mult = multFor(row, D.gm);
     }
-    D.stars = cache.colStars || [];
-    if (cache.starRowsBase && cache.starSortId !== starKey.id) {
+    if (!loaderRows) D.stars = cache.colStars || [];
+    if (!loaderRows && cache.starRowsBase && cache.starSortId !== starKey.id) {
       cache.starSortId = starKey.id;
       D.starRows = starKey.cmp ? cache.starRowsBase.slice().sort(starKey.cmp) : cache.starRowsBase.slice();
     }
@@ -1100,7 +1172,16 @@ export function makeViewState() {
     //    else the nearest row inside 0.1 pc of the player); on ANY OTHER column there is no here-row.
     const playerCol = Number.isFinite(P.x) && Number.isFinite(P.z) ? navGrid.parentAt(3, P.x, P.z) : null;
     D.hereColumn = !!playerCol && navGrid.sameAddress(playerCol, S.prismColumn);
-    D.here = D.hereColumn ? hereRowOf(nav, D.starRows) : null;
+    /* ⭐ AC-6 — THE TWO PER-FRAME IDENTITY SCANS ARE MEMOISED. `hereRowOf` and `findStar` walk every row
+     *   (a `hypot` each where keys differ), and this runs every frame on every nav instance: at 172k
+     *   rows that is a frame budget spent asking a question whose answer changes only when the rows,
+     *   the player or the selection does. Same answer, asked once per change. */
+    const hereKey = `${playerKey}|${nav._hereStarId?.key ?? ''}|${nav._hereStarId?.wx ?? ''}`;
+    if (cache.hereRows !== D.starRows || cache.hereKey !== hereKey || cache.hereCol !== D.hereColumn) {
+      cache.hereRows = D.starRows; cache.hereKey = hereKey; cache.hereCol = D.hereColumn;
+      cache.here = D.hereColumn ? hereRowOf(nav, D.starRows) : null;
+    }
+    D.here = cache.here;
     // ⭐ THE NAME THE "WHERE AM I" LABELS PRINT IS THE GAME'S OWN, FIRST. `_currentSystemName` is
     //    written from main.js on arrival and does not depend on what is loaded or browsed; the row's
     //    name is only the fallback for a frame the game has not named yet.
@@ -1111,7 +1192,11 @@ export function makeViewState() {
     //    ⛔ FOUND BY IDENTITY (`findStar`), NEVER THE SEED (naming-prism-segments AC-2): a seed match
     //    put the highlight, the detail block and the commit line on a twin that shares the seed — and
     //    never the first row inside 0.1 pc either, which can be a neighbour.
-    D.selStar = sel ? (findStar(D.starRows, sel) || {
+    if (cache.selRows !== D.starRows || cache.selRef !== sel || cache.selKey !== sel?.key) {
+      cache.selRows = D.starRows; cache.selRef = sel; cache.selKey = sel?.key;
+      cache.selFound = sel ? findStar(D.starRows, sel) : null;
+    }
+    D.selStar = sel ? (cache.selFound || {
       ...sel, name: nameFor(sel), pc: (sel.dist ?? 0) * 1000, ly: (sel.dist ?? 0) * KPC_TO_LY,
     }) : null;
     D.target = D.selStar || (nav._externalTarget ? {

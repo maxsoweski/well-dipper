@@ -520,6 +520,10 @@ describe('AC-10 — every star row carries its multiplicity, and COMPS orders by
     let guard = 0;
     while (drv.S.sortLabel !== 'COMPS' && guard++ < 12) { press(nav, 'BracketRight'); nav.render(); }
     expect(drv.S.sortLabel, '`]` never reached the COMPS key').toBe('COMPS');
+    // ⭐ naming-prism-segments AC-6 — A WHOLE COLUMN IS SORTED IN SLICES under the loader's shared 8 ms
+    //    deadline (`nav.sortedRows`), so the new order lands over the next frames, not inside the key's
+    //    own frame. The harness runs no frames on its own; drain them, then paint.
+    (await import('../prismLoader.js')).prismLoadScheduler.drain(); nav.render();
 
     const rows = drv.D.starRows;
     expect(rows[0].mult, 'the top of a COMPS sort is a single star').toBeGreaterThan(1);

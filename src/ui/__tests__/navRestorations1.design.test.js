@@ -56,6 +56,8 @@ import { FACE, drawPixelText, measurePixelText } from '../../rendering/PixelText
 const W = 417, H = 240;                 // Max's window, and the buffer every number here is for
 /** This wave's four new inks, pinned as literals AND cross-checked against the table (first case). */
 const NEW = { GRID: '#0f2430', ABOVE: '#1f6b52', BELOW: '#6b2f28', HALO: '#6b4a18' };
+/** `INK.LATTICE` — since naming-prism-segments Phase 3 every eighth lattice line (a prism boundary) is drawn in it. */
+const LATTICE_INK = '#18323f';
 const SPECTRAL = { O: '#9db0ff', B: '#abbfff', A: '#c9d6ff', F: '#f7f7ff', G: '#fff5ea',
                    K: '#ffd1a1', M: '#ff9f70', D: '#d9e6ff' };
 
@@ -260,8 +262,13 @@ describe('AC-2 — drop lines, the plane lattice and far-first drawing', () => {
   //    measured below — and the lab's `ZOOM_STOPS[3]` (0.01034, the cube at the lab's fixture) is
   //    reached through the FIELD, stated where it happens.
 
-  /** 1 pc in kpc — legacy's `_localGridCell` (NavComputer.js:1191), the cell the AC is about. */
-  const ONE_PC_KPC = 0.001;
+  /** The lattice's finest cell, in kpc. ⚠ RULING (naming-prism-segments Phase 3, Max 2026-10-03: *"that
+   *  grid in the background is actually not contextual, but the plane grid would be"*): the lattice is
+   *  the FIXED GRID's own now — an eighth of a prism, 7.8125 / 8 = 0.977 pc, counted from a corner of
+   *  the column, every eighth line a prism boundary. It replaces legacy's 1 pc counted from x = 0
+   *  (`_localGridCell`, NavComputer.js:1191); the doubling law below is unchanged. The name `ONE_PC_KPC`
+   *  is kept so the reports read as before: "1 pc" in them means this cell. */
+  const ONE_PC_KPC = navGrid.childKpc(2) / 8;
   /** ⛔ AC-2's OWN FLOOR, SPELLED HERE. Reading `PLANE_MIN_TEXELS` off `designs.js` would make this
    *  a check that the source agrees with itself; the observable's number is 8 and 8 is what this
    *  file asserts against. */
@@ -295,11 +302,23 @@ describe('AC-2 — drop lines, the plane lattice and far-first drawing', () => {
    */
   function lattice(r) {
     const rgn = r.regions.map;
-    const grid = r.fills.filter((f) => f.ink === NEW.GRID);
+    // ⚠ naming-prism-segments Phase 3: the lattice is two inks now — `GRID` for the fine lines and
+    //   `LATTICE` for every eighth (a prism boundary) — so both are read, as 1-texel dots inside the pane.
+    //   ⚠ TEXT IS NOT LATTICE: every drawn string's box is excluded. ⚠ AND ONE LINE CAN LAND ON TWO ADJACENT TEXEL ROWS: a prism boundary is drawn by
+    //   the lattice, by the column's edge and by its corner pillars, each rounding on its own, so runs
+    //   of adjacent positions are merged into one line at their mean.
+    const boxes = r.lines.map((l) => ({ x: l.x - 1, y: l.y - 1, w: measurePixelText(l.s) + 2, h: FACE.h + 2 }));
+    const inText = (f) => boxes.some((b) => f.x >= b.x && f.x < b.x + b.w && f.y >= b.y && f.y < b.y + b.h);
+    const inPane = (f) => f.w === 1 && f.h === 1 && f.x >= rgn.x && f.x < rgn.x + rgn.w && f.y >= rgn.y && f.y < rgn.y + rgn.h;
+    const grid = r.fills.filter((f) => (f.ink === NEW.GRID || f.ink === LATTICE_INK) && inPane(f) && !inText(f));
     const byY = new Map(), byX = new Map();
     for (const f of grid) { byY.set(f.y, (byY.get(f.y) || 0) + 1); byX.set(f.x, (byX.get(f.x) || 0) + 1); }
-    const lines = (m, full) => [...m.entries()].filter(([, n]) => n >= full / 2)
-                                               .map(([v]) => v).sort((a, b) => a - b);
+    const merge = (vs) => { const out = []; let run = [];
+      for (const v of vs) { if (run.length && v - run[run.length - 1] > 1) { out.push(run.reduce((a, b) => a + b, 0) / run.length); run = []; } run.push(v); }
+      if (run.length) out.push(run.reduce((a, b) => a + b, 0) / run.length);
+      return out; };
+    const lines = (m, full) => merge([...m.entries()].filter(([, n]) => n >= full / 2)
+                                               .map(([v]) => v).sort((a, b) => a - b));
     const step = (a) => (a.length < 2 ? NaN : (a[a.length - 1] - a[0]) / (a.length - 1));
     const c = r.S.cam;
     const P = (wx, wz) => r.d.projectPrism({ wx, wy: c.y, wz },
@@ -541,7 +560,9 @@ describe('AC-3 — design 1 names its catalogue stars, and both designs print th
     //    keys themselves move it by `_localRadius * 0.01` per animation frame (0.015 pc at the entry
     //    radius), which rounds to nothing in a headless frame; the pipe under test is that field →
     //    `S.cam.y` → the printed string, and these are the three values that cross both thresholds.
-    for (const [y, region] of [[0.0, 'THIN DISK'], [0.45, 'THICK DISK'], [-1.6, 'HALO']]) {
+    // ⚠ naming-prism-segments AC-7 (plan §7.3): the line names the SLAB beside its layer now —
+    //   "N1 · THIN DISK" — the cell the segment bar lights.
+    for (const [y, region] of [[0.0, 'N1 · THIN DISK'], [0.45, 'N5 · THICK DISK'], [-1.6, 'S16 · HALO']]) {
       nav._localCenter.y = y;
       nav.render();
       const r = paint(nav, 1);
@@ -564,7 +585,8 @@ describe('AC-3 — design 1 names its catalogue stars, and both designs print th
     const r = paint(nav, 2);
     const status = r.lines.find((l) => l.s.startsWith('PRISM · '));
     expect(status, 'design 2 drew no PRISM status line').toBeTruthy();
-    expect(status.s).toBe(`PRISM · VIEW ${Math.round(nav._localRadius * 3260)} LY · HEIGHT 450 PC ABOVE · THICK DISK`);
+    // ⚠ naming-prism-segments AC-7: the layer clause carries its slab, "N5 THICK DISK" (plan §7.3).
+    expect(status.s).toBe(`PRISM · VIEW ${Math.round(nav._localRadius * 3260)} LY · HEIGHT 450 PC ABOVE · N5 THICK DISK`);
     // ⛔ NOT TRUNCATED: `fit()` eats from the right, so a line that ends in the region word is a line
     //    that fitted. The old line ended in `WASD PAN ` — mid-separator — at this very buffer.
     expect(status.s.endsWith('THICK DISK'), 'fit() ate the end of the status line').toBe(true);

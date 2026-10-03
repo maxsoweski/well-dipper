@@ -267,7 +267,12 @@ describe('⛔ the memos are keyed by the star, not the seed (state.js nameFor / 
     const gm = drv.D.gm;
     expect(gm, 'the adapter needs a galactic map for the fill').toBeTruthy();
     B.name = 'Alpha Centauri'; B.key = `r:Alpha Centauri@${B.wx},${B.wy},${B.wz}`; B.ident = null;
-    nav._localStars = nav._localStars.slice();
+    // ⚠ naming-prism-segments AC-6 — AS PLAIN ROWS, so the case still reaches `multFor`. The loader's
+    //   rows arrive with `mult` already rolled from their OWN inputs at load time (prismLoader.js
+    //   `_mult`, no memo at all), and state.js takes them as they are; a row renamed in place after
+    //   loading keeps the count it was loaded with. Stripping `slab` hands the adapter the plain-row
+    //   path whose identity-keyed memo this case is about.
+    nav._localStars = nav._localStars.map(({ slab, mult, ...r }) => r);
     nav.render();
     const mult = (s) => multiplicityForSeed({ seed: s.seed, pos: { x: s.wx, y: s.wy, z: s.wz }, type: s.spectral,
       name: s.name }, { galacticMap: gm }).count;

@@ -51,6 +51,9 @@ import { ladderShipV, orreryShipRadius, fmtShipRange, shipRangeTo } from './ship
 // ⭐ THE FIXED GRID'S SCREENS (naming-prism-segments Phase 2): the lab imports the same module under the
 //    same name, so `gridScreen`, `gridRows` and `pickCell` resolve it identically on both pages.
 import * as navGrid from '../navGrid.js';
+// ⭐ THE SEGMENT BAR'S GEOMETRY AND THE ONE LAYER FUNCTION (naming-prism-segments Phase 3, AC-7): the
+//    lab imports the same module under the same name, and the driver's hit-test reads it too.
+import * as slabBarGeo from './slabBar.js';
 
 /** `NavComputer.js:69`, verbatim — the density model's stars-per-pc^3 conversion. */
 const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;

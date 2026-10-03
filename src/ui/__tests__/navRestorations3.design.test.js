@@ -350,9 +350,11 @@ describe('AC-10 — a grabbable y-gauge in design 2\'s prism', () => {
     expect(camMark.length, 'exactly one camera mark on the strip').toBe(1);
     expect(Math.abs(camMark[0].y - target), 'the mark is under the pointer that put it there').toBeLessThanOrEqual(1);
 
-    // ⭐ AND THE PRESS BESIDE IT IS STILL A MAP GESTURE. Two texels left of the rect's skirt.
+    // ⭐ AND THE PRESS BESIDE IT IS STILL A MAP GESTURE. Two texels RIGHT of the rect's skirt: since
+    //    naming-prism-segments AC-7 the texels left of the gauge are the segment bar's (plan §7.3), a
+    //    control of its own, and a press there is supposed to move the height.
     nav._localCenter.y = y0; nav.render(); paint(nav, 2);
-    dragY(nav, g.x - 3, Math.round(g.cy), target);
+    dragY(nav, g.x + g.w + 2, Math.round(g.cy), target);
     expect(nav._localCenter.y, 'a press outside the gauge must not move the height').toBe(y0);
   }, 180000);
 

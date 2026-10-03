@@ -50,6 +50,7 @@ import { railGeometry, barsGeometry, tabIndexAt } from './geometry.js';
 import { pickSector, pickTile, pickPrismStar, pickBody, bodyIdentity,
          usableProj, insideProj, projRect, gridCellAt, HOVER_FIELD } from './picking.js';
 import * as navGrid from '../navGrid.js';
+import * as slabBarGeo from './slabBar.js';
 import { makeSearch } from './search.js';
 import { findStar, isHereStar } from './starIdentity.js';
 import { FACE, measurePixelText } from '../../rendering/PixelText.js';
@@ -204,7 +205,7 @@ export function makeViewModeDriver(nav) {
     // selects a planet that is not on the glass. `null`, not `[]`: "this design publishes no rings"
     // is a different claim from "it published an empty set of them", and `pickOrbitRing` treats
     // either as no candidates.
-    S.orbitRings = null; S.yGaugeRect = null; S.zoomGaugeRect = null;
+    S.orbitRings = null; S.yGaugeRect = null; S.zoomGaugeRect = null; S.slabBarRect = null;
     // ── ⚠⚠ AC-2's REMAINING SIX (INTERFACE §8), AND THIS LINE IS A BELT, NOT THE BRACES. MEASURED.
     //
     // The interface says the DRIVER clears them each frame, and it does — but the LAB independently
@@ -290,6 +291,9 @@ export function makeViewModeDriver(nav) {
     if (!design) return false;
     S.design = design;
     lastW = w; lastH = h;
+    // ⭐ AC-7 — THE PRESS IS OVER WHEN THE HOST SAYS SO. `gaugeGrab` records what a press took; the host
+    //    clears `_gaugeDrag` on release (and on leaving the canvas), and this is where the driver hears it.
+    if (!nav._gaugeDrag) S.gaugeHold = null;
     if (pendingTabs && !nav._anim) { const d = Math.sign(pendingTabs); pendingTabs -= d; tabLevel(d); }
     refresh(nav, { width: w, height: h, lines: h });
     agePick();   // ⭐ AFTER refresh — it tests `S.level`, which refresh has just made current.
@@ -1063,9 +1067,37 @@ export function makeViewModeDriver(nav) {
    * a control the pilot has to hit within six texels at 240p is a control that mostly misses.
    */
   function gaugeGrab(x, y) {
+    // ⭐ naming-prism-segments AC-7 — TWO HANDLES ANSWER THIS PRESS NOW: the segment bar and the fine
+    //    gauge. The host arms ONE flag for "a vertical handle took this press" (`_gaugeDrag`) and feeds
+    //    every move to `gaugeDragTo`, so the driver records WHICH handle it was, here, at the press. A
+    //    held gauge also stops re-centring (`yGauge`, DECISION 7 = A: its centre follows the VIEW, never
+    //    the ship, and stands still under the hand), so the drag can never throw the view back home.
+    // ⛔ THE BAR IS TESTED FIRST AND THE GAUGE'S SKIRT STOPS WHERE THE BAR'S BEGINS, so where the two
+    //    widgets stand side by side (design 1) every texel answers exactly one of them (plan §7.3).
+    const b = S.slabBarRect;
+    if (b && slabBarGeo.onBar(b, x, y)) { S.gaugeHold = { widget: 'bar' }; return true; }
     const r = S.yGaugeRect;
     if (!r) return false;
-    return x >= r.x - 1 && x < r.x + r.w + 1 && y >= r.y && y < r.y + r.h;
+    const on = x >= r.x - 1 && x < r.x + r.w + 1 && y >= r.y && y < r.y + r.h;
+    if (on) S.gaugeHold = { widget: 'gauge' };
+    return on;
+  }
+
+  /**
+   * ⭐ AC-7 — THE SLAB A POINTER AT `py` ON THE BAR NAMES, JUMPED TO: the camera height the host should
+   * now hold, or `null` when no bar is drawn. Moving within one cell changes nothing (R/F's fine
+   * position is kept); crossing into the next cell jumps there through the HOST's `jumpToSlab`, which
+   * centres the camera in that slab and points the loader at it first — so a drag steps slab by slab,
+   * each step a jump.
+   */
+  function barDragTo(py) {
+    const k = slabBarGeo.barIndexAt(S.slabBarRect, py);
+    if (k === null) return null;
+    const lc = nav._localCenter;
+    const cur = lc && Number.isFinite(lc.y) ? lc.y : 0;
+    if (slabBarGeo.slabIndexOfY(cur) === k) return cur;
+    if (typeof nav.jumpToSlab !== 'function' || !nav.jumpToSlab(slabBarGeo.refOfIndex(k))) return null;
+    return nav._localCenter.y;
   }
 
   /**
@@ -1078,6 +1110,10 @@ export function makeViewModeDriver(nav) {
    * star's mark already does.
    */
   function gaugeDragTo(py) {
+    return S.gaugeHold && S.gaugeHold.widget === 'bar' ? barDragTo(py) : fineDragTo(py);
+  }
+  /** The fine gauge's half of `gaugeDragTo`: the paint's own mapping, inverted (unchanged since AC-9). */
+  function fineDragTo(py) {
     const r = S.yGaugeRect;
     if (!r || !Number.isFinite(py) || !(r.span > 0)) return null;
     const k = r.base + ((r.cy - py) / r.span) * r.halfKpc;
@@ -1563,6 +1599,22 @@ export function makeViewModeDriver(nav) {
     // ⚠ PLACED AFTER THE LAG CLAUSE AND BEFORE THE TAB BRANCH, which is the seam this batch fixed
     //   across three lanes: during the inbound ease every click is still eaten, and a press inside the
     //   commit rect beats the tab strip rather than the other way round.
+    // ⭐ AC-7 — A CLICK ON THE SEGMENT BAR JUMPS TO THAT SLAB, and a click on the fine gauge moves the
+    //    view to the height under it (a drag of no length). Both EAT the click: a press on a control must
+    //    not fall through to the star or the list row painted underneath it (the plate rule, INTERFACE §6).
+    if (S.level === 3 && S.slabBarRect && slabBarGeo.onBar(S.slabBarRect, p.x, p.y)) {
+      const k = slabBarGeo.barIndexAt(S.slabBarRect, p.y);
+      if (k !== null && typeof nav.jumpToSlab === 'function') nav.jumpToSlab(slabBarGeo.refOfIndex(k));
+      return null;
+    }
+    if (S.level === 3 && S.yGaugeRect && !(S.slabBarRect && slabBarGeo.onBar(S.slabBarRect, p.x, p.y))) {
+      const r = S.yGaugeRect;
+      if (p.x >= r.x - 1 && p.x < r.x + r.w + 1 && p.y >= r.y && p.y < r.y + r.h) {
+        const ky = fineDragTo(p.y);
+        if (ky != null && nav._localCenter) nav._localCenter.y = ky;
+        return null;
+      }
+    }
     if (inRect(nav._commitButtonRect, p.x, p.y)) { commit(); return null; }
     // ── ⭐ AC-2 — DESIGN 1'S PAGER ROW: LEFT HALF BACK, RIGHT HALF FORWARD ────────────────────────
     // ⛔ THE PUBLICATION IS THE ONLY GATE, and this is the reason `gaugeGrab` gives: `S.pagerRect` is
