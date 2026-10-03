@@ -1968,6 +1968,14 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
+> **▶▶ PLAYER SHIP LAB (increment 1) — `docs/WORKSTREAMS/player-ship-lab-2026-10-02/` (lab-only; no `src/` edits).**
+> One model = Foss-style exterior + helicopter-bubble cockpit, built by Astra as a PLACEHOLDER (Steam: no AI assets ship).
+> Done 2026-10-02: display plan signed off (`DISPLAY-PLAN.md`); exterior concept accepted (r10) and cockpit concept
+> accepted (r03); GPU road ran (Hunyuan3D → Astra retopology). 3D model NOT accepted: Max's round-03 verdict says it
+> got worse than round 02 and questions the process. Handoff: `/tmp/handoff-player-ship-2026-10-02.md`. Review page:
+> https://claude.ai/artifact/9b2gLE86hupgbSuzBiLPN3. Not started: fly-in/out lab page, INTERFACE.md, HOW-TO-REBUILD.md,
+> docs/AI-PLACEHOLDERS.md.
+
 > **▶▶ BARYCENTRE RENDER — ✅ SHIPPED + UAT-PASSED 2026-08-19.** Max: *"Looks like it's working."*
 > ⛔ **ORBIT-LINE LOCAL-SYSTEM OCCLUSION — REVERTED `baa4935`. Max rejected the PREMISE, not the build.**
 > *"we should just have the larger orbit intersect with the barycenter; I don't think having those
