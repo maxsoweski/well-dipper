@@ -56,7 +56,7 @@ function hereMarks(drv, nav) {
   const { ctx, fills } = inkRecorder();
   drv.render(ctx, W, H);
   const m = drv.regions().map;
-  return fills.filter((f) => f.ink === INK.YOU && f.h === 1 && f.w >= 3 && f.w <= 5
+  return fills.filter((f) => f.ink === INK.CURRENT && f.h === 1 && f.w >= 3 && f.w <= 5
     && f.x >= m.x && f.x < m.x + m.w && f.y >= m.y && f.y < m.y + m.h
     // ⚠ the y-gauge's own player tick (`yGauge`, 3x1 YOU) sits inside design 2's map pane: not a star mark
     && !(drv.S.yGaugeRect && f.x >= drv.S.yGaugeRect.x - 1 && f.x <= drv.S.yGaugeRect.x + drv.S.yGaugeRect.w + 1));

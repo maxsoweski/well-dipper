@@ -215,14 +215,17 @@ function dragY(nav, x, y0, ...ys) {
 }
 
 /** Every fill this frame laid down in the ship's ink — the diamond, the word, the dashes, the chevron. */
-const shipFills = (p) => p.fills.filter((f) => f.ink === p.d.INK.SHIP);
+// ⚠ batch 2 (AC-15): the ship is CURRENT ink, which the top bar's CURRENT chip (and the active tab on the
+//   player's own place) also wear — so "the ship's fills" are the CURRENT fills inside the MAP pane.
+const inMapR = (p, f) => { const m = p.regions.map; return f.x >= m.x && f.x < m.x + m.w && f.y >= m.y && f.y < m.y + m.h; };
+const shipFills = (p) => p.fills.filter((f) => f.ink === p.d.INK.CURRENT && inMapR(p, f));
 
 /**
  * The TRAJECTORY's own texels: every 1x1 ship-ink fill that is not part of the word `SHIP`.
  *
  * ⛔ THE WORD HAD TO BE SUBTRACTED, AND FINDING THAT OUT COST A RED RUN. `drawPixelText` emits ONE
  *    `fillRect(x, y, 1, 1)` PER TEXEL OF EVERY GLYPH, in the colour it was handed — so four glyphs in
- *    `INK.SHIP` are ~50 fills of exactly the shape a dashed line is made of, and a case asserting
+ *    `INK.CURRENT` are ~50 fills of exactly the shape a dashed line is made of, and a case asserting
  *    "no line drew" read 54 where it expected 2. The word's box comes from the recorded draw itself
  *    (`p.lines`), not from a second guess at where `placeLabel` put it.
  * ⭐ WHICH LEAVES AN ABSOLUTE FLOOR: with no trajectory the count is exactly 2 — `SP.diam5`'s top and
@@ -230,9 +233,9 @@ const shipFills = (p) => p.fills.filter((f) => f.ink === p.d.INK.SHIP);
  */
 function trajectoryDots(p) {
   // ⚠ ANY `SHIP…` WORD, not only a bare `SHIP` (Astra's point 9): the GPS line's word can carry a range.
-  const word = p.lines.find((l) => /^SHIP\b/.test(l.s));
+  const word = p.lines.find((l) => /^CURRENT\b/.test(l.s) && inMapR(p, l));   // batch 2: the marker reads CURRENT
   const box = word ? { x: word.x - 1, y: word.y - 1, w: measurePixelText(word.s) + 2, h: FACE.h + 2 } : null;
-  return p.fills.filter((f) => f.ink === p.d.INK.SHIP && f.w === 1 && f.h === 1
+  return p.fills.filter((f) => f.ink === p.d.INK.CURRENT && f.w === 1 && f.h === 1 && inMapR(p, f)
     && !(box && f.x >= box.x && f.x < box.x + box.w && f.y >= box.y && f.y < box.y + box.h));
 }
 
@@ -521,7 +524,7 @@ describe('AC-5 — the ship diamond and the trajectory', () => {
       expect(centre, `design ${design}: the diamond's 5-texel centre row`).toBeTruthy();
       expect({ x: centre.x, y: centre.y }, `design ${design}: the diamond stands ON planet 0's mark`)
         .toEqual({ x: Math.round(hit.x) - 2, y: Math.round(hit.y) });
-      expect(inRegion(p, 'map').map((l) => l.s), `design ${design}: the word`).toContain('SHIP');
+      expect(inRegion(p, 'map').map((l) => l.s), `design ${design}: the word`).toContain('CURRENT');   // batch 2: "the marker should say current"
       expect(p.violations, `design ${design}: the mark guard stays silent`).toBe(0);
     }
   }, 180000);
@@ -660,7 +663,7 @@ describe('AC-5 — the ship diamond and the trajectory', () => {
       expect(q.D.isCurrent, `design ${design}: the fixture must be a FOREIGN system`).toBe(false);
       expect(q.D.ship, `design ${design}: and the ship is not published there`).toBeNull();
       expect(shipFills(q).length, `design ${design}: nothing of AC-5 draws in a foreign system`).toBe(0);
-      expect(q.text, `design ${design}: and no word`).not.toContain('SHIP');
+      expect(inRegion(q, 'map').map((l) => l.s).filter((s) => /^CURRENT\b/.test(s)), `design ${design}: and no word`).toEqual([]);
     }
   }, 240000);
 });

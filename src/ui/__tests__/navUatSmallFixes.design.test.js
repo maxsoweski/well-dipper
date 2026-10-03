@@ -21,7 +21,7 @@ import { railGeometry } from '../navViewModes/geometry.js';
 import { FACE, drawPixelText, measurePixelText } from '../../rendering/PixelText.js';
 
 const W = 417, H = 240;
-const INK = { RULE: '#1d3a4a', YOU: '#2ee6c0', TARGET: '#ffb03a', SHIP: '#00ff80' };
+const INK = { RULE: '#1d3a4a', CURRENT: '#2ee6c0', TARGET: '#ffb03a' };
 
 /** Every phrase design 1's removed row ever printed, in any of its variants. */
 const ROW_PHRASES = ['CLICK A SECTOR', 'CLICK A TILE', 'CLICK A STAR', 'OR A LIST ROW', 'TAB LEVEL', '/ SEARCH',
@@ -138,9 +138,10 @@ describe('(B) SYSTEM says WHICH system it shows, and draws no ship on a foreign 
   const viewing = (p) => p.lines.filter((l) => l.s.startsWith('VIEWING '));
   const youOnStar = (p, nav) => {
     const star = (nav._viewDriverInst.S.bodyHits || []).find((b) => b.star);
-    return p.fills.filter((f) => star && f.ink === INK.YOU && f.w === 3 && f.h === 3 && f.x === star.x - 1 && f.y === star.y - 1);
+    return p.fills.filter((f) => star && f.ink === INK.CURRENT && f.w === 3 && f.h === 3 && f.x === star.x - 1 && f.y === star.y - 1);
   };
-  const shipInk = (p) => p.fills.filter((f) => f.ink === INK.SHIP);
+  // ⚠ batch 2 (AC-15): the ship is CURRENT ink, and so is the top bar's CURRENT chip — the ship's ink is the map's.
+  const shipInk = (p) => { const m = p.regions.map; return p.fills.filter((f) => f.ink === INK.CURRENT && f.x >= m.x && f.x < m.x + m.w && f.y >= m.y && f.y < m.y + m.h); };
 
   for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
     it(`design ${design}: a FOREIGN system is named in target ink on the map, and no ship mark is drawn`, async () => {
@@ -156,11 +157,28 @@ describe('(B) SYSTEM says WHICH system it shows, and draws no ship on a foreign 
       expect(v, 'exactly one VIEWING line').toHaveLength(1);
       // ⛔ THE WHOLE NAME, UNCLIPPED — `fit()` eating it would be a line that names nothing
       expect(v[0].s).toBe(`VIEWING ${String(D.sysStar.name).toUpperCase()}`);
-      const why = p.lines.filter((l) => l.s === 'NOT YOUR SYSTEM');
+      const why = p.lines.filter((l) => l.s === 'NOT CURRENT SYSTEM');   // batch 2: no YOU word anywhere
       expect(why, 'and the line under it says why').toHaveLength(1);
       expect(why[0].y, 'directly under the VIEWING line').toBe(v[0].y + FACE.h + 2);
+      // ⭐ batch 2 (AC-15) — TARGET ink ONLY when the system on the glass IS the target (`foreignSysInk`, by
+      //    position); browsing one that is not, the lines are BODY. Both halves, on the same frame.
+      const tg = nav._viewDriverInst.D.target, ss = nav._systemStar;
+      const isTgt = !!(tg && Number.isFinite(tg.wx) && Math.hypot(tg.wx - ss.wx, tg.wz - ss.wz) < 1e-4);
+      for (const l of [v[0], why[0]]) expect(l.color, 'the VIEWING lines follow the target rule').toBe(isTgt ? INK.TARGET : '#7fd8e8');
+      const sel0 = nav._selectedNavStar, ext0 = nav._externalTarget;
+      nav._selectedNavStar = null;
+      nav._externalTarget = { name: 'SOMEWHERE ELSE', x: ss.wx + 0.3, y: ss.wy, z: ss.wz };
+      nav.render(); D.ship = { planetIndex: 0, moonIndex: -1 };
+      for (const l of paint(nav, design).lines.filter((q) => q.s.startsWith('VIEWING ') || q.s === 'NOT CURRENT SYSTEM')) {
+        expect(l.color, 'the target is elsewhere: the browsed system is not TARGET ink').toBe('#7fd8e8');
+      }
+      nav._externalTarget = { name: 'HERE', x: ss.wx, y: ss.wy, z: ss.wz };
+      nav.render(); D.ship = { planetIndex: 0, moonIndex: -1 };
+      for (const l of paint(nav, design).lines.filter((q) => q.s.startsWith('VIEWING ') || q.s === 'NOT CURRENT SYSTEM')) {
+        expect(l.color, 'the shown system IS the target: TARGET ink').toBe(INK.TARGET);
+      }
+      nav._selectedNavStar = sel0; nav._externalTarget = ext0; nav.render(); D.ship = { planetIndex: 0, moonIndex: -1 };
       for (const l of [v[0], why[0]]) {
-        expect(l.color, 'drawn in the target ink').toBe(INK.TARGET);
         const m = p.regions.map;
         expect(l.x >= m.x && l.y >= m.y && l.y < m.y + m.h, 'on the map, not the header').toBe(true);
       }

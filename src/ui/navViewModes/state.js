@@ -552,6 +552,9 @@ export function makeViewState() {
      *    grid cell; at level 0 it is the containing SECTOR, because that is what a GALAXY click
      *    drills — the cell there is not the destination (INTERFACE §5 / §8). */
     pick: null,       // { level: 1|2, i, j, tMs } | { level: 0, sector: {centerX,centerZ,size,name}, tMs } | null
+    locate: null,     // ⭐ batch 2 (AC-15): { who: 'current'|'target', level, tMs, on } — the chip's flash (driver)
+    indicatorRects: null, // ⭐ batch 2 (AC-15): the CURRENT / TARGET chips, published by the paint
+    currentMark: null,    // ⭐ batch 2 (AC-15): the CURRENT marker's texel at SYSTEM, published by the paint
     /** ⭐ MAX, 2026-09-07: *"disable the system screen when not in a system."* True when the ship is
      *  in no spawned system at all — `nav._currentSystemData` is null, which is the ORRERY splash boot
      *  and nothing else (every arrival sets it via `_applyNavArrival`). The designs dim the SYSTEM tab

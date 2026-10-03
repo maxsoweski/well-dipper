@@ -68,7 +68,7 @@ import { makeDesigns } from '../navViewModes/designs.js';
 import { FACE, drawPixelText, measurePixelText } from '../../rendering/PixelText.js';
 
 const W = 417, H = 240;                 // Max's window, and the buffer every number above is for
-const INK = { RULE: '#1d3a4a', DIM: '#2f6b7a', BODY: '#7fd8e8', KEY: '#d8fbff', YOU: '#2ee6c0', TARGET: '#ffb03a' };
+const INK = { RULE: '#1d3a4a', DIM: '#2f6b7a', BODY: '#7fd8e8', KEY: '#d8fbff', CURRENT: '#2ee6c0', TARGET: '#ffb03a' };
 const TAGS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 /** A 2D context that records each fill's RECTANGLE AND ITS INK. See the header for why. */
@@ -213,8 +213,12 @@ describe('AC-19 — the YOU marker and the target diamond stay inside the map pa
       // ⭐ A MARK IS TOLD FROM A GLYPH BY ITS SIZE: `drawPixelText` emits 1x1 fills (measured — every
       //   text fill in the stream is 1x1), so any YOU/TARGET fill bigger than a texel is a MARK. That
       //   is what lets this assert about the rail, whose own detail rows print `YOU` and `TARGET`.
-      const marks = (rgn) => p.fills.filter((f) => (f.ink === INK.YOU || f.ink === INK.TARGET)
-                                                && (f.w > 1 || f.h > 1) && inBox(f, rgn));
+      // ⚠ batch 2 (AC-15): the status row now CARRIES the CURRENT / TARGET chips — their diamonds are
+      //   drawn there on purpose and published as `S.indicatorRects`; a map mark is anything else.
+      const chips = p.S && p.S.indicatorRects ? p.S.indicatorRects : (nav._viewDriverInst.S.indicatorRects || []);
+      const onChip = (f) => chips.some((c) => f.x >= c.x && f.x < c.x + c.w && f.y >= c.y && f.y < c.y + c.h);
+      const marks = (rgn) => p.fills.filter((f) => (f.ink === INK.CURRENT || f.ink === INK.TARGET)
+                                                && (f.w > 1 || f.h > 1) && inBox(f, rgn) && !onChip(f));
       expect(marks(r.rail), `level ${level}: marks painted onto the ranked rail — ${JSON.stringify(marks(r.rail))}`)
         .toEqual([]);
       expect(marks(r.status), `level ${level}: marks painted onto the status row`).toEqual([]);
@@ -222,8 +226,8 @@ describe('AC-19 — the YOU marker and the target diamond stay inside the map pa
       // ⛔ AND NOWHERE ELSE OFF THE MAP EITHER. The tab band and the commit row are excluded because
       //    both legitimately carry YOU-ink FILLS of their own (the active tab's plate, the armed
       //    commit bar) — chrome drawing itself, not a mark that escaped a pane.
-      const strays = p.fills.filter((f) => (f.ink === INK.YOU || f.ink === INK.TARGET) && (f.w > 1 || f.h > 1)
-                                        && !inBox(f, r.map) && !inBox(f, r.tabs) && !inBox(f, r.commit));
+      const strays = p.fills.filter((f) => (f.ink === INK.CURRENT || f.ink === INK.TARGET) && (f.w > 1 || f.h > 1)
+                                        && !inBox(f, r.map) && !inBox(f, r.tabs) && !inBox(f, r.commit) && !onChip(f));   // batch 2: the chips are the status row's own
       expect(strays, `level ${level}: marks outside the map pane — ${JSON.stringify(strays)}`).toEqual([]);
       expect(p.violations, `level ${level}: the mark guard fired — ${JSON.stringify(p.viol)}`).toBe(0);
       nav._handleMouseUp();

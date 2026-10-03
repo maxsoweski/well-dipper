@@ -50,6 +50,7 @@ import { railGeometry, barsGeometry, tabIndexAt } from './geometry.js';
 import { pickSector, pickTile, pickPrismStar, pickBody, bodyIdentity,
          usableProj, insideProj, projRect, gridCellAt, HOVER_FIELD } from './picking.js';
 import * as navGrid from '../navGrid.js';
+import * as navDrill from '../navDrill.js';
 import * as slabBarGeo from './slabBar.js';
 import { makeSearch } from './search.js';
 import { findStar, isHereStar } from './starIdentity.js';
@@ -229,6 +230,8 @@ export function makeViewModeDriver(nav) {
     //    Clearing a field nobody writes would be housekeeping for a contract that no longer exists.
     S.pagerRect = null; S.ladderCounterRect = null; S.listHeaderRects = null;
     S.locatorRect = null; S.companionRect = null;
+    // ⭐ batch 2 (AC-15) — the CURRENT / TARGET chips and the ship marker's point, both paint-published.
+    S.indicatorRects = null; S.currentMark = null;
     // ⛔ `S.pick` IS NOT IN THIS LIST AND MUST NOT BE. Everything above is published by the PAINT and
     // is one frame's worth by construction; `S.pick` is published by the CLICK and has to outlive
     // the frames between the click and the drill landing — which is the entire feature. Clearing it
@@ -251,6 +254,72 @@ export function makeViewModeDriver(nav) {
     if (!pk) return;
     if (pk.level !== S.level) { S.pick = null; return; }
     if (simClockMs() - (pk.tMs || 0) > (Number.isFinite(pk.holdMs) ? pk.holdMs : PICK_HOLD_MS)) S.pick = null;   // a performed pick (the autopilot's) carries its own hold: hover + zoom
+  }
+
+  /*  Function · THE CURRENT / TARGET CHIPS' FLASH, AND WHERE A CLICK ON ONE TAKES THE SCREEN.
+   *  Intent · naming-prism-segments AC-15 (batch 2). Max, g-here: *"clicking on those will bring you to the
+   *    appropriate location on the navigation screen you're on. If it's galaxy, it will highlight in that
+   *    same color the cell in the galaxy where you are, the sector. If you're in the sector screen, it will
+   *    highlight the part in the sector matrix that represents the region where your target is, or where
+   *    you are if you pressed the current button up there."*
+   *  ⭐ TWO HALVES. The FLASH is `S.locate = { who, level, tMs, on }`: the painters ring the cell (2D), the
+   *    star (PRISM) or the mark (SYSTEM) in the chip's ink while `on`, blinking on 200 ms for 1.6 s — the
+   *    4th-gen way to say "here", and it costs nothing when it ends. The MOVE brings the thing onto the
+   *    glass first, so the ring is never drawn round a cell the frame cannot show:
+   *    · GALAXY — back to the whole 19 x 19 grid (the window filled exactly, AC-16), eased.
+   *    · SECTOR / REGION — CURRENT is `recentreOnPlayer` (the player's own sector / region, as the old
+   *      `HERE · SECTOR` locator did); TARGET re-stacks onto the target's own (`navDrill.stackFor`) and
+   *      eases there, so ESC climbs out through the target's region and sector.
+   *    · PRISM — CURRENT is `recentreOnPlayer`; TARGET centres the camera on the target star, entering
+   *      its column first (`navDrill.jumpTo`) when it is another one.
+   *    · SYSTEM — no move (re-entering another system is not this click's to decide); the flash only.
+   *  ⛔ A TARGET CHIP WITH NO TARGET (`live: false`) IS EATEN AND DOES NOTHING — it is drawn, so it answers. */
+  const LOCATE_MS = 1600, LOCATE_BLINK_MS = 200;
+  function ageLocate() {
+    const L = S.locate;
+    if (!L) return;
+    if (L.level !== S.level) { S.locate = null; return; }
+    const t = simClockMs() - (L.tMs || 0);
+    if (t > LOCATE_MS) { S.locate = null; return; }
+    L.on = Math.floor(t / LOCATE_BLINK_MS) % 2 === 0;
+  }
+  function easeViewTo(toCenter, toSize) {
+    const vc = nav._viewCenter || toCenter;
+    const fromSize = Number.isFinite(nav._viewSize) ? nav._viewSize : toSize;
+    nav._viewEase = { startTime: simClockMs(), duration: 350, fromCenter: { x: vc.x, z: vc.z }, fromSize,
+                      toCenter: { x: toCenter.x, z: toCenter.z }, toSize };
+  }
+  function locate(who) {
+    if (who !== 'current' && who !== 'target') return false;
+    const level = S.level | 0;
+    if (who === 'target' && !(D.target && !D.targetIsHere) && !(level === 4 && D.selBody)) return false;
+    if (level === 0) {
+      // the GALAXY frame IS the 19 x 19 naming area (`navDrill.stackEntry`, what the stack's own entry holds);
+      // a no-op ease when already there is harmless and keeps this one path
+      const g0 = navDrill.stackEntry(navGrid.GALAXY, null);
+      if (g0 && g0.center) easeViewTo(g0.center, g0.size);
+    } else if (level === 1 || level === 2 || level === 3) {
+      if (who === 'current') recentreOnPlayer();
+      else {
+        const t = D.target, tx = t.wx, tz = t.wz;
+        if (level === 3) {
+          const col = navGrid.parentAt(3, tx, tz);
+          const here = nav._prismColumn && navGrid.parentOf(3, nav._prismColumn.address);
+          if (col && !navGrid.sameAddress(col, here)) navDrill.jumpTo(nav, 3, col, { y: t.wy });
+          if (nav._localCenter) { nav._localCenter.x = tx; nav._localCenter.z = tz; if (Number.isFinite(t.wy)) nav._localCenter.y = t.wy; }
+        } else {
+          // the target's own sector / region, framed exactly (the window filled, AC-16)
+          const stack = navDrill.stackFor(tx, tz);
+          if (stack[level]) {
+            nav._viewStack = stack;
+            easeViewTo(stack[level].center, stack[level].size);
+            nav._densityCacheKey = '';
+          }
+        }
+      }
+    }
+    S.locate = { who, level, tMs: simClockMs(), on: true };
+    return true;
   }
 
   /**
@@ -297,6 +366,7 @@ export function makeViewModeDriver(nav) {
     if (pendingTabs && !nav._anim) { const d = Math.sign(pendingTabs); pendingTabs -= d; tabLevel(d); }
     refresh(nav, { width: w, height: h, lines: h });
     agePick();   // ⭐ AFTER refresh — it tests `S.level`, which refresh has just made current.
+    ageLocate(); // ⭐ batch 2 (AC-15) — the CURRENT / TARGET chip's flash, on the same rule
     if (!D.ready) return false;
     violations.length = 0;
     designs.resetViolations();
@@ -1667,6 +1737,11 @@ export function makeViewModeDriver(nav) {
     //    clicking `HERE · SECTOR` at SYSTEM threw the pilot's body selection away — a readout acting
     //    as a destructive control. The click is eaten until Max rules what it should do there; the
     //    level test moved INSIDE so 0-3 re-centre exactly as before.
+    // ⭐⭐ batch 2 (AC-15) — THE CURRENT / TARGET CHIPS, BOTH DESIGNS, EVERY LEVEL. Eaten always (they are
+    //    drawn, so they answer — the plate rule, INTERFACE §6), and at SYSTEM too: the chips sit on the bar
+    //    where the old locator sat, and a click falling through there cleared the body selection (AC-9).
+    const chip2 = (S.indicatorRects || []).find((r) => inRect(r, p.x, p.y));
+    if (chip2) { if (chip2.live !== false) locate(chip2.who); return null; }
     if (inRect(S.locatorRect, p.x, p.y)) { if (S.level !== 4) recentreOnPlayer(); return null; }
     // ── ⭐ AC-2 — THE ONE READOUT THAT EATS A CLICK AND DOES NOTHING (§6's plate rule) ────────────
     // ⛔ THE `» STAR B` COMPANION STRIP HAS NO DOWNSTREAM IDENTITY, and inventing one would be the
@@ -1744,6 +1819,7 @@ export function makeViewModeDriver(nav) {
     // CONTRACT: renaming either leaves the class calling `undefined?.()`, which is an inert control
     // and never a throw — the failure would be a scrubber that quietly does nothing.
     sortTo, recentreOnPlayer, counterGrab, counterDragTo,
+    locate,   // ⭐ batch 2 (AC-15): what a click on the CURRENT / TARGET chip does
     // ⭐ AC-3 / AC-4's DRIVER HALVES (nav-defects-batch-2026-09-18). Both are called OPTIONALLY by the
     // HOST's folds in the line-frozen `NavComputer.js` (`panKpcPerTexel?.()` at :4364,
     // `pressStartsGesture?.()` at :4396), so THE NAMES ARE THE CONTRACT exactly as `counterGrab`'s is:

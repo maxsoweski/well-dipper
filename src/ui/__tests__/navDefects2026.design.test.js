@@ -53,14 +53,14 @@ import { FACE, drawPixelText, measurePixelText } from '../../rendering/PixelText
 
 const W = 417, H = 240;                 // Max's window, and the buffer every number below is for
 const LEAD = 6, CELL = 6;               // FACE.h + 1, FACE.advance — asserted in the first case
-const INK = { RULE: '#1d3a4a', DIM: '#2f6b7a', BODY: '#7fd8e8', KEY: '#d8fbff', YOU: '#2ee6c0', TARGET: '#ffb03a' };
+const INK = { RULE: '#1d3a4a', DIM: '#2f6b7a', BODY: '#7fd8e8', KEY: '#d8fbff', CURRENT: '#2ee6c0', TARGET: '#ffb03a' };
 
 /**
  * A 2D context that records the ink as well as the rectangle.
  *
  * ⛔ `makeRecordingContext` CANNOT BE USED HERE: its Proxy's `set()` swallows every assignment, so
  *    `g.fillStyle = ink` is lost and a fill's COLOUR is unreadable — and AC-2's unarmed commit row is
- *    a colour change (`INK.RULE` instead of `INK.YOU`) drawn at the same coordinates as the armed one.
+ *    a colour change (`INK.RULE` instead of `INK.CURRENT`) drawn at the same coordinates as the armed one.
  */
 function inkRecordingContext() {
   const fills = [];
@@ -174,7 +174,7 @@ describe('AC-11 — design 1\'s commit bar and tab band no longer share a row', 
       // …and the bar itself is exactly the published rectangle, full width, one row down.
       const bar = fills.filter((f) => f.x === 0 && f.w === W && f.h === LEAD && f.y === g.commitY);
       expect(bar, `level ${level}: the commit bar must be drawn at ${g.commitY}`).toHaveLength(1);
-      expect([INK.YOU, INK.TARGET, INK.RULE]).toContain(bar[0].ink);
+      expect([INK.CURRENT, INK.TARGET, INK.RULE]).toContain(bar[0].ink);
     }
   }, 60000);
 
@@ -287,7 +287,8 @@ describe('AC-2 — a selection can be nothing, and it can be the star', () => {
     const { fills, atY } = paint(nav, 2);
     const starHit = (nav._viewDriverInst.S.bodyHits || []).find((b) => b.star);
     expect(starHit, 'the orrery must publish its primary as a hit').toBeTruthy();
-    const f = frames9(fills).filter((r) => r.ink === INK.KEY && Math.abs(r.x + 4 - starHit.x) <= 1);
+    // ⭐ batch 2 (AC-15): the selection is the TARGET, so the frame is TARGET ink (it was KEY).
+    const f = frames9(fills).filter((r) => r.ink === INK.TARGET && Math.abs(r.x + 4 - starHit.x) <= 1);
     expect(f.length, 'a 9x9 frame on the primary at the pane centre').toBeGreaterThan(0);
     const status = atY(H - 8 + 2).join(' ');
     expect(status).toContain('PRIMARY');

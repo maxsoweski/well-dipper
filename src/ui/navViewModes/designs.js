@@ -54,6 +54,9 @@ import * as navGrid from '../navGrid.js';
 // ⭐ THE SEGMENT BAR'S GEOMETRY AND THE ONE LAYER FUNCTION (naming-prism-segments Phase 3, AC-7): the
 //    lab imports the same module under the same name, and the driver's hit-test reads it too.
 import * as slabBarGeo from './slabBar.js';
+// ⭐ batch 2 (AC-16) — THE DENSITY IMAGE'S DITHER, AVERAGED OUT BEFORE THE 240p BLIT: the lab imports the same
+//    module under the same name, so `dequantLum` runs one filter on both pages.
+import * as lumDequant from './lumDequant.js';
 
 /** `NavComputer.js:69`, verbatim — the density model's stars-per-pc^3 conversion. */
 const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;
@@ -184,7 +187,15 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     DIM:    '#2f6b7a',
     BODY:   '#7fd8e8',
     KEY:    '#d8fbff',
-    YOU:    '#2ee6c0',
+    // ── ⭐⭐ naming-prism-segments AC-15 (batch 2) — ONE CURRENT INK AND ONE TARGET INK, AND NOTHING ELSE
+    //    WEARS EITHER. Max, 2026-10-03: *"a visually meaning color-codedly consistent indicator that lets
+    //    you know which thing selected is where you currently are and where the other thing selected is
+    //    your target"*, and *"Let's replace all references to you in the menus with the word Current."*
+    //    `CURRENT` was `YOU` (same hex): where the player is, at EVERY scale — his sector, region, column,
+    //    star, the ship marker in a system, the name in the top-right indicator. `TARGET` is the thing a
+    //    commit would go to. ⛔ The habitable band, the HAB readout and the active tab of a level the
+    //    player is NOT on used to borrow one of these two; each has its own ink now (`HAB`, `KEY`).
+    CURRENT: '#2ee6c0',
     TARGET: '#ffb03a',
     WARN:   '#e8674f',
     // ── AC-2 (restorations) — THE PRISM'S DEPTH CUES GET INKS, NOT LITERALS ───────────────────────
@@ -199,16 +210,18 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     ABOVE:  '#1f6b52',   // a drop line standing a mark UP off the plane   (legacy's green)
     BELOW:  '#6b2f28',   // …and one hanging it BELOW                       (legacy's red)
     HALO:   '#6b4a18',   // the catalogue ring, design 1                    (legacy's amber glow)
-    // ── AC-5 (restorations) — THE SHIP, AND IT IS ITS OWN INK ON PURPOSE ─────────────────────────
-    // Legacy draws the diamond, the word SHIP and the trajectory in one colour, `#00ff80`
-    // (NavComputer.js:2937/2953/2977), and that colour is not `YOU`: `YOU` is *where the pilot is in
-    // the GALAXY* — the player's plane on the y-gauge, his tile, his sector — and this is *where the
-    // SHIP is in this system*, one level down. At 240p two greens a few degrees apart read as one, so
-    // the ink is legacy's own literal rather than a shade of `YOU`, and the two never share a picture:
-    // `YOU` does not appear at SYSTEM in either design.
-    SHIP:   '#00ff80',   // the ship diamond, its word and its trajectory    (legacy's own)
+    // ── ⛔ THE SHIP'S OWN GREEN (`SHIP`, legacy's `#00ff80`) IS RETIRED INTO `CURRENT` (batch 2). It was
+    //    kept apart on the argument that `YOU` meant "where the pilot is in the galaxy" and the ship one
+    //    level down was a different fact — and Max's s-sky note is that argument failing on the glass:
+    //    *"The player's icon on the system map view is a different color than the name of the system
+    //    that they currently inhabit."* The ship diamond, its word (now CURRENT, *"Rather than ship, the
+    //    marker should say current"*) and its route are all `CURRENT` now. At 240p two greens a few
+    //    degrees apart read as one, which was the old note's own warning: now there is only one.
+    // ── the habitable band / HAB readout / habitability cross: their own yellow-green, a hue well off
+    //    `CURRENT`'s teal, because "habitable" is a fact about a body, not about where the player is.
+    HAB:    '#b8d84a',
     // ── naming-prism-segments AC-7 — THE SEGMENT BAR'S THREE LAYERS (plan §7.1: "coloured thin /
-    //    thick / halo"). ⛔ NONE OF THEM IS `YOU` OR `TARGET`: those two are reserved for CURRENT and
+    //    thick / halo"). ⛔ NONE OF THEM IS `CURRENT` OR `TARGET`: those two are reserved for CURRENT and
     //    TARGET on every screen (Max, 2026-10-03), and the bar marks both with them. A loaded slab is
     //    the solid ink, an unloaded one the same ink in `checker` — the era's third tone, no alpha.
     THIN:   '#3a74b4',   // N1–N3 / S1–S3        |y| < 0.3 kpc  (plan §7.2)
@@ -218,6 +231,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   /** BURN or WARP is not "which level am I on" — it is NavComputer._isCurrentSystem() (:1098-1105), a
    *  0.1 pc identity test. Browsing a foreign system from SYSTEM still arms a WARP. */
   const isHere = () => S.level === 4 && (D.isCurrent != null ? !!D.isCurrent : !!(D.sysStar && D.here && D.sysStar.seed === D.here.seed));   // the game publishes D.isCurrent from NavComputer._isCurrentSystem(); the seed test is only the lab's own stand-in (in Sol the two seeds are 'Sol' and a hash number, so it was false at home)
+  /** ⭐ batch 2 (AC-15) — the ink a star's NAME wears: the selected star is the TARGET, the player's own star
+   *  is CURRENT, anything else keeps the caller's ink. One spelling for both designs' prism labels. */
+  const starInk = (s, dflt) => (s && s === D.selStar) ? INK.TARGET : (s && s === D.here) ? INK.CURRENT : dflt;
   const SPECTRAL = { O:'#9db0ff', B:'#abbfff', A:'#c9d6ff', F:'#f7f7ff', G:'#fff5ea',
                      K:'#ffd1a1', M:'#ff9f70', D:'#d9e6ff' };
 
@@ -543,9 +559,47 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     return { dustStrength: ext > 10 ? 0.5 : ext > 2 ? 0.3 : 0.1,
              noiseStrength: ext > 10 ? 0.4 : ext > 2 ? 0.6 : 0.8, components };
   }
+  /*  Function · THE GPU DENSITY IMAGE WITH ITS RETRO DITHER AVERAGED OUT — an 8 x 8 box over the 512² image,
+   *    cached per image object (the renderer hands back the same canvas for a cached key).
+   *  Intent · batch 2, AC-16 — Max, g-sector: *"The grid is not looking quite right. I'm getting all of these
+   *    little algorithm artifacts where things are looking square or looking like a screen door."*
+   *  ⭐ THE CAUSE, MEASURED: `NavGalaxyRenderer`'s fragment shader quantises brightness to 12 levels through
+   *    a 4 x 4 BAYER matrix laid on 2 x 2-pixel cells (`floor(gl_FragCoord.xy / 2.0)`), so its 512² output
+   *    carries a fixed lattice with an 8-pixel period. Both designs then blit that image NEAREST-NEIGHBOUR
+   *    (`imageSmoothingEnabled = false`, rightly — no smear at 240p) at a NON-INTEGER ratio, ~2.3-2.6 source
+   *    pixels per texel: the period lands on ~3.3 texels and the sampler picks a beat of it. Where the field
+   *    is smooth — the whole of a sector, all of a region — the dither IS the picture, and what the glass
+   *    shows is that lattice aliased into regular dots and 2 x 2 squares: the screen door. The lab's CPU
+   *    renderer has no dither, which is why the spec page never showed it.
+   *  ⭐ AN 8 x 8 WINDOW IS EXACTLY ONE DITHER PERIOD, so every window holds each of the sixteen thresholds
+   *    four times and the average IS the brightness the dither was encoding — the pattern cancels instead
+   *    of being blurred. Detail finer than 8 source pixels was already destroyed by the 12-level
+   *    quantisation, so nothing real is lost. The arithmetic is `lumDequant.dequantRGBA` (one module, both
+   *    pages); this wrapper is only the canvas round trip and the per-image cache.
+   *  ⚠ COST, MEASURED: ~7 ms per NEW 512² image in node (the renderer's own cache hands back the same
+   *    canvas for a key it has, and so does this one); a drag that changes the key every frame pays it
+   *    every frame, beside the renderer's own read-back of the same 512² pixels.
+   *  ⛔ NOT A FIX IN THE RENDERER (another lane's file, and legacy draws its image bilinear at 3.2x, which
+   *    already averages it); this is the designs' own blit doing what a 240p resampler has to.
+   *  ⚠ No `document` (a headless test) or an image that is not a canvas: the image is returned as it came. */
+  const _dequant = new WeakMap();
+  function dequantLum(img) {
+    if (!img || typeof img.getContext !== 'function' || typeof document === 'undefined') return img;
+    const hit = _dequant.get(img);
+    if (hit) return hit;
+    try {
+      const W = img.width, H = img.height;
+      const out = lumDequant.dequantRGBA(img.getContext('2d').getImageData(0, 0, W, H).data, W, H);
+      const cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      cv.getContext('2d').putImageData(new ImageData(out, W, H), 0, 0);
+      _dequant.set(img, cv);
+      return cv;
+    } catch (e) { _dequant.set(img, img); return img; }
+  }
   function lumImage(cx, cz, ext, res) {
     if (D.nav) {                                     // GPU: synchronous, 512², cached inside the renderer
-      try { return D.nav.render(cx, cz, ext); }
+      try { return dequantLum(D.nav.render(cx, cz, ext)); }   // ⭐ batch 2 (AC-16): the dither averaged out
       catch (e) { D.fail.push('NavGalaxyRenderer.render: ' + e.message); D.nav = null; }
     }
     const capped = Math.min(res, LUM_CAP);
@@ -842,7 +896,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         lineTexels(g, fx(ax, az), fy(ax, az), fx(bx, bz), fy(bx, bz), ink, cl, 2);
       }
     };
-    if (D.player) outline(D.player.x, D.player.z, INK.YOU);
+    if (D.player) outline(D.player.x, D.player.z, INK.CURRENT);
     const tgt = D.selStar || D.target;
     if (tgt) outline(tgt.wx, tgt.wz, INK.TARGET);
   }
@@ -950,6 +1004,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    that never reaches the map painter (there is none today) would otherwise leave last frame's
     //    plate live for the driver's press guard to find.
     S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null; S.hoverCalloutRect = null;
+    S.indicatorRects = null; S.currentMark = null;   // ⭐ batch 2 (AC-15): republished by `indicatorChips` / the ship painters
     const CELL = FACE.advance, LEAD = FACE.h + 1;
     const cols = Math.floor((W + 1) / CELL), rows = Math.floor(H / LEAD);
     const cx = (c) => c * CELL, ry = (r) => r * LEAD;
@@ -978,17 +1033,20 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     rect(g, ruleX, mapY, 1, mapH, INK.RULE);
 
     // ── STATUS, row 0 ────────────────────────────────────────────────────────────────────────────
-    const sys = D.hereName || 'UNKNOWN';   // `hereName`, not `D.here.name`: see state.js — star rows are empty outside PRISM
-    const identW = T(g, fit(sys.toUpperCase(), 14 * CELL), 1, 0, { color: INK.KEY, rgn: 'status', what: 'status ident' });
-    rect(g, 1 + 15 * CELL, 2, 1, 1, INK.RULE);
-    const secW = T(g, fit((D.playerSector?.name || '').toUpperCase(), 17 * CELL), 1 + 17 * CELL, 0,
-      { color: INK.DIM, rgn: 'status', what: 'status sector' });
-    // ⭐ 2026-09-25 — THE SYSTEM YOU ARE IN IS NOT A TARGET (state.js `targetIsHere`): `TGT —`, not `TGT SOL  0.0 LY`.
-    const tgt = D.targetIsHere ? 'TGT —' : `TGT ${(D.target?.name || '—').toUpperCase()}  ${lyOf(D.target).toFixed(1)} LY`;
-    const tgtW = measurePixelText(fit(tgt, 34 * CELL));
-    T(g, fit(tgt, 34 * CELL), W - 1, 0, { color: INK.TARGET, align: 'right', rgn: 'status', what: 'status target' });
-    assertClear('status ident/sector vs TGT', 'status',
-                Math.max(1 + identW, 1 + 17 * CELL + secW) + CELL, W - 1 - tgtW);
+    // ⭐⭐ batch 2 (AC-15) — THE RIGHT END IS THE CURRENT / TARGET INDICATOR PAIR (`indicatorChips`), in the
+    //    place `TGT` always stood (Max, g-here: *"In the location where the target indicator is"*). The
+    //    system name that used to open this row is the CURRENT chip now, in the CURRENT ink — which is the
+    //    s-sky defect closed: *"The player's icon on the system map view is a different color than the name
+    //    of the system that they currently inhabit."* The ship diamond and this name are one ink.
+    // ⭐ THE LEFT END SAYS WHAT THE SCREEN IS SHOWING (`viewLabel`) — the sector / region / column / system
+    //    on the glass, which stops being "where you are" the moment you browse (then it is `DIM`).
+    const viewTxt = fit(viewLabel(), 22 * CELL);
+    // ⚠ …AND WHEN THE SCREEN IS THE PLAYER'S OWN PLACE (`onPlayerPlace`) THAT REFERENCE IS A CURRENT-POSITION TEXT
+    //   and wears CURRENT — at home on SYSTEM it is the very name the CURRENT chip carries, and two inks for
+    //   one name on one bar is the s-sky defect again. `GALAXY` is not a position: DIM.
+    const viewW = T(g, viewTxt, 1, 0, { color: S.level > 0 && onPlayerPlace(S.level) ? INK.CURRENT : INK.DIM, rgn: 'status', what: 'status view' });
+    const chipL = indicatorChips(g, 1 + viewW + 2 * CELL, W - 1, 0, LEAD, 'status');
+    assertClear('status view vs indicators', 'status', 1 + viewW + CELL, chipL);
 
     // ── THE MAP PANE ─────────────────────────────────────────────────────────────────────────────
     if (S.level <= 2) d1TwoD(g, mapW, mapY, mapH);
@@ -998,10 +1056,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       slabBar(g, barX, mapY, mapH);                      // ⭐ AC-7 — beside the fine gauge (plan §7.3)
     }
     else d1Ladder(g, mapW, mapY, mapH);
+    locateMarks(g);                                      // ⭐ batch 2 (AC-15): the CURRENT / TARGET chip's flash at PRISM and SYSTEM
     // ⭐ 2026-10-02 — WHICH SYSTEM THIS IS, WHEN IT IS NOT YOURS (`foreignSysLines`). Top-left of the map,
     //    plated, in TARGET ink; the ladder's axis sits at 62% of the pane, so the corner is empty.
     (foreignSysLines() || []).forEach((t, i) =>
-      plated(g, fit(t, mapW - 4), 2, mapY + 1 + i * (FACE.h + 2), INK.TARGET, 'map', 'foreign system ' + i));
+      plated(g, fit(t, mapW - 4), 2, mapY + 1 + i * (FACE.h + 2), foreignSysInk(), 'map', 'foreign system ' + i));
     // ⭐ AC-1 (restorations) — THE HOVER CALLOUT, LAST THING ON THE MAP AND ONLY ON THE MAP. It is
     // placed off `S.hover`'s own texel point and clamped into `REGIONS.map`, so it can never reach the
     // rail, the hint row, the tabs or the commit row. ⛔ NOT DRAWN UNDER THE DRAWN SEARCH: the driver
@@ -1036,7 +1095,10 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       const x = i * tabW;
       const lbl = fit(name, tabW - 2);
       const lx = x + (tabW - measurePixelText(lbl)) / 2;
-      if (i === S.level) { rect(g, x, ry(rows - 2) - 1, tabW, LEAD, INK.YOU);
+      // ⭐ batch 2 (AC-15) — THE ACTIVE TAB IS CURRENT'S INK ONLY WHERE THE SCREEN IS THE PLAYER'S OWN PLACE
+      //    (`onPlayerPlace`); browsing another sector / region / column / system it is `KEY`. It used to be
+      //    `YOU` on every level, which painted "where you are" over places you are not.
+      if (i === S.level) { rect(g, x, ry(rows - 2) - 1, tabW, LEAD, onPlayerPlace(i) ? INK.CURRENT : INK.KEY);
                            T(g, lbl, lx, ry(rows - 2), { color: INK.BG, rgn: 'tabs', what: 'tab ' + name }); }
       // ⭐ SYSTEM is drawn in the rule's own ink — dimmer than an inactive tab — when the ship is in no
       //   system (`S.noSystem`, Max 2026-09-07: *"disable the system screen when not in a system"*). The
@@ -1056,8 +1118,10 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    of a readout, which is the shape this codebase names as a defect everywhere else.
     // ⛔ AND IT IS NOT DRAWN OVER THE DRAWN SEARCH. `d1Search` takes the rail, not this row, so the
     //    strip keeps saying what it always says — and its `ESC CLOSE` is the field's way out too.
-    const legend = 'V LOOK  SHIFT+TAB BACK  ESC CLOSE';
-    T(g, fit(legend, W - 5 * tabW - 2), W - 1, ry(rows - 2), { color: INK.DIM, align: 'right', rgn: 'tabs', what: 'global legend' });
+    // ⭐ batch 2 (AC-18d) — CLAUSES, NOT CHARACTERS: at a 390-wide buffer this read `… ESC C`. `V LOOK` goes
+    //    first and `SHIFT+TAB BACK` next; `ESC CLOSE` — the way out — is the clause that stays (`fitClauses`).
+    const legend = fitClauses(['V LOOK', 'SHIFT+TAB BACK', 'ESC CLOSE'], W - 5 * tabW - 2, ['V LOOK', 'SHIFT+TAB BACK']);
+    T(g, legend, W - 1, ry(rows - 2), { color: INK.DIM, align: 'right', rgn: 'tabs', what: 'global legend' });
 
     // ── COMMIT, full width ───────────────────────────────────────────────────────────────────────
     const cur = isHere();
@@ -1099,7 +1163,10 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    Moving the fill down one texel makes the button the pilot sees and the button the driver tests
     //    the same rectangle. ⚠ Nothing else moves: the LABEL was already drawn at `ry(rows - 1)`, and
     //    240 / LEAD 6 leaves exactly six rows here, so 234-239 is the last full row on the glass.
-    rect(g, 0, ry(rows - 1), W, LEAD, armed ? (cur && !homeWarp ? INK.YOU : INK.TARGET) : INK.RULE);
+    // ⭐ batch 2 (AC-15) — ARMED IS ALWAYS THE TARGET'S INK. The BURN bar used to wear `YOU`, but what
+    //    the row names is the SELECTED body, i.e. the target (Max, s-sky: *"The readiness indicator color
+    //    at the bottom … matches the information about the target system's name … which is great."*).
+    rect(g, 0, ry(rows - 1), W, LEAD, armed ? INK.TARGET : INK.RULE);
     const labelFull = label + (S.sabotage ? SAB : '');
     T(g, fit(labelFull, W - 4), W / 2, ry(rows - 1), { color: armed ? INK.BG : INK.DIM, align: 'center', rgn: 'commit', what: 'commit label' });
     // the guard must see the UNCLIPPED string, or it is not a guard — it is the clip
@@ -1122,8 +1189,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *    mirror image of the density behind them, and a vertical drag moved the marks against the pointer.
    *    ⚠ PRISM's 3D camera still looks from the south (+z toward the bottom at its top-down start), as
    *      legacy's always has; the drill into it turns the picture over exactly as legacy's does.
-   *  ⭐ THE PARENT'S NEIGHBOURS ARE DIMMED AND LABELLED, NOT GRIDDED: they are somebody else's cells,
-   *    and a click there is a miss (`navGrid.cellAt` answers null outside the parent).
+   *  ⭐ batch 2 (AC-16) — THE PICTURE IS A WINDOW EXACTLY THE PARENT'S SQUARE, in both designs. A drag slides
+   *    the neighbouring parents in through it AS GRID (their own cells, dotted), with the parent's edge in
+   *    `BODY` and the edge labels following; a click there is still a miss (`navGrid.cellAt` answers null
+   *    outside the parent). Nothing that is not a place is drawn: dead corners and the space beyond the
+   *    naming area are blank sky, not a checker.
    *  ⭐ EDGE LABELS REPLACE THE EIGHT DENSEST TILE IDS: letters across the top, numbers down the left,
    *    each centred on its own world-locked column or row, so every cell is readable by its row and
    *    column and the labels slide with a pan.
@@ -1137,18 +1207,22 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     return navGrid.parentOf(level, S.gridParent) || navGrid.parentAt(level, S.view.cx, S.view.cz);
   }
 
+  const LEADER_MIN = 4;   // ⭐ batch 2 (AC-16): the shortest run of leader dots a row number is given
   /** Integer texels per child, so every cell is the same size at rest: a label row on top, the
    *  square below it, numbers in the margin to its left. `areaX/W/Y/H` is the design's map band. */
   function gridLayout(level, areaX, areaW, areaY, areaH) {
     const n = navGrid.childCount(level);
     // ⛔ THE ROW NUMBERS NEED THEIR OWN MARGIN, MEASURED IN THE LIVE FACE: at 390 wide the centred square
     //    left 13 texels and "16" is 11 + a 3-texel gap, so the guard fired on every two-digit row.
-    const numW = measurePixelText(String(n)) + 3;
+    // ⭐ batch 2 (AC-16, g-galaxy) — AND ROOM FOR THE LEADERS: the numbers sit left-aligned at the gutter's
+    //    own left edge and a dotted midline runs from each to the grid, so the gutter is the widest number,
+    //    its 3-texel gap and `LEADER_MIN` texels of dots; the letters' row keeps up to 3 texels for theirs.
+    const numW = measurePixelText(String(n)) + 3 + LEADER_MIN;
     const cellPx = Math.max(1, Math.min(Math.floor((areaH - FACE.h) / n), Math.floor((areaW - numW) / n)));
     const sq = cellPx * n;
-    const gap = (areaH - FACE.h - sq) >= 1 ? 1 : 0;
+    const gap = Math.max(0, Math.min(3, areaH - FACE.h - sq));
     const x0 = areaX + Math.max(numW, Math.round((areaW - sq) / 2));
-    return { n, cellPx, sq, labelY: areaY, x0, y0: areaY + FACE.h + gap };
+    return { n, cellPx, sq, labelY: areaY, x0, y0: areaY + FACE.h + gap, numW };
   }
 
   /** The frame `v` laid over the square: `v.size` kpc across `sq` texels, centred on its middle. */
@@ -1180,11 +1254,13 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     g.drawImage(img, (clip.x - ix) * kk, (clip.y - iy) * kk, clip.w * kk, clip.h * kk, clip.x, clip.y, clip.w, clip.h);
   }
 
-  /** Knock a rectangle back to the third tone, on the GLOBAL checker parity so two dimmed blocks
-   *  that touch read as one surface. */
+  /** ⭐ batch 2 (AC-16) — BLANK a rectangle that is not a place: solid `BG`, the empty sky.
+   *  ⛔ IT WAS A 50% `checker` OF BG — a literal screen door, and Max's g-sector note is that the grid
+   *  background *"looks like a screen door"*. A dead corner or a block off the naming area is not a dimmer
+   *  place, it is no place, and the window shows nothing there (g-drag: *"We only want to show the grid"*). */
   function dimRect(g, r, clip) {
     const b = clipBox(r.x, r.y, r.w, r.h, clip);
-    if (b.w > 0 && b.h > 0) checker(g, b.x, b.y, b.w, b.h, INK.BG, (b.x + b.y) & 1);
+    if (b.w > 0 && b.h > 0) rect(g, b.x, b.y, b.w, b.h, INK.BG);
     return b;
   }
 
@@ -1220,28 +1296,55 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
              z0: v.cz + (P.pcy - clip.y - clip.h) / P.k, z1: v.cz + (P.pcy - clip.y) / P.k };
   }
 
-  /** SECTOR / REGION: every other parent the clip shows, dimmed, framed and labelled with its own
-   *  reference ("M10" beside sector N10; "H8" beside region H9, or "M10 P9" across a sector edge). */
-  function gridNeighbours(g, level, parent, v, P, clip, plate) {
+  /** SECTOR / REGION: every other parent the clip shows, drawn as MORE GRID — its own cells, in a dotted
+   *  `RULE` lattice — and returned as `[{ address, cells }]` so the edge labels can follow them.
+   *  ⭐⭐ batch 2 (AC-16, g-neighbours + g-drag) — NOT DIMMED, NOT FRAMED, NOT LABELLED IN THE PICTURE. Max:
+   *    *"we should still only allow you to see the galaxy through the matrix like it's a window and not show
+   *    any galaxy outside of that window. What we should do though is when you drag the view, then the
+   *    boundaries of one cell and the other should be obvious as you do so … The row and column labels will
+   *    follow you."* And on g-drag: *"we have an area outside of the grid that has a text drawn [in] it …
+   *    We only want to show the grid."* So the window is the square, a drag slides the world under it, and
+   *    what slides in is somebody else's cells drawn as cells — the parent's own edge (`parentEdge`) is the
+   *    line that shows *"the shape of the cell that you're leaving"*. The `M10` / `H8` block labels are gone.
+   *  ⛔ STILL NEVER PICKED: `navGrid.cellAt` answers only inside the screen's own parent, and Max rejected
+   *    clickable neighbour blocks — a neighbour's cells are a view, not a control.
+   *  ⚠ A NEIGHBOUR THAT IS NO PLACE (off the 19 x 19 naming area, or a dead corner sector) is blanked to BG,
+   *    exactly as GALAXY blanks its corners. */
+  function gridNeighbours(g, level, parent, v, P, clip) {
     const pb = navGrid.parentBounds(level, parent), step = pb.max.x - pb.min.x;
     const w = clipWorld(v, P, clip);
     const i0 = Math.floor((w.x0 - pb.min.x) / step), i1 = Math.floor((w.x1 - pb.min.x) / step);
     const j0 = Math.floor((w.z0 - pb.min.z) / step), j1 = Math.floor((w.z1 - pb.min.z) / step);
-    if (i1 - i0 > 8 || j1 - j0 > 8) return;               // a frame zoomed far out: no blocks to name
+    const out = [];
+    if (i1 - i0 > 8 || j1 - j0 > 8) return out;           // a frame zoomed far out: no blocks to draw
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       if (i === 0 && j === 0) continue;
-      const nb = navGrid.parentAt(level, pb.min.x + (i + 0.5) * step, pb.min.z + (j + 0.5) * step);
-      const r = boxRect(P, navGrid.parentBounds(level, nb));
-      const vis = dimRect(g, r, clip);
-      if (!(vis.w > 0 && vis.h > 0)) continue;
-      frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.RULE, clip);
-      const sRef = nb && nb.sector ? (navGrid.childRef(0, nb) || '') : '';
-      const lbl = level === 1 ? sRef
-                : (nb && parent && nb.sector.i === parent.sector.i && nb.sector.j === parent.sector.j)
-                  ? navGrid.childRef(1, nb) : `${sRef} ${navGrid.childRef(1, nb) || ''}`.trim();
-      const lw = measurePixelText(lbl);
-      if (lbl && vis.w >= lw + 6 && vis.h >= FACE.h + 6) plate(lbl, vis.x + 3, vis.y + 3, INK.DIM, 'neighbour ' + lbl);
+      const box = { min: { x: pb.min.x + i * step, z: pb.min.z + j * step }, max: { x: pb.min.x + (i + 1) * step, z: pb.min.z + (j + 1) * step } };
+      const nb = navGrid.parentAt(level, (box.min.x + box.max.x) / 2, (box.min.z + box.max.z) / 2);
+      if (!nb || !navGrid.sectorLive(nb)) { dimRect(g, boxRect(P, box), clip); continue; }
+      const cells = navGrid.childGrid(level, nb);
+      gridLines(g, cells, navGrid.childCount(level), P, clip, INK.RULE, true);
+      out.push({ address: nb, cells });
     }
+    return out;
+  }
+
+  /** ⭐ batch 2 (AC-16, g-neighbours) — THE PARENT'S OWN EDGE, WHERE A DRAG HAS BROUGHT IT INSIDE THE WINDOW:
+   *  one solid `BODY` line, so the block you are leaving keeps its shape while another slides in.
+   *  ⛔ ONLY STRICTLY INSIDE THE WINDOW. At rest the edge IS the window's edge, and drawing it there would
+   *  repaint the picture Max passed (*"I like how clean this one is looking"*) — so an edge on the clip's own
+   *  outer texel is the grid's ordinary outer line and is left alone. */
+  function parentEdge(g, level, parent, P, clip) {
+    const pb = navGrid.parentBounds(level, parent);
+    if (!pb) return;
+    const r = boxRect(P, pb);
+    const inX = (x) => x > clip.x && x < clip.x + clip.w - 1, inY = (y) => y > clip.y && y < clip.y + clip.h - 1;
+    const ys = Math.max(r.y, clip.y), ye = Math.min(r.y + r.h, clip.y + clip.h - 1);
+    const xs = Math.max(r.x, clip.x), xe = Math.min(r.x + r.w, clip.x + clip.w - 1);
+    if (inX(r.x) && ye >= ys) rect(g, r.x, ys, 1, ye - ys + 1, INK.BODY);
+    if (inX(r.x + r.w) && ye >= ys) rect(g, r.x + r.w, ys, 1, ye - ys + 1, INK.BODY);
+    if (inY(r.y) && xe >= xs) rect(g, xs, r.y, xe - xs + 1, 1, INK.BODY);
+    if (inY(r.y + r.h) && xe >= xs) rect(g, xs, r.y + r.h, xe - xs + 1, 1, INK.BODY);
   }
 
   /** GALAXY: everything outside the 293 drawn sectors — the 68 corners and the space beyond the
@@ -1256,33 +1359,59 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   }
 
   /** Letters across the top and numbers down the left, each centred on its own column or row.
-   *  ⭐ WHOLE LABELS, INSIDE THE PICTURE, BESIDE THE PARENT THEY NAME (Astra phase-2 review, finding 8).
-   *  · A column's letter is drawn while its centre is on the picture, slid sideways so the whole glyph
-   *    stays inside it — a letter centred at the picture's edge was cut 2 texels off the map.
-   *  · Row numbers sit in the gutter left of the square when the picture does not reach into it (design
-   *    1, whose picture IS the square). Where the picture runs the full width (design 2) they follow the
-   *    parent's own left edge as it pans, and stop at the picture's edge when that edge pans off it —
-   *    they used to stay at the square's resting x, on top of whatever cells had slid under them.
-   *  · A parent panned clean off the picture sideways takes its row numbers with it, as its cells go. */
-  function gridEdgeLabels(g, level, cells, n, P, L, clip, plate) {
+   *  ⭐ WHOLE LABELS, BESIDE THE CELLS THEY NAME (Astra phase-2 review, finding 8): a column's letter is
+   *    drawn while its centre is in the window, slid sideways so the whole glyph stays over the window.
+   *  ⭐⭐ batch 2 (AC-16, g-neighbours) — THE LABELS FOLLOW THE CELLS, THE NEIGHBOURS' TOO. Max: *"The row and
+   *    column labels will follow you."* Every column and row the window shows is labelled — the screen's own
+   *    in `DIM`, a neighbour's (`nbs`, from `gridNeighbours`) in `RULE` — so a drag slides `P`, `A`, `B` …
+   *    across the top exactly as the cells under them slide. Where two parents share a column (one above
+   *    the other) the screen's own label wins.
+   *  ⭐⭐ batch 2 (AC-16, g-galaxy) — AND EACH LABEL HAS A DOTTED MIDLINE LEADER TO THE GRID. Max: *"little
+   *    horizontal midline level dots extending from each number and letter to the nearest side to the right
+   *    or the bottom respectively. And it will be okay if those are crossing over in the upper left portion
+   *    of the negative space surrounding the grid."* The NEAREST SIDE is the first LIVE cell of that row or
+   *    column in the window — at GALAXY that is across the blank corners, and the leaders cross there; below
+   *    GALAXY every cell is live and a leader spans the gutter. Dots on the even texels (the global parity
+   *    the dotted grid lines use), in `RULE`, so they read as structure and never as a mark.
+   *  ⚠ The numbers sit LEFT-aligned at the gutter's left edge (`L.x0 - L.numW`), so every number has dots. */
+  function gridEdgeLabels(g, level, cells, n, P, L, clip, plate, nbs = []) {
     const ax = navGrid.axisLabels(level);
-    for (let i = 0; i < n; i++) {
-      const b = cells[i].bounds, tx = Math.round(P.toX((b.min.x + b.max.x) / 2));
-      if (tx < clip.x || tx >= clip.x + clip.w) continue;
-      const lw = measurePixelText(ax.cols[i]);
-      const x = Math.max(clip.x, Math.min(clip.x + clip.w - lw, tx - (lw >> 1)));
-      T(g, ax.cols[i], x, L.labelY, { color: INK.DIM, rgn: 'map', what: 'column label ' + ax.cols[i] });
+    const map = REGIONS.map || clip;
+    const parents = [{ cells, own: true }, ...nbs.map((nb) => ({ cells: nb.cells, own: false }))];
+    const colAt = new Map(), rowAt = new Map();
+    for (const pr of parents) for (const c of pr.cells) {
+      const b = c.bounds;
+      const tx = Math.round(P.toX((b.min.x + b.max.x) / 2)), my = Math.round(P.toY((b.min.z + b.max.z) / 2));
+      const r = c.live ? boxRect(P, b) : null;
+      const vis = r && r.x + r.w > clip.x && r.x < clip.x + clip.w && r.y + r.h > clip.y && r.y < clip.y + clip.h;
+      if (tx >= clip.x && tx < clip.x + clip.w) {
+        const e = colAt.get(tx) || { s: ax.cols[c.i], own: pr.own, near: Infinity };
+        if (pr.own && !e.own) { e.s = ax.cols[c.i]; e.own = true; }
+        if (vis) e.near = Math.min(e.near, Math.max(r.y, clip.y));
+        colAt.set(tx, e);
+      }
+      if (my >= clip.y && my < clip.y + clip.h) {
+        const e = rowAt.get(my) || { s: ax.rows[c.j], own: pr.own, near: Infinity };
+        if (pr.own && !e.own) { e.s = ax.rows[c.j]; e.own = true; }
+        if (vis) e.near = Math.min(e.near, Math.max(r.x, clip.x));
+        rowAt.set(my, e);
+      }
     }
-    const gutter = clip.x >= L.x0;                         // the picture leaves the square's left margin free
-    const left = Math.round(P.toX(cells[0].bounds.min.x)), right = Math.round(P.toX(cells[n - 1].bounds.max.x));
-    if (right <= clip.x || left >= clip.x + clip.w) return;
-    for (let j = 0; j < n; j++) {
-      const b = cells[j * n].bounds, ty = Math.round(P.toY((b.min.z + b.max.z) / 2)) - (FACE.h >> 1);
+    const dotsV = (x, y0, y1) => { for (let y = y0; y <= y1; y++) if (!(y & 1) && y >= map.y && y < map.y + map.h) rect(g, x, y, 1, 1, INK.RULE); };
+    const dotsH = (y, x0, x1) => { for (let x = x0; x <= x1; x++) if (!(x & 1) && x >= map.x && x < map.x + map.w) rect(g, x, y, 1, 1, INK.RULE); };
+    for (const [tx, e] of colAt) {
+      const lw = measurePixelText(e.s);
+      const x = Math.max(clip.x, Math.min(clip.x + clip.w - lw, tx - (lw >> 1)));
+      if (Number.isFinite(e.near)) dotsV(tx, L.labelY + FACE.h + 1, e.near - 1);
+      T(g, e.s, x, L.labelY, { color: e.own ? INK.DIM : INK.RULE, rgn: 'map', what: 'column label ' + e.s });
+    }
+    const lx = Math.max(map.x + 1, L.x0 - L.numW);
+    for (const [my, e] of rowAt) {
+      const ty = my - (FACE.h >> 1);
       if (ty < clip.y || ty + FACE.h > clip.y + clip.h) continue;
-      const s = ax.rows[j], lw = measurePixelText(s);
-      // a plated label's backing reaches one texel past its glyphs, so the clamp keeps that inside too
-      const x = gutter ? L.x0 - 3 - lw : Math.max(clip.x + 1, Math.min(clip.x + clip.w - lw - 1, left - 3 - lw));
-      plate(s, x, ty, INK.DIM, 'row label ' + s);
+      const lw = measurePixelText(e.s);
+      if (Number.isFinite(e.near)) dotsH(my, lx + lw + 1, e.near - 1);
+      plate(e.s, lx, ty, e.own ? INK.DIM : INK.RULE, 'row label ' + e.s);
     }
   }
 
@@ -1311,8 +1440,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const plate = (s, x, y, ink, what) => (opt.plateLabels ? plated(g, s, x, y, ink, 'map', what)
                                                            : T(g, s, x, y, { color: ink, rgn: 'map', what }));
     if (level === 0) gridOutside(g, cells, P, clip);
-    else gridNeighbours(g, level, parent, v, P, clip, plate);
+    const nbs = level === 0 ? [] : gridNeighbours(g, level, parent, v, P, clip);   // ⭐ batch 2: neighbours are more grid
     gridLines(g, cells, n, P, clip, opt.ink, opt.dotted);
+    if (level > 0) parentEdge(g, level, parent, P, clip);                              // ⭐ batch 2: the block you are leaving
     if (opt.design === 2 && level > 0) {
       // ⭐ THE PER-CELL DENSITY BAR (design 2), one fillRect on each cell's bottom edge, now on the
       //    cell's own world-locked rectangle rather than a view-relative slot.
@@ -1323,34 +1453,49 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         if (len > 0) rectClip(g, r.x + 2, r.y + r.h - 2, len, 1, INK.DIM, clip);
       }
     }
-    // YOU — the player's own cell at this level, and the point.
+    // CURRENT — the player's own cell at this level, and the point.
+    // ⛔ batch 2 (AC-16) — DESIGN 2'S CHECKER FILL INSIDE THE PLAYER'S CELL IS GONE: a 50% parity checker is
+    //    a screen door by construction, and the frame alone is the "highlight for the sector" Max named in
+    //    design 1 (g-sector: *"how it is the same color as the highlight for the sector Highlight indicator"*).
     const pc = playerCell(level);
     if (pc) {
       const r = boxRect(P, pc.bounds);
-      if (opt.design === 2 && level > 0) {
-        const inner = clipBox(r.x + 1, r.y + 1, r.w - 1, r.h - 1, clip);
-        if (inner.w > 0 && inner.h > 0) checker(g, inner.x, inner.y, inner.w, inner.h, INK.YOU, (inner.x + inner.y) & 1);
-      }
-      const yc = frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.YOU, clip);
-      if (yc.w > 0 && yc.h > 0) assertMark('YOU cell', 'map', yc.x, yc.y, yc.w, yc.h);
+      const yc = frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.CURRENT, clip);
+      if (yc.w > 0 && yc.h > 0) assertMark('CURRENT cell', 'map', yc.x, yc.y, yc.w, yc.h);
     }
     if (D.player) {
       const px = Math.round(P.toX(D.player.x)), py = Math.round(P.toY(D.player.z));
       const yd = opt.design === 2 && level === 0
-        ? frameClip(g, px - 2, py - 2, 5, 5, INK.YOU, clip) : rectClip(g, px - 1, py - 1, 3, 3, INK.YOU, clip);
+        ? frameClip(g, px - 2, py - 2, 5, 5, INK.CURRENT, clip) : rectClip(g, px - 1, py - 1, 3, 3, INK.CURRENT, clip);
       if (opt.design === 2 && level === 0) {
-        for (const d of [[0, -4], [0, 4], [-4, 0], [4, 0]]) rectClip(g, px + d[0], py + d[1], d[0] ? 3 : 1, d[0] ? 1 : 3, INK.YOU, clip);
+        for (const d of [[0, -4], [0, 4], [-4, 0], [4, 0]]) rectClip(g, px + d[0], py + d[1], d[0] ? 3 : 1, d[0] ? 1 : 3, INK.CURRENT, clip);
       }
-      if (yd.w > 0 && yd.h > 0) assertMark('YOU marker', 'map', yd.x, yd.y, yd.w, yd.h);
+      if (yd.w > 0 && yd.h > 0) assertMark('CURRENT marker', 'map', yd.x, yd.y, yd.w, yd.h);
     }
     if (D.target && !D.targetIsHere && Number.isFinite(D.target.wx)) {
       const tg = spriteClip(g, P.toX(D.target.wx), P.toY(D.target.wz), SP.diam5, INK.TARGET, clip);
       if (tg.w > 0 && tg.h > 0) assertMark('target diamond', 'map', tg.x, tg.y, tg.w, tg.h);
     }
-    gridEdgeLabels(g, level, cells, n, P, L, clip, plate);
+    gridEdgeLabels(g, level, cells, n, P, L, clip, plate, nbs);
     // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5): the clicked cell's OWN box, the one the drill flies to.
     const pk = pickCell(level);
     if (pk) { const r = boxRect(P, pk); frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.KEY, clip); }
+    // ⭐ batch 2 (AC-16, g-sector) — THE HOVERED CELL IS HIGHLIGHTED, in `KEY` (the pick's own ink, so a hover
+    //    and the click that commits it are one highlight), and the callout is placed off it, never over it,
+    //    with its parenthetical numbers in this same ink (`hoverCallout`). Only a cell of THIS screen: a
+    //    neighbour's cell is never a pick, so it is never highlighted.
+    const hv = S.hover;
+    if (hv && hv.kind === 'cell' && hv.level === level && hv.ref && hv.ref.address && !S.search.open) {
+      const hc = navGrid.childCell(level, hv.ref.address);
+      if (hc && navGrid.sameAddress(navGrid.parentOf(level, hc.address), parent)) {
+        const r = boxRect(P, hc.bounds); frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.KEY, clip);
+      }
+    }
+    // ⭐ batch 2 (AC-15) — THE LOCATE FLASH: a click on the CURRENT or TARGET chip rings the cell holding the
+    //    player / the target at this level, two texels thick, in that chip's ink (`S.locate`, the driver's).
+    const lk = locateInk(level);
+    const lc = lk ? (lk === INK.CURRENT ? playerCell(level) : targetCell(level)) : null;
+    if (lc) { const r = boxRect(P, lc.bounds); frameClip(g, r.x - 1, r.y - 1, r.w + 3, r.h + 3, lk, clip, 2); }
     // ⭐ THE PICK GEOMETRY, PUBLISHED BY THE CODE THAT DREW IT. `x0/y0/sq` is the square `size` kpc
     //    spans and `clip` is the picture; outside `clip` a click is a MISS, never a clamp.
     S.mapProj = { design: opt.design, level, kind: 'grid', x0: L.x0, y0: L.y0, sq: L.sq,
@@ -1460,7 +1605,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       prismDrop(g, p, REGIONS.map);                                                // the stem, under the mark
       rect(g, p.x, p.py, 1, 1, INK.RULE);                                          // the plane dot
       if (s === D.selStar) { frame(g, p.x - 2, p.y - 2, 5, 5, INK.TARGET); continue; }
-      if (s === D.here)    { frame(g, p.x - 2, p.y - 2, 5, 5, INK.YOU); continue; }   // ⭐ AC-5: the player's OWN star, never "the row at the query centre"
+      if (s === D.here)    { frame(g, p.x - 2, p.y - 2, 5, 5, INK.CURRENT); continue; }   // ⭐ AC-5: the player's OWN star, never "the row at the query centre"
       // ⭐ AC-2 — A CATALOGUE STAR TAKES ITS SPECTRAL INK AND A RING; A PROCEDURAL ONE KEEPS THE DOT.
       //    Legacy colours every marker by `star.color` and rings the catalogue ones in amber
       //    (NavComputer.js:2104/2109-2113). Design 2 already spends the SPECTRAL table; design 1 spent
@@ -1523,7 +1668,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       const txt = fit(String(s.name).toUpperCase(), mapW - 8);
       const pos = placeLabel(nameTaken, S.prismHits, p.x, p.y, 3, 6, measurePixelText(txt), REGIONS.map, s);
       if (!pos) continue;                                                        // dropped, never faded
-      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.KEY, 'map', 'prism label ' + txt),
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, starInk(s, INK.KEY), 'map', 'prism label ' + txt),
                          ref: s, kind: 'star' });
       namesDrawn++;
     }
@@ -1800,7 +1945,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const routeMask = [];   // ⭐ GPS line — what the ship's route may not paint over beyond the marks
     if (z) {
       const a2 = Math.max(x0, sx(vpx(z.hzInnerAU))), b2 = Math.min(x1, sx(vpx(z.hzOuterAU)));
-      if (b2 > a2) rect(g, a2, axisY + 2, Math.max(1, b2 - a2), 3, INK.YOU);
+      if (b2 > a2) rect(g, a2, axisY + 2, Math.max(1, b2 - a2), 3, INK.HAB);   // ⭐ batch 2: habitable is not CURRENT
       if (b2 > a2) routeMask.push([a2, axisY + 2, a2 + Math.max(1, b2 - a2) - 1, axisY + 4]);
     }
 
@@ -1823,7 +1968,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         if (b === D.selBody) frame(g, x - 4, axisY - 4, 9, 9, INK.TARGET);
       }
       const tag = tagOf(b);   // AC-20 — the same letter `d1Rail` prints beside this body's row
-      const tw = T(g, tag, x - 2, axisY + 8, { color: b === D.selBody ? INK.KEY : INK.DIM, rgn: 'map', what: 'ladder tag ' + tag });
+      const tw = T(g, tag, x - 2, axisY + 8, { color: b === D.selBody ? INK.TARGET : INK.DIM, rgn: 'map', what: 'ladder tag ' + tag });
       // ⭐ AC-7/AC-8 (restorations) — THE NAME IS QUEUED HERE AND PLACED BELOW, for the reason
       //    `d2System`'s tag queue gives: a placer that refuses a slot covering a foreign mark can only
       //    run once `hits` is COMPLETE, and inside this loop it holds only the bodies drawn so far.
@@ -1866,7 +2011,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     }
     // ⛔ ONLY AT HOME (2026-10-02). `YOU` is the ink this glass reserves for where the pilot is, and this
     //    3x3 on a FOREIGN system's star is the "ship dot" Max's walk measured on a ladder he was not in.
-    if (vis(sx(0)) && isHere()) rect(g, sx(0) - 1, axisY - 1, 3, 3, INK.YOU);
+    if (vis(sx(0)) && isHere()) rect(g, sx(0) - 1, axisY - 1, 3, 3, INK.CURRENT);
     /*  Function · AC-7 and AC-8 — every body and belt on this ladder that has room carries its NAME.
      *  Intent · page items 19 and 20, Max's ruling *"yes"* on both: *"The name is one click away in a
      *    list, not on the thing"*, and *"belts are anonymous dots."* Legacy printed a name under every
@@ -1914,7 +2059,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (!txt) continue;
       const pos = placeLabel(taken, nameMarks, q.x, axisY, 4, -14, measurePixelText(txt), REGIONS.map, q.b);
       if (!pos) continue;
-      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.TARGET : INK.DIM,
                                    'map', 'ladder name ' + txt), ref: q.b, kind: 'body' });
     }
     /*  Function · AC-5 — the ship's diamond on this ladder, its word, and the dashed line to the
@@ -1957,7 +2102,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *    — see the call at the foot of this function. The old suppression's reason (a body index in the
    *    SYSTEM's frame, which would have stood on whatever moon shared the ship's index) is answered by
    *    `D.ship.rel`: the ship's offset from the open planet, in the Earth radii this axis measures.
-   *  ⛔ AND NO `INK.YOU` MARK ON THE HEAD. On the whole-system ladder the 3x3 at virtual 0 sits on the
+   *  ⛔ AND NO `INK.CURRENT` MARK ON THE HEAD. On the whole-system ladder the 3x3 at virtual 0 sits on the
    *    system's star; here virtual 0 is a planet, and `YOU` is the ink this glass reserves for where
    *    the pilot is.
    *  Deliberate non-goals · no habitable band (it is an AU band about the star), no moon pips under a
@@ -2009,7 +2154,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (sel) frame(g, mx - 4, axisY - 4, 9, 9, INK.TARGET);
       const tag = moonTag(parentTag, m.mIdx);
       const tw = T(g, tag, mx - 2, axisY + 8,
-                   { color: sel ? INK.KEY : INK.DIM, rgn: 'map', what: 'moon ladder tag ' + tag });
+                   { color: sel ? INK.TARGET : INK.DIM, rgn: 'map', what: 'moon ladder tag ' + tag });
       nameQ.push({ b: m.row, x: mx, tag });
       tagPlates.push({ x: Math.round(mx - 2) - 2, y: axisY + 8, w: tw + 4 });
     });
@@ -2057,7 +2202,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (!txt) continue;
       const pos = placeLabel(taken, nameMarks, q.x, axisY, 4, -14, measurePixelText(txt), REGIONS.map, q.b);
       if (!pos) continue;
-      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.TARGET : INK.DIM,
                                    'map', 'moon ladder name ' + txt), ref: q.b, kind: 'body' });
     }
     // ⭐⭐ THE GPS LINE (2026-10-02) — THE SHIP IS BACK ON THIS LADDER, IN ITS OWN FRAME. The old
@@ -2084,12 +2229,24 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    `null` at levels 0-3 and in the whole-system picture, so this rail is byte-identical there.
     const detPlanet = S.level === 4 ? sysDetail() : null;
     const hdr = detPlanet ? 'MOONS' : ['SECTORS', 'REGIONS', 'PRISMS', 'STARS', 'BODIES'][S.level];
-    T(g, hdr, x, y, { color: INK.KEY, rgn: 'rail', what: 'rail header' });
+    const hdrW = T(g, hdr, x, y, { color: INK.KEY, rgn: 'rail', what: 'rail header' });
     const cnt = detPlanet ? String(detPlanet.moons.length)
               : [String(D.sectorRows.length), String(S.level === 1 ? gridRows(1).length : 0), String(S.level === 2 ? gridRows(2).length : 0),
                  `${realCount(D.starRows)}/${fmtK(D.stars.length)}`,
                  String(D.bodies.length)][S.level];
-    T(g, cnt, x + w, y, { color: INK.DIM, align: 'right', rgn: 'rail', what: 'rail count' });
+    // ⭐⭐ batch 2 (AC-16) — THE COUNT-AND-SQUARES COLUMN HAS A HEADER. Max, g-sector: *"What are the squares
+    //    next to each of the distances in the table at the top right? I'm not sure what they represent."* The
+    //    number is the cell's ESTIMATED STAR SYSTEMS (`estStars`, not a distance) and the 0-4 squares are the
+    //    same number as a bar, against the densest cell on this screen (`rankMax`). So at the three levels
+    //    whose rows carry them the header's right end names that column — `EST SYSTEMS`, right-aligned over
+    //    the number and the squares together — and the level's total moves beside its title (`REGIONS 256`).
+    //    ⚠ `SYSTEMS` alone when the long form does not fit beside the title; the total keeps its place then.
+    const barCols = !detPlanet && S.level <= 2;
+    const colHdr = barCols ? ['EST SYSTEMS', 'SYSTEMS'].find((t) => 1 + hdrW + FACE.advance + measurePixelText(cnt) + 2 * FACE.advance + measurePixelText(t) <= w) : null;
+    if (colHdr) {
+      T(g, cnt, x + hdrW + FACE.advance, y, { color: INK.DIM, rgn: 'rail', what: 'rail count' });
+      T(g, colHdr, x + w, y, { color: INK.DIM, align: 'right', rgn: 'rail', what: 'rail column header' });
+    } else T(g, cnt, x + w, y, { color: INK.DIM, align: 'right', rgn: 'rail', what: 'rail count' });
     rect(g, x, y + LEAD - 1, w, 1, INK.RULE);
 
     // ⭐ AC-3/AC-9 (restorations) — THE DETAIL BLOCK'S HEIGHT IS NOW A NUMBER, NOT A `9` IN A SUM.
@@ -2125,7 +2282,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       const secMax = rankMax(D.sectorRows);
       lines = D.sectorRows.slice(off, off + listRows).map((r, i) =>
         ({ txt: `${pad(String(off + i + 1), 2)} ${pad(r.s.name.toUpperCase(), cols - 16)} ${rpad(fmtK(r.n), 6)}`,
-           bar: r.n / secMax, sel: r.s.id === D.playerSector?.id }));
+           bar: r.n / secMax, sel: r.s.id === D.playerSector?.id, ink: r.s.id === D.playerSector?.id ? INK.CURRENT : null }));   // ⭐ batch 2: the lit row is the player's own sector
       // ⛔⛔ `D.playerSector` IS NULLABLE, AND DEREFERENCING IT RAW HERE WAS A FREEZE, NOT A BLANK ROW.
       //    `state.js:495` falls back to `getSectorAt(D.player)`, which answers `null` for any player
       //    past `GALAXY_RADIUS * 1.2` — and `D.ready` (`state.js:594`) gates only on `gm && player`, so
@@ -2137,11 +2294,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       //   plausible numbers on the glass for a sector that does not exist, which is exactly the
       //   swallowed failure this file is written against. "—" says the instrument does not know.
       const s = D.playerSector;
-      detail.push([s ? s.name.toUpperCase() : 'UNKNOWN SECTOR', INK.KEY],
+      detail.push([s ? s.name.toUpperCase() : 'UNKNOWN SECTOR', INK.CURRENT],   // ⭐ batch 2: this block is the player's own sector
         [`CENTRE  ${s ? `${s.centerX.toFixed(1)}, ${s.centerZ.toFixed(1)}` : '—'}`, INK.BODY],
         [`SYSTEMS ${s ? fmtK(estStars(s.centerX, s.centerZ, s.size)) : '—'}`, INK.BODY],
         [`SPAN    ${s ? `${s.size.toFixed(2)} KPC` : '—'}`, INK.BODY], ['', INK.BODY],
-        [`YOU     ${fit(s ? s.name.toUpperCase() : 'UNKNOWN', (cols - 8) * FACE.advance)}`, INK.YOU],
+        [`CURRENT ${fit(s ? s.name.toUpperCase() : 'UNKNOWN', (cols - 8) * FACE.advance)}`, INK.CURRENT],
         [`TARGET  ${fit((D.targetIsHere ? '—' : (D.target?.name || '—')).toUpperCase(), (cols - 8) * FACE.advance)}`, INK.TARGET]);
     } else if (S.level === 1 || S.level === 2) {
       // ⭐ THE ROWS ARE THIS SCREEN'S OWN CELLS (naming-prism-segments AC-3): each one is a region (or a
@@ -2172,12 +2329,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       const dp = S.level === 1 ? 2 : 3;   // a 125 pc region needs pc, a 7.8 pc prism needs a tenth of one
       detail.push([t.id, INK.KEY], [`CENTRE  ${Number.isFinite(t.x) ? `${t.x.toFixed(dp)}, ${t.z.toFixed(dp)}` : '—'}`, INK.BODY],
         [`SYSTEMS ${fmtK(t.n)}`, INK.BODY], [`SPAN    ${navGrid.childKpc(S.level).toFixed(4)} KPC`, INK.BODY],
-        ['', INK.BODY], [`YOU     ${playerCellRef(S.level)}`, INK.YOU], ['TARGET  —', INK.DIM]);
+        ['', INK.BODY], [`CURRENT ${playerCellRef(S.level)}`, INK.CURRENT], ['TARGET  —', INK.DIM]);
     } else if (S.level === 3) {
       lines = D.starRows.slice(off, off + listRows).map((s, i) => ({
         txt: `${off + i < 8 && s !== D.here ? off + i + 1 : '·'} ${pad(s.name.toUpperCase() || 'UNNAMED', cols - 13)} ` +
              `${rpad(pcOf(s).toFixed(1), 5)} ${pad(s.spectral, 2)} ${s.mult > 1 ? s.mult : '·'}`,
-        bar: 0, sel: s === D.selStar }));
+        bar: 0, sel: s === D.selStar, ink: s === D.selStar ? INK.TARGET : s === D.here ? INK.CURRENT : null }));   // ⭐ batch 2 (AC-15)
       /*  Function · the camera block — where the eye is, in the units legacy used.
        *  Intent · AC-3 and AC-9 (restorations). Max, UAT 2026-08-01, on this very screen: *"I still
        *    can't use the up/down controls to rise and lower below the galactic plane."* R and F move
@@ -2200,11 +2357,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       detail.push([pn.height, INK.BODY], [`       ${pn.slab} · ${pn.region}`, INK.DIM],
         [pn.playerY, INK.BODY], [pn.yRange, INK.DIM], [pn.view, INK.BODY]);
       const s = D.selStar;
-      if (s) detail.push([fit(s.name.toUpperCase(), w), INK.KEY], [`${s.spectral}   ${s.isReal ? 'CATALOG' : 'PROCEDURAL'}`, INK.BODY],
+      if (s) detail.push([fit(s.name.toUpperCase(), w), INK.TARGET], [`${s.spectral}   ${s.isReal ? 'CATALOG' : 'PROCEDURAL'}`, INK.BODY],
         [`DIST   ${pcOf(s).toFixed(2)} PC`, INK.BODY], [`       ${lyOf(s).toFixed(1)} LY`, INK.BODY],
         [`PLANE  ${((s.wy - D.player.y) * 1000).toFixed(0)} PC`, INK.BODY],
         [`COMPS  ${s.mult > 1 ? 'MULTIPLE (' + s.mult + ')' : 'SINGLE'}`, INK.BODY],
-        D.targetIsHere ? ['YOU ARE HERE', INK.YOU] : ['WARP ARMED', INK.TARGET]);
+        D.targetIsHere ? ['CURRENT SYSTEM', INK.CURRENT] : ['WARP ARMED', INK.TARGET]);
     } else if (detPlanet) {
       /*  Function · AC-4 — the rail while a planet is open: the planet, then its moons, and the
        *    detail block showing whichever of them is selected.
@@ -2234,14 +2391,14 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       lines = rows.slice(off, off + listRows).map((r) => ({
         txt: `${pad(r.tag, 3)}${pad(String(r.b.name || '—').toUpperCase(), cols - 14)} ` +
              `${rpad(r.orbit, 4)} ${pad(r.type, 5)}`,
-        bar: 0, sel: r.b === D.selBody }));
+        bar: 0, sel: r.b === D.selBody, ink: r.b === D.selBody ? INK.TARGET : null }));
       const sm = selMoonOf(detPlanet);
-      if (sm) detail.push([fit(String(sm.row.name || '—').toUpperCase(), w), INK.KEY],
+      if (sm) detail.push([fit(String(sm.row.name || '—').toUpperCase(), w), INK.TARGET],
         [fit(sm.type, w), INK.BODY],
         [`RADIUS ${sm.rE ? sm.rE.toFixed(2) + ' EARTH' : '—'}`, INK.BODY],
         [`ORBIT  ${Math.round(sm.orbitR)} R⊕`, INK.BODY],
         [fit(`MOON OF ${String(detPlanet.parent.name || '—').toUpperCase()}`, w), INK.DIM]);
-      else detail.push([fit(String(detPlanet.parent.name || '—').toUpperCase(), w), INK.KEY],
+      else detail.push([fit(String(detPlanet.parent.name || '—').toUpperCase(), w), detPlanet.parent === D.selBody ? INK.TARGET : INK.KEY],
         [String(detPlanet.parent.cls || '').toUpperCase(), INK.BODY],
         [`RADIUS ${detPlanet.parent.rE ? detPlanet.parent.rE.toFixed(2) + ' EARTH' : '—'}`, INK.BODY],
         [`ORBIT  ${(detPlanet.parent.au ?? 0).toFixed(2)} AU`, INK.BODY],
@@ -2257,7 +2414,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         txt: `${tagOf(b)}${b.kind === 'moon' ? '-' : ' '}` +
              `${pad((b.kind === 'moon' ? ' ' : '') + b.name.toUpperCase(), cols - 14)} ` +
              `${rpad(b.au.toFixed(2), 5)} ${rpad(b.T ? Math.round(b.T) + 'K' : '—', 5)}`,
-        bar: 0, sel: b === D.selBody }));
+        bar: 0, sel: b === D.selBody, ink: b === D.selBody ? INK.TARGET : null }));
       const b = D.selBody;
       // ⭐⭐ AC-2 — THE TWO STATES THIS BLOCK COULD NOT DRAW, AND WHY SILENCE WAS THE WRONG ANSWER.
       //    `if (b)` was already here, so a null selection drew NOTHING — seven blank rows under the
@@ -2283,20 +2440,22 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         if (sc.length) detail.push([fit(sc[0], w), INK.KEY], [fit(sc.slice(1).join(' · '), w), INK.BODY]);
         else detail.push(['NO BODY SELECTED', INK.DIM]);
       }
-      else if (b.kind === 'star') detail.push([fit((b.name || '—').toUpperCase(), w), INK.KEY],
+      else if (b.kind === 'star') detail.push([fit((b.name || '—').toUpperCase(), w), INK.TARGET],
         [(b.cls || '').toUpperCase(), INK.BODY], ['PRIMARY', INK.DIM]);
-      else if (b) detail.push([fit(b.name.toUpperCase(), w), INK.KEY], [b.cls.toUpperCase(), INK.BODY],
+      else if (b) detail.push([fit(b.name.toUpperCase(), w), INK.TARGET], [b.cls.toUpperCase(), INK.BODY],
         [`RADIUS ${b.rE ? b.rE.toFixed(2) + ' EARTH' : '—'}`, INK.BODY],
         [`ORBIT  ${b.au.toFixed(2)} AU`, INK.BODY],
         [`TEMP   ${b.T ? Math.round(b.T) + ' K' : '—'}`, INK.BODY],
-        [`HAB    ${b.hab != null ? b.hab.toFixed(2) : '—'}`, b.hab > 0.5 ? INK.YOU : INK.BODY],
+        [`HAB    ${b.hab != null ? b.hab.toFixed(2) : '—'}`, b.hab > 0.5 ? INK.HAB : INK.BODY],
         [`MOONS  ${b.moons}${b.rings ? '   RINGED' : ''}`, INK.BODY]);
     }
 
     lines.forEach((L, i) => {
       const yy = y + (i + 1) * LEAD;
       if (L.sel) rect(g, x - 1, yy - 1, w + 2, LEAD, INK.RULE);
-      T(g, fit(L.txt, w), x, yy, { color: L.sel ? INK.KEY : INK.BODY, rgn: 'rail', what: 'rail row ' + i });
+      // ⭐ batch 2 (AC-15) — A ROW THAT NAMES THE TARGET IS THE TARGET'S INK, ONE THAT NAMES WHERE THE PLAYER
+      //    IS IS CURRENT'S; `L.ink` is set only where a row can be one of those, so every other row is BODY.
+      T(g, fit(L.txt, w), x, yy, { color: L.ink || (L.sel ? INK.KEY : INK.BODY), rgn: 'rail', what: 'rail row ' + i });
       if (L.bar > 0) for (let k = 0; k < Math.round(4 * L.bar); k++) rect(g, x + w - 23 + k * 6, yy + 1, 4, 4, INK.BODY);   // c67-c70
     });
     const pagerY = y + (lines.length + 1) * LEAD;
@@ -2387,7 +2546,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       const kind = fit(String(r.kind || '').toUpperCase(), 8 * FACE.advance);
       const kw = measurePixelText(kind);
       const nameW = T(g, fit(String(r.name || '').toUpperCase(), w - kw - FACE.advance), x, yy,
-                      { color: sel ? INK.KEY : INK.BODY, rgn: 'rail', what: 'search row ' + i });
+                      { color: sel ? INK.TARGET : INK.BODY, rgn: 'rail', what: 'search row ' + i });   // ⭐ batch 2 (s-search): the picked result is the TARGET
       T(g, kind, x + w, yy, { color: sel ? INK.BODY : INK.DIM, align: 'right', rgn: 'rail', what: 'search kind ' + i });
       assertClear('search row ' + i + ' name vs kind', 'rail', x + nameW + 2, x + w - kw);
     });
@@ -2486,9 +2645,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const gaugeTexel = (kpc) => gaugeCy - Math.max(-gaugeSpan + 2, Math.min(gaugeSpan - 2, off(kpc)));
     rect(g, gx + 3, gy + 2, 1, gh - 4, INK.RULE);
     const po = off(D.player.y);
-    if (Math.abs(po) <= gaugeSpan - 2) rect(g, gx + 1, gaugeCy - po, 3, 1, INK.YOU);
-    else if (po > 0) { rect(g, gx + 2, gy + 1, 1, 1, INK.YOU); rect(g, gx + 1, gy + 2, 3, 1, INK.YOU); }   // ▲ the ship is above
-    else { rect(g, gx + 1, gy + gh - 3, 3, 1, INK.YOU); rect(g, gx + 2, gy + gh - 2, 1, 1, INK.YOU); }   // ▼ …or below
+    if (Math.abs(po) <= gaugeSpan - 2) rect(g, gx + 1, gaugeCy - po, 3, 1, INK.CURRENT);
+    else if (po > 0) { rect(g, gx + 2, gy + 1, 1, 1, INK.CURRENT); rect(g, gx + 1, gy + 2, 3, 1, INK.CURRENT); }   // ▲ the ship is above
+    else { rect(g, gx + 1, gy + gh - 3, 3, 1, INK.CURRENT); rect(g, gx + 2, gy + gh - 2, 1, 1, INK.CURRENT); }   // ▼ …or below
     if (D.selStar) rect(g, gx, gaugeTexel(D.selStar.wy), 5, 1, INK.TARGET);
     if (Math.abs(camY - D.player.y) > 1e-9) rect(g, gx + 1, gaugeTexel(camY), 4, 1, INK.KEY);
     S.yGaugeRect = { x: gx, y: gy, w: 6, h: gh,
@@ -2536,7 +2695,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (!isLoaded) checker(g, bx + 1, y0, 4, h, ink, i & 1);
       else if (empty && empty.has(ref) && k !== kView) { rect(g, bx + 1, y0, 1, h, ink); rect(g, bx + 4, y0, 1, h, ink); }
       else rect(g, bx + 1, y0, 4, h, ink);
-      if (k === kShip) rect(g, bx, y0, 1, h, INK.YOU);
+      if (k === kShip) rect(g, bx, y0, 1, h, INK.CURRENT);
       if (k === kTgt) rect(g, bx + 5, y0, 1, h, INK.TARGET);
     }
     const planeY = slabBarGeo.barRow(slabBarGeo.rowOfIndex(0), top, span)[1] - 1;   // the gap under N1
@@ -2550,7 +2709,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (k === null || (k >= -slabBarGeo.BAR_HEMI && k < slabBarGeo.BAR_HEMI)) return;
       rect(g, x, k > 0 ? by : by + bh - 1, w, 1, ink);
     };
-    beyond(kView, bx + 1, 4, INK.KEY); beyond(kShip, bx, 1, INK.YOU); beyond(kTgt, bx + 5, 1, INK.TARGET);
+    beyond(kView, bx + 1, 4, INK.KEY); beyond(kShip, bx, 1, INK.CURRENT); beyond(kTgt, bx + 5, 1, INK.TARGET);
     assertMark('segment bar', 'slabbar', bx, by, slabBarGeo.BAR_W, bh);
     S.slabBarRect = r;
   }
@@ -2617,7 +2776,18 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   function foreignSysLines() {
     if (S.level !== 4 || isHere()) return null;
     const n = (D.sysStar && D.sysStar.name) || (D.sys && D.sys.star && D.sys.star.name);
-    return n ? [`VIEWING ${String(n).toUpperCase()}`, 'NOT YOUR SYSTEM'] : null;
+    return n ? [`VIEWING ${String(n).toUpperCase()}`, 'NOT CURRENT SYSTEM'] : null;
+  }
+
+  /** ⭐ batch 2 (AC-15) — the VIEWING lines wear TARGET only when the system on the glass IS the target (by
+   *  position, 0.1 pc — `isHereStar`'s tolerance); browsing a system that is not the target is neither
+   *  CURRENT nor TARGET, and TARGET is reserved for the target. */
+  function foreignSysInk() {
+    const t = D.target, s = D.sysStar;
+    if (!t || D.targetIsHere || !s) return INK.BODY;
+    const sx = Number.isFinite(s.wx) ? s.wx : s.x, sz = Number.isFinite(s.wz) ? s.wz : s.z;
+    if (Number.isFinite(t.wx) && Number.isFinite(sx)) return Math.hypot(t.wx - sx, t.wz - sz) < 1e-4 ? INK.TARGET : INK.BODY;
+    return (t.name && s.name && String(t.name).toUpperCase() === String(s.name).toUpperCase()) ? INK.TARGET : INK.BODY;
   }
 
   function sysStarClauses() {
@@ -2836,7 +3006,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const cl = st.cl;
     if (cl && (x < cl.x || x >= cl.x + cl.w || y < cl.y || y >= cl.y + cl.h)) return false;
     for (const b of st.boxes) if (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) return false;
-    rect(st.g, x, y, 1, 1, INK.SHIP);
+    rect(st.g, x, y, 1, 1, INK.CURRENT);
     st.n++;
     st.path.push({ x, y, r: 0.5 });
     return true;
@@ -2890,16 +3060,52 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   /** The word, through `placeLabel` against the labels already placed. ⛔ `self` IS `null`, SO THE WORD
    *  IS FOREIGN TO EVERY MARK INCLUDING THE ONE IT STANDS ON — a plate allowed to touch "its own object"
    *  would knock that body out of the picture to name the ship sitting on it. It is NOT pushed into
-   *  `S.labelHits`: the ship is not a pickable body. */
-  function shipWord(g, hits, taken, ax, ay, word) {
+   *  `S.labelHits`: the ship is not a pickable body.
+   *  ⭐ batch 2 — `words` IS A FALLBACK CHAIN, LONGEST FIRST (`currentWords`): the first spelling that finds
+   *  a slot is drawn, so a crowded frame shortens the word instead of dropping it. */
+  function shipWord(g, hits, taken, ax, ay, words) {
     const cl = REGIONS.map;
     if (!cl) return;
-    const txt = fit(word, cl.w - 8);
-    // ⚠ BELOW FIRST (today's slot, so an uncrowded frame is unchanged), THEN ABOVE: on a ladder the room
-    //   under the axis is the names' (`gy = -14`), and a word carrying a range is worth a second try.
-    const w = measurePixelText(txt);
-    const pos = placeLabel(taken, hits, ax, ay, 4, -10, w, cl, null) || placeLabel(taken, hits, ax, ay, 4, 18, w, cl, null);   // `hits` carries the lit route (the callers pass `hits.concat(st.path)`)
-    if (pos) plated(g, txt, pos.x, pos.y, INK.SHIP, 'map', 'ship label');
+    for (const word of (Array.isArray(words) ? words : [words])) {
+      const txt = fit(word, cl.w - 8);
+      if (txt !== word) continue;                     // a spelling that does not fit the pane is not drawn cut
+      // ⚠ BELOW FIRST (today's slot, so an uncrowded frame is unchanged), THEN ABOVE: on a ladder the room
+      //   under the axis is the names' (`gy = -14`), and a word carrying a range is worth a second try.
+      const w = measurePixelText(txt);
+      const pos = placeLabel(taken, hits, ax, ay, 4, -10, w, cl, null) || placeLabel(taken, hits, ax, ay, 4, 18, w, cl, null);   // `hits` carries the lit route (the callers pass `hits.concat(st.path)`)
+      if (pos) { plated(g, txt, pos.x, pos.y, INK.CURRENT, 'map', 'ship label'); return; }
+    }
+  }
+  /*  Function · AC-17 (batch 2) — WHAT THE CURRENT MARKER'S WORD SAYS, AND THE ONE THING ITS NUMBER MEANS.
+   *  Intent · Max: *"Rather than ship, the marker should say current."* And the moon review
+   *    (`.astra/jobs/20261003-002012-moon-view-gameplay-review`, finding 2): *"the current offscreen SHIP
+   *    distance is to the central planet, whereas the overlap fallback's SHIP distance is to the target"* —
+   *    one label, two meanings. Its recommendation: *"show a consistently labeled true ship-to-selected-
+   *    target range."* So the number is ALWAYS the ship's true 3D centre-to-centre range to the route's
+   *    target (the hovered body, else the selection — `routeTarget`), and the word SAYS so: `CURRENT
+   *    2.0AU TO MARS`. ⛔ The picture's-origin distance the off-pane chevron used to carry is gone: the
+   *    chevron says which way the ship is; a number about the star that the pilot cannot see the ship
+   *    against was the second meaning.
+   *  ⚠ WHY THE TARGET AND NOT THE ORIGIN: the dashed route on the same picture points at the target, the
+   *    schematic's compressed radii cannot be read as a ruler (review finding 2), and "how far is it to
+   *    where Enter would take me" is the number a pilot acts on. With no target, or with the ship AT it,
+   *    there is no number at all — `CURRENT`, never a range about something else.
+   *  ⚠ THE FALLBACKS ARE SHORTER SPELLINGS OF THE SAME MEANING: `CURRENT 2.0AU TO TGT` when the target's
+   *    name does not fit, then the bare word. Never a bare number. */
+  function currentWords(at) {
+    const t = routeTarget();
+    if (!t || !D.ship || !D.ship.live || (at && sameBody(t, at))) return ['CURRENT'];
+    const rg = shipRangeTo(D.ship, t);
+    if (!Number.isFinite(rg)) return ['CURRENT'];
+    const r = fmtShipRange(rg), name = routeTargetName(t);
+    return [...(name ? [`CURRENT ${r} TO ${name}`] : []), `CURRENT ${r} TO TGT`, 'CURRENT'];
+  }
+  /** The route target's name as the rail spells it (upper case), or '' — the star by its system's name. */
+  function routeTargetName(t) {
+    if (!t) return '';
+    if (t.kind === 'star') return String((D.sysStar && D.sysStar.name) || (D.sys && D.sys.star && D.sys.star.name) || 'STAR').toUpperCase();
+    const row = (D.bodies || []).find((b) => b && b.kind === t.kind && b.pIdx === t.pIdx && (t.kind !== 'moon' || b.mIdx === t.mIdx));
+    return row ? bodyLabelText(row) : '';
   }
 
   /*  Function · the ship and its route on design 2's two ORRERIES (the system, and a planet's moons).
@@ -2936,8 +3142,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     }
     if (!sp && !edge) return null;
     const from = sp || edge;
-    let word = 'SHIP';
-    if (edge) { const r = geo.originRange(); if (Number.isFinite(r)) word += ' ' + fmtShipRange(r); }
+    const words = currentWords(at);   // ⭐ AC-17 — one meaning: the true range to the route's target (see `currentWords`)
     const st = routeInk(g, cl, hits, taken, 'orrery', null, dry);
     const t = routeTarget();
     if (t && !(at && sameBody(t, at))) {
@@ -2999,8 +3204,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         const mk = pip || tm;
         if (mk && Number.isFinite(rg) && inPane(mk.x, mk.y)) {
           const bk = (tm && tm.framed) ? 6 : (pip ? 2 : 4);
-          routeChevron(st, mk.x, mk.y - bk, 0, 1, 1, 1);
-          word = 'SHIP ' + fmtShipRange(rg);
+          routeChevron(st, mk.x, mk.y - bk, 0, 1, 1, 1);   // ⭐ AC-17: the word already carries this range
         }
       }
     }
@@ -3010,12 +3214,13 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       return st.path;
     }
     if (sp) {
-      const box = spriteClip(g, sp.x, sp.y, SP.diam5, INK.SHIP, cl);
+      const box = spriteClip(g, sp.x, sp.y, SP.diam5, INK.CURRENT, cl);
       if (box.w > 0 && box.h > 0) assertMark('ship diamond', 'map', box.x, box.y, box.w, box.h);
     } else {
       routeChevron(st, edge.x, edge.y, edge.ux, edge.uy);
     }
-    shipWord(g, hits.concat(st.path), taken, Math.round(from.x), Math.round(from.y), word);
+    shipWord(g, hits.concat(st.path), taken, Math.round(from.x), Math.round(from.y), words);
+    S.currentMark = sp ? { x: Math.round(sp.x), y: Math.round(sp.y) } : null;   // ⭐ AC-15: where the CURRENT locate ring goes
     return null;
   }
 
@@ -3056,8 +3261,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //   the window's own edge when they are not (the last stop of an unscrolled ladder is at `x1 - 8`).
     const capL = L.capsL ? L.x0 + 6 : L.x0 + 2, capR = L.capsR ? L.x1 - 7 : L.x1 - 2;
     const shipX = sp ? Math.round(sp.x) : (edgeSide < 0 ? capL : capR);
-    let word = 'SHIP';
-    if (edgeSide) { const r = L.originRange(); if (Number.isFinite(r)) word += ' ' + fmtShipRange(r); }
+    const words = currentWords(at);   // ⭐ AC-17 — one meaning: the true range to the route's target (see `currentWords`)
     const st = routeInk(g, cl, hits, taken, 'ladder', L.mask, dry);
     const t = routeTarget();
     if (t && !(at && sameBody(t, at))) {
@@ -3121,8 +3325,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
           //    ship is too close along the axis for a track, so it comes from ABOVE, pointing down at the
           //    target — never under the diamond, on either side.
           const tx = Math.round(tp.x), bk = tp.framed ? 6 : 4;
-          routeChevron(st, tx, axisY - bk, 0, 1, 1, 1);
-          word = 'SHIP ' + fmtShipRange(rg);
+          routeChevron(st, tx, axisY - bk, 0, 1, 1, 1);   // ⭐ AC-17: the word already carries this range
         }
       }
     }
@@ -3133,7 +3336,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       return st.path;
     }
     if (sp) {
-      const box = spriteClip(g, sp.x, sp.y, SP.diam5, INK.SHIP, cl);
+      const box = spriteClip(g, sp.x, sp.y, SP.diam5, INK.CURRENT, cl);
       if (box.w > 0 && box.h > 0) assertMark('ship diamond', 'map', box.x, box.y, box.w, box.h);
       ax = Math.round(sp.x); ay = Math.round(sp.y);
     } else {
@@ -3142,7 +3345,8 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       ax = edgeSide < 0 ? L.x0 + 2 : L.x1 - 2; ay = axisY - 3;
       routeChevron(st, ax, ay, edgeSide, 0);
     }
-    shipWord(g, hits.concat(st.path), taken, ax, ay, word);
+    shipWord(g, hits.concat(st.path), taken, ax, ay, words);
+    S.currentMark = sp ? { x: Math.round(sp.x), y: Math.round(sp.y) } : null;   // ⭐ AC-15: where the CURRENT locate ring goes
     return null;
   }
 
@@ -3209,6 +3413,22 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const minX = rgn.x + 1, maxX = rgn.x + rgn.w - w - 1;
     const minY = rgn.y + 1, maxY = rgn.y + rgn.h - h - 1;
     if (maxX < minX || maxY < minY) return;        // a pane that cannot hold the plate draws nothing
+    // ⭐⭐ batch 2 (AC-16, g-sector) — A CELL'S CALLOUT IS PLACED OFF THE CELL, NEVER OVER IT, AND ON THE GRID.
+    //    Max: *"Let's make sure the pop-up label does not obscure the cell that is highlighted. So we'll want
+    //    it to move up, down, left, or right with respect to the bottom or top or whatever side of the cell
+    //    so that it always displays on the grid but never on the cell that is highlighted. Let's also make
+    //    the highlight color and the font color of the pop-up label where the parenthetical numeric values
+    //    are the same font color."* The old placement kept clear of a ±5-texel box round the POINTER, which
+    //    on a 13-texel cell let the plate cover most of the cell it names. See `cellCalloutBox`.
+    if (hv.kind === 'cell') {
+      const cb = cellCalloutBox(hv, w, h);
+      if (!cb) return;
+      rect(g, cb.x - 1, cb.y - 1, w + 2, h + 2, INK.BG);
+      lines.forEach((s, i) => T(g, s, cb.x, cb.y + i * LEAD,
+        { color: i === 0 ? INK.KEY : CALLOUT_CELL_INK, rgn: 'map', what: 'callout line ' + i }));
+      S.hoverCalloutRect = { x: cb.x - 1, y: cb.y - 1, w: w + 2, h: h + 2 };
+      return;
+    }
     const ax = Math.round(hv.sx), ay = Math.round(hv.sy);
     const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     // ⭐ THE SIDE WITH THE MOST ROOM FIRST, then the other side, then below, then above. Each candidate
@@ -3239,6 +3459,49 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    DRIVER's press guard is the consumer for it and re-deriving this box there would be a second
     //    copy of the placement above.
     S.hoverCalloutRect = { x: box.x - 1, y: box.y - 1, w: w + 2, h: h + 2 };
+  }
+
+  /** ⭐ batch 2 — the hover highlight's ink, which is also the ink of the cell callout's `(x, z)` line: one
+   *  colour for "the cell you are pointing at" on the grid and in the words about it. `KEY`, the clicked
+   *  cell's own ink, because a hover and the click that commits it are the same cell. */
+  const CALLOUT_CELL_INK = INK.KEY;
+  /*  Function · where a CELL's callout goes: `{ x, y }` for its glyph box (the plate is one texel bigger), or
+   *    `null` when nowhere fits.
+   *  Intent · AC-16 (g-sector). Four slots round the HOVERED CELL's own drawn rectangle (`S.mapCells`, the
+   *    rectangle the paint published) — below, above, right, left, the side with more room first — each
+   *    clamped into the WINDOW (`S.mapProj.clip`, so the label is always on the grid) and refused if its
+   *    plate would touch the cell or the cell's highlight frame. ⭐ First pass also keeps off the CURRENT
+   *    and TARGET cells, so the label never sits on a coloured highlight either; the second pass only on
+   *    the hovered cell.
+   *  Deliberate non-goals · no leader line from label to cell; no third line. */
+  function cellCalloutBox(hv, w, h) {
+    const rgn = REGIONS.map, mp = S.mapProj;
+    const gc = (mp && mp.clip) ? mp.clip : rgn;
+    if (!rgn || !gc) return null;
+    const x0 = Math.max(gc.x, rgn.x) + 1, y0 = Math.max(gc.y, rgn.y) + 1;
+    const x1 = Math.min(gc.x + gc.w, rgn.x + rgn.w) - 1 - w, y1 = Math.min(gc.y + gc.h, rgn.y + rgn.h) - 1 - h;
+    if (x1 < x0 || y1 < y0) return null;
+    const rectOf = (addr) => { const c = addr && (S.mapCells || []).find((m) => navGrid.sameAddress(m.address, addr)); return c ? c.rect : null; };
+    const ax = Math.round(hv.sx), ay = Math.round(hv.sy);
+    const hr = rectOf(hv.ref && hv.ref.address) || { x: ax - CALLOUT_MARK, y: ay - CALLOUT_MARK, w: 2 * CALLOUT_MARK, h: 2 * CALLOUT_MARK };
+    const pc = playerCell(S.level), tc = targetCell(S.level);
+    const soft = [pc && rectOf(pc.address), tc && rectOf(tc.address)].filter(Boolean);
+    // the plate is (x-1 .. x+w) x (y-1 .. y+h); a cell's frame is (r.x .. r.x+r.w) x (r.y .. r.y+r.h)
+    const touches = (x, y, r) => x - 1 <= r.x + r.w && x + w >= r.x && y - 1 <= r.y + r.h && y + h >= r.y;
+    const cx = hr.x + Math.round(hr.w / 2) - Math.floor(w / 2), cy = hr.y + Math.round(hr.h / 2) - Math.floor(h / 2);
+    const below = { x: cx, y: hr.y + hr.h + 3 }, above = { x: cx, y: hr.y - h - 2 };
+    const right = { x: hr.x + hr.w + 3, y: cy }, left = { x: hr.x - w - 2, y: cy };
+    const vert = (gc.y + gc.h - (hr.y + hr.h)) >= (hr.y - gc.y) ? [below, above] : [above, below];
+    const horz = (gc.x + gc.w - (hr.x + hr.w)) >= (hr.x - gc.x) ? [right, left] : [left, right];
+    const cands = [...vert, ...horz];
+    const clampC = (c) => ({ x: Math.max(x0, Math.min(x1, Math.round(c.x))), y: Math.max(y0, Math.min(y1, Math.round(c.y))) });
+    for (const avoid of [[hr, ...soft], [hr]]) {
+      for (const c of cands) {
+        const p = clampC(c);
+        if (!avoid.some((r) => touches(p.x, p.y, r))) return p;
+      }
+    }
+    return null;
   }
 
   /*  Function · legacy's own tooltip CONTENT for whatever `S.hover` is holding, line by line, name
@@ -3335,6 +3598,151 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     return out;
   }
 
+  /* ────────────────────────────────────────────────────────────────────────────────────────────────
+   * ⭐⭐ naming-prism-segments AC-15 (batch 2) — THE CURRENT AND TARGET INDICATORS, TOP RIGHT, BOTH DESIGNS.
+   *
+   * Max, g-here (2026-10-03): *"I really like this option in the upper right hand of the menus to know the
+   * name of your current position system and your target system, or your current position system in
+   * general if you're just off in space and not in orbit in a system and your target item in that system
+   * … And that whenever in the navigation system, you can click on any of those indicators which both of
+   * those should be in the upper right. In the location where the target indicator is … clicking on those
+   * will bring you to the appropriate location on the navigation screen you're on. If it's galaxy, it will
+   * highlight in that same color the cell in the galaxy where you are, the sector. If you're in the sector
+   * screen, it will highlight the part in the sector matrix that represents the region where your target
+   * is, or where you are if you pressed the current button up there."*
+   *
+   * ⭐ TWO CHIPS, RIGHT-ALIGNED, CURRENT THEN TARGET (TARGET stays where design 1's `TGT` always was). Each
+   *   is a 5-texel diamond — the same diamond the maps use for that ink — and a name, with a one-texel
+   *   underline in its ink on the bar's rule row: at 240p a lit underline is the era's "this is a button"
+   *   (the active tab already says it that way in design 2). Published as `S.indicatorRects`, one
+   *   `{ x, y, w, h, who }` per chip, out of the loop that drew it — the driver's click reads exactly that.
+   * ⛔ WHAT THE NAMES ARE: CURRENT is the body the ship has ARRIVED at (`D.ship.at`, live position only),
+   *   else the system it is in (`D.hereName`), else `DEEP SPACE` (`S.noSystem`). TARGET is what Enter
+   *   would go to — the same three-way test the commit row makes (`isHere()` / `homeWarp` / `warpLive`) —
+   *   so the indicator and the commit can never name two different things.
+   * Deliberate non-goals · no per-chip animation (the Astra button pass is parked), no third chip.
+   * ──────────────────────────────────────────────────────────────────────────────────────────────── */
+  function currentName() {
+    if (S.noSystem) return 'DEEP SPACE';
+    const at = (D.ship && D.ship.live) ? D.ship.at : null;
+    if (at && at.kind !== 'star') {
+      const row = (D.bodies || []).find((b) => b && b.kind === at.kind && b.pIdx === at.pIdx && (at.kind !== 'moon' || b.mIdx === at.mIdx));
+      if (row && row.name) return String(row.name).toUpperCase();
+    }
+    return String(D.hereName || 'DEEP SPACE').toUpperCase();
+  }
+  /** `{ name, dist, live, kind }` — the commit's own target, or `{ name: '—', live: false }`. */
+  function targetInfo() {
+    const cur = isHere();
+    const warpLive = !!D.target && !D.targetIsHere;
+    const homeWarp = cur && !D.selBody && warpLive;
+    if (cur && !homeWarp && D.selBody) return { name: bodyLabelText(D.selBody) || '—', dist: '', live: true, kind: 'body' };
+    if (warpLive) return { name: String(D.target.name || '—').toUpperCase(), dist: `${lyOf(D.target).toFixed(1)} LY`, live: true, kind: 'star' };
+    return { name: '—', dist: '', live: false, kind: null };
+  }
+  /** Draw the two chips right-aligned at `xr`, glyphs on row `y`, inside `[xl, xr]`; the underline sits on
+   *  `y + FACE.h` and the hit band is `0 .. hitH`. Returns the left edge of the ink it drew. */
+  function indicatorChips(g, xl, xr, y, hitH, rgn) {
+    const GAP = 8, ICON = 7;                                // a 5-texel diamond and two texels of air
+    const t = targetInfo(), cName = currentName();
+    const room = Math.max(0, xr - xl);
+    // the current chip takes what it needs up to a third of the room; the target gets the rest
+    const cTxt = fit(cName, Math.max(FACE.advance, Math.floor(room / 3) - ICON));
+    const cW = ICON + measurePixelText(cTxt);
+    const tRoom = Math.max(FACE.advance, room - cW - GAP - ICON);
+    const distW = t.dist ? measurePixelText(' ' + t.dist) : 0;
+    const tTxt = t.dist ? fit(t.name, Math.max(FACE.advance, tRoom - distW)) + ' ' + t.dist : fit(t.name, tRoom);
+    const tW = ICON + measurePixelText(tTxt);
+    const tx = xr - tW, cx = tx - GAP - cW;
+    const chip = (x, w, txt, ink, textInk, who, live) => {
+      sprite(g, x + 2, y + Math.floor(FACE.h / 2), SP.diam5, ink);
+      T(g, txt, x + ICON, y, { color: textInk, rgn, what: 'indicator ' + who });
+      if (live) rect(g, x, y + FACE.h, w, 1, ink);         // the lit underline: a button, not a readout
+      return { x: x - 1, y: 0, w: w + 2, h: hitH, who, live };
+    };
+    S.indicatorRects = [chip(cx, cW, cTxt, INK.CURRENT, INK.CURRENT, 'current', true),
+                        chip(tx, tW, tTxt, INK.TARGET, t.live ? INK.TARGET : INK.DIM, 'target', t.live)];
+    return cx;
+  }
+
+  /** ⭐ batch 2 — what the screen on the glass is ABOUT, by its grid reference: `SECTOR N10`, `REGION N10 H9`,
+   *  `COLUMN N10 H9 C4`, the system's name at SYSTEM, `GALAXY` at the top. */
+  function viewLabel() {
+    const L = S.level;
+    if (L === 0) return 'GALAXY';
+    if (L === 1 || L === 2) { const p = gridParent(L); return p ? `${L === 1 ? 'SECTOR' : 'REGION'} ${navGrid.addressKey(p)}` : ''; }
+    if (L === 3) return D.column && D.column.address ? `COLUMN ${navGrid.addressKey(D.column.address)}` : 'COLUMN';
+    const n = (D.sysStar && D.sysStar.name) || (D.sys && D.sys.star && D.sys.star.name);
+    return n ? String(n).toUpperCase() : '';
+  }
+  /* ⭐ batch 2 (AC-15) — IS THE SCREEN ON THE GLASS THE PLAYER'S OWN PLACE AT THIS LEVEL? The active tab
+   *  wears CURRENT exactly when it is (the galaxy always; your own sector / region / column / system), and
+   *  KEY when you are browsing somewhere else — so the tab strip never paints CURRENT over a place the
+   *  player is not. */
+  function onPlayerPlace(level) {
+    if (level === 0) return true;
+    if (level === 1 || level === 2) {
+      if (!D.player || !Number.isFinite(D.player.x) || !Number.isFinite(D.player.z)) return false;
+      return navGrid.sameAddress(navGrid.parentAt(level, D.player.x, D.player.z), gridParent(level));
+    }
+    if (level === 3) return D.hereColumn !== false;
+    return isHere();
+  }
+
+  /* ⭐ batch 2 (AC-15) — THE LOCATE FLASH. `S.locate = { who, level, tMs, on }` is the DRIVER's (a click on a
+   *  chip); `on` is its blink phase and is absent on the lab page, where it draws steadily. Answers the ink
+   *  for this level, or null. */
+  function locateInk(level) {
+    const L = S.locate;
+    if (!L || L.level !== level || L.on === false) return null;
+    return L.who === 'target' ? INK.TARGET : L.who === 'current' ? INK.CURRENT : null;
+  }
+  /** The cell the TARGET star is in at this 2D level (as `playerCell` does for the player), or null. */
+  function targetCell(level) {
+    const t = D.target;
+    if (!t || D.targetIsHere || !Number.isFinite(t.wx) || !Number.isFinite(t.wz)) return null;
+    return navGrid.childCell(level, navGrid.parentAt(level + 1, t.wx, t.wz));
+  }
+  /** The ring the locate flash draws around one mark (prism star, system body, the CURRENT diamond). */
+  function locateRing(g, x, y, ink, cl) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    frameClip(g, Math.round(x) - 6, Math.round(y) - 6, 13, 13, ink, cl);
+  }
+  /** At PRISM and SYSTEM: ring the CURRENT star / ship marker, or the TARGET star / body, if it is drawn. */
+  function locateMarks(g) {
+    const ink = locateInk(S.level), cl = REGIONS.map;
+    if (!ink || !cl) return;
+    const cur = ink === INK.CURRENT;
+    if (S.level === 3) {
+      const want = cur ? D.here : D.selStar;
+      const h = want && (S.prismHits || []).find((z) => z.ref === want);
+      if (h) locateRing(g, h.x, h.y, ink, cl);
+      return;
+    }
+    if (S.level !== 4) return;
+    if (cur) { if (S.currentMark) locateRing(g, S.currentMark.x, S.currentMark.y, ink, cl); return; }
+    const b = D.selBody;
+    if (!b) return;
+    const hits = S.bodyHits || [];
+    const h = b.kind === 'star' ? hits.find((z) => z.star)
+            : hits.find((z) => z.ref === b && !(z.moon >= 0))
+              || (b.kind === 'moon' ? hits.find((z) => z.ref && z.ref.pIdx === b.pIdx && z.moon === b.mIdx) : null);
+    if (h) locateRing(g, h.x, h.y, ink, cl);
+  }
+
+  /* ⭐ batch 2 (AC-18d) — A LEGEND IS CLAUSES, AND WHAT DOES NOT FIT IS A WHOLE CLAUSE DROPPED, NEVER A WORD CUT.
+   *  The measured defect: at the 390-wide review captures design 1's tab-row legend read `ESC C` — `fit()`
+   *  truncates from the right, so the way OUT lost its own name. Clauses go in the order given and the
+   *  `drop` list says which ones may go, first to last; the last clause standing is the one that never
+   *  should. Falls back to `fit()` only when even the last clause alone is wider than the room. */
+  function fitClauses(clauses, maxW, drop = []) {
+    let keep = clauses.slice();
+    const join = () => keep.join('  ');
+    for (const d of drop) { if (measurePixelText(join()) <= maxW) break; keep = keep.filter((c) => c !== d); }
+    const s = join();
+    return measurePixelText(s) <= maxW ? s : fit(s, maxW);
+  }
+
   function fmtK(n) {
     // ⭐ T since naming-prism-segments Phase 2: the whole bulge is ONE 2 kpc sector (J10, ~1.5e13) and
     //   "14863.4B" overran the rail's six-character count column.
@@ -3370,6 +3778,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // ⚠ Measured redundant one by one and load-bearing as a set — see the note on `drawDesign1`'s.
     S.listHeaderRects = null; S.locatorRect = null; S.companionRect = null; S.hoverCalloutRect = null;
     S.pagerRect = null; S.ladderCounterRect = null; S.slabBarRect = null;   // ⭐ AC-7: the segment bar is republished by the PRISM painter that draws it, and by nothing else
+    S.indicatorRects = null; S.currentMark = null;   // ⭐ batch 2 (AC-15): republished by `indicatorChips` / the ship painters
     // ⛔ AC-4's ROW LIST ON THE SAME RULE. `S.railBodies` is published only by the SUB-VIEW's rail
     //    branch, so without a clear here the rows of a planet the pilot left would stay on offer under
     //    the whole-system list — geometry out of nobody's paint, which is the defect this block names.
@@ -3377,11 +3786,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
     else if (S.level === 3) d2Prism(g, W, mapY, mapH);
     else d2System(g, W, mapY, mapH);
+    locateMarks(g);                                      // ⭐ batch 2 (AC-15): the CURRENT / TARGET chip's flash at PRISM and SYSTEM
     // ⭐ 2026-10-02 — WHICH SYSTEM THIS IS, WHEN IT IS NOT YOURS (`foreignSysLines`), top-left of the sky
     //    in TARGET ink. ⚠ FITTED SHORT OF THE ZOOM READOUT (`zoomGauge`, top-right, <= 40 texels), and
     //    `d2System` drops its companion strip below them to make room.
     if (!S.search.open) (foreignSysLines() || []).forEach((t, i) =>
-      plated(g, fit(t, W - 54), 4, mapY + 1 + i * (FACE.h + 2), INK.TARGET, 'map', 'foreign system ' + i));
+      plated(g, fit(t, W - 54), 4, mapY + 1 + i * (FACE.h + 2), foreignSysInk(), 'map', 'foreign system ' + i));
     // ⭐ THE DRAWN SEARCH GOES OVER THE MAP, AFTER IT, IN THIS DESIGN'S OWN IDIOM (AC-11). Design 2's
     // premise is that there is no floating box anywhere — its ONE floating widget, the prism minimap,
     // is drawn as a stated contradiction — so the field cannot be a panel. It is the treatment `d2List`
@@ -3415,14 +3825,19 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    below this row with the right word already on it; the legend names the key and lets the button
     //    name the act, which is the one spelling that cannot go out of step with `S.chipRect.armed`.
     if (!S.search.open && !(S.level === 3 && S.list)) {
-      const LEG = 'V LOOK  SHIFT+TAB BACK  ESC CLOSE';
       const legY = mapY + mapH - FACE.h - 1;
+      // ⭐ batch 2 (AC-18d) — THE LEGENDS STOP SHORT OF THE RIGHT-EDGE WIDGETS AND DROP WHOLE CLAUSES. At
+      //    PRISM the minimap starts at `W - 53` and at SYSTEM the zoom gauge at `W - 10`; a legend fitted to
+      //    `W - 8` ran under both at a narrow buffer and its right end was the part that vanished. `legR` is
+      //    the first widget's left edge, and `fitClauses` drops a whole clause rather than cut a word.
+      const legR = S.level === 3 ? W - 53 - 2 : S.level === 4 ? W - 12 : W - 4;
+      const LEG = fitClauses(['V LOOK', 'SHIFT+TAB BACK', 'ESC CLOSE'], legR - 4, ['V LOOK', 'SHIFT+TAB BACK']);
       // ⭐ 2026-09-25 (usability review) — A KNOCKOUT UNDER EACH LEGEND RUN, IN THE SKY'S OWN INK.
       //    At SECTOR and REGION the density field fills the whole pane, and RULE-ink text laid straight
       //    on it could not be read at all. The knockout is `INK.BG`, the colour of the empty sky, so
       //    on every other screen it is invisible — still no plate, no frame, no box.
       const knock = (str, x, y) => rect(g, x - 1, y - 1, measurePixelText(str) + 2, FACE.h + 2, INK.BG);
-      if (S.level === 4) { const sl = fit('SELECT A BODY  DRAG ROTATE  ENTER', W - 8); knock(sl, 4, legY - (FACE.h + 1));
+      if (S.level === 4) { const sl = fitClauses(['SELECT A BODY', 'DRAG ROTATE', 'ENTER'], legR - 4, ['DRAG ROTATE', 'SELECT A BODY']); knock(sl, 4, legY - (FACE.h + 1));
                            T(g, sl, 4, legY - (FACE.h + 1),
                            { color: INK.RULE, rgn: 'map', what: 'system legend' }); }
       /*  Function · PRISM's own legend row: the loaded-star count and the three keys this level owns.
@@ -3442,12 +3857,13 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         knock(`${fmtK(D.stars.length)} STARS`, 4, legY - (FACE.h + 1));
         const cw = T(g, `${fmtK(D.stars.length)} STARS`, 4, legY - (FACE.h + 1),
                      { color: INK.DIM, rgn: 'map', what: 'prism count' });
-        knock(fit('L=LIST  WASD PAN  R/F UP/DOWN', W - 10 - cw - 6), 4 + cw + 6, legY - (FACE.h + 1));
-        T(g, fit('L=LIST  WASD PAN  R/F UP/DOWN', W - 10 - cw - 6), 4 + cw + 6, legY - (FACE.h + 1),
+        const pl = fitClauses(['L=LIST', 'WASD PAN', 'R/F UP/DOWN'], legR - 4 - cw - 6, ['WASD PAN', 'R/F UP/DOWN']);
+        knock(pl, 4 + cw + 6, legY - (FACE.h + 1));
+        T(g, pl, 4 + cw + 6, legY - (FACE.h + 1),
           { color: INK.RULE, rgn: 'map', what: 'prism legend' });
       }
-      knock(fit(LEG, W - 8), 4, legY);
-      T(g, fit(LEG, W - 8), 4, legY, { color: INK.RULE, rgn: 'map', what: 'global legend' });
+      knock(LEG, 4, legY);
+      T(g, LEG, 4, legY, { color: INK.RULE, rgn: 'map', what: 'global legend' });
       // ⭐ AC-1 (restorations) — THE CALLOUT RIDES THE SAME GATE AS THE LEGEND, AND FOR THE SAME
       // REASON: list mode and the drawn search REPLACE the pane with full-pane content of their own,
       // and a callout over either would be naming a mark that is no longer on the glass. It is drawn
@@ -3464,7 +3880,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     LEVELS.forEach((n, i) => {
       const w = measurePixelText(n);
       T(g, n, tx, 1, { color: i === S.level ? INK.KEY : (i === 4 && S.noSystem) ? INK.RULE : INK.DIM, rgn: 'topbar', what: 'tab ' + n });   // SYSTEM dims on S.noSystem — see design 1's tab row
-      if (i === S.level) rect(g, tx - 2, BAR - 2, w + 4, 1, INK.YOU);
+      if (i === S.level) rect(g, tx - 2, BAR - 2, w + 4, 1, onPlayerPlace(i) ? INK.CURRENT : INK.KEY);   // ⭐ batch 2: CURRENT only on the player's own place (see design 1's tab row)
       tabRects.push({ x: tx - 2, y: 0, w: w + 4, h: BAR });
       tx += w + 6;
     });
@@ -3473,17 +3889,13 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // active tab is `tx - 2, w + 4`, and so is the button. Restating `measurePixelText(n) + 6`
     // anywhere else is the AC-4 defect with a face swap (`;`) as its trigger.
     S.tabRects = tabRects;
-    const loc = `${(D.hereName || '—').toUpperCase()} · ${(D.playerSector?.name || '').toUpperCase()}`;
-    const locW = measurePixelText(fit(loc, W - tx - 6));
-    T(g, fit(loc, W - tx - 6), W - 4, 1, { color: INK.BODY, align: 'right', rgn: 'topbar', what: 'locator' });
-    assertClear('tab strip vs locator', 'topbar', tx, W - 4 - locW);
-    // ⭐ AC-2 — `HERE · SECTOR` IS THE ONE THING THIS DESIGN SAYS ABOUT WHERE YOU ARE, and clicking it
-    // has always done nothing. `locW` is the FITTED string's width — the very value the right align
-    // above subtracts from `W - 4` — so the band is the text that LANDED, not the text that was asked
-    // for: at a narrow buffer `fit()` eats characters off the right and the band shrinks with them.
-    // ⛔ PUBLISHED AT EVERY LEVEL, because the topbar is drawn at every level. It is cleared at the
-    //    head of this same function, so the one frame where it is stale cannot exist.
-    S.locatorRect = { x: W - 4 - locW, y: 1, w: locW, h: FACE.h };
+    // ⭐⭐ batch 2 (AC-15) — THE `HERE · SECTOR` LOCATOR BECOMES THE CURRENT / TARGET INDICATOR PAIR, the same
+    //    two chips design 1 draws at the right of its status row (`indicatorChips`). The locator's own job —
+    //    a click that brings the frame back to the player — is the CURRENT chip's now, and the TARGET chip
+    //    does the same for the target (the driver's `locate`). `S.locatorRect` is no longer published: the
+    //    chips' rectangles are `S.indicatorRects`, out of the loop that drew them.
+    const chipL = indicatorChips(g, tx + 4, W - 4, 1, BAR, 'topbar');
+    assertClear('tab strip vs indicators', 'topbar', tx, chipL);
 
     // ── BOTTOM BAR: one 63-character status line, ' · '-joined so truncation eats the VERB first.
     rect(g, 0, H - BAR, W, 1, INK.RULE); rect(g, 0, H - BAR + 1, W, BAR - 1, INK.BG);
@@ -3502,6 +3914,16 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const full = clauses.join(' · ') + (S.sabotage ? SAB : '');
     if (avail < measurePixelText('PRISM')) fire('status line has no room left beside the commit chip');
     T(g, fit(full, avail), 4, H - BAR + 2, { color: INK.BODY, rgn: 'botbar', what: 'status line' });
+    // ⭐ batch 2 (AC-15) — THE ONE CLAUSE THAT NAMES THE PLAYER'S PLACE OR THE TARGET IS RE-INKED WHERE IT
+    //    LANDED: the same glyphs, drawn again over themselves in CURRENT / TARGET (`d2StatusInk`). The line
+    //    stays ONE fitted string, so its truncation and its guard are exactly what they were.
+    const hiC = d2StatusInk(clauses);
+    if (hiC) {
+      const drawn = fit(full, avail), pre = clauses.slice(0, hiC.k).join(' · ') + (hiC.k ? ' · ' : '');
+      const seg = drawn.length > pre.length ? drawn.slice(pre.length, pre.length + String(clauses[hiC.k]).length) : '';
+      if (seg.trim()) T(g, seg, 4 + measurePixelText(pre + seg) - measurePixelText(seg), H - BAR + 2,
+                        { color: hiC.ink, rgn: 'botbar', what: 'status clause' });
+    }
     if (S.sabotage) assertFits('D2 status line (unclipped)', 'botbar', 4, H - BAR + 2, measurePixelText(full), FACE.h);
     const armed = !!(isHere() && !homeWarp ? D.selBody : (D.target && !D.targetIsHere));   // not the system you are in (state.js `targetIsHere`)
     const chipX = W - chipW - 2;
@@ -3623,15 +4045,27 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     return [b.name.toUpperCase(), b.cls.toUpperCase(), `${b.au.toFixed(2)} AU`,
             b.T ? `${Math.round(b.T)} K` : '—', `${b.moons} MOONS`, ...(b.rings ? ['RINGED'] : [])];
   }
+  /** ⭐ batch 2 (AC-15) — which `d2Status` clause names where the player is (CURRENT) or the target (TARGET),
+   *  as `{ k, ink }`, or null: the player's sector at the three 2D levels, the selected body at SYSTEM. */
+  function d2StatusInk(clauses) {
+    if (S.search.open || !clauses || !clauses.length) return null;
+    if (S.level <= 2) return clauses[1] ? { k: 1, ink: INK.CURRENT } : null;
+    if (S.level !== 4) return null;
+    const det = sysDetail();
+    if (det) return (selMoonOf(det) || D.selBody === det.parent) ? { k: 0, ink: INK.TARGET } : null;
+    return D.selBody ? { k: 0, ink: INK.TARGET } : null;
+  }
   /** The active sort key, named — design 2's alone since design 1's hint row was removed (2026-10-02).
    *  Empty is the honest default: with no key on, the row degrades to `[ ] SORT`. */
   function d2SortHint() { return S.sortLabel ? `[ ] SORT ${S.sortLabel}` : '[ ] SORT'; }
   function d2TwoD(g, W, mapY, mapH) {
-    // ⭐ ONE SQUARE GRID AT ALL THREE 2D LEVELS, GALAXY INCLUDED (naming-prism-segments AC-3): the
-    //    density still bleeds full width, at the SQUARE's scale now, so what shows either side is the
-    //    neighbouring ground at true size — dimmed and labelled — rather than a band at another scale.
+    // ⭐ ONE SQUARE GRID AT ALL THREE 2D LEVELS, GALAXY INCLUDED (naming-prism-segments AC-3).
+    // ⭐⭐ batch 2 (AC-16, g-neighbours) — THE PICTURE IS THE SQUARE, AS IN DESIGN 1. Max: *"we should still
+    //    only allow you to see the galaxy through the matrix like it's a window and not show any galaxy outside
+    //    of that window."* The density used to bleed full width with the neighbours dimmed either side; the
+    //    window is now exactly the parent's grid, and a drag slides the neighbours in through it.
     const L = gridLayout(S.level, 0, W, mapY, mapH);
-    gridScreen(g, L, { x: 0, y: L.y0, w: W, h: mapY + mapH - L.y0 },
+    gridScreen(g, L, { x: L.x0, y: L.y0, w: L.sq, h: L.sq },
                { design: 2, ink: INK.DIM, dotted: L.cellPx < 20, plateLabels: true });
   }
   function d2Prism(g, W, mapY, mapH) {
@@ -3666,8 +4100,8 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     for (const { s, p } of onScreen) {
       prismDrop(g, p, REGIONS.map);                             // the stem — the dashed line, restored
       rect(g, p.x, p.py, 1, 1, INK.RULE);                       // plane dot, not a dashed line
-      if (s === D.here) { for (const d of [[-4,-4],[2,-4],[-4,2],[2,2]]) { rect(g, p.x+d[0], p.y+d[1], 3, 1, INK.YOU); rect(g, p.x+d[0], p.y+d[1], 1, 3, INK.YOU); } continue; }
-      if (s === D.selStar) { frame(g, p.x - 3, p.y - 3, 7, 7, INK.KEY); continue; }
+      if (s === D.here) { for (const d of [[-4,-4],[2,-4],[-4,2],[2,2]]) { rect(g, p.x+d[0], p.y+d[1], 3, 1, INK.CURRENT); rect(g, p.x+d[0], p.y+d[1], 1, 3, INK.CURRENT); } continue; }
+      if (s === D.selStar) { frame(g, p.x - 3, p.y - 3, 7, 7, INK.TARGET); continue; }   // ⭐ batch 2 (AC-15): the selected star is the TARGET, in its ink (Phase 3 left it in KEY)
       if (s.isReal) { plus(g, p.x, p.y, SPECTRAL[s.spectral] || INK.BODY); if (s.mult > 1) { rect(g, p.x+2, p.y-2, 1, 1, INK.BODY); rect(g, p.x-2, p.y+2, 1, 1, INK.BODY); } }
       else rect(g, p.x, p.y, 1, 1, SPECTRAL[s.spectral] || INK.DIM);
     }
@@ -3692,7 +4126,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       //   on whichever side the name actually landed. Drawn on the star's left when the name is.
       const tick = pos.x < p.x ? p.x - 1 : p.x + 1;
       rect(g, tick, Math.min(p.y, pos.y + 2), 1, Math.abs(pos.y + 2 - p.y) + 1, INK.RULE);
-      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.KEY, 'map', 'prism label ' + txt),
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, starInk(s, INK.KEY), 'map', 'prism label ' + txt),
                          ref: s, kind: 'star' });
       placed++;
     }
@@ -3704,7 +4138,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    `[W-21, W-13)`). It was `W - 44`, and a bar left of the gauge would have landed on it.
     const mw = 24, mh = 24, mx = W - 53, my = mapY + mapH - mh - 5;
     for (const d of [[0,0],[mw-3,0],[0,mh-3],[mw-3,mh-3]]) { rect(g, mx+d[0], my+d[1], 3, 1, INK.DIM); rect(g, mx+d[0], my+d[1], 1, 3, INK.DIM); }
-    if (D.hereColumn !== false) rect(g, mx + mw / 2, my + mh / 2, 1, 1, INK.YOU);   // ⭐ Phase 3 fixup: YOU means the player — not on a browsed column
+    if (D.hereColumn !== false) rect(g, mx + mw / 2, my + mh / 2, 1, 1, INK.CURRENT);   // ⭐ Phase 3 fixup: YOU means the player — not on a browsed column
     /*  Function · AC-10 — the 24-texel scale column beside the minimap becomes a REAL y-gauge,
      *    spanning the pane and published as `S.yGaugeRect`.
      *  Intent · page item 23, Max's ruling *"yes"*: design 1 has two handles at these two levels and
@@ -3830,7 +4264,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     drawn.forEach((s, i) => {
       const y = mapY + 4 + (i + 1) * LEAD;
       const sel = s === D.selStar;
-      if (sel) rect(g, 2, y - 1, rowEdge - 2, LEAD, INK.KEY);
+      if (sel) rect(g, 2, y - 1, rowEdge - 2, LEAD, INK.TARGET);   // ⭐ batch 2 (AC-15): the selected star is the TARGET
       const ink = sel ? INK.BG : (s.isReal ? INK.BODY : INK.DIM);
       const put = (c, str, maxw) => cols[c] < W - 10 && cols[c] < rowEdge &&
         T(g, fit(str, Math.min(maxw, W - cols[c] - 6, rowEdge - cols[c])), cols[c], y, { color: ink, rgn: 'map', what: 'list row ' + i });
@@ -3879,7 +4313,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     shown.forEach((r, i) => {
       const yy = top + (i + 1) * LEAD;
       const sel = off + i === hi;
-      if (sel) rect(g, 2, yy - 1, W - 4, LEAD, INK.KEY);
+      if (sel) rect(g, 2, yy - 1, W - 4, LEAD, INK.TARGET);   // ⭐ batch 2 (s-search): the picked result is the TARGET
       const kind = fit(String(r.kind || '').toUpperCase(), 12 * FACE.advance);
       const kw = measurePixelText(kind);
       const nameW = T(g, fit(String(r.name || '').toUpperCase(), W - 12 - kw), 4, yy,
@@ -3992,7 +4426,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // show that the pick landed, because `D.selBody` only ever held a planet or a moon. Same 9x9 at the
     // same `r = 4`, same `INK.KEY` the selected planets wear, and its own `assertMark` — the pane
     // centre cannot overflow the pane, but an unguarded mark is how the orrery's ring got off the glass.
-    if (D.selBody?.kind === 'star') { frame(g, cxp - 4, cyp - 4, 9, 9, INK.KEY);
+    if (D.selBody?.kind === 'star') { frame(g, cxp - 4, cyp - 4, 9, 9, INK.TARGET);   // ⭐ batch 2: the selection is the TARGET
                                       assertMark('star selection frame', 'map', cxp - 4, cyp - 4, 9, 9); }
     D.bodies.filter((b) => b.kind !== 'moon').forEach((b, i) => {
       // ⭐⭐ THE PLANET'S REAL ORBITAL ANGLE, AND FIXING IT CLOSES A LIVE DEFECT.
@@ -4025,8 +4459,8 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       //    note); the branch that never taken is the one that cannot rot.
       spriteClip(g, x, y, b.rE > 4 ? SP.giant5 : SP.terr3, INK.BODY, pane);
       if (b.rings) { rectClip(g, x - 3, y - 2, 7, 1, INK.DIM, pane); rectClip(g, x - 3, y + 2, 7, 1, INK.DIM, pane); }
-      if (b.hab > 0.5) for (const d of [[-2,0],[2,0],[0,-2],[0,2]]) rectClip(g, x + d[0], y + d[1], 1, 1, INK.TARGET, pane);
-      if (b === D.selBody) frameClip(g, x - 4, y - 4, 9, 9, INK.KEY, pane);
+      if (b.hab > 0.5) for (const d of [[-2,0],[2,0],[0,-2],[0,2]]) rectClip(g, x + d[0], y + d[1], 1, 1, INK.HAB, pane);   // ⭐ batch 2: TARGET is only the target
+      if (b === D.selBody) frameClip(g, x - 4, y - 4, 9, 9, INK.TARGET, pane);   // ⭐ batch 2 (AC-15): the selection is the TARGET
       // ⭐ THE MARK GUARD, ONE CALL PER BODY (see `assertMark`) — the union of what the four branches
       // ABOVE actually drew, off the same `x`/`y` they drew it from, never a worst-case box. A fixed
       // 9x9 would report the selection frame on bodies that never draw one, which is the guard crying
@@ -4144,7 +4578,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (name) { pos = placeLabel(tagsTaken, nameMarks, q.x, q.y, 4, 8, measurePixelText(name), REGIONS.map, q.b); txt = name; }
       if (!pos && q.tag) { pos = placeLabel(tagsTaken, nameMarks, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b); txt = q.tag; }
       if (!pos || !txt) continue;
-      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, INK.DIM, 'map', 'body label ' + txt),
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.TARGET : INK.DIM, 'map', 'body label ' + txt),
                          ref: q.b, kind: 'body' });
     }
     // ⭐⭐ AC-5 (restorations) — AND THE NUMBER TO GUESS FROM NOW EXISTS, SO THE DIAMOND MOVED.
@@ -4240,7 +4674,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     spriteClip(g, cxp, cyp, pSp, INK.KEY, pane);
     if (det.parent.rings) { rectClip(g, cxp - 3, cyp - 2, 7, 1, INK.DIM, pane); rectClip(g, cxp - 3, cyp + 2, 7, 1, INK.DIM, pane); }
     hits.push({ x: cxp, y: cyp, r: 4, ref: det.parent, moon: -1, star: false });
-    if (D.selBody === det.parent) frameClip(g, cxp - 4, cyp - 4, 9, 9, INK.KEY, pane);
+    if (D.selBody === det.parent) frameClip(g, cxp - 4, cyp - 4, 9, 9, INK.TARGET, pane);   // ⭐ batch 2: the selection is the TARGET
     {
       const g0 = det.parent.rE > 4 ? 2 : 1;
       let l = cxp - g0, t = cyp - g0, rr = cxp + g0, bb = cyp + g0;
@@ -4311,7 +4745,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       if (name) { pos = placeLabel(tagsTaken, nameMarks, q.x, q.y, 4, 8, measurePixelText(name), REGIONS.map, q.b); txt = name; }
       if (!pos && q.tag) { pos = placeLabel(tagsTaken, nameMarks, q.x, q.y, 4, 8, measurePixelText(q.tag), REGIONS.map, q.b); txt = q.tag; }
       if (!pos || !txt) continue;
-      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.KEY : INK.DIM,
+      S.labelHits.push({ ...plated(g, txt, pos.x, pos.y, q.b === D.selBody ? INK.TARGET : INK.DIM,
                                    'map', 'moon label ' + txt), ref: q.b, kind: 'body' });
     }
     // ⭐⭐ THE GPS LINE (2026-10-02) — the ship in this planet's own frame, and a route to any target:

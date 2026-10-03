@@ -97,7 +97,7 @@ describe('AC-13 — a control fires on a CLICK, never on the release of a drag',
 
   it('⭐⭐ A PAN RELEASED ON DESIGN 2\'S `HERE · SECTOR` RE-CENTRES NOTHING', async () => {
     const { nav, drv } = await designNav({ mode: 'bars', level: 0 });
-    const loc = drv.S.locatorRect;
+    const loc = (drv.S.indicatorRects || []).find((r) => r.who === 'current');   // batch 2 (AC-15): the locator IS the CURRENT chip now
     expect(loc, 'design 2 at GALAXY published no locator band').toBeTruthy();
     const to = { x: Math.floor(loc.x + loc.w / 2), y: Math.floor(loc.y + loc.h / 2) };
     const from = mapCentre(drv);

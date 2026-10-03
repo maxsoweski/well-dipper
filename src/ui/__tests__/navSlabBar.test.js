@@ -348,7 +348,7 @@ describe('AC-7, decision 7 = A — the fine gauge follows the view', () => {
       const g = p.S.yGaugeRect;
       expect(g.base, `design ${design}: the gauge is not centred on the view`).toBe(jumped);
       // the ship is 1.5 kpc below: an arrow (1x1 + 3x1 YOU fills) at the strip's bottom end, nowhere else
-      const you = p.fills.filter((f) => f.ink === p.d.INK.YOU && f.x >= g.x && f.x < g.x + g.w);
+      const you = p.fills.filter((f) => f.ink === p.d.INK.CURRENT && f.x >= g.x && f.x < g.x + g.w);
       expect(you.length, `design ${design}: no ship mark on the strip`).toBe(2);
       expect(you.every((f) => f.y >= g.y + g.h - 3), `design ${design}: the ship arrow is not at the bottom end`).toBe(true);
       // grab the strip a quarter up and drag a little: the view moves a little, from where it is
@@ -387,7 +387,7 @@ describe('AC-7, decision 7 = A — the fine gauge follows the view', () => {
     const p = paint(nav, 1);
     const g = p.S.yGaugeRect;
     const on = p.fills.filter((f) => f.x >= g.x && f.x < g.x + g.w && f.y >= g.y && f.y < g.y + g.h);
-    expect(on.filter((f) => f.ink === p.d.INK.YOU)).toEqual([{ x: g.x + 1, y: g.cy, w: 3, h: 1, ink: p.d.INK.YOU }]);
+    expect(on.filter((f) => f.ink === p.d.INK.CURRENT)).toEqual([{ x: g.x + 1, y: g.cy, w: 3, h: 1, ink: p.d.INK.CURRENT }]);
     expect(on.filter((f) => f.ink === p.d.INK.KEY)).toEqual([]);
     expect(g.base).toBe(nav._playerY);
   }, 60000);
@@ -428,7 +428,7 @@ describe('AC-7 — the neighbouring prisms, boundaries only, on the real grid', 
     nav._localRadius = navGrid.PRISM_ZOOM_MAX_KPC; nav.render();
     let p = paint(nav, 1);
     const map = p.regions.map;
-    const youInMap = p.fills.filter((f) => f.ink === p.d.INK.YOU && f.x < map.x + map.w && f.y >= map.y && f.y < map.y + map.h);
+    const youInMap = p.fills.filter((f) => f.ink === p.d.INK.CURRENT && f.x < map.x + map.w && f.y >= map.y && f.y < map.y + map.h);
     expect(youInMap.length, 'the ship\'s neighbouring column is not outlined in CURRENT ink').toBeGreaterThan(20);
     const lat = (pp) => pp.fills.filter((f) => f.ink === pp.d.INK.LATTICE && f.x < map.x + map.w).length;
     const mid = lat(p);

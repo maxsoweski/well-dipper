@@ -466,7 +466,7 @@ describe('AC-9 — HERE · SECTOR is eaten at SYSTEM, and clears nothing', () =>
 
     nav.viewMode = 'bars';
     nav.render();
-    const loc = drv.S.locatorRect;
+    const loc = (drv.S.indicatorRects || []).find((r) => r.who === 'current');   // batch 2 (AC-15): the locator IS the CURRENT chip now
     expect(loc, 'design 2 at SYSTEM published no locator band').toBeTruthy();
     const ease0 = nav._viewEase;
     const c = mid(loc);
@@ -480,7 +480,7 @@ describe('AC-9 — HERE · SECTOR is eaten at SYSTEM, and clears nothing', () =>
 
   it('⭐ AND AT GALAXY IT STILL RE-CENTRES, exactly as before', async () => {
     const { nav, drv } = await designNav({ mode: 'bars', level: 0 });
-    const loc = drv.S.locatorRect;
+    const loc = (drv.S.indicatorRects || []).find((r) => r.who === 'current');   // batch 2 (AC-15): the locator IS the CURRENT chip now
     expect(loc, 'design 2 at GALAXY published no locator band').toBeTruthy();
     nav._viewEase = null;
     const c = mid(loc);

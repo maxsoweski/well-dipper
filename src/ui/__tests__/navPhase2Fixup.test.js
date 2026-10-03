@@ -359,13 +359,10 @@ describe('finding 8 — design edge labels after a pan: whole, inside the pictur
           for (let j = 0; j < n; j++) {
             for (const t of text.filter((t) => t.s === lab.rows[j] && t.y >= clip.y && t.y < clip.y + clip.h)) {
               const w = measurePixelText(t.s);
-              if (design === 2) {
-                expect(t.x - 1 >= clip.x && t.x + w + 1 <= clip.x + clip.w, `row ${t.s} at x ${t.x} is cut by the picture's edge`).toBe(true);
-                // beside its parent's left edge — or pinned at the picture's edge when that edge is off it
-                const beside = Math.round(left) - 3 - w;
-                expect(t.x === beside || t.x === clip.x + 1 || t.x === clip.x + clip.w - w - 1,
-                  `row ${t.s} at x ${t.x} is neither beside the parent (${beside}) nor pinned at the edge`).toBe(true);
-              }
+              // ⭐ batch 2 (AC-16): BOTH designs' picture is the square now, so every row number sits whole
+              //    in the gutter LEFT of it (design 2's used to ride inside a full-width picture).
+              expect(t.x + w + 1 <= clip.x, `row ${t.s} at x ${t.x} is not whole in the gutter left of the picture`).toBe(true);
+              void left;
             }
           }
           for (const c of lab.cols) {

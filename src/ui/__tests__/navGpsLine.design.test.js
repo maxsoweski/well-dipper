@@ -16,7 +16,7 @@
 import { describe, it, expect } from 'vitest';
 import { makeHeadlessNav } from './helpers/headlessNav.mjs';
 import { makeDesigns } from '../navViewModes/designs.js';
-import { planetTrueScene, moonRelScene } from '../navViewModes/shipState.js';
+import { planetTrueScene, moonRelScene, fmtShipRange, shipRangeTo } from '../navViewModes/shipState.js';
 import { FACE, drawPixelText, measurePixelText } from '../../rendering/PixelText.js';
 import { earthRadiiToScene } from '../../core/ScaleConstants.js';
 
@@ -109,13 +109,17 @@ const plus = (a, b, k = 1) => ({ x: a.x + b.x * k, y: a.y + b.y * k, z: a.z + b.
 function select(nav, sel) { nav._selectedBody = sel; nav.render(); }
 function openDetail(nav, pIdx) { const S = nav._viewDriverInst.S; S.sysView = 'planet'; S.detailPlanet = pIdx; }
 
-const shipCentre = (p) => { const f = p.fills.find((q) => q.ink === p.INK.SHIP && q.w === 5 && q.h === 1); return f ? { x: f.x + 2, y: f.y } : null; };
-const wordOf = (p) => p.lines.find((l) => /^SHIP/.test(l.s)) || null;
-/** The ROUTE's own texels — 1x1 ship-ink fills that are neither the diamond nor a SHIP word. */
+/** ⭐ batch 2 (AC-15): the ship is CURRENT ink now, which the top bar's CURRENT chip also wears — so every
+ *  ship-ink reading below is confined to the MAP pane, where the chip never is. */
+const inMapP = (p, f) => { const m = p.regions.map; return f.x >= m.x && f.x < m.x + m.w && f.y >= m.y && f.y < m.y + m.h; };
+const shipCentre = (p) => { const f = p.fills.find((q) => q.ink === p.INK.CURRENT && q.w === 5 && q.h === 1 && inMapP(p, q)); return f ? { x: f.x + 2, y: f.y } : null; };
+/** ⭐ batch 2 (AC-17): the marker's word is CURRENT, and its number is the true range to the route's target. */
+const wordOf = (p) => p.lines.find((l) => /^CURRENT\b/.test(l.s) && inMapP(p, l)) || null;
+/** The ROUTE's own texels — 1x1 CURRENT-ink fills in the map that are neither the diamond nor the word. */
 function routeDots(p) {
   const c = shipCentre(p);
-  const boxes = p.lines.filter((l) => /^SHIP/.test(l.s)).map((l) => ({ x0: l.x - 1, y0: l.y - 1, x1: l.x + measurePixelText(l.s), y1: l.y + FACE.h }));
-  return p.fills.filter((f) => f.ink === p.INK.SHIP && f.w === 1 && f.h === 1
+  const boxes = p.lines.filter((l) => /^CURRENT\b/.test(l.s) && inMapP(p, l)).map((l) => ({ x0: l.x - 1, y0: l.y - 1, x1: l.x + measurePixelText(l.s), y1: l.y + FACE.h }));
+  return p.fills.filter((f) => f.ink === p.INK.CURRENT && f.w === 1 && f.h === 1 && inMapP(p, f)
     && !(c && Math.abs(f.x - c.x) + Math.abs(f.y - c.y) <= 2)
     && !boxes.some((b) => f.x >= b.x0 && f.x <= b.x1 && f.y >= b.y0 && f.y <= b.y1));
 }
@@ -265,7 +269,7 @@ describe('GPS line — the ship is drawn from where it IS', () => {
       const p = paint(nav, design);
       expect(p.D.isCurrent).toBe(false);
       expect(p.D.ship, `design ${design}: no ship abroad`).toBeNull();
-      expect(p.fills.filter((f) => f.ink === p.INK.SHIP).length).toBe(0);
+      expect(p.fills.filter((f) => f.ink === p.INK.CURRENT && inMapP(p, f)).length).toBe(0);   // batch 2: the top bar's CURRENT chip is not the ship
     }
   }, 120000);
 
@@ -310,7 +314,9 @@ describe('GPS line — the ship is drawn from where it IS', () => {
       const p = paint(nav, design);
       expect(shipCentre(p), 'no diamond — the ship is not on this picture').toBeNull();
       const w = wordOf(p);
-      expect(w && /^SHIP \d+(\.\d)?AU$/.test(w.s), `design ${design}: the word carries the distance (${w && w.s})`).toBe(true);
+      // ⭐ batch 2 (AC-17): ONE meaning — the range to the TARGET (the selected moon), and the word says so.
+      const rg = fmtShipRange(shipRangeTo(p.D.ship, { kind: 'moon', pIdx: 4, mIdx: 1 }));
+      expect(w && w.s.startsWith(`CURRENT ${rg} TO `), `design ${design}: the word carries the range to the target (${w && w.s})`).toBe(true);
       const dots = routeDots(p), map = p.regions.map;
       if (design === 1) {
         const { axisY, x1 } = p.S.ladderCaps;
@@ -399,7 +405,7 @@ describe('GPS line — the ship is drawn from where it IS', () => {
     const p = paint(nav, 1);
     const axisY = p.S.ladderCaps.axisY, t = stopOf(p.S, 2);
     expect(shipCentre(p).x, 'the ship projects onto the target\'s own stop').toBe(t.x);
-    expect(wordOf(p) && wordOf(p).s, 'the word carries the 3D range').toBe('SHIP 2.0AU');
+    expect(wordOf(p) && wordOf(p).s, 'the word carries the 3D range to the target').toMatch(/^CURRENT 2\.0AU TO /);
     expect(has(routeDots(p), t.x, axisY - 6), 'a stub chevron above the framed target').toBe(true);
   }, 120000);
 
@@ -414,7 +420,7 @@ describe('GPS line — the ship is drawn from where it IS', () => {
     expect(p.D.ship.at).toBeNull();
     const axisY = p.S.ladderCaps.axisY, t = stopOf(p.S, 3), c = shipCentre(p), dots = routeDots(p);
     expect(c.x > t.x, `the ship (${c.x}) is right of the target (${t.x})`).toBe(true);
-    expect(/^SHIP \d/.test(wordOf(p) && wordOf(p).s), 'a stub, with the range in the word').toBe(true);
+    expect(/^CURRENT \d.* TO /.test(wordOf(p) && wordOf(p).s), 'a stub, with the range in the word').toBe(true);
     expect(has(dots, t.x, axisY - 6), 'the tip above the framed target').toBe(true);
     expect(dots.filter((f) => f.x < t.x - 1).length, 'nothing on the far side of the target').toBe(0);
   }, 120000);
@@ -432,12 +438,15 @@ describe('GPS line — the ship is drawn from where it IS', () => {
         const c = shipCentre(p), s = stopOf(p.S, 4);
         expect([c.x, c.y], 'the diamond on the giant').toEqual([s.x, s.y]);
         expect(routeDots(p).length, 'no line to where you are').toBe(0);
-        expect(wordOf(p) && wordOf(p).s, 'and no range').toBe('SHIP');
+        expect(wordOf(p) && wordOf(p).s, 'and no range').toBe('CURRENT');
       }
     }
   }, 120000);
 
-  it('G8 ⛔ FAR OUT PAST THE LAST STOP: an edge chevron above the axis and `SHIP 60AU`', async () => {
+  // ⭐ batch 2 (AC-17) — UPDATED: with NO target there is no number at all. This case used to read `SHIP 60AU`,
+  //    the distance from the ladder's origin — the second meaning the moon review found. See AC-17's own
+  //    cases in navCurrentTarget.design.test.js for the off-picture marker WITH a target.
+  it('G8 ⛔ FAR OUT PAST THE LAST STOP: an edge chevron above the axis and the bare word `CURRENT`', async () => {
     // ⛔ SABOTAGE RUN: `ladderShipV` clamping at the last stop (no `beyond` arm) → the diamond sits on
     //    planet 7's stop and no edge marker draws, red.
     const nav = await at('rail');
@@ -445,7 +454,7 @@ describe('GPS line — the ship is drawn from where it IS', () => {
     const p = paint(nav, 1);
     const { axisY, x1 } = p.S.ladderCaps;
     expect(shipCentre(p), 'no diamond on the window').toBeNull();
-    expect(wordOf(p) && wordOf(p).s).toBe('SHIP 60AU');
+    expect(wordOf(p) && wordOf(p).s).toBe('CURRENT');
     expect(has(routeDots(p), x1 - 2, axisY - 3), 'the outward chevron tip, inset 2, above the axis').toBe(true);
   }, 120000);
 });
@@ -496,7 +505,7 @@ describe('GPS line — the route never erases a mark', () => {
       const a = raster(base.fills), b = raster(withRoute.fills);
       const INK = withRoute.INK, free = new Set([INK.BG, INK.RULE, INK.GRID]);
       const c = shipCentre(withRoute);
-      const words = withRoute.lines.filter((l) => /^SHIP/.test(l.s)).map((l) => [l.x - 1, l.y - 1, l.x + measurePixelText(l.s), l.y + FACE.h]);
+      const words = withRoute.lines.filter((l) => /^CURRENT\b/.test(l.s)).map((l) => [l.x - 1, l.y - 1, l.x + measurePixelText(l.s), l.y + FACE.h]);
       const plates = (q) => q.labelHits.map((l) => [l.x - 1, l.y - 1, l.x + l.w, l.y + FACE.h]);
       const names = [...plates(base), ...plates(withRoute)];
       const inAny = (rs, x, y) => rs.some((r) => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]);

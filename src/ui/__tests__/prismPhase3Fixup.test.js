@@ -381,13 +381,13 @@ describe('AC-7 — beyond the bar: above / below marks (plan §4.5, Astra findin
     const bar = p.S.slabBarRect;
     expect(bar).toBeTruthy();
     const at = (x, y, ink) => p.fills.some((f) => f.ink === ink && f.x <= x && x < f.x + f.w && f.y <= y && y < f.y + f.h);
-    expect(at(bar.x, bar.y, p.d.INK.YOU), 'no ship mark above the bar').toBe(true);
+    expect(at(bar.x, bar.y, p.d.INK.CURRENT), 'no ship mark above the bar').toBe(true);
     expect(at(bar.x + 5, bar.y, p.d.INK.TARGET), 'no target mark above the bar (y = 3.0 is N31)').toBe(true);
     expect(at(bar.x + 2, bar.y + bar.h - 1, p.d.INK.KEY), 'no view mark below the bar').toBe(true);
     // nothing in a cell claims them
     const [top, span] = G.barSpan(bar);
     const inCells = (ink, x) => p.fills.some((f) => f.ink === ink && f.x === x && f.y >= top && f.y < top + span);
-    expect(inCells(p.d.INK.YOU, bar.x)).toBe(false);
+    expect(inCells(p.d.INK.CURRENT, bar.x)).toBe(false);
     // ⚠ the edges, exactly: −3.0 is S30's floor (in the bar), +3.0 is N31's (beyond)
     expect(G.slabIndexOfY(-3.0)).toBe(-30);
     expect(G.slabIndexOfY(3.0)).toBe(30);
@@ -407,7 +407,8 @@ describe('YOU means the player — design 2\'s minimap dot (Astra finding 7, the
     nav._viewModesEnabled = true; nav._levelIndex = 3; nav.viewMode = 'bars';
     nav.render();
     const mx = W - 53 + 12;
-    const dot = (p) => p.fills.some((f) => f.ink === p.d.INK.YOU && f.x === mx && f.w === 1 && f.h === 1);
+    // ⚠ batch 2: the top bar's CURRENT chip is CURRENT ink too — the minimap dot is the one in the map pane
+    const dot = (p) => p.fills.some((f) => f.ink === p.d.INK.CURRENT && f.x === mx && f.w === 1 && f.h === 1 && f.y >= p.d.regions().map.y);
     let p = paint(nav, 2);
     expect(p.D.hereColumn).toBe(true);
     expect(dot(p), 'no YOU dot on the ship\'s column').toBe(true);

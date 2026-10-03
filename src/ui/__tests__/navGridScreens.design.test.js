@@ -145,9 +145,15 @@ describe('AC-3 — every grid can be read: letters across the top, numbers down 
   }
 });
 
-describe('AC-3 — neighbouring parents are dimmed and labelled, and never picked', () => {
+// ⭐ batch 2 (AC-16, g-neighbours / g-drag) — UPDATED. The neighbour used to be a DIMMED BLOCK with its
+//    reference (`O10`) printed in the picture; Max: *"only allow you to see the galaxy through the matrix
+//    like it's a window … when you drag the view, then the boundaries of one cell and the other should be
+//    obvious … The row and column labels will follow you"* and *"We only want to show the grid"*. So the
+//    neighbour slides in as more GRID, its columns are lettered along the top like the screen's own, no
+//    block label is drawn in the picture — and a click there is still a miss (Max rejected clickable blocks).
+describe('AC-3 / batch 2 — a neighbouring parent slides in as grid, labelled along the edge, and is never picked', () => {
   for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
-    it(`design ${design} SECTOR: panned half a sector east, the eastern neighbour shows its own reference`, async () => {
+    it(`design ${design} SECTOR: panned half a sector east, the eastern neighbour's columns are lettered and nothing is printed in the picture`, async () => {
       const { nav, drv } = await framed(mode, 1);
       nav._viewCenter.x += 1;                          // half a 2 kpc sector
       nav.render();
@@ -155,15 +161,20 @@ describe('AC-3 — neighbouring parents are dimmed and labelled, and never picke
       const own = navGrid.parentOf(1, addressOf(8, 0, 0)).sector;
       const east = navGrid.childRef(0, { sector: { i: own.i + 1, j: own.j } });
       expect(east).toBe('O10');
-      expect(text.some((t) => t.s === east), `the neighbour ${east} is not labelled`).toBe(true);
-      // a click on it is a miss: the cell picker answers only inside the screen's own sector
       const p = drv.S.mapProj;
+      expect(text.some((t) => t.s === east), `the old block label ${east} is still drawn`).toBe(false);
+      // the neighbour's own columns A… are lettered on the label row, right of the screen's P
+      const pX = text.find((t) => t.s === 'P' && t.y < p.y0);
+      const nbA = text.filter((t) => t.s === 'A' && t.y < p.y0);
+      expect(pX, 'the screen\'s own column P is not lettered').toBeTruthy();
+      expect(nbA.some((t) => t.x > pX.x), 'the neighbour\'s column A did not follow the drag').toBe(true);
+      // a click on it is a miss: the cell picker answers only inside the screen's own sector
       const b = boundsOf({ sector: { i: own.i + 1, j: own.j } });
       const x = p.x0 + ((b.min.x + 0.3 - p.cx) / p.size + 0.5) * p.sq;
       const y = p.y0 + (0.5 - ((b.min.z + b.max.z) / 2 - p.cz) / p.size) * p.sq;
       nav._handleMouseMove({ clientX: x, clientY: y });
       nav.render();
-      expect(nav._hoveredTile, 'a dimmed neighbour took the pick').toBe(null);
+      expect(nav._hoveredTile, 'a neighbour took the pick').toBe(null);
     }, 60000);
   }
 });

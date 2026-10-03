@@ -54,6 +54,9 @@ import * as navGrid from '../navGrid.js';
 // ⭐ THE SEGMENT BAR'S GEOMETRY AND THE ONE LAYER FUNCTION (naming-prism-segments Phase 3, AC-7): the
 //    lab imports the same module under the same name, and the driver's hit-test reads it too.
 import * as slabBarGeo from './slabBar.js';
+// ⭐ batch 2 (AC-16) — THE DENSITY IMAGE'S DITHER, AVERAGED OUT BEFORE THE 240p BLIT: the lab imports the same
+//    module under the same name, so `dequantLum` runs one filter on both pages.
+import * as lumDequant from './lumDequant.js';
 
 /** `NavComputer.js:69`, verbatim — the density model's stars-per-pc^3 conversion. */
 const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;

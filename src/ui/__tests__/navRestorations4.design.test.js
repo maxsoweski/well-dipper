@@ -64,7 +64,8 @@ import { makeDesigns } from '../navViewModes/designs.js';
 import { FACE, drawPixelText, measurePixelText } from '../../rendering/PixelText.js';
 
 const W = 417, H = 240;                 // Max's window, and the buffer every number here is for
-const INK_SHIP = '#00ff80';             // designs.js's INK.SHIP — legacy's own diamond colour
+const INK_SHIP = '#2ee6c0';             // designs.js's INK.CURRENT — batch 2 retired legacy's ship green into it
+const inMap4 = (p, f) => { const m = p.regions && p.regions.map; return !m || (f.x >= m.x && f.x < m.x + m.w && f.y >= m.y && f.y < m.y + m.h); };
 
 /** A 2D context that records each fill's RECTANGLE AND ITS INK — wave 1a's own note says why. */
 function inkRecordingContext() {
@@ -323,11 +324,11 @@ describe('AC-4 — design 1 draws the moon ladder', () => {
     nav.render();
     closeDetail(nav);
     const whole = paint(nav, 1);
-    expect(whole.fills.some((f) => f.ink === INK_SHIP), 'wave 2a still draws it out here').toBe(true);
+    expect(whole.fills.some((f) => f.ink === INK_SHIP && inMap4(whole, f)), 'wave 2a still draws it out here').toBe(true);
     openDetail(nav);
     const sub = paint(nav, 1);
     const head = (sub.S.bodyHits || []).find((z) => !(z.moon >= 0) && z.ref?.kind === 'planet');
-    const centre = sub.fills.find((f) => f.ink === INK_SHIP && f.w === 5 && f.h === 1);
+    const centre = sub.fills.find((f) => f.ink === INK_SHIP && f.w === 5 && f.h === 1 && inMap4(sub, f));
     expect(centre, 'the diamond is drawn inside the sub-view').toBeTruthy();
     expect({ x: centre.x, y: centre.y }, 'on the head — the open planet\'s own mark')
       .toEqual({ x: Math.round(head.x) - 2, y: Math.round(head.y) });
@@ -468,7 +469,7 @@ describe('AC-4 — design 2 draws the moon orrery', () => {
     expect(gauge1, 'AC-6\'s gauge stays in the sub-view').toBeTruthy();
     // ⭐ 2026-10-02 (the GPS line): no longer suppressed — parked at this planet, the diamond is on
     //    the centre mark (`head1`), the planet's own texel.
-    const centre1 = one.fills.find((f) => f.ink === INK_SHIP && f.w === 5 && f.h === 1);
+    const centre1 = one.fills.find((f) => f.ink === INK_SHIP && f.w === 5 && f.h === 1 && inMap4(one, f));
     expect(centre1 && { x: centre1.x, y: centre1.y }, 'the ship stands on the open planet')
       .toEqual({ x: Math.round(head1.x) - 2, y: Math.round(head1.y) });
 

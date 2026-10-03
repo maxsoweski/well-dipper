@@ -28,6 +28,7 @@ import { projRect, worldAt, pickBody, pickOrbitRing, pickSector } from '../navVi
 import * as navGrid from '../navGrid.js';
 import { boundsOf } from '../../generation/GalaxyGrid.js';
 import { simClockMs, _setSimClockMs } from '../../core/SimClock.js';
+import { FACE } from '../../rendering/PixelText.js';   // batch 2: the chips' bar heights
 /** ⛔ THE HOST'S OWN PAN SCALE, IMPORTED. `_handleMouseMove`'s 2D branch converts texels to kpc with
  *  `_viewSize / navMapSize(w, h)`; a test restating that ratio would be a second copy of the
  *  production layout and would go stale silently. Only the DRAG in the design-1 clip case needs it.
@@ -535,8 +536,14 @@ describe("design 2's column headers sort the list", () => {
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 // AC-2 — DESIGN 2'S `HERE · SECTOR` LOCATOR RE-CENTRES ON THE PLAYER (INTERFACE §8b).
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
+// ⭐ batch 2 (AC-15) — UPDATED: the `HERE · SECTOR` locator IS the CURRENT chip now (`indicatorChips`, both
+//    designs), published in `S.indicatorRects`; `S.locatorRect` is retired. Its job is unchanged at
+//    SECTOR, REGION and PRISM (back to the player's own place) and at SYSTEM (eaten, changes nothing);
+//    at GALAXY it brings back the WHOLE grid — the window filled exactly (AC-16) — rather than a frame
+//    centred on the player that leaves half the grid off the glass.
 describe("design 2's locator centres the frame on the player", () => {
-  const locPoint = (drv) => ({ x: drv.S.locatorRect.x + 2, y: drv.S.locatorRect.y + 2 });
+  const chipOf = (drv, who = 'current') => (drv.S.indicatorRects || []).find((r) => r.who === who);
+  const locPoint = (drv) => { const r = chipOf(drv); return { x: r.x + 2, y: r.y + 2 }; };
 
   it('⭐⭐ THE BAND IS THE FITTED STRING THE TOPBAR RIGHT-ALIGNED, AT EVERY LEVEL, AND IT IS EATEN', async () => {
     // Absolute against the paint: `drawDesign2` aligns the locator's right edge at `W - 4` and draws
@@ -553,10 +560,11 @@ describe("design 2's locator centres the frame on the player", () => {
     for (const level of [0, 1, 2, 3]) {
       nav._levelIndex = level;
       nav.render();
-      const r = drv.S.locatorRect;
-      expect(r, `design 2 published no locator at level ${level}`).toBeTruthy();
-      expect(r.x + r.w, `the locator is not right-aligned at W - 4 at level ${level}`).toBe(W - 4);
-      expect(r.y, `the locator left the topbar's own row at level ${level}`).toBe(1);
+      const r = chipOf(drv), t = chipOf(drv, 'target');
+      expect(r, `design 2 published no CURRENT chip at level ${level}`).toBeTruthy();
+      expect(t.x + t.w - 1, `the chip pair is not right-aligned at W - 4 at level ${level}`).toBe(W - 4);
+      expect(r.y, `the chip left the topbar at level ${level}`).toBe(0);
+      expect(drv.S.locatorRect, 'the retired locator band is still published').toBe(null);
       const p = locPoint(drv);
       expect(drv.remapClick({ x: p.x, y: p.y }, W, H),
         `level ${level} let the locator click through to the handler`).toBe(null);
@@ -567,29 +575,28 @@ describe("design 2's locator centres the frame on the player", () => {
       'SYSTEM let the locator click fall through — at 4 that clears the body selection').toBe(null);
   }, 60000);
 
-  it('⭐⭐ AT GALAXY IT EASES THE FRAME ONTO THE PLAYER — and the ease actually lands', async () => {
+  it('⭐⭐ AT GALAXY IT EASES THE WHOLE GRID BACK ONTO THE GLASS — and the ease actually lands', async () => {
     const { nav, drv } = await loadedNav({ mode: 'bars', level: 0 });
     const t0 = simClockMs();
     try {
       nav._viewCenter = { x: 17, z: -13 };     // panned well off the player
       nav.render();
-      const r = drv.S.locatorRect;
-      expect(r, 'design 2 must publish its locator at every level').toBeTruthy();
+      expect(chipOf(drv), 'design 2 must publish its CURRENT chip at every level').toBeTruthy();
       const p = locPoint(drv);
       nav._handleMouseMove({ clientX: p.x, clientY: p.y });
       clickAt(nav, p.x, p.y);
       expect(nav._viewEase, 'the locator armed no ease').toBeTruthy();
       expect(nav._anim, 'it must not arm `_anim` — that eats the next click and changes level').toBeFalsy();
-      expect(nav._viewEase.toCenter).toEqual({ x: nav._playerX, z: nav._playerZ });
+      const g0 = navDrill.stackEntry(navGrid.GALAXY, null);   // batch 2: the whole 19 x 19 grid
+      expect(nav._viewEase.toCenter).toEqual({ x: g0.center.x, z: g0.center.z });
       // ⛔ AT THE SIZE ON THE GLASS (§8b). "Centre on the player" is a translation at GALAXY, not a
       //    zoom: a `toSize` computed from anything but `fromSize` moves the picture as well as the
       //    frame, and at level 0 there is no level below to take a size from.
-      expect(nav._viewEase.toSize, 'the re-centre also changed the zoom')
-        .toBe(nav._viewEase.fromSize);
+      expect(nav._viewEase.toSize, 'the whole grid is the galaxy frame\'s own size').toBe(g0.size);
       _setSimClockMs(t0 + 400);
       nav.render();
-      expect(nav._viewCenter.x, 'the frame never arrived on the player').toBeCloseTo(nav._playerX, 9);
-      expect(nav._viewCenter.z).toBeCloseTo(nav._playerZ, 9);
+      expect(nav._viewCenter.x, 'the frame never arrived on the whole grid').toBeCloseTo(g0.center.x, 9);
+      expect(nav._viewCenter.z).toBeCloseTo(g0.center.z, 9);
     } finally { _setSimClockMs(t0); }
   }, 60000);
 
@@ -709,18 +716,18 @@ describe("design 2's locator centres the frame on the player", () => {
     expect(nav._localStars, 'the refusal still reset the loader').toHaveLength(stars);
   }, 60000);
 
-  it('⛔ DESIGN 1 PUBLISHES NO LOCATOR, and a design-2 band does not survive one frame of it', async () => {
-    const { nav, drv } = await loadedNav();
-    expect(drv.S.locatorRect, 'design 1 drew a topbar locator it does not have').toBe(null);
-
+  it('⛔ NEITHER DESIGN PUBLISHES THE RETIRED LOCATOR, and each design\'s chips are its own (batch 2)', async () => {
+    const { drv } = await loadedNav();
+    expect(drv.S.locatorRect, 'design 1 drew a locator').toBe(null);
+    const d1 = chipOf(drv);
+    expect(d1 && d1.h, "design 1's chip is its status row (LEAD tall)").toBe(FACE.h + 1);
     const bars = await loadedNav({ mode: 'bars' });
-    const r = bars.drv.S.locatorRect;
+    expect(bars.drv.S.locatorRect, 'design 2 drew a locator').toBe(null);
+    const d2 = chipOf(bars.drv);
     bars.nav.viewMode = 'rail';
     bars.nav.render();
-    expect(bars.drv.S.locatorRect, "design 2's locator outlived the design that drew it").toBe(null);
-    const lc = { ...bars.nav._localCenter };
-    clickAt(bars.nav, r.x + 2, r.y + 2);
-    expect(bars.nav._localCenter, 'a stale locator re-centred design 1').toEqual(lc);
+    expect(chipOf(bars.drv).h, "design 2's chip outlived the design that drew it").toBe(FACE.h + 1);
+    expect(d2.h, "design 2's chip is its top bar").toBeGreaterThan(FACE.h + 1);
   }, 60000);
 });
 
@@ -1108,7 +1115,7 @@ describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
     expect(armPick(nav, drv, x, y), 'the fixture point was eaten').not.toBe(null);
     const { ctx, fills } = inkRecorder(W, H);
     drv.render(ctx, W, H);
-    const youAt = fills.findIndex((f) => f.ink === INK.YOU && f.w === 3 && f.h === 3);
+    const youAt = fills.findIndex((f) => f.ink === INK.CURRENT && f.w === 3 && f.h === 3);
     expect(youAt, "design 1's 3x3 YOU block was not drawn — the case is vacuous").toBeGreaterThanOrEqual(0);
     const want = expectedFrame(drv.S.mapProj, drv.S.pick.address);
     const frameAt = fills.findIndex((f) => f.ink === INK.KEY
