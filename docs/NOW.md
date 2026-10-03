@@ -4,6 +4,12 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ▶ 2026-10-03 — **NAMING + PRISM SEGMENTS: PHASES 0-3 BUILT, ASTRA-REVIEWED, LIVE-CHECKED AND PUSHED; THE PRISM NO LONGER FREEZES; EVERY GRID CELL IS ONE PLACE. ▶ NEXT: BATCH 2 (CURRENT/TARGET COLOURS + GRID POLISH), THEN ONE REVIEW PAGE.** Lane A, pushed through `68eba12`.
+>
+> **Serves the 35% SCREENSAVER MVP, SCREENSAVER tier.** Max's 09-30 UAT walk → plan `docs/FEATURES/naming-prism-segments-PLAN-2026-10-02.md` → workstream `naming-prism-segments-2026-10-02` (AC-0..8 VERIFIED_PENDING_MAX; option D confirmed: 2 kpc sectors, 7.8125 pc prisms, 100 pc slabs, Sol = N10). Also shipped: the walk's five fixes, the GPS line from the ship's real position to moons. Max's verbatim review: `docs/WORKSTREAMS/naming-prism-segments-2026-10-02/UAT-review-2026-10-03.md`.
+>
+> ▶ **HANDOFF → `docs/FEATURES/handoff-2026-10-03-nav-naming-prism-batch2.md`.**
+
 > ## ▶ 2026-09-25 — **ASTRA REVIEWED THE MENUS FROM THE SCREEN; THE OBVIOUS FIXES ARE IN AND PUSHED; SOL'S PLANETS HAVE THEIR REAL NAMES.** Lane A, pushed through `fc7774f`.
 >
 > **Serves the 35% SCREENSAVER MVP milestone, SCREENSAVER tier.** GPT Astra judged 21 live captures for "easy to navigate from what's on screen" (record: `.astra/jobs/20260925-083724-nav-menu-usability-review/report.md`): design 1 is the baseline, design 2 wins only on system layout. Built: where-am-I says SOL; no warp to the system you are in; design 2's legend readable on SECTOR/REGION; `R/F UP/DOWN`; search says its scope; quick Tabs no longer dropped; no self-target in the headers; **finding 24 fixed** (real Sol names, belts named like the map). `src/ui` 1198/1198.
