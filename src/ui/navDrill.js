@@ -29,7 +29,7 @@
 import * as navGrid from './navGrid.js';
 import { navMapSize, navMapOriginY } from './navLayout.js';
 import { simClockMs } from '../core/SimClock.js';
-import { findStar } from './navViewModes/starIdentity.js';
+import { hereRowOf } from './navViewModes/starIdentity.js';
 
 /** The PRISM camera's radius on entry, kpc (~5 light years). Inside the plan's zoom range. */
 export const PRISM_ENTRY_RADIUS_KPC = 0.0015;
@@ -75,10 +75,93 @@ export function sectorRecordAt(x, z) {
   return t ? { id: t.ref, ...t.sector } : null;
 }
 
-/** Make `column` the one PRISM shows: the loader's box and the WASD clamp both read it. */
+/**
+ * Make `column` the one PRISM shows: the loader's box and the WASD clamp both read it.
+ *
+ * ⭐ AND THE COLUMN NEVER CHANGES ALONE (Astra phase-2 review, finding 1). When the column on the
+ * glass becomes a DIFFERENT one, the rows loaded for the old one are dropped (they are not this
+ * column's stars) and the camera is put inside the new one — on the player when the player stands in
+ * it, else on its centre, keeping its height. ⛔ It used to write `_prismColumn` and nothing else, so
+ * design 2's HERE at SECTOR/REGION swapped in the player's column while the camera stayed in the
+ * column browsed before (5.7 kpc away), and Tab into PRISM showed an empty frame until WASD snapped
+ * it back. Callers that place the camera themselves (the drill, `jumpTo`) simply overwrite it after.
+ */
 export function setColumn(nav, column) {
+  const prev = nav._prismColumn;
   nav._prismColumn = column || null;
-  if (column) nav._localCubeSize = column.halfWidth;
+  if (!column) return;
+  nav._localCubeSize = column.halfWidth;
+  const changed = !prev || !navGrid.sameAddress(prev.address, column.address);
+  if (changed && prev) {
+    nav._localStars = [];
+    if (typeof nav._resetPrismLoad === 'function') nav._resetPrismLoad();
+  }
+  keepCameraInColumn(nav, changed);
+}
+
+/**
+ * The PRISM camera's orbit centre is inside the column on the glass. `recentre` (the column just
+ * changed): the player's point (and height) when the player stands in the column, else the column's centre.
+ * Otherwise a camera already inside is left alone and one outside is clamped to the nearest edge.
+ */
+export function keepCameraInColumn(nav, recentre = false) {
+  const col = nav._prismColumn;
+  if (!col || !col.bounds) return;
+  const lc = nav._localCenter;
+  const y = lc && Number.isFinite(lc.y) ? lc.y : (Number.isFinite(nav._playerY) ? nav._playerY : 0);
+  const inside = (x, z) => Number.isFinite(x) && Number.isFinite(z)
+    && x >= col.bounds.min.x && x <= col.bounds.max.x && z >= col.bounds.min.z && z <= col.bounds.max.z;
+  if (recentre || !lc || !inside(lc.x, lc.z)) {
+    if (recentre && inside(nav._playerX, nav._playerZ)) nav._localCenter = { x: nav._playerX, y: Number.isFinite(nav._playerY) ? nav._playerY : y, z: nav._playerZ };
+    else if (recentre || !lc || !Number.isFinite(lc.x) || !Number.isFinite(lc.z)) nav._localCenter = { x: col.center.x, y, z: col.center.z };
+    else { const c = navGrid.clampToColumn(col, lc.x, lc.z); nav._localCenter = { x: c.x, y, z: c.z }; }
+  }
+}
+
+/** Is `a` inside (or equal to) the box `parent` names — every part `parent` has, `a` shares? */
+function within(a, parent) {
+  if (!parent) return true;
+  if (!a || !a.sector || a.sector.i !== parent.sector.i || a.sector.j !== parent.sector.j) return false;
+  if (parent.region && (!a.region || a.region.i !== parent.region.i || a.region.j !== parent.region.j)) return false;
+  if (parent.prism && (!a.prism || a.prism.i !== parent.prism.i || a.prism.j !== parent.prism.j)) return false;
+  return true;
+}
+
+/** The point a new descendant of `parent` is taken at: the player's, when the player stands in
+ *  `parent`; else the parent's centre. */
+function pointIn(nav, level, parent) {
+  if (Number.isFinite(nav._playerX) && Number.isFinite(nav._playerZ)
+      && within(navGrid.parentAt(level, nav._playerX, nav._playerZ), parent)) return { x: nav._playerX, z: nav._playerZ };
+  const v = navGrid.viewForAddress(level, parent);
+  return { x: v.cx, z: v.cz };
+}
+
+/**
+ * ⭐ THE SAVED SCREENS BELOW `level` STAY INSIDE IT (Astra phase-2 review, finding 1). The tab strip,
+ * Tab and ESC go back to `_viewStack[k]` and to `_prismColumn`; after the parent at `level` changes,
+ * a deeper entry still naming the OLD parent's child is a screen that is not inside the one above it
+ * (drill GALAXY → P8, Tab to REGION, and you were shown the player's N10 H9). Each deeper entry that
+ * no longer lies inside its parent is replaced by the child holding the player, when the player is
+ * in that parent, else the child at the parent's centre; then the column, the same way.
+ */
+export function reconcileBelow(nav, level) {
+  const stack = nav._viewStack;
+  if (!stack) return;
+  for (let k = Math.max(level + 1, navGrid.SECTOR); k <= navGrid.REGION; k++) {
+    const up = k === navGrid.SECTOR ? null : stack[k - 1] && stack[k - 1].address;
+    if (k > navGrid.SECTOR && !up) return;
+    const e = stack[k];
+    if (e && e.address && within(e.address, up)) continue;
+    const pt = up ? pointIn(nav, k - 1, up) : null;
+    if (!pt) continue;   // SECTOR with no GALAXY parent to reconcile against: nothing to do
+    stack[k] = stackEntry(k, navGrid.parentAt(k, pt.x, pt.z));
+  }
+  const region = stack[navGrid.REGION] && stack[navGrid.REGION].address;
+  const col = nav._prismColumn;
+  if (region && (!col || !within(col.address, region))) {
+    const pt = pointIn(nav, navGrid.REGION, region);
+    setColumn(nav, navGrid.enterColumn(navGrid.parentAt(navGrid.PRISM, pt.x, pt.z)));
+  }
 }
 
 /**
@@ -101,6 +184,7 @@ export function drillInto(nav, level, childAddress, opts = {}) {
   if (nv.view) {
     const e = stackEntry(nv.level, nv.address);
     nav._viewStack[nv.level] = e;
+    reconcileBelow(nav, nv.level);   // the deeper saved screens and the column follow the new parent
     nav._startDrillAnim(from, fromSize, { x: e.center.x, z: e.center.z }, e.size, nv.level, duration);
   } else {
     const col = nv.column;
@@ -151,11 +235,25 @@ export function jumpTo(nav, level, address, { y } = {}) {
  * `_hoveredTile` for the legacy look's hover frame, and — under a 240p design — the driver's
  * `S.pick`, the clicked-cell highlight the designs paint (they draw no hover frame at 2D).
  */
-export function showPick(nav, level, childAddress) {
+export function showPick(nav, level, childAddress, { holdMs } = {}) {
   nav._hoveredTile = navGrid.hoverTile(level, childAddress);
+  const now = simClockMs();
+  // ⭐ THE HIGHLIGHT LASTS THROUGH THE HOVER AND THE ZOOM (Astra phase-2 review, finding 5). The
+  //    autopilot hovers 800 / 700 ms and then drills for 500-600 ms, but a design's pick expired after
+  //    its 700 ms backstop and legacy GALAXY's paint replaced it with the physical pointer's cell. So
+  //    the pick carries its own lifetime (`holdMs`), the design's backstop honours it, and while it
+  //    runs the pointer does not repaint the hover (`pickHeld`). The level change still ends it.
+  const hold = Number.isFinite(holdMs) && holdMs > 0 ? holdMs : 0;
+  nav._pickHoldUntil = hold ? now + hold : 0;
   const S = nav.viewMode && nav._viewDriverInst && nav._viewDriverInst.S;
-  if (S && nav._hoveredTile) S.pick = { level, address: nav._hoveredTile.address, tMs: simClockMs() };
+  if (S && nav._hoveredTile) S.pick = { level, address: nav._hoveredTile.address, tMs: now, ...(hold ? { holdMs: hold } : {}) };
   return nav._hoveredTile;
+}
+
+/** Is a performed pick (the autopilot's) still on the glass? While it is, the pointer's hover does
+ *  not replace it. */
+export function pickHeld(nav) {
+  return !!nav && Number.isFinite(nav._pickHoldUntil) && nav._pickHoldUntil > 0 && simClockMs() < nav._pickHoldUntil;
 }
 
 /** The world point's texel on whichever map is on the glass: a design's published `S.mapProj`
@@ -218,14 +316,16 @@ export function onPlayerColumn(nav) {
 }
 
 /**
- * The legacy prism's "here" row: on the PLAYER'S column, the loaded row that is the player's own star
- * (identity rule, `findStar` at the player's position), else the row carrying the current system's
- * name; on any other column, none — never the nearest browsed row (plan §6; NavComputer.js:2052).
+ * The legacy prism's "here" row: on the PLAYER'S column, the loaded row that IS the player's own star
+ * (`hereRowOf` — the one resolver both designs and the self-warp guard use); on any other column,
+ * none — never the nearest browsed row (plan §6; NavComputer.js:2052).
+ * ⛔ No name fallback any more (Astra phase-2 review, finding 2): "any row in the column with the
+ * current system's name" took a same-name star 2 pc away as the player's. When the player's own row
+ * is not loaded the player marker stands in, as it always has.
  */
 export function hereStar(nav, rows) {
   if (!onPlayerColumn(nav) || !rows || !rows.length) return null;
-  const P = { wx: nav._playerX, wy: Number.isFinite(nav._playerY) ? nav._playerY : 0, wz: nav._playerZ };
-  return findStar(rows, P) || (nav._currentSystemName ? rows.find((s) => s.name === nav._currentSystemName) || null : null);
+  return hereRowOf(nav, rows);
 }
 
 /** Distance from the player, kpc — what a nav row's `dist` means (plan §6), not the query centre's. */

@@ -10,6 +10,20 @@ import * as THREE from 'three';
  * Renders to an offscreen WebGLRenderTarget, then copies to a Canvas 2D
  * element that NavComputer can drawImage() into its own canvas.
  */
+/**
+ * The cache key for a density image of the frame (cx, cz, ±ext) at `res` texels: the centre snapped
+ * to ONE OUTPUT TEXEL of that frame (2·ext / res) and the extent to 6 significant figures. Callers
+ * render AT the returned centre and extent, so a cached image sits at most half an output texel —
+ * well under one screen texel — from the frame it is drawn into. Shared by the GPU renderer and the
+ * nav's CPU fallback (NavComputer._getOrRenderMap). naming-prism-segments Phase 2 fixup.
+ */
+export function mapKey(cx, cz, ext, res = 512) {
+  const e = Number(ext.toPrecision(6));
+  const q = (2 * e) / Math.max(1, res);
+  const qx = Math.round(cx / q) * q, qz = Math.round(cz / q) * q;
+  return { cx: qx, cz: qz, ext: e, key: `${Math.round(cx / q)},${Math.round(cz / q)},${e}` };
+}
+
 export class NavGalaxyRenderer {
   /**
    * @param {THREE.WebGLRenderer} renderer — shared Three.js renderer
@@ -237,11 +251,12 @@ export class NavGalaxyRenderer {
    * @returns {HTMLCanvasElement}
    */
   render(cx, cz, extent) {
-    // Quantize key to avoid re-rendering for tiny view shifts
-    const qcx = Math.round(cx * 10) / 10;
-    const qcz = Math.round(cz * 10) / 10;
-    const qext = Math.round(extent * 100) / 100;
-    const key = `${qcx},${qcz},${qext}`;
+    // ⭐ naming-prism-segments Phase 2 fixup (Astra finding 3) — THE IMAGE IS RENDERED AT ITS KEY.
+    // The key used to round the centre to 0.1 kpc and the extent to 0.01 kpc while a miss rendered at
+    // the exact centre, so a hit handed back a picture up to ~100 pc (12.8 prism cells) away from the
+    // cells drawn over it. Now the key is one OUTPUT TEXEL of this extent (`mapKey`) and the render
+    // uses the keyed centre and extent, so every image is within half a texel of the frame asked for.
+    const { cx: qcx, cz: qcz, ext: qext, key } = mapKey(cx, cz, extent, this._resolution);
 
     if (this._cache.has(key)) {
       const entry = this._cache.get(key);
@@ -251,8 +266,8 @@ export class NavGalaxyRenderer {
 
     // Set uniforms
     const u = this._material.uniforms;
-    u.uCenter.value.set(cx, cz);
-    u.uExtent.value = extent;
+    u.uCenter.value.set(qcx, qcz);
+    u.uExtent.value = qext;
 
     // Save renderer state and render to our target
     const prevRT = this._renderer.getRenderTarget();

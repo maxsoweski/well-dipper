@@ -51,7 +51,7 @@ import { pickSector, pickTile, pickPrismStar, pickBody, bodyIdentity,
          usableProj, insideProj, projRect, gridCellAt, HOVER_FIELD } from './picking.js';
 import * as navGrid from '../navGrid.js';
 import { makeSearch } from './search.js';
-import { findStar } from './starIdentity.js';
+import { findStar, isHereStar } from './starIdentity.js';
 import { FACE, measurePixelText } from '../../rendering/PixelText.js';
 import { simClockMs } from '../../core/SimClock.js';
 
@@ -249,7 +249,7 @@ export function makeViewModeDriver(nav) {
     const pk = S.pick;
     if (!pk) return;
     if (pk.level !== S.level) { S.pick = null; return; }
-    if (simClockMs() - (pk.tMs || 0) > PICK_HOLD_MS) S.pick = null;
+    if (simClockMs() - (pk.tMs || 0) > (Number.isFinite(pk.holdMs) ? pk.holdMs : PICK_HOLD_MS)) S.pick = null;   // a performed pick (the autopilot's) carries its own hold: hover + zoom
   }
 
   /**
@@ -821,8 +821,9 @@ export function makeViewModeDriver(nav) {
     if (!star) return false;
     // ⭐ 2026-09-25 — NOT THE SYSTEM YOU ARE IN. The host pre-selects the current system's star when the
     // nav opens, so Enter below SYSTEM "warped" to Sol from inside Sol. Same test as state.js's
-    // `D.targetIsHere`, which is what draws the row and chip unarmed.
-    if (nav._currentSystemName && star.name === nav._currentSystemName) return false;
+    // `D.targetIsHere`, which is what draws the row and chip unarmed — both ask `isHereStar`
+    // (starIdentity.js), the player's own star by identity, never by name (Astra phase-2 finding 2).
+    if (isHereStar(nav, star)) return false;
     if (nav._onSound) nav._onSound('warpTarget');
     if (nav._onCommit) {
       nav._onCommit({

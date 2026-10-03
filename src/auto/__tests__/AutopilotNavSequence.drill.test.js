@@ -203,7 +203,8 @@ describe('AC-4 — the autopilot\'s direct entries frame the same boxes as the d
     expect(nav._viewStack[2].size).toBe(navGrid.viewForAddress(2, col.address).size);
     nav.render();
     for (const s of nav._localStars) {
-      expect(navGrid.inFootprint(col.bounds, s.wx, s.wz) || s.isReal, `${s.key} is outside the column`).toBe(true);
+      // no `|| s.isReal` exemption: catalogue rows are held to the column's half-open footprint too (Phase 2 fixup, Astra finding 7)
+      expect(navGrid.inFootprint(col.bounds, s.wx, s.wz), `${s.key} is outside the column`).toBe(true);
     }
   }, 120000);
 });

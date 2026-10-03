@@ -115,7 +115,7 @@ import { simClockMs } from '../../core/SimClock.js';
  *  module the host's drill, the pickers, the painters and the autopilot share. */
 import * as navGrid from '../navGrid.js';
 import { addressOf } from '../../generation/GalaxyGrid.js';
-import { findStar, starMemoKey } from './starIdentity.js';
+import { findStar, starMemoKey, hereRowOf, isHereStar } from './starIdentity.js';
 import { deriveShip, liveMoonRelE } from './shipState.js';
 import alea from 'alea';
 
@@ -214,13 +214,6 @@ export function makeRng(seed) {
 }
 
 /** `NavComputer._estimateBlockStarCount`'s arithmetic at a new call site, not a new pipeline. */
-/** The player's own star among the rows: the nearest row inside the 0.1 pc same-star radius of the
- *  player's position (`findStar` with a position-only record), or null when it is not loaded. */
-function hereRow(rows, P) {
-  if (!rows || !rows.length || !P || !Number.isFinite(P.x) || !Number.isFinite(P.z)) return null;
-  return findStar(rows, { wx: P.x, wy: Number.isFinite(P.y) ? P.y : 0, wz: P.z }) || null;
-}
-
 /** Distance from the player, kpc — what the list prints and sorts by (plan §6). Falls back to the
  *  query's own `dist` for a frame with no player yet. */
 function playerDist(s, P) {
@@ -1019,7 +1012,6 @@ export function makeViewState() {
     S.prismColumn = col || navGrid.parentAt(3, lc.x, lc.z);
 
     D.gm = nav._gm;
-    D.sectors = nav._sectors;
     D.lum = nav._luminosityRenderer;
     D.nav = nav._navGalaxyRenderer;
     D.player = { x: nav._playerX, y: nav._playerY, z: nav._playerZ };
@@ -1103,11 +1095,12 @@ export function makeViewState() {
     //    NEAREST loaded row to the query centre — and once a pilot can browse another column, the
     //    nearest row is a stranger: the YOU mark sat on it and its name replaced the real system's.
     //    Now: the player's column is `navGrid.parentAt(3, player)`; on THAT column the here-row is
-    //    the player's own star (`hereRow`: the nearest row within the 0.1 pc same-star radius of the
-    //    player's position); on ANY OTHER column there is no here-row at all.
+    //    the player's own star (`hereRowOf`, starIdentity.js — the ONE resolver the legacy prism, the
+    //    target styling and the self-warp guard also use: the star the game arrived at, by its key,
+    //    else the nearest row inside 0.1 pc of the player); on ANY OTHER column there is no here-row.
     const playerCol = Number.isFinite(P.x) && Number.isFinite(P.z) ? navGrid.parentAt(3, P.x, P.z) : null;
     D.hereColumn = !!playerCol && navGrid.sameAddress(playerCol, S.prismColumn);
-    D.here = D.hereColumn ? hereRow(D.starRows, P) : null;
+    D.here = D.hereColumn ? hereRowOf(nav, D.starRows) : null;
     // ⭐ THE NAME THE "WHERE AM I" LABELS PRINT IS THE GAME'S OWN, FIRST. `_currentSystemName` is
     //    written from main.js on arrival and does not depend on what is loaded or browsed; the row's
     //    name is only the fallback for a frame the game has not named yet.
@@ -1123,7 +1116,7 @@ export function makeViewState() {
     }) : null;
     D.target = D.selStar || (nav._externalTarget ? {
       name: nav._externalTarget.name || '', wx: nav._externalTarget.x, wy: nav._externalTarget.y,
-      wz: nav._externalTarget.z, seed: 0, spectral: 'G',
+      wz: nav._externalTarget.z, seed: 0, spectral: 'G', key: nav._externalTarget.key,
       ly: Math.hypot(nav._externalTarget.x - D.player.x, nav._externalTarget.y - D.player.y,
                      nav._externalTarget.z - D.player.z) * KPC_TO_LY,
     } : null);
@@ -1131,7 +1124,9 @@ export function makeViewState() {
     //    system's star when the nav opens, so below SYSTEM both designs lit `WARP TO SOL · 0.0 LY ·
     //    ENTER` from inside Sol (usability review 2026-09-25). The commit row and chip read this to
     //    draw unarmed, and `commit()` refuses the same case.
-    D.targetIsHere = !!(D.target && nav._currentSystemName && D.target.name === nav._currentSystemName);
+    //    ⭐ BY IDENTITY, NOT NAME (Astra phase-2 review, finding 2): `isHereStar` is the same resolver as
+    //    `D.here`, so an alias at the player's own position is here and a same-name stranger is not.
+    D.targetIsHere = !!(D.target && isHereStar(nav, D.target));
     // ⭐ 2026-10-02 (Max's UAT ruling) — THE COMMIT VERB FOLLOWS THE GAME'S REGIME. The HOST keeps
     //    `nav.commitIsView` true while the game is in ORRERY (false in HELM) on every NavComputer, so
     //    both designs print `GO TO <body>` there instead of `BURN TO`. ⛔ ONLY THE WORD: Enter and the

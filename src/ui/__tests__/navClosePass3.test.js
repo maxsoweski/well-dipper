@@ -1254,16 +1254,23 @@ describe('AC-6 — tabbing INTO PRISM/SYSTEM closes the frame instead of cutting
     //   ANYTHING. At REGION `_viewStack[2].center` IS `{ _playerX, _playerZ }` and `_localCenter` is
     //   the same point, so on the stock fixture "the frame arrived on `_localCenter`" is true whether
     //   the ease wrote the centre or never touched it — the mutant that deletes both centre writes
-    //   survives. A prism loaded 12 kpc away is an ordinary state (pan at PRISM, or a drill from
-    //   another sector) and it separates the two.
+    //   survives.
+    // ⚠ RULING (naming-prism-segments Phase 2 fixup, Astra finding 1): the prism camera is ALWAYS
+    //   inside the column on the glass, and the column inside the saved region, so this used to put
+    //   the camera 12 kpc away (`{ x: 20, z: -15 }`) — a state the host no longer allows (entering
+    //   PRISM pulls the camera into the column). The prism is moved off the player the honest way: the
+    //   column on the glass is the region's far corner prism (P16), ~58 pc from the frame's centre.
     const { nav, drv } = await atRegion();
     const t0 = simClockMs();
     try {
-      nav._localCenter = { x: 20, y: 1, z: -15 };
+      const corner = navGrid.enterColumn({ ...navGrid.parentAt(2, nav._playerX, nav._playerZ), prism: { i: 15, j: 15 } });
+      navDrill.setColumn(nav, corner);
+      nav._localCenter = { x: corner.center.x, y: 0.001, z: corner.center.z };
+      const TX = corner.center.x, TZ = corner.center.z;
       nav.render();
       _setSimClockMs(t0);
       const fromCx = drv.S.view.cx, fromCz = drv.S.view.cz, fromSize = drv.S.view.size;
-      expect(fromCx, 'the fixture must start away from the prism centre').not.toBeCloseTo(20, 3);
+      expect(fromCx, 'the fixture must start away from the prism centre').not.toBeCloseTo(TX, 3);
       press(nav, 'Tab');
       nav.render();
       const lag = drv.S.levelLag;
@@ -1276,9 +1283,10 @@ describe('AC-6 — tabbing INTO PRISM/SYSTEM closes the frame instead of cutting
       // half way: the centre is strictly between the two ends, so a lag that never writes it fails
       _setSimClockMs(t0 + 175);
       nav.render();
-      expect(drv.S.view.cx, 'the frame did not travel at all').toBeGreaterThan(Math.min(fromCx, 20));
-      expect(drv.S.view.cx).toBeLessThan(Math.max(fromCx, 20));
-      expect(drv.S.view.cz).toBeLessThan(Math.max(fromCz, -15));
+      expect(drv.S.view.cx, 'the frame did not travel at all').toBeGreaterThan(Math.min(fromCx, TX));
+      expect(drv.S.view.cx).toBeLessThan(Math.max(fromCx, TX));
+      expect(drv.S.view.cz).toBeLessThan(Math.max(fromCz, TZ));
+      expect(drv.S.view.cz).toBeGreaterThan(Math.min(fromCz, TZ));
 
       _setSimClockMs(t0 + 349.9999);          // still inside the lag: t < 1, so the curve is applied
       nav.render();

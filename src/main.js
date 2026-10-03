@@ -5748,7 +5748,7 @@ function _buildCurrentStarEntry() {
     wx: gs.worldX, wy: gs.worldY, wz: gs.worldZ,
     name: _currentSystemName || '',
     spectral: gs.type || system?._systemData?.star?.type || 'G',
-    seed: gs.seed, key: gs.key, dist: 0, distPc: '0',
+    seed: gs.seed, key: gs.key, dist: 0, distPc: '0', isReal: !!gs.isReal,   // a catalogue / KnownSystems arrival keeps its CATALOG tag when its row is not loaded (a neighbouring column read 'SOL G PROCEDURAL', Phase 2 live check)
   };
 }
 

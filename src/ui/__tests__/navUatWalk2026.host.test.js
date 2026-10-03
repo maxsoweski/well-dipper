@@ -228,6 +228,11 @@ describe('(D) a star clicked in the sky becomes the nav\'s target', () => {
     nav.viewMode = mode;
     nav.render();
     const home = nav._localStars.reduce((m, s) => (m == null || s.dist < m.dist ? s : m), null);
+    // ⚠ THE PLAYER STANDS AT HOME, as he does after a real arrival (naming-prism-segments Phase 2 fixup,
+    //   Astra finding 2): "here" is the star the game arrived at, by identity and while the player is at
+    //   it — the old name test made the nearest row "home" wherever the player stood.
+    nav.setPlayerPosition({ x: home.wx, y: home.wy, z: home.wz });
+    nav._levelIndex = 3; nav.render();
     nav._currentSystemName = home.name || 'HOMEY';
     nav.openToCurrentSystem({ ...home, name: nav._currentSystemName }, null);
     nav._levelIndex = 0;

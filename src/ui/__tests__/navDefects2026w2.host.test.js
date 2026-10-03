@@ -550,10 +550,17 @@ const LEGACY_TEXT = {
 //   781 → 299 (the 775-sector quadtree → the 293 drawn sectors of the 19 × 19 grid), SECTOR / REGION
 //   9 / 17 beginPath·moveTo·lineTo·stroke pairs of view-relative lines → 256 world-locked cell
 //   strokeRects. HEAD's values were 0: df3025c11613b1b5, 1: 875c015b0dad36e1, 2: 90ecebeb47aa76ca.
+// ⚠ RE-PINNED AGAIN 2026-10-02 — naming-prism-segments Phase 2 FIXUP (Astra findings 3 and 9), RULING
+//   NOTED. Measured against 2840168's NavComputer.js (a sibling copy, this harness, fresh 417x240
+//   legacy nav): TEXT streams identical at 0/1/2; the call streams differ in exactly two ways, both on
+//   purpose — (a) save · beginPath · rect · clip · restore around the grid, so cells are painted only
+//   on the map square the picker accepts (finding 9); (b) the one putImageData of the CPU density
+//   image, now rendered at its texel-snapped cache key so it can never sit off the cells (finding 3).
+//   2840168's values were 0: 4704b767619c16a8, 1: 6e73d1440c48f57a, 2: 494c205c23074d2a.
 const LEGACY_CALLS = {
-  0: '4704b767619c16a8',
-  1: '6e73d1440c48f57a',
-  2: '494c205c23074d2a',
+  0: '7496bc08548a963a',
+  1: '7c31d33c9f8976ad',
+  2: '647c9d85b4cc2313',
   4: '5542b2f88f086705',
 };
 

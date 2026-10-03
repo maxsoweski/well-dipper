@@ -79,3 +79,43 @@ export function isStarKey(k) { return keyKind(k) === 'star'; }
 export function starMemoKey(s) {
   return s.key != null ? s.key : `${s.seed}@${s.wx},${s.wy},${s.wz}`;
 }
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// ⭐ "HERE" — THE PLAYER'S OWN STAR, ONE RESOLVER FOR EVERY CONSUMER (naming-prism-segments AC-5;
+//    Astra phase-2 review, finding 2). Design 1 and design 2's here-mark (state.js `D.here`), the
+//    legacy prism's here-star (navDrill `hereStar`), the target styling (`D.targetIsHere`) and the
+//    self-warp guard (`commit()`) used to ask three different questions — nearest row inside 0.1 pc,
+//    "any row with the current system's NAME", and "the target's name equals the current system's".
+//    A same-name star 2 pc away read as here; an alias at the player's exact position did not, so
+//    Enter warped to the system you were in. Now all of them ask the one below.
+//
+//    The player's identity is the star the game ARRIVED at (`nav._hereStarId`, written by
+//    `openToCurrentSystem` from main.js's current-star entry, key and all) while the player is still
+//    at it (inside the 0.1 pc same-star radius). Its key is authoritative under `sameStar`'s rule; a
+//    player with no carried identity (a debug spawn, a frame before arrival) falls back explicitly to
+//    POSITION — the nearest row inside 0.1 pc of the player. ⛔ Never the name.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The player's own star as a record `sameStar` can compare: `{ wx, wy, wz, key?, name? }`, or null
+ *  before the nav knows where the player is. */
+export function playerStarOf(nav) {
+  if (!nav || !Number.isFinite(nav._playerX) || !Number.isFinite(nav._playerZ)) return null;
+  const P = { wx: nav._playerX, wy: Number.isFinite(nav._playerY) ? nav._playerY : 0, wz: nav._playerZ };
+  const id = nav._hereStarId;
+  if (id && Number.isFinite(id.wx) && Number.isFinite(id.wz) && gap(id, P) < POSITION_MATCH_TOL) {
+    return { ...P, key: id.key, name: id.name };
+  }
+  return P;
+}
+
+/** True when `star` IS the player's own star — the self-warp guard and the "here" styling. */
+export function isHereStar(nav, star) {
+  const p = playerStarOf(nav);
+  return !!p && !!star && sameStar(p, star);
+}
+
+/** The row in `rows` that is the player's own star, or null (not loaded, or not in these rows). */
+export function hereRowOf(nav, rows) {
+  const p = playerStarOf(nav);
+  return p && rows && rows.length ? findStar(rows, p) : null;
+}

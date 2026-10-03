@@ -235,7 +235,8 @@ describe('AC-3 (legacy look) — one cell = one place, end to end', () => {
     expect(key(nav._prismColumn.address)).toBe(key(target));
     nav.render();
     for (const s of nav._localStars) {
-      expect(navGrid.inFootprint(tb, s.wx, s.wz) || s.isReal, `${s.key} is outside the column`).toBe(true);
+      // no `|| s.isReal` exemption: catalogue rows are held to the column's half-open footprint too (Phase 2 fixup, Astra finding 7)
+      expect(navGrid.inFootprint(tb, s.wx, s.wz), `${s.key} is outside the column`).toBe(true);
     }
     nav.handleEscape();
     expect(nav._levelIndex).toBe(2);

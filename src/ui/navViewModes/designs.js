@@ -583,13 +583,6 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const v = S.view;
     return { cx: v.cx, cz: v.cz, size: v.size, n: navGrid.childCount(level) };
   }
-  function tileSize(x, z, target) {                  // NavComputer._computeTileSize (:1596-1602)
-    const R = Math.hypot(x, z), theta = Math.atan2(z, x || 1e-10);
-    const d = D.gm.potentialDerivedDensity(R, 0, theta).totalDensity;
-    if (d < 1e-10) return 0.02;
-    const perPc3 = Math.max(0.001, d * DENSITY_TO_STARS_PER_PC3);
-    return Math.cbrt(target / perPc3) / 1000;
-  }
 
   // ── PRISM PROJECTION.  A top-down-ish view whose ANGLE now arrives with the frame, defaulting to
   //    the fixed shallow tilt these designs were drawn at. Zoom stops: the four D2 and D3 both asked for.
@@ -1114,20 +1107,34 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     for (const c of cells) if (!c.live) dimRect(g, boxRect(P, c.bounds), clip);
   }
 
-  /** Letters across the top and numbers down the left, each centred on its own column or row. */
+  /** Letters across the top and numbers down the left, each centred on its own column or row.
+   *  ⭐ WHOLE LABELS, INSIDE THE PICTURE, BESIDE THE PARENT THEY NAME (Astra phase-2 review, finding 8).
+   *  · A column's letter is drawn while its centre is on the picture, slid sideways so the whole glyph
+   *    stays inside it — a letter centred at the picture's edge was cut 2 texels off the map.
+   *  · Row numbers sit in the gutter left of the square when the picture does not reach into it (design
+   *    1, whose picture IS the square). Where the picture runs the full width (design 2) they follow the
+   *    parent's own left edge as it pans, and stop at the picture's edge when that edge pans off it —
+   *    they used to stay at the square's resting x, on top of whatever cells had slid under them.
+   *  · A parent panned clean off the picture sideways takes its row numbers with it, as its cells go. */
   function gridEdgeLabels(g, level, cells, n, P, L, clip, plate) {
     const ax = navGrid.axisLabels(level);
     for (let i = 0; i < n; i++) {
       const b = cells[i].bounds, tx = Math.round(P.toX((b.min.x + b.max.x) / 2));
       if (tx < clip.x || tx >= clip.x + clip.w) continue;
       const lw = measurePixelText(ax.cols[i]);
-      T(g, ax.cols[i], tx - (lw >> 1), L.labelY, { color: INK.DIM, rgn: 'map', what: 'column label ' + ax.cols[i] });
+      const x = Math.max(clip.x, Math.min(clip.x + clip.w - lw, tx - (lw >> 1)));
+      T(g, ax.cols[i], x, L.labelY, { color: INK.DIM, rgn: 'map', what: 'column label ' + ax.cols[i] });
     }
+    const gutter = clip.x >= L.x0;                         // the picture leaves the square's left margin free
+    const left = Math.round(P.toX(cells[0].bounds.min.x)), right = Math.round(P.toX(cells[n - 1].bounds.max.x));
+    if (right <= clip.x || left >= clip.x + clip.w) return;
     for (let j = 0; j < n; j++) {
       const b = cells[j * n].bounds, ty = Math.round(P.toY((b.min.z + b.max.z) / 2)) - (FACE.h >> 1);
       if (ty < clip.y || ty + FACE.h > clip.y + clip.h) continue;
       const s = ax.rows[j], lw = measurePixelText(s);
-      plate(s, L.x0 - 3 - lw, ty, INK.DIM, 'row label ' + s);
+      // a plated label's backing reaches one texel past its glyphs, so the clamp keeps that inside too
+      const x = gutter ? L.x0 - 3 - lw : Math.max(clip.x + 1, Math.min(clip.x + clip.w - lw - 1, left - 3 - lw));
+      plate(s, x, ty, INK.DIM, 'row label ' + s);
     }
   }
 

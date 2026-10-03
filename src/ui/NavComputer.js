@@ -12,9 +12,9 @@ import { findComponentIndexByName, deriveComponentView } from './componentIdenti
 import { buildFarCompanionChips, formatSeparationAU } from './farCompanionChips.js';
 import { resolveMembership, membershipLabel } from './prismMembership.js';
 import { KnownSystems } from '../generation/KnownSystems.js';
-import { GalacticSectors } from '../generation/GalacticSectors.js';
+/* naming-prism-segments Phase 2: GalacticSectors (the 775-sector density quadtree) is no longer constructed here — every sector is a cell of the fixed grid (navGrid / GalaxyGrid) */
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
-import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
+import { NavGalaxyRenderer, mapKey } from '../rendering/NavGalaxyRenderer.js';
 import alea from 'alea';
 import { simClockMs } from '../core/SimClock.js';  import { navTabHeight, navChromeReserve, navDrawH, navMapOriginY, navMapSize, navCommitButton, navTextInset } from './navLayout.js';  import { wrapPixelTypeCtx, navUnitCap } from './navPixelType.js';  import { prismMarkerMayShow } from './navPrismCull.js';  import { makeViewModeDriver, nextViewMode, loadViewMode, saveViewMode, applySurface } from './navViewModes/index.js';  import * as navGrid from './navGrid.js';  import * as navDrill from './navDrill.js';   // ⚠ appended to this line, not added as new lines: ~700 line-anchored citations ride this file
 
@@ -60,7 +60,7 @@ const LEVEL_NAMES = ['GALAXY', 'SECTOR', 'REGION', 'PRISM', 'SYSTEM'];
  * the overlay still draws the whole word; drop the driver and every letter comes back.
  */
 const LEVEL_TAB_CHARS = ['G', 'S', 'R', 'P', 'Y'];
-const GRID_N = 8; // tiles per axis (sector uses 8, region uses 16)
+/* (GRID_N retired, naming-prism-segments Phase 2: cells per axis come from navGrid.childCount) */
 
 // Bridge potentialDerivedDensity() units → actual stars/pc³ the hash grid renders.
 // GalacticMap calibrates potential density to ~0.065/pc³ at the solar neighborhood;
@@ -68,9 +68,9 @@ const GRID_N = 8; // tiles per axis (sector uses 8, region uses 16)
 // block star-count estimate MUST use this same factor or they disagree (~2.15×).
 const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;
 
-function gridNForLevel(levelIndex) {
-  return navGrid.childCount(levelIndex); // naming-prism-segments AC-3: GALAXY 19, SECTOR 16, REGION 16 — the fixed grid's own counts
-}   const DESIGN_PRISM_DZ = 0.42, DESIGN_PRISM_DY = 0.55, PRISM_ROT_X = Math.atan2(DESIGN_PRISM_DZ, DESIGN_PRISM_DY), ORRERY_TILT = 0.42, ORRERY_ROT_X = Math.asin(ORRERY_TILT);   /* ⭐ THE DESIGNS’ TWO ROTATION DEFAULTS, DERIVED FROM THE GAINS AND NEVER THE OTHER WAY ROUND (nav-screens-close-pass/INTERFACE.md §1). `projectPrism` scales dz by 0.42 and dy by 0.55, which factors as an elevation-only rotation times an anisotropic scale, so the prism’s default elevation is atan2(0.42, 0.55) = 0.6521714117570698. `d2System`’s TILT is a true sine, so the orrery’s is asin(0.42) = 0.43344532006988595 and round-trips exactly. ⛔ WRITING THE ANGLES AS LITERALS AND DERIVING 0.42/0.55 BACK OUT IS 1-2 ULP OFF, and those raw floats feed the bounds culls and go unrounded into `S.prismHits` where `nearestHit` measures distance. This direction cannot drift. */
+/* (gridNForLevel retired, naming-prism-segments Phase 2 cleanup: no caller left —
+   navGrid.childCount is the cells-per-axis answer) */
+   const DESIGN_PRISM_DZ = 0.42, DESIGN_PRISM_DY = 0.55, PRISM_ROT_X = Math.atan2(DESIGN_PRISM_DZ, DESIGN_PRISM_DY), ORRERY_TILT = 0.42, ORRERY_ROT_X = Math.asin(ORRERY_TILT);   /* ⭐ THE DESIGNS’ TWO ROTATION DEFAULTS, DERIVED FROM THE GAINS AND NEVER THE OTHER WAY ROUND (nav-screens-close-pass/INTERFACE.md §1). `projectPrism` scales dz by 0.42 and dy by 0.55, which factors as an elevation-only rotation times an anisotropic scale, so the prism’s default elevation is atan2(0.42, 0.55) = 0.6521714117570698. `d2System`’s TILT is a true sine, so the orrery’s is asin(0.42) = 0.43344532006988595 and round-trips exactly. ⛔ WRITING THE ANGLES AS LITERALS AND DERIVING 0.42/0.55 BACK OUT IS 1-2 ULP OFF, and those raw floats feed the bounds culls and go unrounded into `S.prismHits` where `nearestHit` measures distance. This direction cannot drift. */
 
 /**
  * Should the NAV panel draw chrome-less at this view level?
@@ -137,8 +137,8 @@ export class NavComputer {
     this._ctx = canvas.getContext('2d');
     this._gm = galacticMap;
 
-    // Sectors (persistent, named)
-    this._sectors = new GalacticSectors(galacticMap, 'well-dipper-galaxy-1');
+    // Sectors: the fixed 19 × 19 grid's (navGrid.childGrid(0)); the old named quadtree is retired
+    /* (naming-prism-segments Phase 2 cleanup: `this._sectors` had no reader left) */
 
     // Current level
     this._levelIndex = 3; // start at PRISM
@@ -596,7 +596,7 @@ export class NavComputer {
     const star = starData || this._findNearestStar();
     if (!star) return;
     if (!star.color) star.color = NavComputer._SPECTRAL_COLORS[star.spectral] || '#ffefb0';
-    this._systemStar = star;
+    this._systemStar = star;  this._hereStarId = starData ? { key: starData.key, name: starData.name, wx: starData.wx, wy: starData.wy, wz: starData.wz } : null;   /* naming-prism-segments AC-5 (Astra phase-2 finding 2): the star the game ARRIVED at, key and all — starIdentity.playerStarOf reads it for every "here" (both designs, legacy, the self-warp guard). Only the game's own entry counts; the nearest-star fallback is not an identity. */
     this._selectedNavStar = star;
     this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '', key: star.key };
     this._systemData = systemData || this._currentSystemData || null;
@@ -1226,7 +1226,7 @@ export class NavComputer {
   }
 
   _applyLevelView() {
-    const idx = this._levelIndex;
+    const idx = this._levelIndex;  if (idx === 3) navDrill.keepCameraInColumn(this);   /* naming-prism-segments Phase 2 fixup (Astra finding 1): Tab / the tab strip into PRISM land with the camera INSIDE the column on the glass, whatever path changed the column */
     if (idx < this._viewStack.length) {
       this._viewCenter = { ...this._viewStack[idx].center };
       this._viewSize = this._viewStack[idx].size;
@@ -1626,7 +1626,7 @@ export class NavComputer {
 
     // No individual stars at 2D levels — luminosity image provides the visual
 
-    // Sector overlay on galaxy level
+    // Sector overlay on galaxy level (each grid clips itself to the map square — naming-prism-segments Phase 2 fixup, Astra finding 9)
     if (this._levelIndex === 0) {
       this._renderSectorOverlay(ctx, ox, oy, drawSize, cx, cz, ext);
     } else {
@@ -1641,7 +1641,7 @@ export class NavComputer {
       // ⛔ IT USED TO BE A VIEW-RELATIVE 8 × 8 / 16 × 16 LATTICE over whatever the frame showed:
       // after any drag its cells straddled regions, and its hover named a `{col, row}` of the
       // frame, not a place.
-      const P = navDrill.legacyProj(this, w, h);
+      const P = navDrill.legacyProj(this, w, h);  ctx.save(); ctx.beginPath(); ctx.rect(ox, oy, drawSize, drawSize); ctx.clip();   /* naming-prism-segments Phase 2 fixup (Astra finding 9): the cells, the player's cell and the hover frame are painted ONLY on the map square — the picker rejects a point outside it (navDrill.legacyHoverAt), so a cell drawn in the margin after a pan looked clickable and was not. The hovered cell's NAME sits above its cell, so it is drawn with the clip lifted. */
       const box = (b) => { const x0 = P.toX(b.min.x), y0 = P.toY(b.max.z); return [x0, y0, P.toX(b.max.x) - x0, P.toY(b.min.z) - y0]; };
       const parent = navDrill.legacyParent(this, this._levelIndex);
       ctx.strokeStyle = 'rgba(100, 180, 255, 0.12)';
@@ -1683,9 +1683,9 @@ export class NavComputer {
         ctx.font = '11px "DotGothic16", monospace';
         ctx.fillStyle = 'rgba(100, 180, 255, 0.9)';
         ctx.textAlign = 'center';
-        ctx.fillText(label, r[0] + r[2] / 2, r[1] - 4);
+        ctx.restore(); ctx.font = '11px "DotGothic16", monospace'; ctx.fillStyle = 'rgba(100, 180, 255, 0.9)'; ctx.textAlign = 'center'; ctx.fillText(label, r[0] + r[2] / 2, r[1] - 4); ctx.save();   /* the clip is lifted for the name (a top-row cell's sits above the map), then re-opened so the restore below stays balanced */
         ctx.textAlign = 'left';
-      }
+      }  ctx.restore();   /* the map clip opened at the top of this branch ends here */
     }
 
     // No player marker at 2D levels — the highlighted cell (above) or
@@ -1724,10 +1724,10 @@ export class NavComputer {
     }
 
     // Fallback: CPU luminosity renderer
-    const qcx = Math.round(cx * 10) / 10;
-    const qcz = Math.round(cz * 10) / 10;
-    const qext = Math.round(ext * 100) / 100;
-    const key = `${qcx},${qcz},${qext}`;
+    const q = mapKey(cx, cz, ext, this._mapRes);   /* naming-prism-segments Phase 2 fixup (Astra finding 3): keyed to ONE OUTPUT TEXEL and rendered AT the key, so a cached image is never more than half a texel off the cells — the 0.1 kpc key returned an image up to ~100 pc off */
+    const qcx = q.cx, qcz = q.cz;
+    const qext = q.ext;
+    const key = q.key;
 
     if (this._mapCache.has(key)) {
       const entry = this._mapCache.get(key);
@@ -1745,7 +1745,7 @@ export class NavComputer {
       compOverrides.disk = { gain: 4.0, stretch: 400 };
       compOverrides.core = { gain: 0.2 };
     }
-    const canvas = this._luminosityRenderer.render(cx, cz, ext, this._mapRes, {
+    const canvas = this._luminosityRenderer.render(qcx, qcz, qext, this._mapRes, {
       dustStrength: ext > 10 ? 0.5 : ext > 2 ? 0.3 : 0.1,
       noiseStrength: ext > 10 ? 0.4 : ext > 2 ? 0.6 : 0.8,
       components: compOverrides,
@@ -1824,8 +1824,8 @@ export class NavComputer {
     // R ≤ 18 kpc are drawn (`live`); the 68 corners are not and cannot be hovered. This replaces the
     // 775-sector density quadtree (`GalacticSectors`), whose 0.25 kpc sectors were 1.5 texels wide and
     // whose names repeated. `ox/oy/drawSize/cx/cz/ext` are this map's projection, as before.
-    const k = drawSize / (ext * 2);
-    const mine = this._currentSector && this._currentSector.address;
+    const k = drawSize / (ext * 2);  ctx.save(); ctx.beginPath(); ctx.rect(ox, oy, drawSize, drawSize); ctx.clip();  if (!this.viewMode && !navDrill.pickHeld(this)) this._hoveredTile = navDrill.legacyHoverAt(this, 0, this._mouseX, this._mouseY);   /* naming-prism-segments Phase 2 fixup (Astra finding 4): the sector under the pointer is the world point's half-open owner (navGrid.cellAt), the rule SECTOR/REGION already use — the screen-space test below gave a shared top/bottom edge to the wrong sector. A held autopilot pick (navDrill.pickHeld) is not replaced by the pointer (finding 5). */
+    const mine = this._currentSector && this._currentSector.address;  const hv = !this.viewMode && this._hoveredTile && this._hoveredTile.level === 0 ? this._hoveredTile : null;  let tip = null;
     for (const c of navGrid.childGrid(0, null)) {
       if (!c.live) continue;
       const b = c.bounds;
@@ -1852,15 +1852,15 @@ export class NavComputer {
       // exactly one sector. The payload is navGrid.hoverTile: it carries `.sector` (the exact square
       // the level-0 drill flies to) and `.address`. ⛔ Not under a 240p design: the driver owns the
       // hover there and resolves it at the tail of render() through its own projection.
-      if (!this.viewMode && this._mouseX >= bx && this._mouseX < bx + sw && this._mouseY >= by && this._mouseY < by + sw) {
-        this._hoveredTile = navGrid.hoverTile(0, c.address);
+      if (hv && navGrid.sameAddress(hv.address, c.address)) {
+        /* the hovered (or autopilot-held) sector, resolved once above — framed here, named after the clip */
         ctx.strokeStyle = 'rgba(100, 180, 255, 0.7)';
         ctx.lineWidth = 2;
         ctx.strokeRect(bx, by, sw, sw);
-        ctx.font = '12px "DotGothic16", monospace';   // sector name tooltip — its grid reference until Phase 4
-        ctx.fillStyle = 'rgba(100, 180, 255, 0.9)'; ctx.textAlign = 'center'; ctx.fillText(c.ref, sx, by - 4); ctx.textAlign = 'left';
+        ctx.font = '12px "DotGothic16", monospace';   /* sector name tooltip — its grid reference until Phase 4 */
+        tip = [c.ref, sx, by - 4];   /* named after the loop, once the map clip is lifted, so a top-row sector's name is not cut off */
       }
-    }
+    }  ctx.restore();  if (tip) { ctx.font = '12px "DotGothic16", monospace'; ctx.fillStyle = 'rgba(100, 180, 255, 0.9)'; ctx.textAlign = 'center'; ctx.fillText(tip[0], tip[1], tip[2]); ctx.textAlign = 'left'; }   /* the map clip opened above ends here; then the hovered sector's name */
   }
 
   // ════════════════════════════════════════════════════
@@ -3784,7 +3784,7 @@ export class NavComputer {
         // Skip unnamed catalog entries, including the pre-regen hyg-stars.json
         // '"' artifact (AC9 regen eliminates it; guard here defensively since
         // that regen lands in parallel with this fix, not before it).
-        if (!rs.name || rs.name === '"') continue;
+        if (!rs.name || rs.name === '"') continue;  if (this._prismColumn && !navGrid.inFootprint(this._prismColumn.bounds, rs.x, rs.z)) continue;   /* naming-prism-segments Phase 2 fixup (Astra finding 7): a catalogue star belongs to ONE column too — findInVolume's box is closed, the grid's is half-open, so a star on the column's upper face is the neighbour's */
         const realKey = realStarKey(rs);   /* naming-prism-segments AC-2: the catalogue IDENTITY — by name, the second of two same-name records (12 names repeat) never loaded */
         if (this._loadedSeen.has(realKey)) continue;
         this._loadedSeen.add(realKey);
@@ -4385,11 +4385,11 @@ export class NavComputer {
     // this field for its own map (a miss writes null), and a legacy write here would put a cell of
     // the LEGACY projection under a design's pointer. The driver re-resolves at the tail of render().
     if (this._levelIndex > 0 && this._levelIndex <= 2) {
-      if (!this.viewMode) this._hoveredTile = navDrill.legacyHoverAt(this, this._levelIndex, p.x, p.y);
+      if (!this.viewMode && !navDrill.pickHeld(this)) this._hoveredTile = navDrill.legacyHoverAt(this, this._levelIndex, p.x, p.y);   /* a held autopilot pick is not replaced by the pointer (Astra phase-2 finding 5) */
       // (the legacy GALAXY hover is resolved during the paint, in `_renderSectorOverlay`)
     } else if (this._levelIndex === 0) {
       // Galaxy level — hover handled in renderSectorOverlay
-      this._hoveredTile = null;
+      if (!navDrill.pickHeld(this)) this._hoveredTile = null;
     }
   }
 

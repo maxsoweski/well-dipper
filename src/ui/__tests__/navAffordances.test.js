@@ -263,7 +263,10 @@ const VOCABULARY = [
     async probe() {
       const n = await nav();
       let fired = null;
-      n._selectedNavStar = { wx: 8, wy: 0, wz: 0, seed: 991, name: 'Probe', spectral: 'G' };
+      // ⚠ 1 pc off the player, not ON him (naming-prism-segments Phase 2 fixup, Astra finding 2): "here"
+      //   is the player's own star BY IDENTITY now, and a keyless record at the player's exact position
+      //   IS the player's star, which Enter rightly refuses. This probe is about a destination.
+      n._selectedNavStar = { wx: 8.001, wy: 0, wz: 0, seed: 991, name: 'Probe', spectral: 'G' };
       n._onCommit = (a) => { fired = a; };
       press(n, 'Enter');
       return !!fired && fired.type === 'warp';
@@ -468,10 +471,15 @@ const VOCABULARY = [
       n.render();
       const D = n._viewDriverInst.D;
       if (!D.target || D.targetIsHere) return false;
-      // ⭐ AND THE SYSTEM YOU ARE IN IS NOT A DESTINATION: name it as here, and the warp disarms.
-      n._currentSystemName = D.target.name;
+      // ⭐ AND THE SYSTEM YOU ARE IN IS NOT A DESTINATION: arrive at it, and the warp disarms.
+      // ⚠ BY ARRIVING, NOT BY NAME (naming-prism-segments Phase 2 fixup, Astra finding 2): "here" is
+      //   the star the game arrived at, by identity — sharing the current system's NAME no longer
+      //   makes a star here (that let a same-name stranger refuse a warp, and an alias self-warp).
+      const t = D.target;
+      n.setPlayerPosition({ x: t.wx, y: t.wy, z: t.wz });
+      n.openToCurrentSystem({ ...t }, null);
       n.render();
-      return D.targetIsHere === true;
+      return n._viewDriverInst.D.targetIsHere === true;
     },
   },
   {

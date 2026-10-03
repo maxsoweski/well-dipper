@@ -228,12 +228,17 @@ export class AutopilotNavSequence {
       return;
     }
 
-    // Simulate hover + cursor on the target cell (the pilot's highlight, on the pilot's grid)
-    const tile = navDrill.showPick(this._nav, level, step.child);
+    // Simulate hover + cursor on the target cell (the pilot's highlight, on the pilot's grid).
+    // ⭐ The highlight is held for the hover AND the zoom that follows (Astra phase-2 review, finding
+    //    5): a pilot's click keeps its cell framed through the drill, and the autopilot's must too —
+    //    it used to expire at the designs' 700 ms backstop, before the 800 ms GALAXY hover ended.
+    const hoverMs = level === navGrid.GALAXY ? 800 : 700;
+    const drillMs = level === navGrid.SECTOR ? 500 : 600;
+    const tile = navDrill.showPick(this._nav, level, step.child, { holdMs: hoverMs + drillMs + 100 });
     this._setCursorAtGalactic(tile.center.x, tile.center.z);
 
     // Hover + cursor visible, then drill
-    this._delay(level === navGrid.GALAXY ? 800 : 700, () => {
+    this._delay(hoverMs, () => {
       if (this._aborted) return;
       this._nav._autoCursor = null;
       if (level === navGrid.REGION) {
@@ -242,7 +247,7 @@ export class AutopilotNavSequence {
       // Tilt from top-down to angled (like entering 3D view) at REGION → PRISM; the camera starts on
       // the column's centre at the destination's height.
       navDrill.drillInto(this._nav, level, step.child, {
-        duration: level === navGrid.SECTOR ? 500 : 600, sound: false,
+        duration: drillMs, sound: false,
         y: dest.y || 0, tiltTo: 0.5, tiltStart: simClockMs(), rotY: 0,
       });
       if (this._soundEngine) this._soundEngine.play(`navDrill${level + 1}`);
