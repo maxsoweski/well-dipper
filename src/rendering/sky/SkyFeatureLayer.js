@@ -92,8 +92,16 @@ export class SkyFeatureLayer {
       .sort((a, b) => b.angularRadius - a.angularRadius)
       .slice(0, MAX_FEATURES);
 
+    // Features whose centre sits inside the volume's nebula are hidden with it: their flat billboard lands on
+    // top of the 3D cloud (a supernova-remnant shell at the nebula's exact centre read as "a ring", Max
+    // 2026-10-03). They come back as volumes when the Galactic Engine draws more than one feature.
+    const skipped = skipKey ? features.find(f => featureKeyOf(f) === skipKey) : null;
+    const insideSkipped = (f) => skipped && featureKeyOf(f) !== skipKey && Math.hypot(
+      f.position.x - skipped.position.x, f.position.y - skipped.position.y, f.position.z - skipped.position.z) < skipped.radius;
+
     for (const feature of scored) {
       if (skipKey && featureKeyOf(feature) === skipKey) continue;
+      if (insideSkipped(feature)) continue;
 
       // Skip features we're inside — don't render as a distant billboard.
       // The ambient tint handles the "you're inside this" indication.
