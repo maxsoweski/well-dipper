@@ -110,11 +110,11 @@ import { multiplicityForSeed } from '../../generation/multiplicityOracle.js';
  *  `_systemZoomAnim` are measured on, so the inbound ease and the transitions it is standing beside
  *  cannot drift apart under a throttled tab. */
 import { simClockMs } from '../../core/SimClock.js';
-/** ⛔ THE DRIVER'S ONE COPY OF `NavComputer.gridNForLevel` (:71), IMPORTED RATHER THAN RESTATED.
- *  This file used to spell its own `LAG_GRID_N`, which made three copies of two constants across the
- *  build — the AC-4 defect shape, counted by the adversarial pass. `picking.js` already owns the
- *  driver's copy for the rail's z-flip, so the lag's `toView.size` reads that one. */
-import { gridNFallback } from './picking.js';
+/** ⭐ THE FIXED GRID'S SCREENS (naming-prism-segments Phase 2): the parent each 2D screen is about,
+ *  the 293 sector rows, the player's own column and the lag's window all come from `navGrid`, the one
+ *  module the host's drill, the pickers, the painters and the autopilot share. */
+import * as navGrid from '../navGrid.js';
+import { addressOf } from '../../generation/GalaxyGrid.js';
 import { findStar, starMemoKey } from './starIdentity.js';
 import { deriveShip, liveMoonRelE } from './shipState.js';
 import alea from 'alea';
@@ -214,6 +214,40 @@ export function makeRng(seed) {
 }
 
 /** `NavComputer._estimateBlockStarCount`'s arithmetic at a new call site, not a new pipeline. */
+/** The player's own star among the rows: the nearest row inside the 0.1 pc same-star radius of the
+ *  player's position (`findStar` with a position-only record), or null when it is not loaded. */
+function hereRow(rows, P) {
+  if (!rows || !rows.length || !P || !Number.isFinite(P.x) || !Number.isFinite(P.z)) return null;
+  return findStar(rows, { wx: P.x, wy: Number.isFinite(P.y) ? P.y : 0, wz: P.z }) || null;
+}
+
+/** Distance from the player, kpc — what the list prints and sorts by (plan §6). Falls back to the
+ *  query's own `dist` for a frame with no player yet. */
+function playerDist(s, P) {
+  if (!P || !Number.isFinite(P.x) || !Number.isFinite(P.z)) return s.dist ?? 0;
+  return Math.hypot(s.wx - P.x, (s.wy || 0) - (Number.isFinite(P.y) ? P.y : 0), s.wz - P.z);
+}
+
+/** A sector of the fixed grid as the row record every sector consumer reads (`id`, `name`,
+ *  `centerX`, `centerZ`, `size`, and now its `address`). Its grid reference is its name until
+ *  Phase 4 gives sectors words. */
+function sectorRecord(cell) {
+  const b = cell.bounds;
+  return { id: cell.ref, name: cell.ref, centerX: (b.min.x + b.max.x) / 2, centerZ: (b.min.z + b.max.z) / 2,
+           size: b.max.x - b.min.x, address: cell.address };
+}
+
+/** The parent a 2D screen is about: the address the host's view stack recorded for this level,
+ *  else the parent under the frame's centre (`S.view`). GALAXY has none. */
+function gridParentFor(nav, level) {
+  if (level < 1 || level > 2) return null;
+  const st = nav._viewStack && nav._viewStack[level];
+  const fromStack = st && st.address ? navGrid.parentOf(level, st.address) : null;
+  if (fromStack) return fromStack;
+  const vc = nav._viewCenter || {};
+  return navGrid.parentAt(level, vc.x, vc.z);
+}
+
 function estStars(gm, x, z, sizeKpc) {
   const R = Math.hypot(x, z), theta = Math.atan2(z, x || 1e-10);
   const d = gm.potentialDerivedDensity(R, 0, theta).totalDensity;
@@ -305,7 +339,13 @@ export function makeViewState() {
     /** THE PAINT PUBLISHES THESE (INTERFACE §1). The driver clears them at the head of each frame,
      *  for the same reason `resetRegions()` exists: a stale rectangle makes a hit-test that should
      *  say "nothing published" quietly answer against the frame before it. */
-    mapProj: null,      // {design,level,kind,x0,y0,w,h,cx,cz,spanX,spanZ,n} — levels 0-2
+    mapProj: null,      // {design,level,kind:'grid',x0,y0,sq,cx,cz,size,clip,parent,n} — levels 0-2
+    mapCells: null,     // every drawn 2D cell { ref, address, bounds, rect } — published by `gridScreen`
+    /* ⭐ naming-prism-segments Phase 2 — WHICH PARENT THE 2D SCREEN IS ABOUT, and which COLUMN PRISM
+     *   shows. Both are navGrid addresses resolved in `refresh()` from the host's own state, so a pan
+     *   moves the frame and never changes which sector / region the cells belong to. */
+    gridParent: null,
+    prismColumn: null,
     prismHits: [],      // [{x,y,r,ref}]                — level 3, in DRAW ORDER
     bodyHits: [],       // [{x,y,r,ref,moon,star}]      — level 4
     /** ⭐ EVERY PLACED LABEL AT ITS FINAL DRAWN RECT, published by `plated()` itself so a caller
@@ -528,6 +568,8 @@ export function makeViewState() {
     ready: false, note: [], fail: [],
     gm: null, sectors: null, lum: null, nav: null,
     player: null, playerSector: null,
+    column: null,       // navGrid.enterColumn() of the column PRISM shows (naming-prism-segments AC-3)
+    hereColumn: false,  // is that column the PLAYER's own? (AC-5) — `here` exists only there
     sectorRows: [], stars: [], starRows: [], sys: null, bodies: [],
     target: null, selStar: null, selBody: null, sysStar: null, here: null,
     isCurrent: false,   // the HOST's own answer to "is the system on the glass the one the ship is in"
@@ -824,7 +866,7 @@ export function makeViewState() {
       const lc = nav._localCenter || {};
       const tc = (to === 3 && Number.isFinite(lc.x) && Number.isFinite(lc.z))
         ? { cx: lc.x, cz: lc.z } : { cx: nav._playerX, cz: nav._playerZ };
-      const toSize = fromSize / (gridNFallback(from) * 2);
+      const toSize = navGrid.easeSize(from, fromSize);
       if (!Number.isFinite(fc.x) || !Number.isFinite(fc.z) || !Number.isFinite(tc.cx)
           || !Number.isFinite(tc.cz) || !(toSize > 0)) return null;
       S.levelLag = { ...base, kind: 'map', hold: from,
@@ -840,7 +882,7 @@ export function makeViewState() {
       //   `NavComputer.js:4625`, `toRadius: this._localRadius * 0.1`, written inline inside a literal
       //   in a LINE-FROZEN file — there is nothing to import and no line to spare to export one. So it
       //   is one restated constant, named here, kept beside the sentence that says where it came from;
-      //   `gridNFallback` above is the shape this would take if `:4625` ever had a name.
+      //   `navGrid.easeSize` above is the shape this would take if `:4625` ever had a name.
       const r = Number.isFinite(nav._localRadius) ? nav._localRadius : S.cam.radius;
       if (!(r > 0)) return null;
       const star = nav._systemStar;
@@ -966,19 +1008,40 @@ export function makeViewState() {
     // `S.cam` (prism lag), never the instrument's own fields — the game's camera stays the single
     // source of truth and the ease is a property of what the DESIGN is told this frame.
     applyLevelLag();
+    // ⭐ THE PARENT THE 2D SCREEN IS ABOUT (naming-prism-segments AC-3). The host's view stack carries
+    //    the ADDRESS it drilled into (`_viewStack[level].address`); a pan moves `_viewCenter` and never
+    //    that, so the cells stay the same places and the neighbours come in dimmed. Absent an address
+    //    (a stack built before the host wrote one), the parent under the frame's centre.
+    S.gridParent = gridParentFor(nav, S.level);
+    // ⭐ AND THE COLUMN PRISM SHOWS: the host's `_prismColumn` (navGrid.enterColumn) when it has one,
+    //    else the column under the prism camera — WASD clamps the camera inside it.
+    const col = nav._prismColumn && navGrid.parentOf(3, nav._prismColumn.address);
+    S.prismColumn = col || navGrid.parentAt(3, lc.x, lc.z);
 
     D.gm = nav._gm;
     D.sectors = nav._sectors;
     D.lum = nav._luminosityRenderer;
     D.nav = nav._navGalaxyRenderer;
     D.player = { x: nav._playerX, y: nav._playerY, z: nav._playerZ };
-    D.playerSector = nav._currentSector || nav._sectors?.getSectorAt(D.player) || null;
+    D.column = S.prismColumn ? navGrid.enterColumn(S.prismColumn) : null;
 
-    // ── SECTOR ROWS — the EXPENSIVE half is galaxy-only, so it is built once and never invalidated;
-    //    only the ORDER is re-derived, and only when the key moves.
-    if (!cache.sectorBase && D.sectors && D.gm) {
-      cache.sectorBase = D.sectors.getSectors()
-        .map((s) => ({ s, n: estStars(D.gm, s.centerX, s.centerZ, s.size) }));
+    // ── SECTOR ROWS — THE 293 DRAWN SECTORS OF THE FIXED GRID (naming-prism-segments AC-3), not the
+    //    775-sector density quadtree: a GALAXY row and a GALAXY cell are now one place, named by the
+    //    grid reference its edge labels spell until Phase 4 gives sectors words. The EXPENSIVE half
+    //    (293 density calls) is galaxy-only, so it is built once and never invalidated; only the
+    //    ORDER is re-derived, and only when the key moves.
+    if (!cache.sectorBase && D.gm) {
+      cache.sectorBase = navGrid.childGrid(0, null).filter((c) => c.live).map((c) => {
+        const s = sectorRecord(c);
+        return { s, n: estStars(D.gm, s.centerX, s.centerZ, s.size) };
+      });
+      cache.sectorByRef = new Map(cache.sectorBase.map((r) => [r.s.id, r.s]));
+    }
+    // ⭐ THE PLAYER'S SECTOR IS THE GRID CELL THE PLAYER STANDS IN — the same record its row carries.
+    {
+      const pa = Number.isFinite(D.player.x) && Number.isFinite(D.player.z)
+        ? navGrid.childCell(0, navGrid.parentAt(1, D.player.x, D.player.z)) : null;
+      D.playerSector = (pa && cache.sectorByRef && cache.sectorByRef.get(pa.ref)) || (pa && pa.live ? sectorRecord(pa) : null);
     }
     const secKey = sortKeyFor(S, 0);
     if (cache.sectorBase && cache.sectorSortId !== secKey.id) {
@@ -990,17 +1053,31 @@ export function makeViewState() {
     // ── STAR ROWS — re-ranked when the background loader has grown `_localStars`, OR when the sort
     //    key moves. See the caching note above for why the array's identity alone is not a
     //    sufficient key, and the sort note for why the key has to be part of it.
-    D.stars = nav._localStars || [];
+    // ⭐ naming-prism-segments AC-3 / AC-5 — PRISM SHOWS ONE COLUMN, AND DISTANCES ARE THE PILOT'S.
+    //    The rows are the loaded stars INSIDE the column on the glass (half-open, the grid's own
+    //    ownership rule, so a star on the shared face belongs to exactly one column), and `dist` is
+    //    measured from the PLAYER, not from the query's centre: once the pilot can browse a column
+    //    that is not his, the query's centre is a stranger (plan §6). The base is rebuilt when the
+    //    loaded array, the column or the player moves.
+    const rawStars = nav._localStars || [];
+    const P = D.player;
+    const colKey = navGrid.addressKey(S.prismColumn);
+    const playerKey = `${P.x},${P.y},${P.z}`;
     const starKey = sortKeyFor(S, 3);
-    if (cache.starsRef !== D.stars || cache.starsLen !== D.stars.length) {
-      cache.starsRef = D.stars; cache.starsLen = D.stars.length; cache.starSortId = null;
+    if (cache.starsRef !== rawStars || cache.starsLen !== rawStars.length
+        || cache.colKey !== colKey || cache.playerKey !== playerKey) {
+      cache.starsRef = rawStars; cache.starsLen = rawStars.length; cache.starSortId = null;
+      cache.colKey = colKey; cache.playerKey = playerKey;
+      const cb = D.column && D.column.bounds;
+      cache.colStars = cb ? rawStars.filter((st) => navGrid.inFootprint(cb, st.wx, st.wz)) : rawStars;
       // ⭐ AC-10 — `mult` IS FILLED HERE, ON EVERY ROW, THROUGH THE STAR MAP. See `multFor` for the
       //    measurement that says this is affordable and for why it is not lazy. ⛔ AFTER `nameFor`,
       //    because the oracle's highest-precedence chain is `KnownSystems.findByAlias(name, pos)` —
       //    Alpha Centauri reports 3 by NAME and would roll 1 or 2 procedurally without one.
       cache.multGm = D.gm;
-      cache.starRowsBase = D.stars.map((s) => {
-        const row = { ...s, name: nameFor(s), pc: (s.dist ?? 0) * 1000, ly: (s.dist ?? 0) * KPC_TO_LY };
+      cache.starRowsBase = cache.colStars.map((s) => {
+        const d = playerDist(s, P);
+        const row = { ...s, dist: d, name: nameFor(s), pc: d * 1000, ly: d * KPC_TO_LY };
         row.mult = D.gm ? multFor(row, D.gm) : (row.mult ?? 1);
         return row;
       });
@@ -1014,26 +1091,27 @@ export function makeViewState() {
       cache.multGm = D.gm; cache.multByStar.clear(); cache.starSortId = null;
       for (const row of cache.starRowsBase) row.mult = multFor(row, D.gm);
     }
+    D.stars = cache.colStars || [];
     if (cache.starRowsBase && cache.starSortId !== starKey.id) {
       cache.starSortId = starKey.id;
       D.starRows = starKey.cmp ? cache.starRowsBase.slice().sort(starKey.cmp) : cache.starRowsBase.slice();
     }
 
-    // ── WHERE YOU ARE. The instrument knows by NAME (`_currentSystemName` is written from main.js);
-    //    the NEAREST row is the fallback for a hash-grid system whose generated name differs.
-    //    ⛔ NEAREST, NOT `starRows[0]` — those are the same row only while the list is sorted by
-    //    distance, and AC-8 makes that one option out of four. "Where am I" cannot depend on which
-    //    column the pilot last sorted by.
-    D.here = (nav._currentSystemName
-      ? D.starRows.find((r) => r.name === nav._currentSystemName) : null)
-      || D.starRows.reduce((m, r) => (m == null || (r.dist ?? Infinity) < (m.dist ?? Infinity) ? r : m), null)
-      || null;
-    // ⭐ THE NAME THE "WHERE AM I" LABELS PRINT. `D.here` is a ROW, and star rows exist only once the
-    //    PRISM loader has filled `_localStars` — measured 2026-09-25 in Sol: 0 rows at GALAXY, SECTOR,
-    //    REGION and SYSTEM, so design 1's status read `UNKNOWN` and design 2's locator `—` while the
-    //    game knew exactly where the pilot was. The label falls back to the game's own name; `D.here`
-    //    stays a row (or null) for everything that reads its seed.
-    D.hereName = D.here?.name || nav._currentSystemName || null;
+    // ── ⭐⭐ WHERE YOU ARE — WORKED OUT FROM THE PLAYER, NOT FROM THE ROWS BEING BROWSED
+    //    (naming-prism-segments AC-5, plan §6; state.js:1018-1027 before it).
+    //    Max: "here" is the player. It used to be the row with the game's system NAME, else the
+    //    NEAREST loaded row to the query centre — and once a pilot can browse another column, the
+    //    nearest row is a stranger: the YOU mark sat on it and its name replaced the real system's.
+    //    Now: the player's column is `navGrid.parentAt(3, player)`; on THAT column the here-row is
+    //    the player's own star (`hereRow`: the nearest row within the 0.1 pc same-star radius of the
+    //    player's position); on ANY OTHER column there is no here-row at all.
+    const playerCol = Number.isFinite(P.x) && Number.isFinite(P.z) ? navGrid.parentAt(3, P.x, P.z) : null;
+    D.hereColumn = !!playerCol && navGrid.sameAddress(playerCol, S.prismColumn);
+    D.here = D.hereColumn ? hereRow(D.starRows, P) : null;
+    // ⭐ THE NAME THE "WHERE AM I" LABELS PRINT IS THE GAME'S OWN, FIRST. `_currentSystemName` is
+    //    written from main.js on arrival and does not depend on what is loaded or browsed; the row's
+    //    name is only the fallback for a frame the game has not named yet.
+    D.hereName = nav._currentSystemName || D.here?.name || null;
 
     // ── WHAT IS SELECTED. The pilot's choice, never the adapter's.
     const sel = nav._selectedNavStar;

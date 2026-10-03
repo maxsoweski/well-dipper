@@ -602,9 +602,9 @@ describe('the tiles at SECTOR and REGION honour the sort key', () => {
     const row0 = drv.S.railTiles[0];
     nav._handleMouseMove({ clientX: lg.x0 + 4, clientY: lg.top + lg.lead });
     nav.render();
-    const n = drv.S.mapProj ? drv.S.mapProj.n : 8;
-    expect(nav._hoveredTile, `rail row 0 names ${row0.id}`)
-      .toEqual({ col: row0.i, row: n - 1 - row0.j });
+    // ⭐ naming-prism-segments AC-3: the pick is the row's own cell ADDRESS (was a z-flipped {col,row}).
+    expect(nav._hoveredTile?.address, `rail row 0 names ${row0.id}`).toEqual(row0.address);
+    expect(nav._hoveredTile.ref).toBe(row0.id);
   });
 
   it('⛔ the ID order is (i, j) and not a string sort — A10 does not belong between A1 and A2',

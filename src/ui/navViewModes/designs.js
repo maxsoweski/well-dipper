@@ -48,6 +48,9 @@ import { FACE as DEFAULT_FACE, drawPixelText as defaultDraw, measurePixelText as
 // ⭐ THE GPS LINE (2026-10-02): the ship-placement helpers the lab imports under the same names, so the
 //    extracted bodies resolve them here exactly as they do on the spec page (see shipState.js).
 import { ladderShipV, orreryShipRadius, fmtShipRange, shipRangeTo } from './shipState.js';
+// ⭐ THE FIXED GRID'S SCREENS (naming-prism-segments Phase 2): the lab imports the same module under the
+//    same name, so `gridScreen`, `gridRows` and `pickCell` resolve it identically on both pages.
+import * as navGrid from '../navGrid.js';
 
 /** `NavComputer.js:69`, verbatim — the density model's stars-per-pc^3 conversion. */
 const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;
@@ -573,14 +576,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   //    `{ center: (0, 0), size: 44 }` in `_viewStack[0]` and `_applyLevelView` loads it on every entry,
   //    so `S.view` at level 0 IS the literal this used to return until a gesture moves it. This page's
   //    own stand-in (`labViewForLevel`) returns the same literal, so the lab picture is byte-identical.
-  // ⚠ Design 1's re-fit (`d1GalaxyView`, `Math.min(v.size, 2R)`) composes with it: at rest the square
-  //   is still 36 kpc; under a pan the cull keeps a cell drawn only where its centre resolves, so no
-  //   dead ground comes in from the rim; under a drill the square closes on the sector.
+  // ⭐ `n` IS THE FIXED GRID'S, NOT THE VIEW'S (naming-prism-segments Phase 2): 19 sectors across
+  //   GALAXY, 16 regions across a sector, 16 prisms across a region — `navGrid.childCount`. The view
+  //   says where the camera is; which cells exist is the grid's business (see `gridScreen`).
   function levelView(level) {
     const v = S.view;
-    if (level === 0) return { cx: v.cx, cz: v.cz, size: v.size, n: 0 };
-    if (level === 1) return { cx: v.cx, cz: v.cz, size: v.size, n: 8 };
-    return { cx: v.cx, cz: v.cz, size: v.size, n: 16 };
+    return { cx: v.cx, cz: v.cz, size: v.size, n: navGrid.childCount(level) };
   }
   function tileSize(x, z, target) {                  // NavComputer._computeTileSize (:1596-1602)
     const R = Math.hypot(x, z), theta = Math.atan2(z, x || 1e-10);
@@ -713,6 +714,33 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     });
   }
 
+  /*  Function · the PRISM column's own footprint, drawn on the plane the feet stand on.
+   *  Intent · naming-prism-segments AC-3: *"PRISM is one fixed 7.8125 pc column (WASD stops at its
+   *    edge, zoom can pull back past it)"*. Once the camera can pull back past the column, the glass
+   *    has to say where the column ends — otherwise an empty band outside it reads as empty space
+   *    inside it. `D.column` is `navGrid.enterColumn(...)` for the column on the glass.
+   *  ⛔ THE SAME FORWARD ARITHMETIC AS `prismPlane` (and therefore `projectPrism`), so a star on the
+   *    column's edge has its foot on this line. Edge-on draws nothing, as the lattice does.
+   *  Deliberate non-goals · no labels on the edge, no fill outside it, no neighbouring columns. */
+  function prismColumnEdge(g, cxp, cyp, halfW, halfH, cl) {
+    const b = D.column && D.column.bounds, cam = S.cam, r = Math.max(cam.radius, 1e-9);
+    if (!b || !cl || !Number.isFinite(cam.x) || !Number.isFinite(cam.z)) return;
+    const rx = 0.92;
+    const rotX = cam.rotX === undefined ? PRISM_ROTX0 : cam.rotX;
+    const rotY = cam.rotY === undefined ? PRISM_ROTY0 : cam.rotY;
+    const def = (rotX === PRISM_ROTX0 && rotY === PRISM_ROTY0);
+    const tilt = def ? PRISM_TILT0 : PRISM_K * Math.sin(rotX);
+    if (!(Math.abs(tilt) > 1e-6)) return;
+    const ca = def ? 1 : Math.cos(rotY), sa = def ? 0 : Math.sin(rotY);
+    const at = (wx, wz) => { const dx = (wx - cam.x) / r, dz = (wz - cam.z) / r;
+      return [cxp + (dx * ca - dz * sa) * halfW * rx, cyp + (dx * sa + dz * ca) * halfH * tilt]; };
+    const c = [at(b.min.x, b.min.z), at(b.max.x, b.min.z), at(b.max.x, b.max.z), at(b.min.x, b.max.z)];
+    for (let k = 0; k < 4; k++) {
+      const [x0, y0] = c[k], [x1, y1] = c[(k + 1) & 3];
+      lineTexels(g, x0, y0, x1, y1, INK.RULE, cl, 1);
+    }
+  }
+
   /*  Function · the one-texel stem from a mark's foot on the plane to the mark itself.
    *  Intent · AC-2 (restorations). Legacy draws a dashed vertical reference line per on-screen star,
    *    green when the star is above the plane and red when it is below (NavComputer.js:2074-2079).
@@ -742,46 +770,18 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   /**
    * ⭐ THE COMMITTED CLICK, FOR THE FRAME BEFORE THE ZOOM TAKES IT AWAY (INTERFACE §5).
    *
-   * `S.pick = { level, i, j, tMs } | null` — the driver writes it on a committed map click and clears
-   * it when the drill lands. Measured live, the designs' map ALREADY zooms on a drill; what was
-   * missing was the acknowledgement, so a click read as "nothing happened" for the first ~100 ms.
-   *
-   * ⛔ `i`/`j` ARE THE DESIGN'S OWN GRID COORDINATES. The game's `row` counts +z upward and `j` counts
-   * it downward (`row = n - 1 - j`); handing one through as the other frames the mirrored tile, which
-   * looks like the highlight simply being wrong rather than like a flipped axis.
-   * ⚠ Returns null on a missing field, a stale level or a non-finite index — a painter that throws
-   *   freezes the glass, and the host catches exactly once before it stops uploading frames at all.
+   * `S.pick = { level, address, tMs } | null` — the driver writes it on a committed map click and
+   * clears it when the drill lands. The answer is the clicked CHILD's own box (`navGrid.childCell`),
+   * which is the box the drill flies to at every 2D level, GALAXY included: since naming-prism-segments
+   * Phase 2 a GALAXY cell IS a sector, so the old split between "the cell" and "the sector" is gone.
+   * ⚠ Returns null on a missing field or a stale level — a painter that throws freezes the glass, and
+   *   the host catches exactly once before it stops uploading frames at all.
    */
   function pickCell(level) {
     const p = S.pick;
-    if (!p || p.level !== level) return null;
-    if (!Number.isFinite(p.i) || !Number.isFinite(p.j)) return null;
-    return { i: Math.round(p.i), j: Math.round(p.j) };
-  }
-
-  /**
-   * ⭐⭐ AT GALAXY THE ACKNOWLEDGEMENT IS THE SECTOR, NOT THE CELL — AC-5's REMAINING HALF.
-   *
-   * At SECTOR and REGION the thing clicked and the thing drilled are the same rectangle, so framing
-   * the cell is honest and `pickCell` above is the whole story. ⛔ AT LEVEL 0 THEY ARE DIFFERENT
-   * OBJECTS. The click resolves through `pickSector` to one of 775 IRREGULAR sectors and the drill
-   * flies to THAT sector's own centre and size, while the grid over it is a plain 8x8 of the re-fitted
-   * square. A frame on the cell would light up a rectangle the zoom does not go to — a promise the
-   * next 350 ms visibly breaks, which is worse than the nothing it replaces.
-   *
-   * ⭐ SO THE DRIVER PUBLISHES THE SECTOR IT ACTUALLY PICKED, out of the SAME `pickSector` call the
-   * drill uses, and each design frames it through its OWN projection. One picked object, two pictures,
-   * no third copy of anybody's geometry.
-   * ⚠ NULL ON A MISSING OR NON-FINITE SECTOR, and every caller is guarded on `S.level === 0` besides.
-   *   A painter that throws freezes the glass LOOKING ALIVE: `PanelHost` catches once and then stops
-   *   uploading, so the last good frame stays on the screen.
-   */
-  function pickedSector() {
-    const p = S.pick;
-    if (!p || p.level !== 0) return null;
-    const s = p.sector;
-    if (!s || !Number.isFinite(s.centerX) || !Number.isFinite(s.centerZ) || !Number.isFinite(s.size)) return null;
-    return s;
+    if (!p || p.level !== level || !p.address) return null;
+    const c = navGrid.childCell(level, p.address);
+    return c ? c.bounds : null;
   }
 
   // DESIGN 1 — THE 71x40.  A character-cell nav computer: a map pane and a persistent ranked rail.
@@ -966,219 +966,273 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
                                measurePixelText(labelFull), FACE.h);
   }
 
-  /**
-   * ⭐⭐ THE REACHABLE GALAXY, MEASURED OFF `getSectorAt` INSTEAD OF ASSUMED — AC-1's FIRST HALF.
-   *
-   * Max: *"I like removing the negative space; the chunky cells of design1 today are good but there are
-   * too many cells that are not selectable, so the solution is simply to remove the negative/
-   * non-selectable space and redraw the cells from there."* So the GALAXY square stops being the
-   * nominal 44 kpc disc and becomes the bounding box of the ground a click can actually land on.
-   *
-   * ⛔ AND THE AUTHORITY IS THE PICKER'S OWN. `D.sectors` is the very object `picking.js:pickSector`
-   * calls (`state.js:491` assigns `nav._sectors` to it), so the picture cannot disagree with the
-   * picker — which is the entire risk in this AC, and the reason this is a MEASUREMENT rather than a
-   * radius of my own. `getSectorAt`'s only `null` path is `R > GalacticMap.GALAXY_RADIUS * 1.2`
-   * (`GalacticSectors.js:44-46`); inside that it always answers, by bounds containment or by the
-   * nearest-centre fallback for the pruned outer cells. So the reachable set is a disc about the
-   * origin, and bisecting outward along 32 rays finds its edge to floating-point precision. On the
-   * shipped seed that lands on **18.000 kpc exactly**, against a nominal view of 44 — which is where
-   * the wasted space came from: 47.5% of the drawn square resolved to nothing.
-   *
-   * ⚠ IT CAN ONLY TIGHTEN, NEVER LOOSEN (`Math.min` at the call site). A footprint wider than the
-   *   nominal view would mean ZOOMING OUT — showing less galaxy per texel to reveal ground that is
-   *   already off the glass — which is a different change and not the one he asked for.
-   * ⚠ MEMOISED ON THE AUTHORITY'S IDENTITY. ~1,400 probes, once, for the life of the `GalacticSectors`
-   *   instance; the galaxy is generated from a fixed seed and its edge cannot move under us.
-   * ⛔ NULL WHEN THERE IS NO AUTHORITY — `state.js:325` defaults `D.sectors` to `null`, so for a frame
-   *   it can simply be absent. The caller then draws today's picture unchanged. Degrading to a guess
-   *   would be this page inventing a galaxy edge; degrading to nothing would blank the map.
-   */
-  let _fitOwner = null, _fitR = null;
-  function reachableRadius() {
-    const sec = D.sectors;
-    if (!sec || typeof sec.getSectorAt !== 'function') return null;
-    if (_fitOwner === sec) return _fitR;
-    const at = (x, z) => { try { return !!sec.getSectorAt({ x, z }); } catch (e) { return false; } };
-    let R = 0;
-    for (let k = 0; k < 32; k++) {
-      const th = Math.PI * k / 16, cx = Math.cos(th), cz = Math.sin(th);
-      let lo = 0, hi = 1;
-      while (hi < 4096 && at(cx * hi, cz * hi)) { lo = hi; hi *= 2; }
-      for (let s = 0; s < 24; s++) { const m = (lo + hi) / 2; if (at(cx * m, cz * m)) lo = m; else hi = m; }
-      if (lo > R) R = lo;
+  /*  Function · THE THREE 2D SCREENS — GALAXY, SECTOR, REGION — FOR BOTH DESIGNS, SPELLED ONCE.
+   *  Intent · naming-prism-segments Phase 2, AC-3. Max (2026-10-02): *"each cell in the galaxy should
+   *    represent a single sector … Every cell in the sector view should be displaying a single region.
+   *    Every cell in the region view should be displaying a single prism."* So every cell drawn here is
+   *    one CHILD BOX of the frozen grid — `navGrid.childGrid(level, parent)` — pushed through this
+   *    pane's projection. The cells are WORLD-LOCKED: a pan slides them across the glass and never
+   *    re-cuts them, and the picker (`picking.js`) inverts the very numbers published in `S.mapProj`
+   *    and asks `navGrid.cellAt` the same question, so the cell under the pointer is the cell drilled.
+   *  ⛔ +z IS UP. Row 1 of every grid is its LARGEST z (GalaxyGrid §4.1), the luminosity image has
+   *    always been drawn +z up (NavGalaxyRenderer flips the WebGL rows; the CPU renderer counts gz down
+   *    from the top row) and legacy's map is +z up. These designs used to project their MARKS +z down
+   *    over that +z-up image, so away from the frame's centre a mark, a cell and a click sat on the
+   *    mirror image of the density behind them, and a vertical drag moved the marks against the pointer.
+   *    ⚠ PRISM's 3D camera still looks from the south (+z toward the bottom at its top-down start), as
+   *      legacy's always has; the drill into it turns the picture over exactly as legacy's does.
+   *  ⭐ THE PARENT'S NEIGHBOURS ARE DIMMED AND LABELLED, NOT GRIDDED: they are somebody else's cells,
+   *    and a click there is a miss (`navGrid.cellAt` answers null outside the parent).
+   *  ⭐ EDGE LABELS REPLACE THE EIGHT DENSEST TILE IDS: letters across the top, numbers down the left,
+   *    each centred on its own world-locked column or row, so every cell is readable by its row and
+   *    column and the labels slide with a pan.
+   *  Deliberate non-goals · legacy is not restyled (the host keeps its grid correct); no slab or
+   *    segment widget (Phase 3); no sector words (Phase 4) — a sector is named by its grid reference. */
+
+  /** The parent this screen is about. The driver publishes it from the host's view stack; without
+   *  one, it is the parent under the frame's centre. GALAXY has no parent. */
+  function gridParent(level) {
+    if (level === 0) return null;
+    return navGrid.parentOf(level, S.gridParent) || navGrid.parentAt(level, S.view.cx, S.view.cz);
+  }
+
+  /** Integer texels per child, so every cell is the same size at rest: a label row on top, the
+   *  square below it, numbers in the margin to its left. `areaX/W/Y/H` is the design's map band. */
+  function gridLayout(level, areaX, areaW, areaY, areaH) {
+    const n = navGrid.childCount(level);
+    // ⛔ THE ROW NUMBERS NEED THEIR OWN MARGIN, MEASURED IN THE LIVE FACE: at 390 wide the centred square
+    //    left 13 texels and "16" is 11 + a 3-texel gap, so the guard fired on every two-digit row.
+    const numW = measurePixelText(String(n)) + 3;
+    const cellPx = Math.max(1, Math.min(Math.floor((areaH - FACE.h) / n), Math.floor((areaW - numW) / n)));
+    const sq = cellPx * n;
+    const gap = (areaH - FACE.h - sq) >= 1 ? 1 : 0;
+    const x0 = areaX + Math.max(numW, Math.round((areaW - sq) / 2));
+    return { n, cellPx, sq, labelY: areaY, x0, y0: areaY + FACE.h + gap };
+  }
+
+  /** The frame `v` laid over the square: `v.size` kpc across `sq` texels, centred on its middle. */
+  function gridProj(v, L) {
+    const k = L.sq / v.size, pcx = L.x0 + L.sq / 2, pcy = L.y0 + L.sq / 2;
+    return { k, pcx, pcy, toX: (x) => pcx + (x - v.cx) * k, toY: (z) => pcy - (z - v.cz) * k };
+  }
+
+  /** A box's on-glass rectangle, each edge rounded on its own so shared edges land on one texel. */
+  function boxRect(P, b) {
+    const x0 = Math.round(P.toX(b.min.x)), x1 = Math.round(P.toX(b.max.x));
+    const y0 = Math.round(P.toY(b.max.z)), y1 = Math.round(P.toY(b.min.z));
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  /** The density behind the grid, CENTRED on the frame's centre and large enough to cover `clip`, so
+   *  the image and the cells share one centre and one scale whatever the clip's shape. */
+  function blitLumAt(g, v, P, clip) {
+    const half = Math.max(P.pcx - clip.x, clip.x + clip.w - P.pcx, P.pcy - clip.y, clip.y + clip.h - P.pcy);
+    const side = Math.max(1, Math.ceil(2 * half));
+    const img = lumImage(v.cx, v.cz, side / P.k / 2, side);
+    if (!img || img === 'FAIL') {
+      checker(g, clip.x, clip.y, clip.w, clip.h, INK.RULE);
+      T(g, img === 'FAIL' ? 'DENSITY FAILED' : 'COMPUTING DENSITY', clip.x + 4, clip.y + 4, { color: INK.DIM });
+      return;
     }
-    _fitOwner = sec; _fitR = R > 0 ? R : null;
-    return _fitR;
+    g.imageSmoothingEnabled = false;
+    const kk = img.width / side, ix = P.pcx - side / 2, iy = P.pcy - side / 2;
+    g.drawImage(img, (clip.x - ix) * kk, (clip.y - iy) * kk, clip.w * kk, clip.h * kk, clip.x, clip.y, clip.w, clip.h);
+  }
+
+  /** Knock a rectangle back to the third tone, on the GLOBAL checker parity so two dimmed blocks
+   *  that touch read as one surface. */
+  function dimRect(g, r, clip) {
+    const b = clipBox(r.x, r.y, r.w, r.h, clip);
+    if (b.w > 0 && b.h > 0) checker(g, b.x, b.y, b.w, b.h, INK.BG, (b.x + b.y) & 1);
+    return b;
+  }
+
+  /** One grid line, solid or dotted on the GLOBAL parity (so two cells' dots on a shared edge agree). */
+  function gridSeg(g, x, y, len, horiz, ink, dotted, clip) {
+    if (!dotted) { if (horiz) rectClip(g, x, y, len + 1, 1, ink, clip); else rectClip(g, x, y, 1, len + 1, ink, clip); return; }
+    for (let t = 0; t <= len; t++) {
+      const px = horiz ? x + t : x, py = horiz ? y : y + t;
+      if (((horiz ? px : py) & 1) !== 0) continue;
+      if (px < clip.x || px >= clip.x + clip.w || py < clip.y || py >= clip.y + clip.h) continue;
+      rect(g, px, py, 1, 1, ink);
+    }
+  }
+
+  /** The parent's own cells: each live cell's left and top edge, and its right / bottom edge where
+   *  no live cell continues it — every edge once, none where a cell is not drawn. */
+  function gridLines(g, cells, n, P, clip, ink, dotted) {
+    const live = (i, j) => i >= 0 && j >= 0 && i < n && j < n && cells[j * n + i].live;
+    for (const c of cells) {
+      if (!c.live) continue;
+      const r = boxRect(P, c.bounds);
+      if (r.x > clip.x + clip.w || r.y > clip.y + clip.h || r.x + r.w < clip.x || r.y + r.h < clip.y) continue;
+      gridSeg(g, r.x, r.y, r.h, false, ink, dotted, clip);
+      gridSeg(g, r.x, r.y, r.w, true, ink, dotted, clip);
+      if (!live(c.i + 1, c.j)) gridSeg(g, r.x + r.w, r.y, r.h, false, ink, dotted, clip);
+      if (!live(c.i, c.j + 1)) gridSeg(g, r.x, r.y + r.h, r.w, true, ink, dotted, clip);
+    }
+  }
+
+  /** The world rectangle the clip shows. */
+  function clipWorld(v, P, clip) {
+    return { x0: v.cx + (clip.x - P.pcx) / P.k, x1: v.cx + (clip.x + clip.w - P.pcx) / P.k,
+             z0: v.cz + (P.pcy - clip.y - clip.h) / P.k, z1: v.cz + (P.pcy - clip.y) / P.k };
+  }
+
+  /** SECTOR / REGION: every other parent the clip shows, dimmed, framed and labelled with its own
+   *  reference ("M10" beside sector N10; "H8" beside region H9, or "M10 P9" across a sector edge). */
+  function gridNeighbours(g, level, parent, v, P, clip, plate) {
+    const pb = navGrid.parentBounds(level, parent), step = pb.max.x - pb.min.x;
+    const w = clipWorld(v, P, clip);
+    const i0 = Math.floor((w.x0 - pb.min.x) / step), i1 = Math.floor((w.x1 - pb.min.x) / step);
+    const j0 = Math.floor((w.z0 - pb.min.z) / step), j1 = Math.floor((w.z1 - pb.min.z) / step);
+    if (i1 - i0 > 8 || j1 - j0 > 8) return;               // a frame zoomed far out: no blocks to name
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      if (i === 0 && j === 0) continue;
+      const nb = navGrid.parentAt(level, pb.min.x + (i + 0.5) * step, pb.min.z + (j + 0.5) * step);
+      const r = boxRect(P, navGrid.parentBounds(level, nb));
+      const vis = dimRect(g, r, clip);
+      if (!(vis.w > 0 && vis.h > 0)) continue;
+      frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.RULE, clip);
+      const sRef = nb && nb.sector ? (navGrid.childRef(0, nb) || '') : '';
+      const lbl = level === 1 ? sRef
+                : (nb && parent && nb.sector.i === parent.sector.i && nb.sector.j === parent.sector.j)
+                  ? navGrid.childRef(1, nb) : `${sRef} ${navGrid.childRef(1, nb) || ''}`.trim();
+      const lw = measurePixelText(lbl);
+      if (lbl && vis.w >= lw + 6 && vis.h >= FACE.h + 6) plate(lbl, vis.x + 3, vis.y + 3, INK.DIM, 'neighbour ' + lbl);
+    }
+  }
+
+  /** GALAXY: everything outside the 293 drawn sectors — the 68 corners and the space beyond the
+   *  19 x 19 naming area — knocked back, so the disc of places reads as the only places. */
+  function gridOutside(g, cells, P, clip) {
+    const gb = navGrid.parentBounds(0, null), gr = boxRect(P, gb);
+    dimRect(g, { x: clip.x, y: clip.y, w: clip.w, h: gr.y - clip.y }, clip);
+    dimRect(g, { x: clip.x, y: gr.y + gr.h, w: clip.w, h: clip.y + clip.h - gr.y - gr.h }, clip);
+    dimRect(g, { x: clip.x, y: gr.y, w: gr.x - clip.x, h: gr.h }, clip);
+    dimRect(g, { x: gr.x + gr.w, y: gr.y, w: clip.x + clip.w - gr.x - gr.w, h: gr.h }, clip);
+    for (const c of cells) if (!c.live) dimRect(g, boxRect(P, c.bounds), clip);
+  }
+
+  /** Letters across the top and numbers down the left, each centred on its own column or row. */
+  function gridEdgeLabels(g, level, cells, n, P, L, clip, plate) {
+    const ax = navGrid.axisLabels(level);
+    for (let i = 0; i < n; i++) {
+      const b = cells[i].bounds, tx = Math.round(P.toX((b.min.x + b.max.x) / 2));
+      if (tx < clip.x || tx >= clip.x + clip.w) continue;
+      const lw = measurePixelText(ax.cols[i]);
+      T(g, ax.cols[i], tx - (lw >> 1), L.labelY, { color: INK.DIM, rgn: 'map', what: 'column label ' + ax.cols[i] });
+    }
+    for (let j = 0; j < n; j++) {
+      const b = cells[j * n].bounds, ty = Math.round(P.toY((b.min.z + b.max.z) / 2)) - (FACE.h >> 1);
+      if (ty < clip.y || ty + FACE.h > clip.y + clip.h) continue;
+      const s = ax.rows[j], lw = measurePixelText(s);
+      plate(s, L.x0 - 3 - lw, ty, INK.DIM, 'row label ' + s);
+    }
+  }
+
+  /** The cell the PLAYER is in at this level (a sector, a region, a prism), wherever the frame is. */
+  function playerCell(level) {
+    if (!D.player || !Number.isFinite(D.player.x) || !Number.isFinite(D.player.z)) return null;
+    return navGrid.childCell(level, navGrid.parentAt(level + 1, D.player.x, D.player.z));
+  }
+
+  /** The player's cell reference on this screen: "H9" inside this parent, the full "N10 H9" outside. */
+  function playerCellRef(level) {
+    const c = playerCell(level);
+    if (!c) return '—';
+    return navGrid.sameAddress(navGrid.parentOf(level, c.address), gridParent(level)) ? c.ref : navGrid.addressKey(c.address);
   }
 
   /**
-   * ⭐ THE GALAXY VIEW, RE-FITTED TO THAT FOOTPRINT — and it is DESIGN 1's, not `levelView`'s.
-   *
-   * ⛔ `levelView` IS SHARED BY ALL THREE DESIGNS AND MUST NOT MOVE. Design 2's GALAXY renders the
-   * square at the WIDE extent and crops a band out of the middle, so shrinking the extent there would
-   * NARROW that band from ±11.54 kpc to ±9.4 and push more of its 20 already-off-glass sectors further
-   * off. Design 2's failure is the opposite one and is not in this pass; this re-fit is applied where
-   * the square is actually drawn.
-   * ⚠ LEVELS 1-2 ARE RETURNED UNTOUCHED — the same object, not a copy. Their picker is `pickTile`,
-   *   which answers for every cell inside the picture; there is no unreachable ground down there to
-   *   remove, and a sector question asked of a tile grid would be a category error.
+   * Paint one 2D screen into the layout `L`, clipped to `clip`, and publish what it drew.
+   * `opt.design` 1 | 2 · `opt.ink` / `opt.dotted` the grid line · `opt.plate` plated labels or plain.
    */
-  function d1GalaxyView(level) {
-    const v = levelView(level);
-    const R = level === 0 ? reachableRadius() : null;
-    return R ? { cx: v.cx, cz: v.cz, size: Math.min(v.size, 2 * R), n: v.n } : v;
-  }
-
-  /**
-   * ⭐⭐ AND THEN THE CELLS THAT STILL HOLD NOTHING ARE NOT DRAWN — AC-1's SECOND HALF.
-   *
-   * ⛔ A SQUARE GRID OVER A DISC ALWAYS HAS DEAD CORNERS, so the re-fit alone cannot finish the job:
-   * at 36 kpc across, 8x8, the corner cells still reach R = 22.3 where nothing resolves. Removing them
-   * is the rest of *"remove the non-selectable space"*.
-   *
-   * ⭐ THE TEST IS THE CELL'S CENTRE, THROUGH `getSectorAt` — because the centre is where a pilot aims,
-   * and because "every cell you can see, you can click" is the promise the grid makes. MEASURED on the
-   * re-fitted square: 52 of 64 cells resolve at their centre, and **94.2% of the ground those 52 cells
-   * cover resolves to a sector**, against 52.5% of the square today.
-   * ⚠ THE ONE THING THIS COSTS, MEASURED RATHER THAN ARGUED. Eight boundary cells are centre-dead but
-   *   hold a live sliver in the corner nearest the galaxy — each **16.0% live, 2.55% of all live ground
-   *   on the square** — and they are no longer advertised. That is the direction that could have traded
-   *   one defect for a worse one, so it was checked at the level that matters: sampling the whole square
-   *   at 1200x1200 and bucketing every answer by cell, **774 sectors are reachable inside a DRAWN cell
-   *   and ZERO are reachable only through an undrawn one.** No sector lost its affordance.
-   * ⚠ AND THE RE-FIT IS WHAT MADE THE CENTRE TEST SAFE. On the 44 kpc square it would have blanked 32
-   *   cells, 20 of them with live ground — the failure `MEASUREMENTS.md` §7's ring is really measuring.
-   *   Re-fit first, then cull: the disputed band drops from 20 cells to 8.
-   *
-   * ⛔ MEMOISED ON THE FRAME'S OWN EXTENT, so a change of view can never serve a stale answer, and the
-   * GALAXY extent is derived once — 64 probes for the life of the page, not per frame.
-   */
-  let _liveCellsKey = null, _liveCellsOwner = null, _liveCells = null;
-  function liveGridCells(level, v, n) {
-    const sec = D.sectors;
-    if (level !== 0 || !sec || typeof sec.getSectorAt !== 'function' || !(n > 0)) return null;
-    const key = `${v.cx}|${v.cz}|${v.size}|${n}`;
-    if (_liveCellsKey === key && _liveCellsOwner === sec) return _liveCells;
-    const set = new Set(), k = v.size / n;
-    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-      let hit = true;                                    // a throwing authority draws, never blanks
-      try { hit = sec.getSectorAt({ x: v.cx + (i + 0.5 - n / 2) * k, z: v.cz + (j + 0.5 - n / 2) * k }); }
-      catch (e) { hit = true; }
-      if (hit) set.add(j * n + i);
+  function gridScreen(g, L, clip, opt) {
+    const level = S.level, v = S.view, parent = gridParent(level);
+    const P = gridProj(v, L);
+    blitLumAt(g, v, P, clip);
+    const cells = navGrid.childGrid(level, parent), n = L.n;
+    const plate = (s, x, y, ink, what) => (opt.plateLabels ? plated(g, s, x, y, ink, 'map', what)
+                                                           : T(g, s, x, y, { color: ink, rgn: 'map', what }));
+    if (level === 0) gridOutside(g, cells, P, clip);
+    else gridNeighbours(g, level, parent, v, P, clip, plate);
+    gridLines(g, cells, n, P, clip, opt.ink, opt.dotted);
+    if (opt.design === 2 && level > 0) {
+      // ⭐ THE PER-CELL DENSITY BAR (design 2), one fillRect on each cell's bottom edge, now on the
+      //    cell's own world-locked rectangle rather than a view-relative slot.
+      const rows = gridRows(level), max = rankMax(rows);
+      for (const t of rows) {
+        const r = boxRect(P, navGrid.childCell(level, t.address).bounds);
+        const len = Math.round((r.w - 4) * Math.min(1, t.n / max));
+        if (len > 0) rectClip(g, r.x + 2, r.y + r.h - 2, len, 1, INK.DIM, clip);
+      }
     }
-    _liveCellsKey = key; _liveCellsOwner = sec; _liveCells = set;
-    return set;
+    // YOU — the player's own cell at this level, and the point.
+    const pc = playerCell(level);
+    if (pc) {
+      const r = boxRect(P, pc.bounds);
+      if (opt.design === 2 && level > 0) {
+        const inner = clipBox(r.x + 1, r.y + 1, r.w - 1, r.h - 1, clip);
+        if (inner.w > 0 && inner.h > 0) checker(g, inner.x, inner.y, inner.w, inner.h, INK.YOU, (inner.x + inner.y) & 1);
+      }
+      const yc = frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.YOU, clip);
+      if (yc.w > 0 && yc.h > 0) assertMark('YOU cell', 'map', yc.x, yc.y, yc.w, yc.h);
+    }
+    if (D.player) {
+      const px = Math.round(P.toX(D.player.x)), py = Math.round(P.toY(D.player.z));
+      const yd = opt.design === 2 && level === 0
+        ? frameClip(g, px - 2, py - 2, 5, 5, INK.YOU, clip) : rectClip(g, px - 1, py - 1, 3, 3, INK.YOU, clip);
+      if (opt.design === 2 && level === 0) {
+        for (const d of [[0, -4], [0, 4], [-4, 0], [4, 0]]) rectClip(g, px + d[0], py + d[1], d[0] ? 3 : 1, d[0] ? 1 : 3, INK.YOU, clip);
+      }
+      if (yd.w > 0 && yd.h > 0) assertMark('YOU marker', 'map', yd.x, yd.y, yd.w, yd.h);
+    }
+    if (D.target && !D.targetIsHere && Number.isFinite(D.target.wx)) {
+      const tg = spriteClip(g, P.toX(D.target.wx), P.toY(D.target.wz), SP.diam5, INK.TARGET, clip);
+      if (tg.w > 0 && tg.h > 0) assertMark('target diamond', 'map', tg.x, tg.y, tg.w, tg.h);
+    }
+    gridEdgeLabels(g, level, cells, n, P, L, clip, plate);
+    // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5): the clicked cell's OWN box, the one the drill flies to.
+    const pk = pickCell(level);
+    if (pk) { const r = boxRect(P, pk); frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.KEY, clip); }
+    // ⭐ THE PICK GEOMETRY, PUBLISHED BY THE CODE THAT DREW IT. `x0/y0/sq` is the square `size` kpc
+    //    spans and `clip` is the picture; outside `clip` a click is a MISS, never a clamp.
+    S.mapProj = { design: opt.design, level, kind: 'grid', x0: L.x0, y0: L.y0, sq: L.sq,
+                  cx: v.cx, cz: v.cz, size: v.size, n, parent,
+                  clip: { x: clip.x, y: clip.y, w: clip.w, h: clip.h } };
+    // …and every cell it drew, with the exact child box it stands for, so a test (or Max's walk) can
+    //    hold each drawn rectangle against the box it names.
+    S.mapCells = [];
+    for (const c of cells) {
+      if (!c.live) continue;
+      const r = boxRect(P, c.bounds);
+      const vis = clipBox(r.x, r.y, r.w, r.h, clip);
+      if (vis.w > 0 && vis.h > 0) S.mapCells.push({ ref: c.ref, address: c.address, bounds: c.bounds, rect: r });
+    }
   }
 
   function d1TwoD(g, mapW, mapY, mapH) {
-    const v = d1GalaxyView(S.level);
-    const sq = Math.min(mapW, mapH), ox = Math.round((mapW - sq) / 2);
-    blitLum(g, lumImage(v.cx, v.cz, v.size / 2, sq), ox, mapY, sq, sq, sq);
-    const n = S.level === 0 ? 8 : v.n;
-    // ⭐ THE GRID IS LAID DOWN ONE CELL AT A TIME, so a cell holding no clickable ground simply is not
-    // drawn. ⛔ The two forms below are the SAME TEXELS when nothing is culled: a cell's four edges are
-    // sub-segments of the same `ox + round(sq*i/n)` rules, and the union over `j` of `[Y_j, Y_{j+1})`
-    // is exactly the full-height line the fallback draws. So the fallback is not a second layout — it
-    // is the same one, spelled in fewer calls for the levels that have nothing to remove.
-    // ⚠ `n` IS STILL 8 AND THE SQUARE IS STILL `sq` TEXELS, so the cell is still 27 texels across —
-    //   *"the chunky cells of design1 today are good"*. The re-fit changed how much GALAXY a cell
-    //   covers (5.5 kpc → 4.5), never how big it is on the glass.
-    const live = liveGridCells(S.level, v, n);
-    const gx = (i) => ox + Math.round(sq * i / n), gy = (j) => mapY + Math.round(sq * j / n);
-    if (!live) {
-      for (let i = 0; i <= n; i++) { rect(g, gx(i), mapY, 1, sq, INK.RULE); rect(g, ox, gy(i), sq, 1, INK.RULE); }
-    } else for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-      if (!live.has(j * n + i)) continue;
-      const x0 = gx(i), x1 = gx(i + 1), y0 = gy(j), y1 = gy(j + 1);
-      rect(g, x0, y0, 1, y1 - y0, INK.RULE); rect(g, x1, y0, 1, y1 - y0, INK.RULE);
-      rect(g, x0, y0, x1 - x0, 1, INK.RULE); rect(g, x0, y1, x1 - x0, 1, INK.RULE);
-    }
-    const toX = (x) => ox + ((x - v.cx) / v.size + 0.5) * sq;
-    const toY = (z) => mapY + ((z - v.cz) / v.size + 0.5) * sq;
-    // YOU — a 1-texel frame plus a 3x3 block, no pulse
-    const px = toX(D.player.x), py = toY(D.player.z);
-    const cell = sq / n;
-    // ⭐⭐ AC-19 — CLIPPED TO THE PAINTED SQUARE, WHICH IS THE PICTURE AND NOT THE PANE. `ox`/`sq` are
-    // what the luminosity blit and the grid were drawn at; the columns either side of the square are
-    // inside the map REGION and outside the map, which is the same distinction the pick geometry
-    // published two paragraphs down ("a click there is a MISS, never a clamp").
-    // ⛔ THE HOST'S 2D PAN IS LIVE AT LEVELS 0-2 AND MOVES `v.cx`/`v.cz`, so these three marks are the
-    //    only things on this pane whose position a pilot can drive off it. Unclipped they painted over
-    //    the status row and the ranked rail and SURVIVED TO THE FINAL FRAME — design 1 repaints
-    //    neither (REVIEW C19). Nothing here moves while the camera is where Max ruled on it.
-    // ⚠ THE MARKS ARE GUARDED AS WELL AS CLIPPED, and against the box that LANDED. An empty
-    //   intersection is not asserted at all: a 0x0 box at a clamped corner is not a mark, and
-    //   `assertFits` would read it as one.
-    const sqPane = { x: ox, y: mapY, w: sq, h: sq };
-    const youCell = frameClip(g, Math.floor((px - ox) / cell) * cell + ox,
-                              Math.floor((py - mapY) / cell) * cell + mapY, cell, cell, INK.YOU, sqPane);
-    if (youCell.w > 0 && youCell.h > 0) assertMark('YOU cell', 'map', youCell.x, youCell.y, youCell.w, youCell.h);
-    const youDot = rectClip(g, px - 1, py - 1, 3, 3, INK.YOU, sqPane);
-    if (youDot.w > 0 && youDot.h > 0) assertMark('YOU marker', 'map', youDot.x, youDot.y, youDot.w, youDot.h);
-    if (D.target && !D.targetIsHere) {   // a self-target's diamond sat on top of the YOU dot and hid it
-      const tg = spriteClip(g, toX(D.target.wx), toY(D.target.wz), SP.diam5, INK.TARGET, sqPane);
-      if (tg.w > 0 && tg.h > 0) assertMark('target diamond', 'map', tg.x, tg.y, tg.w, tg.h);
-    }
-    // the eight ranked tiles carry a 2-char id; at 16x16 the cell is 13 texels and only the listed
-    // tiles are tagged, which is the design saying so rather than the glyphs colliding
-    const ids = d1TileOrder(d1TileRows(v, n)).slice(0, 8);
-    ids.forEach((t, i) => {
-      const tx = ox + t.i * cell + 2, ty = mapY + t.j * cell + 2;
-      if (cell < measurePixelText(t.id) + 3) return;
-      // ⛔ AND NEVER A PLATE ON A CELL THAT IS NOT DRAWN. A named tile with no cell around it is the
-      //   same promise the culled cells were removed for making, and `plated()` knocks out a BG rect
-      //   first, so it would ALSO punch a hole in the density behind it. Total rather than incidental:
-      //   at this seed the eight densest tiles are all central and this has never fired.
-      if (live && !live.has(t.j * n + t.i)) return;
-      // ⚠ THE ONE UNAMBIGUOUS LABEL ON THE PAGE, AND IT NEEDS NO PLACER. A tile id is drawn INSIDE its
-      //   own cell, guarded by the `cell < measurePixelText + 3` test above, so it can neither collide
-      //   with another label nor sit on a mark it does not name. It is published all the same, because
-      //   a picker that has to special-case which labels are hit-testable is a second rule.
-      S.labelHits.push({ ...plated(g, t.id, tx, ty, INK.DIM, 'map', 'tile id ' + t.id), ref: t, kind: 'tile' });
-    });
-    // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5). Drawn LAST so it sits over the grid, the tile ids and the
-    // YOU marker — a "you hit this one" that a rule can cross is not an acknowledgement.
-    const pk = pickCell(S.level);
-    if (pk) frame(g, ox + pk.i * cell, mapY + pk.j * cell, cell, cell, INK.KEY);
-    // ⭐ AND AT GALAXY THE HIGHLIGHT IS THE SECTOR (AC-5). Same ink, same drawn-last rule, different
-    // geometry — see `pickedSector`. Both edges of each axis go through THIS pane's own `toX`/`toY`
-    // and are rounded ONE EDGE AT A TIME, which is exactly how the grid's rules are laid down
-    // (`gx(i) = ox + round(sq * i / n)`): rounding a width instead would let the frame drift a texel
-    // off the boundaries the grid already draws on.
-    // ⛔ INTERSECTED WITH THE PAINTED SQUARE, AND SKIPPED WHEN THE INTERSECTION IS EMPTY. A sector can
-    //    straddle the re-fitted footprint's edge and `rect()` clips nothing, so an unclipped frame
-    //    would paint over the map's rule, the rail and the status row — chrome that is not the map's
-    //    to write on, and the failure the region guard exists to catch elsewhere.
-    // ⛔ AND IT DRAWS NOTHING WHEN `S.pick` IS NULL, which is every frame until a click commits: the
-    //    default picture Max ruled on cannot move.
-    const ps = S.level === 0 ? pickedSector() : null;
-    if (ps) {
-      const sx0 = Math.max(ox, Math.round(toX(ps.centerX - ps.size / 2)));
-      const sy0 = Math.max(mapY, Math.round(toY(ps.centerZ - ps.size / 2)));
-      const sx1 = Math.min(ox + sq, Math.round(toX(ps.centerX + ps.size / 2)));
-      const sy1 = Math.min(mapY + sq, Math.round(toY(ps.centerZ + ps.size / 2)));
-      if (sx1 > sx0 && sy1 > sy0) frame(g, sx0, sy0, sx1 - sx0, sy1 - sy0, INK.KEY);
-    }
-    // ⭐ THE PICK GEOMETRY, PUBLISHED BY THE CODE THAT DREW IT — the same principle as `region()` and
-    // as `S.ladderStops` below. A hit-test that restates `ox` / `sq` / `n` is a SECOND COPY of this
-    // layout, and two copies of one geometry with one silently wrong is the whole AC-4 defect shape.
-    // ⚠ THE PICTURE IS THE SQUARE, NOT THE REGION. The map region is `mapW` wide and the square is
-    //   `sq` wide at `ox`, so the columns either side are inside the region and outside the picture:
-    //   a click there is a MISS, never a clamp. That is why `ox`/`sq` are published and not the pane.
-    // ⛔ A PURE WRITE, PLACED AFTER EVERY DRAW CALL IT READS FROM. Not one texel above moves.
-    S.mapProj = { design: 1, level: S.level, kind: 'square',
-                  ox, oy: mapY, sq, n, cell, cx: v.cx, cz: v.cz, size: v.size };
+    const L = gridLayout(S.level, 0, mapW, mapY, mapH);
+    // ⭐ THE PICTURE IS THE SQUARE, NOT THE PANE: the margins either side are inside the map region
+    //    and outside the map, which is where the row numbers live.
+    gridScreen(g, L, { x: L.x0, y: L.y0, w: L.sq, h: L.sq }, { design: 1, ink: INK.RULE, dotted: false, plateLabels: false });
   }
 
-  const AZ = 'ABCDEFGHIJKLMNOP';
-  function d1TileRows(v, n) {
-    const out = [];
-    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-      const x = v.cx + (i + 0.5 - n / 2) * (v.size / n);
-      const z = v.cz + (j + 0.5 - n / 2) * (v.size / n);
-      out.push({ i, j, id: AZ[i] + (j + 1), x, z, n: estStars(x, z, v.size / n) });
-    }
-    return out.sort((a, b) => b.n - a.n);
+  /** The child cells of this screen's parent, ranked by estimated systems — the rail's and the status
+   *  line's rows. ⛔ Memoised on the parent: 256 density calls once per parent, not every frame. */
+  let _gridRowsKey = null, _gridRowsGm = null, _gridRows = null;
+  function gridRows(level) {
+    const parent = gridParent(level);
+    const key = `${level}|${navGrid.addressKey(parent)}`;
+    if (_gridRowsKey === key && _gridRowsGm === D.gm && _gridRows) return _gridRows;
+    const kpc = navGrid.childKpc(level);
+    const rows = navGrid.childGrid(level, parent).filter((c) => c.live).map((c) => {
+      const x = (c.bounds.min.x + c.bounds.max.x) / 2, z = (c.bounds.min.z + c.bounds.max.z) / 2;
+      return { i: c.i, j: c.j, id: c.ref, address: c.address, x, z, n: D.gm ? estStars(x, z, kpc) : 0 };
+    }).sort((a, b) => b.n - a.n);
+    _gridRowsKey = key; _gridRowsGm = D.gm; _gridRows = rows;
+    return rows;
   }
 
   /**
@@ -1186,14 +1240,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *
    * ⛔ AND IT IS A FUNCTION RATHER THAN `rows[0].n` BECAUSE `rows[0]` IS ONLY THE MAXIMUM WHILE THE
    * LIST HAPPENS TO BE COUNT-SORTED, AND THAT STOPPED BEING TRUE THE DAY `[` AND `]` LANDED. Measured
-   * at GALAXY under the NAME key, on a 427x240 buffer: `D.sectorRows[0]` estimates 32,078,857 stars
+   * at GALAXY under the NAME key, on a 427x240 buffer: the first sector row estimated 32,078,857 stars
    * against a true maximum of 6,836,551,510, so the drawn page's worst row asked for **90 bar squares
-   * instead of four**, 583 of them a frame against nought, and **475 fills landed off the buffer** —
-   * the furthest at x = 940 on a canvas 427 texels wide. The tile branch had already been given the
-   * whole-ranking fix ("THE BAR NORMALISES AGAINST THE WHOLE RANKING, NOT THE PAGE"); this is that
-   * same fix, spelled once, for every caller that needs a denominator rather than an order.
-   * ⚠ IDENTICAL TO `rows[0].n` UNDER EVERY DEFAULT — every list here opens count-sorted, which is
-   *   exactly why the defect was invisible until a second sort key existed.
+   * instead of four**. Spelled once, for every caller that needs a denominator rather than an order.
    */
   function rankMax(rows) {
     let m = 0;
@@ -1202,22 +1251,10 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   }
 
   /**
-   * ⭐ THE TILES, RE-ORDERED BY THE ACTIVE SORT KEY (AC-8 at SECTOR and REGION).
-   *
-   * The driver publishes `S.sortIdx` / `S.sortLabel` at every level, but levels 1-2 are the two whose
-   * rows are not in `D` at all — they are built and ranked INSIDE this paint — so the driver cannot
-   * re-order them the way it re-orders `D.sectorRows` / `D.starRows` / `D.bodies`. The key was
-   * therefore published, drawn on the hint row, and honoured by nothing: pressing `]` at SECTOR moved
-   * a label and left the list exactly as it was.
-   *
-   * ⛔ THE DISCRIMINATOR IS `S.sortLabel`, THE ONE-WORD NAME THE DRIVER ALREADY PUBLISHES AND THIS
-   * DESIGN ALREADY DRAWS. A copy of the driver's key TABLE here would be two lists of sort keys with
-   * no mechanism holding them together — the AC-4 defect shape wearing a different hat — whereas the
-   * label is a value that arrives with the frame and is on the glass beside the list it ordered.
-   * ⚠ AND THE ID ORDER IS `(i, j)`, NOT `localeCompare(id)`. The ids read A1..A16, and a string sort
-   *   puts A10 between A1 and A2, which is not what "sorted by ID" means to anyone reading the rail.
-   * ⛔ IT RETURNS THE ARRAY UNTOUCHED UNDER THE DEFAULT KEY — the same array identity, not a copy —
-   *   so the count-ranked picture Max ruled on is reproduced by never running.
+   * ⭐ THE CELLS, RE-ORDERED BY THE ACTIVE SORT KEY (AC-8 at SECTOR and REGION). The driver publishes
+   * `S.sortLabel`; these rows are built inside the paint, so this is the only place that can honour it.
+   * ⚠ THE ID ORDER IS `(i, j)` — A1..A16, B1.. — NOT `localeCompare(id)`, which puts A10 before A2.
+   * ⛔ IT RETURNS THE ARRAY UNTOUCHED UNDER THE DEFAULT KEY — the same array identity, not a copy.
    */
   function d1TileOrder(rows) {
     if (S.sortLabel !== 'ID') return rows;
@@ -1248,11 +1285,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
      *    ruling on item 14: *"keep the low-fi marks"*), no z-buffer, no occlusion test. */
     shown.sort((a, b) => b.p.depth - a.p.depth);
     prismPlane(g, cxp, cyp, mapW / 2, mapH / 2, REGIONS.map);
+    prismColumnEdge(g, cxp, cyp, mapW / 2, mapH / 2, REGIONS.map);
     for (const { s, p } of shown) {
       prismDrop(g, p, REGIONS.map);                                                // the stem, under the mark
       rect(g, p.x, p.py, 1, 1, INK.RULE);                                          // the plane dot
       if (s === D.selStar) { frame(g, p.x - 2, p.y - 2, 5, 5, INK.TARGET); continue; }
-      if (s.dist < 1e-6)   { frame(g, p.x - 2, p.y - 2, 5, 5, INK.YOU); continue; }
+      if (s === D.here)    { frame(g, p.x - 2, p.y - 2, 5, 5, INK.YOU); continue; }   // ⭐ AC-5: the player's OWN star, never "the row at the query centre"
       // ⭐ AC-2 — A CATALOGUE STAR TAKES ITS SPECTRAL INK AND A RING; A PROCEDURAL ONE KEEPS THE DOT.
       //    Legacy colours every marker by `star.color` and rings the catalogue ones in amber
       //    (NavComputer.js:2104/2109-2113). Design 2 already spends the SPECTRAL table; design 1 spent
@@ -1305,7 +1343,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
      *    cross-references a mark that carries its own name instead of a digit; no membership suffix
      *    (legacy's `Proxima · Alpha Centauri`, NavComputer.js:2115-2130) — not in item 15. */
     const nameCap = Math.max(4, Math.floor(mapH / 22));
-    const rank = (s) => (s === D.selStar ? 0 : s.dist < 1e-6 ? 1 : 2);
+    const rank = (s) => (s === D.selStar ? 0 : s === D.here ? 1 : 2);
     const named = shown.filter(({ s }) => s.isReal && s.name)
                        .sort((a, b) => (rank(a.s) - rank(b.s)) || ((a.s.dist ?? 0) - (b.s.dist ?? 0)));
     const nameTaken = [];
@@ -1875,10 +1913,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // ⭐ AC-4 (restorations) — THE ONE READ OF THE SUB-VIEW, AND EVERY BRANCH BELOW HANGS OFF IT.
     //    `null` at levels 0-3 and in the whole-system picture, so this rail is byte-identical there.
     const detPlanet = S.level === 4 ? sysDetail() : null;
-    const hdr = detPlanet ? 'MOONS' : ['SECTORS', 'TILES', 'TILES', 'STARS', 'BODIES'][S.level];
+    const hdr = detPlanet ? 'MOONS' : ['SECTORS', 'REGIONS', 'PRISMS', 'STARS', 'BODIES'][S.level];
     T(g, hdr, x, y, { color: INK.KEY, rgn: 'rail', what: 'rail header' });
     const cnt = detPlanet ? String(detPlanet.moons.length)
-              : [String(D.sectorRows.length), '64', '256', `${D.starRows.filter(s=>s.isReal).length}/${fmtK(D.stars.length)}`,
+              : [String(D.sectorRows.length), String(S.level === 1 ? gridRows(1).length : 0), String(S.level === 2 ? gridRows(2).length : 0),
+                 `${D.starRows.filter(s=>s.isReal).length}/${fmtK(D.stars.length)}`,
                  String(D.bodies.length)][S.level];
     T(g, cnt, x + w, y, { color: INK.DIM, align: 'right', rgn: 'rail', what: 'rail count' });
     rect(g, x, y + LEAD - 1, w, 1, INK.RULE);
@@ -1900,7 +1939,8 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // ⛔ AT OFFSET 0 EVERY SLICE BELOW IS `slice(0, listRows)` EXACTLY AS IT ALWAYS WAS, and the label
     //    reads `1-N OF T` exactly as it always did — nothing moves until a key is pressed.
     const total = detPlanet ? 1 + detPlanet.moons.length
-                : [D.sectorRows.length, 64, 256, D.starRows.length, D.bodies.length][S.level];
+                : [D.sectorRows.length, S.level === 1 ? gridRows(1).length : 0, S.level === 2 ? gridRows(2).length : 0,
+                   D.starRows.length, D.bodies.length][S.level];
     const off = Math.max(0, Math.min(Math.max(0, total - listRows), S.listOffset | 0));
     S.listOffset = off;   // clamped here too, so a stale offset cannot page off the end of the data
     const detail = [];
@@ -1934,11 +1974,13 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
         [`YOU     ${fit(s ? s.name.toUpperCase() : 'UNKNOWN', (cols - 8) * FACE.advance)}`, INK.YOU],
         [`TARGET  ${fit((D.targetIsHere ? '—' : (D.target?.name || '—')).toUpperCase(), (cols - 8) * FACE.advance)}`, INK.TARGET]);
     } else if (S.level === 1 || S.level === 2) {
-      const v = levelView(S.level);
+      // ⭐ THE ROWS ARE THIS SCREEN'S OWN CELLS (naming-prism-segments AC-3): each one is a region (or a
+      //   prism) of the parent on the glass, named by the same reference its column and row labels
+      //   spell — so a row, a cell and an edge label can never disagree about which place they mean.
       // ⚠ THE BAR NORMALISES AGAINST THE WHOLE RANKING, NOT THE PAGE. `ranked[0]` is the densest tile
       //   there is; against `tiles[0]` every page after the first would draw four full bars and say
       //   nothing. Identical on page 1, which is the only page that existed before.
-      const ranked = d1TileRows(v, v.n);
+      const ranked = gridRows(S.level);
       // ⭐ AND THE ROWS ARE ORDERED BY THE ACTIVE KEY BEFORE THEY ARE PAGED, WHICH IS AC-8's SECOND
       //   HALF. `ranked` stays the count ranking because that is what the bar's denominator means;
       //   `ordered` is what the pilot asked to read. Under the default key the two are one array.
@@ -1950,19 +1992,20 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
       // ⭐ THE RAIL'S OWN ROWS, PUBLISHED. Rows are drawn at SECTOR and REGION today and clicking them
       // does nothing at all, because nothing outside this branch could know which tile row N names.
       // ⛔ It is THIS array — already ranked, already sliced, index-aligned with the drawn rows — and
-      //    not a second `d1TileRows(v, v.n)` call, whose ranking would have to agree with this one by
+      //    not a second `gridRows()` call, whose ranking would have to agree with this one by
       //    luck. `estStars` is deterministic, so it would agree today and stop agreeing silently.
       S.railTiles = tiles;
-      const idW = S.level === 2 ? 3 : 2;
+      const idW = 3;   // A1 … P16 at both levels
       lines = tiles.map((t) => ({ txt: `${pad(t.id, idW)} ${pad('—', cols - idW - 13)} ${rpad(fmtK(t.n), 6)}`,
                                   bar: t.n / secMax, sel: false }));
-      const t = tiles[0];
-      detail.push([t.id, INK.KEY], [`CENTRE  ${t.x.toFixed(1)}, ${t.z.toFixed(1)}`, INK.BODY],
-        [`SYSTEMS ${fmtK(t.n)}`, INK.BODY], [`SPAN    ${(v.size / v.n).toFixed(3)} KPC`, INK.BODY],
-        ['', INK.BODY], [`YOU     ${d1PlayerTile(v)}`, INK.YOU], ['TARGET  —', INK.DIM]);
+      const t = tiles[0] || { id: '—', x: NaN, z: NaN, n: 0 };
+      const dp = S.level === 1 ? 2 : 3;   // a 125 pc region needs pc, a 7.8 pc prism needs a tenth of one
+      detail.push([t.id, INK.KEY], [`CENTRE  ${Number.isFinite(t.x) ? `${t.x.toFixed(dp)}, ${t.z.toFixed(dp)}` : '—'}`, INK.BODY],
+        [`SYSTEMS ${fmtK(t.n)}`, INK.BODY], [`SPAN    ${navGrid.childKpc(S.level).toFixed(4)} KPC`, INK.BODY],
+        ['', INK.BODY], [`YOU     ${playerCellRef(S.level)}`, INK.YOU], ['TARGET  —', INK.DIM]);
     } else if (S.level === 3) {
       lines = D.starRows.slice(off, off + listRows).map((s, i) => ({
-        txt: `${off + i < 8 && s.dist > 1e-6 ? off + i + 1 : '·'} ${pad(s.name.toUpperCase() || 'UNNAMED', cols - 13)} ` +
+        txt: `${off + i < 8 && s !== D.here ? off + i + 1 : '·'} ${pad(s.name.toUpperCase() || 'UNNAMED', cols - 13)} ` +
              `${rpad(s.pc.toFixed(1), 5)} ${pad(s.spectral, 2)} ${s.mult > 1 ? s.mult : '·'}`,
         bar: 0, sel: s === D.selStar }));
       /*  Function · the camera block — where the eye is, in the units legacy used.
@@ -2188,11 +2231,6 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
                      x0: x - 1, x1: x + w + 1, offset: off, total: rows.length };
   }
 
-  function d1PlayerTile(v) {
-    const i = Math.floor(((D.player.x - v.cx) / v.size + 0.5) * v.n);
-    const j = Math.floor(((D.player.z - v.cz) / v.size + 0.5) * v.n);
-    return (AZ[Math.max(0, Math.min(v.n - 1, i))] || '?') + (Math.max(0, Math.min(v.n - 1, j)) + 1);
-  }
   /*  Function · the four camera numbers legacy printed at PRISM and neither design did, spelled once.
    *  Intent · AC-3 and AC-9 (restorations), page items 15 and 21. Legacy's own block
    *    (NavComputer.js:4272-4296): `VIEW: <n> ly` = round(_localRadius * 1000 * 3.26); `HEIGHT: <n> pc
@@ -2956,10 +2994,14 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *    on a prism star (item 20's member list is parked), no companion separation. */
   function calloutLines(hv) {
     const r = hv.ref;
-    if (hv.kind === 'sector') return [(r && r.name) || 'UNKNOWN SECTOR'];
-    if (hv.kind === 'tile') {
-      if (!r || !Number.isFinite(r.kx) || !Number.isFinite(r.kz)) return [];
-      return [`(${r.kx.toFixed(1)}, ${r.kz.toFixed(1)})`];
+    // ⭐ A 2D CELL (naming-prism-segments AC-3): "hovering a cell shows its word" — until Phase 4 the
+    //    word is the grid reference the edge labels spell, then legacy's centre pair, at the precision
+    //    that tells two neighbouring cells apart (1 kpc, 10 pc, 1 pc as the cell shrinks).
+    if (hv.kind === 'cell') {
+      if (!r || !r.ref || !r.center) return [];
+      const dp = hv.level === 0 ? 1 : hv.level === 1 ? 2 : 3;
+      return [`${['SECTOR', 'REGION', 'PRISM'][hv.level] || 'CELL'} ${r.ref}`,
+              `(${r.center.x.toFixed(dp)}, ${r.center.z.toFixed(dp)})`];
     }
     if (hv.kind === 'star') {
       if (!r) return [];
@@ -3033,6 +3075,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
   }
 
   function fmtK(n) {
+    // ⭐ T since naming-prism-segments Phase 2: the whole bulge is ONE 2 kpc sector (J10, ~1.5e13) and
+    //   "14863.4B" overran the rail's six-character count column.
+    if (n >= 1e12) return (n / 1e12).toFixed(1) + 'T';
     if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
     if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
     if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
@@ -3236,7 +3281,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     // both visible and harmless, instead of in the affordance at the far end. `avail` is the bar's own
     // budget, handed down by the caller that drew it rather than re-derived here.
     if (S.level <= 2) {
-      const tile = `${fmtK(rankMax(d1TileRows(levelView(S.level), levelView(S.level).n)))} BEST TILE`;
+      const tile = `${fmtK(rankMax(gridRows(S.level)))} BEST ${S.level === 0 ? 'SECTOR' : S.level === 1 ? 'REGION' : 'PRISM'}`;
       const fixed = [LEVELS[S.level], '', tile, 'CLICK TO ENTER'];
       const room = avail - measurePixelText(fixed.join(' · '));
       return [LEVELS[S.level], fit((D.playerSector?.name || '').toUpperCase(), room), tile, 'CLICK TO ENTER'];
@@ -3318,104 +3363,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *  Empty is the honest default: with no key on, the row degrades to `[ ] SORT`. */
   function d2SortHint() { return S.sortLabel ? `[ ] SORT ${S.sortLabel}` : '[ ] SORT'; }
   function d2TwoD(g, W, mapY, mapH) {
-    const v = levelView(S.level);
-    // ⭐ FULL BLEED WITH SQUARE WORLD PIXELS.  NavGalaxyRenderer/GalaxyLuminosityRenderer are square by
-    // signature, so the honest way to get a wide field is to render the square at the WIDE extent and
-    // crop the middle band — no upstream change, and one world pixel stays one texel.
-    const extWide = v.size / 2;
-    blitLum(g, lumImage(v.cx, v.cz, extWide, W), 0, mapY, W, mapH, W);
-    const toX = (x) => ((x - v.cx) / v.size + 0.5) * W;
-    const toY = (z) => mapY + mapH / 2 + ((z - v.cz) / v.size) * W;
-
-    if (S.level === 0) {
-      for (const { s } of D.sectorRows) {
-        const x = toX(s.centerX), y = toY(s.centerZ);
-        if (x < 0 || x >= W || y < mapY || y >= mapY + mapH) continue;
-        rect(g, x, y, 1, 1, INK.DIM);
-      }
-      const px = toX(D.player.x), py = toY(D.player.z);
-      // ⭐ AC-19 — CLIPPED TO THE PAINTED BAND, on the same rule as the picked sector forty lines below
-      // ("CLIPPED TO THE PAINTED BAND ... an unclipped frame would draw over the topbar's rule and the
-      // status bar"). The wide field is only ±(mapH/2)·kpc, so a pan puts the player outside it.
-      // ⚠ NOTHING SURVIVING THE FRAME CHANGES HERE, MEASURED: `drawDesign2` repaints the topbar and the
-      //   bottom bar AFTER this painter, so design 2's escaped marks were already overpainted (REVIEW
-      //   C19 refutes that half of the claim). The clip is here because the paint order is the only
-      //   thing that was saving it — the marks themselves were as unbounded as design 1's.
-      const bandPane = { x: 0, y: mapY, w: W, h: mapH };
-      const you0 = frameClip(g, px - 2, py - 2, 5, 5, INK.YOU, bandPane);
-      if (you0.w > 0 && you0.h > 0) assertMark('YOU marker', 'map', you0.x, you0.y, you0.w, you0.h);
-      for (const d of [[0, -4], [0, 4], [-4, 0], [4, 0]]) rectClip(g, px + d[0], py + d[1], d[0] ? 3 : 1, d[0] ? 1 : 3, INK.YOU, bandPane);
-      // ⭐ THE WIDE PROJECTION, PUBLISHED. `toX`/`toY` above are isotropic — the square is rendered at
-      // the WIDE extent and cropped, so one world pixel is one texel in BOTH axes — which collapses
-      // the whole inverse to an origin and a scale: wx = cx + (x - ox)*kpc, wz = cz + (y - oy)*kpc.
-      // ⚠ THE VERTICAL FIELD IS ONLY ±(mapH/2)·kpc, so about half the disc is off the glass BY
-      //   CONSTRUCTION. `clip` is the band that was actually painted; outside it a click is a miss.
-      S.mapProj = { design: 2, level: S.level, kind: 'wide', ox: W / 2, oy: mapY + mapH / 2,
-                    kpc: v.size / W, cx: v.cx, cz: v.cz, clip: { x: 0, y: mapY, w: W, h: mapH } };
-      // ⭐ THE CLICK-HIGHLIGHT AT GALAXY IS THE SECTOR, WHICH IS WHAT A GALAXY CLICK ACTUALLY DRILLS
-      // (AC-5) — see `pickedSector`. Through THIS design's `toX`/`toY`, which are isotropic at
-      // `W / v.size` texels per kpc, so a 0.5 kpc sector is the same handful of texels in both axes and
-      // nothing of design 1's square comes across with it. Drawn last, over the YOU marker.
-      // ⛔ THERE IS NO CELL FRAME HERE ANY MORE, AND THERE NEVER COULD HAVE BEEN ONE. A `pickCell` block
-      //    sat above this until 2026-09-08, framing an 8x8 world cell at level 0; the adversarial pass
-      //    found it unreachable — the driver's `notePick` writes `{ level: 0, sector }` and never `i`/`j`,
-      //    and `pickCell` refuses a pick without them — so it was five lines of paint and nine of
-      //    argument for a frame the build cannot draw. Deleted rather than defended.
-      // ⛔ CLIPPED TO THE PAINTED BAND. The wide field is only ±(mapH/2)·kpc — about half the disc is
-      //    off the glass BY CONSTRUCTION — so a picked sector can be partly or wholly outside it, and
-      //    an unclipped frame would draw over the topbar's rule and the status bar. Empty
-      //    intersection, nothing drawn: the honest answer for a sector the crop does not show.
-      const ps0 = pickedSector();
-      if (ps0) {
-        const qx0 = Math.max(0, Math.round(toX(ps0.centerX - ps0.size / 2)));
-        const qy0 = Math.max(mapY, Math.round(toY(ps0.centerZ - ps0.size / 2)));
-        const qx1 = Math.min(W, Math.round(toX(ps0.centerX + ps0.size / 2)));
-        const qy1 = Math.min(mapY + mapH, Math.round(toY(ps0.centerZ + ps0.size / 2)));
-        if (qx1 > qx0 && qy1 > qy0) frame(g, qx0, qy0, qx1 - qx0, qy1 - qy0, INK.KEY);
-      }
-    } else {
-      // the drillable block is SQUARE in world space; the density bleeding past it is real map and is
-      // knocked back with a 50% parity checker rather than a translucency that cannot survive 240p
-      const blk = mapH, bx = Math.round((W - blk) / 2);
-      checker(g, 0, mapY, bx, mapH, INK.BG); checker(g, bx + blk, mapY, W - bx - blk, mapH, INK.BG);
-      const n = v.n, cell = blk / n;
-      for (let i = 0; i <= n; i++) {
-        if (cell >= 20) { rect(g, bx + Math.round(cell * i), mapY, 1, blk, INK.DIM); rect(g, bx, mapY + Math.round(cell * i), blk, 1, INK.DIM); }
-        else { for (let k = 0; k < blk; k += 2) { rect(g, bx + Math.round(cell * i), mapY + k, 1, 1, INK.DIM); rect(g, bx + k, mapY + Math.round(cell * i), 1, 1, INK.DIM); } }
-      }
-      // ⭐ THE PER-CELL DENSITY BAR — one fillRect, and the first per-tile information these levels
-      // have ever carried (today the only text is a kpc coordinate pair on hover)
-      const tiles = d1TileRows(v, n), max = rankMax(tiles);
-      for (const t of tiles) {
-        const len = Math.round((cell - 4) * Math.min(1, t.n / max));
-        if (len > 0) rect(g, bx + t.i * cell + 2, mapY + (t.j + 1) * cell - 2, len, 1, INK.DIM);
-      }
-      const pi = Math.floor(((D.player.x - v.cx) / v.size + 0.5) * n);
-      const pj = Math.floor(((D.player.z - v.cz) / v.size + 0.5) * n);
-      // ⭐ AC-19 — AND THE BLOCK'S OWN YOU CELL IS CLIPPED TO THE BLOCK. `pi`/`pj` are unclamped floors
-      // of the player's position in cell units, so a pan that takes the player out of the drillable
-      // square puts this cell outside it — over the checkered surround at best and over the bars at
-      // worst. ⚠ The checker's parity is shifted by the amount the clip ate, so the texels that remain
-      // are the ones it would have drawn anyway; fully inside, the shift is 0 and the call is identical.
-      const blkPane = { x: bx, y: mapY, w: blk, h: mapH };
-      const youIn = clipBox(bx + pi * cell + 1, mapY + pj * cell + 1, cell - 2, cell - 2, blkPane);
-      if (youIn.w > 0 && youIn.h > 0) {
-        checker(g, youIn.x, youIn.y, youIn.w, youIn.h, INK.YOU,
-                (youIn.x - Math.round(bx + pi * cell + 1) + youIn.y - Math.round(mapY + pj * cell + 1)) & 1);
-      }
-      const youCell2 = frameClip(g, bx + pi * cell, mapY + pj * cell, cell, cell, INK.YOU, blkPane);
-      if (youCell2.w > 0 && youCell2.h > 0) assertMark('YOU cell', 'map', youCell2.x, youCell2.y, youCell2.w, youCell2.h);
-      // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5), on the block's OWN cell — over the YOU frame, because a
-      // drill onto the tile you are already in must still read as a drill.
-      const pk = pickCell(S.level);
-      if (pk) frame(g, bx + pk.i * cell, mapY + pk.j * cell, cell, cell, INK.KEY);
-      // ⛔ THE BLOCK, AND NOT `toX`/`toY`. This branch never calls them: it lays a `blk`-wide square
-      //    at `bx` for the same `v.size` kpc that the density behind it spends the full `W` on. A
-      //    picker built on the wide projection therefore drills a tile roughly TWICE the size the
-      //    pilot clicked — which looks like an off-by-one in the grid and is not one.
-      S.mapProj = { design: 2, level: S.level, kind: 'block', bx, by: mapY, blk, n, cell,
-                    cx: v.cx, cz: v.cz, size: v.size };
-    }
+    // ⭐ ONE SQUARE GRID AT ALL THREE 2D LEVELS, GALAXY INCLUDED (naming-prism-segments AC-3): the
+    //    density still bleeds full width, at the SQUARE's scale now, so what shows either side is the
+    //    neighbouring ground at true size — dimmed and labelled — rather than a band at another scale.
+    const L = gridLayout(S.level, 0, W, mapY, mapH);
+    gridScreen(g, L, { x: 0, y: L.y0, w: W, h: mapY + mapH - L.y0 },
+               { design: 2, ink: INK.DIM, dotted: L.cellPx < 20, plateLabels: true });
   }
   function d2Prism(g, W, mapY, mapH) {
     const cxp = W / 2, cyp = mapY + mapH / 2;
@@ -3442,10 +3395,11 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const byRank = onScreen.slice();
     onScreen.sort((a, b) => b.p.depth - a.p.depth);
     prismPlane(g, cxp, cyp, W / 2, mapH / 2, REGIONS.map);
+    prismColumnEdge(g, cxp, cyp, W / 2, mapH / 2, REGIONS.map);
     for (const { s, p } of onScreen) {
       prismDrop(g, p, REGIONS.map);                             // the stem — the dashed line, restored
       rect(g, p.x, p.py, 1, 1, INK.RULE);                       // plane dot, not a dashed line
-      if (s.dist < 1e-6) { for (const d of [[-4,-4],[2,-4],[-4,2],[2,2]]) { rect(g, p.x+d[0], p.y+d[1], 3, 1, INK.YOU); rect(g, p.x+d[0], p.y+d[1], 1, 3, INK.YOU); } continue; }
+      if (s === D.here) { for (const d of [[-4,-4],[2,-4],[-4,2],[2,2]]) { rect(g, p.x+d[0], p.y+d[1], 3, 1, INK.YOU); rect(g, p.x+d[0], p.y+d[1], 1, 3, INK.YOU); } continue; }
       if (s === D.selStar) { frame(g, p.x - 3, p.y - 3, 7, 7, INK.KEY); continue; }
       if (s.isReal) { plus(g, p.x, p.y, SPECTRAL[s.spectral] || INK.BODY); if (s.mult > 1) { rect(g, p.x+2, p.y-2, 1, 1, INK.BODY); rect(g, p.x-2, p.y+2, 1, 1, INK.BODY); } }
       else rect(g, p.x, p.y, 1, 1, SPECTRAL[s.spectral] || INK.DIM);

@@ -48,6 +48,9 @@ import { FACE as DEFAULT_FACE, drawPixelText as defaultDraw, measurePixelText as
 // ⭐ THE GPS LINE (2026-10-02): the ship-placement helpers the lab imports under the same names, so the
 //    extracted bodies resolve them here exactly as they do on the spec page (see shipState.js).
 import { ladderShipV, orreryShipRadius, fmtShipRange, shipRangeTo } from './shipState.js';
+// ⭐ THE FIXED GRID'S SCREENS (naming-prism-segments Phase 2): the lab imports the same module under the
+//    same name, so `gridScreen`, `gridRows` and `pickCell` resolve it identically on both pages.
+import * as navGrid from '../navGrid.js';
 
 /** `NavComputer.js:69`, verbatim — the density model's stars-per-pc^3 conversion. */
 const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;

@@ -35,6 +35,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import * as navGrid from '../navGrid.js';
+import { boundsOf } from '../../generation/GalaxyGrid.js';
 import { makeHeadlessNav } from './helpers/headlessNav.mjs';
 
 const W = 417, H = 240;   // ⭐ MAX'S OWN BUFFER — the size every number below is measured at.
@@ -46,7 +48,6 @@ const W = 417, H = 240;   // ⭐ MAX'S OWN BUFFER — the size every number belo
  * `S.mapProj.n` agrees, so a fixture that has gone stale fails loudly instead of quietly agreeing
  * with itself.
  */
-const HOST_GRID_N = { 1: 8, 2: 16 };
 
 /** A nav with the prism loaded and a design on, at `level`. */
 async function designNav({ mode = 'rail', level = 3 } = {}) {
@@ -166,55 +167,34 @@ describe('AC-1 — S.hover carries what the pointer is on, at every level, in bo
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 
   for (const mode of ['rail', 'bars']) {
-    it(`⭐ ${mode}: GALAXY publishes kind 'sector' and the sector row itself`, async () => {
-      const h = await designNav({ mode, level: 0 });
-      const found = sweepHover(h, (hb) => !!hb.sector);
-      expect(found, `${mode} at GALAXY resolved no sector anywhere in its map pane`).toBeTruthy();
-      const hv = found.hover;
-      expect(hv, `${mode} at GALAXY published no S.hover for a sector the host did pick`).toBeTruthy();
-      expect(hv.kind).toBe('sector');
-      expect(hv.level).toBe(0);
-      expect(typeof hv.ref.name, 'the sector row carries no name to print').toBe('string');
-      expect(hv.ref.name.length).toBeGreaterThan(0);
-      // ⭐ THE SAME OBJECT THE HOST WILL DRILL. `_handleClick`'s level-0 branch flies to
-      //   `_hoveredTile.sector.centerX/centerZ/size`; the callout must not be naming a different one.
-      expect(hv.ref, 'S.hover.ref is not the sector the click would drill')
-        .toBe(h.nav._hoveredTile.sector);
-      expect(hv.sx).toBe(found.x); expect(hv.sy).toBe(found.y);
-    }, 120000);
-
-    for (const level of [1, 2]) {
-      it(`⭐⭐ ${mode}: L${level} publishes the tile's kpc CENTRE, and it is where the drill flies`,
-         async () => {
+    // ⭐ RULING (naming-prism-segments AC-3, 2026-10-02): every 2D cell is one child box of the fixed
+    //    grid, so GALAXY, SECTOR and REGION publish ONE hover kind, 'cell', whose `ref` IS the host's
+    //    hover payload (`navGrid.hoverTile`) — the very object `_handleClick` drills. The old 'sector'
+    //    (775-sector quadtree) and 'tile' ({col,row} + a view-relative kpc centre) kinds are retired
+    //    with the grids they described. The intent is unchanged: the callout names exactly the place
+    //    the click goes, and its centre is that box's centre.
+    for (const level of [0, 1, 2]) {
+      it(`⭐⭐ ${mode}: L${level} publishes kind 'cell' — the drilled box, its reference and its centre`, async () => {
         const h = await designNav({ mode, level });
-        const found = sweepHover(h, (hb) => Number.isFinite(hb.col));
-        expect(found, `${mode} at L${level} resolved no tile anywhere in its map pane`).toBeTruthy();
+        const v = navGrid.viewForAddress(level, navGrid.parentAt(3, h.nav._playerX, h.nav._playerZ));
+        if (level > 0) { h.nav._viewCenter = { x: v.cx, z: v.cz }; h.nav._viewSize = v.size; h.nav.render(); }
+        const found = sweepHover(h, (hb) => !!hb.address);
+        expect(found, `${mode} at L${level} resolved no cell anywhere in its map pane`).toBeTruthy();
         const hv = found.hover;
-        expect(hv, `${mode} at L${level} published no S.hover for a tile the host did pick`).toBeTruthy();
-        expect(hv.kind).toBe('tile');
+        expect(hv, `${mode} at L${level} published no S.hover for a cell the host did pick`).toBeTruthy();
+        expect(hv.kind).toBe('cell');
         expect(hv.level).toBe(level);
-        expect(hv.ref.col).toBe(h.nav._hoveredTile.col);
-        expect(hv.ref.row).toBe(h.nav._hoveredTile.row);
-
-        // ── THE INDEPENDENT DERIVATION: the host's own drill arithmetic (NavComputer.js:4652-4657)
-        //    over the INSTRUMENT'S fields, not the driver's mirror of them.
-        const gn = HOST_GRID_N[level];
-        expect(h.drv.S.mapProj.n, 'the drawn grid is not the host\'s subdivision').toBe(gn);
-        const tileSize = h.nav._viewSize / gn;
-        const ext = h.nav._viewSize / 2;
-        const kx = h.nav._viewCenter.x - ext + (hv.ref.col + 0.5) * tileSize;
-        const kz = h.nav._viewCenter.z + ext - (hv.ref.row + 0.5) * tileSize;
-        expect(hv.ref.kx, 'kx is not the centre of the tile the click would drill').toBeCloseTo(kx, 9);
-        expect(hv.ref.kz, 'kz is not the centre of the tile the click would drill').toBeCloseTo(kz, 9);
-
-        // ⛔ AND THE Z-FLIP IS LOAD-BEARING: the mirrored tile is a plausible coordinate and the
-        //    wrong one. Assert the two differ wherever the row is not the middle of the grid.
-        const mirrored = h.nav._viewCenter.z + ext - (gn - 1 - hv.ref.row + 0.5) * tileSize;
-        if (hv.ref.row !== (gn - 1) / 2) {
-          expect(Math.abs(hv.ref.kz - mirrored),
-            'the fixture sits on the grid\'s mirror line, so the flip is untested here')
-            .toBeGreaterThan(tileSize / 4);
-        }
+        // ⭐ THE SAME OBJECT THE HOST WILL DRILL.
+        expect(hv.ref, 'S.hover.ref is not the cell the click would drill').toBe(h.nav._hoveredTile);
+        const b = boundsOf(hv.ref.address);
+        expect(hv.ref.bounds).toEqual(b);
+        expect(hv.ref.center).toEqual({ x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2 });
+        expect(hv.ref.ref).toBe(navGrid.childRef(level, hv.ref.address));
+        // and the box holds the point under the pointer — the projection inverted independently
+        const p = h.drv.S.mapProj;
+        const wx = p.cx + ((found.x - p.x0) / p.sq - 0.5) * p.size, wz = p.cz - ((found.y - p.y0) / p.sq - 0.5) * p.size;
+        expect(wx >= b.min.x && wx < b.max.x && wz >= b.min.z && wz < b.max.z, 'the named box is not under the pointer').toBe(true);
+        expect(hv.sx).toBe(found.x); expect(hv.sy).toBe(found.y);
       }, 120000);
     }
 

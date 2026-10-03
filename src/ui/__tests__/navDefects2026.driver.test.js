@@ -271,8 +271,11 @@ describe('AC-3 — the pan scale is the DRAWN map, not the legacy square', () =>
       expect(k, 'the driver published no pan scale where the paint published a map').toBeTruthy();
       expect(k).toBeCloseTo(b.wx - a.wx, 12);
       // …and in the other axis too, which is what makes it ONE scale rather than two that agree here.
+      // ⭐ RULING (naming-prism-segments Phase 2): the 2D screens draw +z UP (row 1 = largest z), so a
+      //    texel DOWN is `k` kpc of -z — and the host's `center.z + dy * k` now moves the picture WITH
+      //    the pointer vertically. (The designs used to draw +z down, the one axis that panned backwards.)
       const c = worldAt(p, r.x + 10, r.y + 11);
-      expect(k).toBeCloseTo(c.wz - a.wz, 12);
+      expect(-k).toBeCloseTo(c.wz - a.wz, 12);
       expect(nav._canvas.width).toBe(W);
     }, 60000);
   }
@@ -283,7 +286,10 @@ describe('AC-3 — the pan scale is the DRAWN map, not the legacy square', () =>
     // of each ratio is the host's own arithmetic and not a pinned 160.
     // ⚠ 2026-10-02: design 1's square is 222 texels now, not 216 — its hint row was removed (Max's UAT
     //   ruling, *"remove all of that row"*) and the row went to the map, so its ratio is 222/160.
-    const want = [['rail', 1, 1.3875], ['bars', 1, 1.40], ['bars', 0, 2.606]];
+    // ⭐ naming-prism-segments Phase 2: both designs draw one square of integer cells under an edge-label
+    //   row — 16 x 13 = 208 texels at SECTOR / REGION, 19 x 11 = 209 at GALAXY, design 2 included (its
+    //   GALAXY band is a square grid now) — so the ratios are 208/160 and 209/160.
+    const want = [['rail', 1, 1.3], ['bars', 1, 1.3], ['bars', 0, 1.30625]];
     for (const [mode, level, ratio] of want) {
       const { nav, drv } = await designNav({ mode, level });
       const legacy = nav._viewSize / navMapSize(W, H);

@@ -21,55 +21,34 @@
  * `PanelHost` catches a throw ONCE and then stops uploading, so the glass keeps showing the last
  * good frame and looks alive. Every entry point here answers `null` for anything it cannot read.
  *
- * ── ⚠ THE THREE MAP PROJECTIONS ARE GENUINELY DIFFERENT, AND THE `kind` TAG IS LOAD-BEARING ─────
+ * ── ⭐ ONE MAP PROJECTION, `kind: 'grid'`, FOR BOTH DESIGNS AT ALL THREE 2D LEVELS ──────────────
  *
- * `INTERFACE.md` §1d, and the lab publishes each one in ITS OWN TERMS rather than in a common
- * normalised form — which is right, because the common form would be a fourth restatement written
- * at neither draw site:
+ * naming-prism-segments Phase 2 (AC-3). Both designs now draw GALAXY, SECTOR and REGION through the
+ * lab's `gridScreen`, which publishes `{ x0, y0, sq, cx, cz, size, clip, parent, n }`: the frame
+ * `size` kpc across the square `sq` texels at `(x0, y0)`, centred on `(cx, cz)`, +z UP, and `clip`
+ * the rectangle actually painted. The three older kinds ('square', 'wide', 'block') are gone with
+ * the view-relative grids they described; an unknown kind is "no pick", never a guess.
  *
- *   | kind     | site                | published                                  |
- *   |----------|---------------------|--------------------------------------------|
- *   | 'square' | `d1TwoD`, levels 0-2| `ox, oy, sq, n, cell, cx, cz, size`         |
- *   | 'wide'   | `d2TwoD`, level 0   | `ox, oy, kpc, cx, cz, clip{x,y,w,h}`        |
- *   | 'block'  | `d2TwoD`, levels 1-2| `bx, by, blk, n, cell, cx, cz, size`        |
+ * ⭐ THE CELL UNDER THE POINTER IS `navGrid.cellAt` OF THE INVERTED POINT — the same function the
+ * host's drill, the autopilot and the painter's own `childGrid` share — so a drawn cell, a picked
+ * cell and a drilled cell are one box by construction, at any pan.
  *
- * They are not one projection with three parameter sets. The 'wide' kind renders the square at the
- * WIDE extent and crops the middle band, so its vertical field is only ±`(mapH/2)·kpc` — about half
- * the disc is off the glass BY CONSTRUCTION and there is no `size`-over-height to invert; it is an
- * origin and a scale. The 'block' kind lays `blk` texels over the same `v.size` kpc that the density
- * BEHIND it spends the full `W` on, so a picker built on design 2's `toX`/`toY` — which that branch
- * never even calls — drills a tile roughly TWICE the size the pilot clicked, and it looks like an
- * off-by-one in the grid rather than the wrong projection.
- *
- * So `projRect` / `projWorld` / `projCell` below branch on `kind` ONCE, in one place, and everything
- * above them is kind-agnostic.
- *
- * ⛔ REJECT, NEVER CLAMP. Design 1's map REGION is 258 texels wide and its square is 216 at `ox=21`:
- * the columns between are inside the region and outside the picture. Clamping a click there would
- * drill the edge tile of a map the pilot did not click on. `projRect` is the PICTURE, never the pane.
+ * ⛔ REJECT, NEVER CLAMP. Design 1's map REGION is wider than its square: the columns either side are
+ * inside the region and outside the picture, and that is where its row numbers are printed. Clamping
+ * a click there would drill the edge cell of a map the pilot did not click on. `projRect` is the
+ * PICTURE (`clip`), never the pane.
  */
 import { findStar } from './starIdentity.js';
+import * as navGrid from '../navGrid.js';
 
 /** Where each level's pick is written. `_handleClick` reads exactly these three fields. */
 export const HOVER_FIELD = ['_hoveredTile', '_hoveredTile', '_hoveredTile',
                             '_hoveredLocalStar', '_hoveredBody'];
 
-/**
- * The grid subdivision at a 2D level, used ONLY when this frame published no `mapProj` to take it
- * from. `NavComputer.gridNForLevel` (:71) is the authority and these are its two constants; the
- * rail picker needs `n` for the z-flip below and refusing the pick outright would make AC-4 depend
- * on a field the rail does not itself need.
- */
-export function gridNFallback(level) { return level === 2 ? 16 : 8; }
-
-/** THE PICTURE'S RECTANGLE, per kind. `null` for a shape this file does not know. */
+/** THE PICTURE'S RECTANGLE — the painted `clip`. `null` for a shape this file does not know. */
 export function projRect(p) {
-  if (!p) return null;
-  if (p.kind === 'square') return { x: p.ox, y: p.oy, w: p.sq, h: p.sq };
-  if (p.kind === 'block') return { x: p.bx, y: p.by, w: p.blk, h: p.blk };
-  if (p.kind === 'wide') return p.clip
-    ? { x: p.clip.x, y: p.clip.y, w: p.clip.w, h: p.clip.h } : null;
-  return null;
+  if (!p || p.kind !== 'grid' || !p.clip) return null;
+  return { x: p.clip.x, y: p.clip.y, w: p.clip.w, h: p.clip.h };
 }
 
 /**
@@ -77,9 +56,7 @@ export function projRect(p) {
  *
  * ⛔ THE `design` AND `level` STAMPS ARE THE WHOLE REASON THEY ARE PUBLISHED. A projection outlives
  * the frame that wrote it; a pick against last frame's rectangle after a level change lands on a
- * tile of a map that is no longer on the glass, and it looks exactly like a broken inverse.
- * (Design 2 nulls the whole set at the head of its own paint for the same reason, and the driver
- * clears them for both designs — three layers, because a stale pick is silent.)
+ * cell of a map that is no longer on the glass, and it looks exactly like a broken inverse.
  */
 export function usableProj(S) {
   const p = S && S.mapProj;
@@ -87,8 +64,8 @@ export function usableProj(S) {
   const r = projRect(p);
   if (!r || !Number.isFinite(r.x) || !Number.isFinite(r.y) || !(r.w > 0) || !(r.h > 0)) return null;
   if (!Number.isFinite(p.cx) || !Number.isFinite(p.cz)) return null;
-  const scale = p.kind === 'wide' ? p.kpc : p.size;
-  return (Number.isFinite(scale) && scale > 0) ? p : null;
+  if (!Number.isFinite(p.x0) || !Number.isFinite(p.y0) || !(p.sq > 0)) return null;
+  return (Number.isFinite(p.size) && p.size > 0) ? p : null;
 }
 
 /** Is the point on the DRAWN picture? Outside is a miss, never a clamp — see the header. */
@@ -97,42 +74,24 @@ export function insideProj(p, x, y) {
   return !!r && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 }
 
-/** The world point under a texel, inverting whichever projection actually drew it. */
+/** The world point under a pointer position, inverting the projection that drew it (+z UP):
+ *  exactly `gridProj`'s `toX`/`toY` run backwards over the published numbers. */
 export function worldAt(p, x, y) {
-  // 'wide' is isotropic about its own centre: one world pixel is one texel in BOTH axes, so the
-  // inverse is an origin and a scale and there is no height to divide by.
-  if (p.kind === 'wide') return { wx: p.cx + (x - p.ox) * p.kpc, wz: p.cz + (y - p.oy) * p.kpc };
-  const r = projRect(p);
-  if (!r) return null;
+  if (!p || p.kind !== 'grid' || !(p.sq > 0)) return null;
   return {
-    wx: p.cx + ((x - r.x) / r.w - 0.5) * p.size,
-    wz: p.cz + ((y - r.y) / r.h - 0.5) * p.size,
+    wx: p.cx + ((x - p.x0) / p.sq - 0.5) * p.size,
+    wz: p.cz - ((y - p.y0) / p.sq - 0.5) * p.size,
   };
 }
 
-/** Which drawn grid cell, in the LAB's indexing (`j` counts +z DOWNWARD). `null` off the grid. */
-export function cellAt(p, x, y) {
-  const n = p.n | 0;
-  const r = projRect(p);
-  if (!r || n <= 0) return null;
-  // `cell` is published because the paint ROUNDS its grid lines to `bx + round(cell*i)`; taking it
-  // rather than recomputing `w / n` keeps the hit-test on the same divisions the glass shows.
-  const cell = (Number.isFinite(p.cell) && p.cell > 0) ? p.cell : r.w / n;
-  const i = Math.floor((x - r.x) / cell);
-  const j = Math.floor((y - r.y) / cell);
-  return (i >= 0 && i < n && j >= 0 && j < n) ? { i, j, n } : null;
+/** The child cell under a texel, as `navGrid.cellAt` answers it for this screen's parent; `null`
+ *  off the picture, outside the parent (a dimmed neighbour) or on an undrawn GALAXY corner. */
+export function gridCellAt(p, x, y) {
+  if (!insideProj(p, x, y)) return null;
+  const w = worldAt(p, x, y);
+  if (!w || !Number.isFinite(w.wx) || !Number.isFinite(w.wz)) return null;
+  return navGrid.cellAt(p.level, p.parent || null, w.wx, w.wz);
 }
-
-/**
- * ⛔ `row` IS Z-FLIPPED AND THIS IS THE ONLY PLACE THAT KNOWS IT.
- *
- * The lab's `j` counts +z DOWNWARD (`toY(z) = mapY + ((z - cz)/size + 0.5)*sq`, so a larger z is a
- * larger y). `NavComputer._handleClick`:4656 counts +z UPWARD:
- * `newCz = viewCenter.z + ext - (row + 0.5) * tileSize`. Equating the two gives `row = n - 1 - j`,
- * `col = i`. Handing raw `j` through drills into the MIRRORED tile — a defect that looks like a
- * plausible drill, which is why it is worth a named function.
- */
-export function tileOf(i, j, n) { return { col: i, row: n - 1 - j }; }
 
 /**
  * The nearest published mark within its OWN radius, scanned in reverse draw order.
@@ -171,57 +130,25 @@ export function inRegion(rgn, x, y) {
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 
 /**
- * LEVEL 0 — the sector under the pointer.
+ * LEVELS 0-2 — the cell under the pointer, as the hover payload `_handleClick` drills
+ * (`navGrid.hoverTile`: `{ level, address, ref, bounds, center, size, sector? }`).
  *
- * ⚠ THE MAP DRAWS A GALAXY GRID, NOT SECTORS. Design 1 draws an 8x8 subdivision of the 44 kpc disc
- * and design 2 draws one dot per ranked sector; there are 775 sectors and they are an irregular
- * density-adaptive quadtree. So neither the grid cell nor a nearest-centre scan over the dots is the
- * sector identity — CONTAINMENT is, and `getSectorAt` is the same call the adapter already makes for
- * `D.playerSector`. It returns `null` outside the disc, which is a miss.
+ * ⭐ ONE PICKER FOR THREE SCREENS (naming-prism-segments AC-3). GALAXY used to resolve a click by
+ * CONTAINMENT in one of 775 irregular sectors under a plain 8x8 grid, so the cell and the sector
+ * were different objects; SECTOR and REGION handed a view-relative `{col,row}` that stopped meaning
+ * a region the moment the map was dragged. Now every cell is one child box, and the payload carries
+ * that box's ADDRESS — the drill goes to exactly the clicked cell's bounds at any pan.
  */
-export function pickSector(nav, S, x, y) {
+export function pickCell(S, x, y) {
   const p = usableProj(S);
-  if (!p || !insideProj(p, x, y)) return null;
-  const w = worldAt(p, x, y);
-  if (!w || !Number.isFinite(w.wx) || !Number.isFinite(w.wz)) return null;
-  const sectorAt = (wx, wz) => {
-    try { return nav._sectors && nav._sectors.getSectorAt ? nav._sectors.getSectorAt({ x: wx, z: wz }) : null; }
-    catch (e) { return null; }
-  };
-  let sec = sectorAt(w.wx, w.wz);
-  // ⭐ AC-1, SECOND HALF — A DRAWN CELL'S DEAD CORNER RESOLVES TO THE SECTOR THE CELL WAS DRAWN FOR.
-  //
-  // Max: *"there are too many cells that are not selectable."* The first half removed the cells whose
-  // CENTRE answered nothing. What is left is sub-cell: a rim cell is drawn whole, but a square laid
-  // over a disc always has corners outside it, and those texels answer nothing — measured live,
-  // 28 of 208 rim corners in 20 of 52 drawn cells. To the pilot that is the same defect at a smaller
-  // size: a cell on the glass that does not take the click.
-  //
-  // ⛔ IT FIRES ONLY WHERE THE TEXEL ITSELF ANSWERED NOTHING, so every click that resolves today
-  //    resolves to exactly what it did — a cell can span more than one sector (52 centres named 42
-  //    distinct sectors on the live sweep), and an interior click keeps the sector under it.
-  // ⚠ THE FALLBACK POINT IS THE PAINT'S OWN PREDICATE, `cx + (i + 0.5 - n/2) * size/n` — the very
-  //   expression `liveGridCells` decides a cell is drawn with. That is ALSO why there is no "only
-  //   inside a drawn cell" gate here, and a mutant is what removed it: a culled cell is one whose
-  //   centre answers nothing, so falling back to that centre answers nothing too. The gate was a
-  //   second copy of the predicate that could never change the answer.
-  if (!sec) {
-    const c = cellAt(p, x, y);
-    if (c && Number.isFinite(p.size)) {
-      const k = p.size / c.n;
-      sec = sectorAt(p.cx + (c.i + 0.5 - c.n / 2) * k, p.cz + (c.j + 0.5 - c.n / 2) * k);
-    }
-  }
-  return sec ? { sector: sec } : null;
+  if (!p) return null;
+  const a = gridCellAt(p, x, y);
+  return a ? navGrid.hoverTile(p.level, a) : null;
 }
-
-/** LEVELS 1-2 — the tile under the pointer, in `_handleClick`'s own `{col,row}` vocabulary. */
-export function pickTile(S, x, y) {
-  const p = usableProj(S);
-  if (!p || !insideProj(p, x, y)) return null;
-  const c = cellAt(p, x, y);
-  return c ? tileOf(c.i, c.j, c.n) : null;
-}
+/** GALAXY's name for the same pick; the payload also carries `sector` (the shipped level-0 drill). */
+export function pickSector(nav, S, x, y) { return S && S.level === 0 ? pickCell(S, x, y) : null; }
+/** SECTOR / REGION's name for the same pick. */
+export function pickTile(S, x, y) { return S && (S.level === 1 || S.level === 2) ? pickCell(S, x, y) : null; }
 
 /**
  * LEVEL 3 — the star glyph under the pointer.

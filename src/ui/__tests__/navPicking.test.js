@@ -33,6 +33,19 @@ import { SORT_KEYS, makeRng, makeViewState, wrapTau,
          PRISM_DZ, PRISM_DY, SYSTEM_TILT } from '../navViewModes/state.js';
 import { generatePlanetName, generateMoonName, generateSystemName } from '../../generation/NameGenerator.js';
 import { projRect, worldAt, pickLabel, pickBody, pickPrismStar, pickOrbitRing, pickSector } from '../navViewModes/picking.js';
+import * as navGrid from '../navGrid.js';
+import { boundsOf } from '../../generation/GalaxyGrid.js';
+
+/** Put the 2D frame on the PLAYER's own parent at `level`, exactly as navGrid frames it (the host's
+ *  default view stack after naming-prism-segments Phase 2; this harness never calls setPlayerPosition). */
+function frameLevel(nav, level) {
+  nav._levelIndex = level;
+  const v = navGrid.viewForAddress(level, navGrid.parentAt(3, nav._playerX, nav._playerZ));
+  nav._viewCenter = { x: v.cx, z: v.cz }; nav._viewSize = v.size;
+}
+
+/** Does a box's x/z footprint hold the world point? (half-open, the grid's own rule) */
+const holds = (b, w) => w.wx >= b.min.x && w.wx < b.max.x && w.wz >= b.min.z && w.wz < b.max.z;
 
 /** `ZOOM_STOPS[0]`, read off the design code rather than retyped — a pinned copy cannot go stale. */
 const ZOOM_STOPS = makeDesigns({ S: { design: 1, level: 3 }, D: {} }).ZOOM_STOPS;
@@ -130,6 +143,7 @@ const rowBand = (drv, i) => {
  * probe that skipped the frame would read "nothing" as "some tile" and could not fail.
  */
 const hoverTile = (nav, x, y) => { nav._handleMouseMove({ clientX: x, clientY: y }); nav.render(); return nav._hoveredTile; };
+const hoverTileRaw = hoverTile;
 const hoverStar = (nav, x, y) => { nav._handleMouseMove({ clientX: x, clientY: y }); nav.render(); return nav._hoveredLocalStar?.star?.seed; };
 
 /** A published mark with no other mark inside its own radius, so the pick is unambiguous. */
@@ -210,11 +224,10 @@ describe('a pick survives the frame that is drawn after it', () => {
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 describe('the map picks at GALAXY', () => {
   for (const mode of ['rail', 'bars']) {
-    it(`${mode}: resolves the SECTOR CONTAINING the point, not the nearest drawn dot`, async () => {
-      // ⚠ THE MAP DRAWS A GALAXY GRID (design 1) OR ONE DOT PER RANKED SECTOR (design 2), and there
-      // are 775 sectors in an irregular density-adaptive quadtree. Neither the grid cell nor a
-      // nearest-centre scan is the identity; containment is, and `getSectorAt` is the same call the
-      // adapter already makes for `D.playerSector`.
+    it(`${mode}: resolves the grid SECTOR CONTAINING the point, and the drill flies to exactly its square`, async () => {
+      // ⭐ RULING (naming-prism-segments AC-3, 2026-10-02): *"each cell in the galaxy should represent
+      //    a single sector"*. The 775-sector density quadtree under a plain 8x8 grid is gone; every
+      //    GALAXY cell IS one 2 kpc sector of the fixed grid, so the containing cell is the identity.
       const { nav, drv } = await loadedNav({ mode });
       nav._levelIndex = 0;
       nav.render();
@@ -222,17 +235,21 @@ describe('the map picks at GALAXY', () => {
       expect(p?.level, `${mode} must publish a level-0 projection`).toBe(0);
       const r = projRect(p);
       const x = r.x + r.w * 0.34, y = r.y + r.h * 0.55;
-      const { wx, wz } = worldAt(p, x, y);
-      const expected = nav._sectors.getSectorAt({ x: wx, z: wz });
-      expect(expected, 'the fixture point must be inside the disc').toBeTruthy();
+      const w = worldAt(p, x, y);
+      const expected = navGrid.cellAt(0, null, w.wx, w.wz);
+      expect(expected, 'the fixture point must be on a drawn sector').toBeTruthy();
       nav._handleMouseMove({ clientX: x, clientY: y });
-      expect(nav._hoveredTile?.sector?.id).toBe(expected.id);
+      expect(navGrid.sameAddress(nav._hoveredTile?.address, expected)).toBe(true);
+      const b = boundsOf(expected);
+      expect(holds(b, w), 'the picked sector holds the point under the pointer').toBe(true);
 
       const drills = [];
       nav._onDrillSound = (i) => drills.push(i);
       clickAt(nav, x, y);
       expect(drills, 'the drill sound only fires on the shipped path').toContain(1);
-      expect(nav._viewStack[1]?.center).toEqual({ x: expected.centerX, z: expected.centerZ });
+      // the shipped level-0 drill reads `_hoveredTile.sector` — the sector's own exact square
+      expect(nav._viewStack[1]?.center).toEqual({ x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2 });
+      expect(nav._viewStack[1]?.size).toBe(2);
     });
   }
 
@@ -278,72 +295,50 @@ describe('the map picks at GALAXY', () => {
   });
 });
 
-describe('the map picks a TILE at SECTOR and REGION', () => {
-  /** The world centre `_handleClick` computes for `{col,row}` — its arithmetic, spelled out. */
-  const drillCentre = (nav, col, row, gn) => {
-    const tile = nav._viewSize / gn, ext = nav._viewSize / 2;
-    return { x: nav._viewCenter.x - ext + (col + 0.5) * tile,
-             z: nav._viewCenter.z + ext - (row + 0.5) * tile };
-  };
-
+describe('the map picks a CELL at SECTOR and REGION', () => {
+  // ⭐ RULING (naming-prism-segments AC-3, 2026-10-02): every SECTOR cell is one region and every
+  //    REGION cell one prism, world-locked. The old `{col,row}` pick (z-flipped, view-relative) is
+  //    retired with the view-relative grid; the pick is now the child's ADDRESS, and the assertion is
+  //    that its box holds the world point the PROJECTION says was under the cursor. The host's drill
+  //    to that address is `navGridDrill.host.test.js`.
   for (const [mode, level] of [['rail', 1], ['rail', 2], ['bars', 1], ['bars', 2]]) {
-    it(`⛔⛔ ${mode} L${level}: \`row\` IS Z-FLIPPED — the drill lands where it was clicked`, async () => {
-      // ⭐ THE ASSERTION IS THE DRILL TARGET, NOT THE `{col,row}` PAIR. Handing `j` straight through
-      // produces a perfectly plausible-looking `_hoveredTile` and drills into the MIRRORED tile;
-      // only comparing the world point `_handleClick` lands on against the world point the
-      // PROJECTION says was under the cursor can tell the two apart.
-      // ⚠ AND IT COVERS BOTH DESIGN 2 PROJECTIONS: 'block' lays `blk` texels over the same kpc the
-      //   density behind it spends `W` on, so a picker built on that design's own `toX`/`toY` —
-      //   which this branch never calls — drills a tile roughly twice the size that was clicked.
+    it(`⛔⛔ ${mode} L${level}: the picked cell's box holds the point under the cursor, edge to edge`, async () => {
       const { nav, drv } = await loadedNav({ mode });
-      nav._levelIndex = level;
+      frameLevel(nav, level);
       nav.render();
       const p = drv.S.mapProj;
-      expect(p?.kind, `${mode} L${level} published nothing to invert`).toBeTruthy();
-      const r = projRect(p), gn = p.n;
-      for (const [i, j] of [[0, 0], [1, gn - 1], [gn - 1, 2]]) {
-        const x = r.x + (i + 0.5) * p.cell, y = r.y + (j + 0.5) * p.cell;
+      expect(p?.kind, `${mode} L${level} published nothing to invert`).toBe('grid');
+      const r = projRect(p);
+      let n = 0;
+      for (const [fx, fy] of [[0.02, 0.02], [0.5, 0.5], [0.97, 0.03], [0.05, 0.96], [0.73, 0.41]]) {
+        const x = r.x + fx * r.w, y = r.y + fy * r.h;
         nav._handleMouseMove({ clientX: x, clientY: y });
-        expect(nav._hoveredTile, `cell ${i},${j}`).toEqual({ col: i, row: gn - 1 - j });
-        const want = worldAt(p, x, y);
-        const got = drillCentre(nav, i, gn - 1 - j, gn);
-        expect(got.x, `cell ${i},${j} drilled a different column`).toBeCloseTo(want.wx, 6);
-        expect(got.z, `cell ${i},${j} drilled the MIRRORED row`).toBeCloseTo(want.wz, 6);
+        nav.render();   // the render tail owns the hover field under a design
+        const w = worldAt(p, x, y), want = navGrid.cellAt(level, p.parent, w.wx, w.wz);
+        const got = nav._hoveredTile;
+        if (!want) { expect(got, `(${fx},${fy}) is outside the parent: no pick`).toBe(null); continue; }
+        n++;
+        expect(navGrid.sameAddress(got?.address, want), `(${fx},${fy}) picked another cell`).toBe(true);
+        expect(holds(got.bounds, w), `(${fx},${fy}) the picked box does not hold the point`).toBe(true);
+        expect(got.bounds).toEqual(boundsOf(want));
       }
-      // and the shipped handler really does land there
-      const x = r.x + 1.5 * p.cell, y = r.y + 0.5 * p.cell;
-      nav._handleMouseMove({ clientX: x, clientY: y });
-      clickAt(nav, x, y);
-      const want = worldAt(p, x, y);
-      const stack = nav._viewStack[2].center;
-      expect(stack.x).toBeCloseTo(want.wx, 6);
-      expect(stack.z).toBeCloseTo(want.wz, 6);
+      expect(n, 'the fixture must land on cells').toBeGreaterThan(0);
     });
   }
 
   for (const level of [1, 2]) {
-    it(`⭐ AC-4: the RAIL picks at L${level} — one of the two holes \`hover()\` had`, async () => {
-      // Measured before the change: hover() returned {L0:true, L1:false, L2:false, L3:true, L4:true}.
-      // The row's tile comes from `S.railTiles`, which the paint publishes from the SAME
-      // `d1TileRows(v, v.n)` call it drew the rows from, already ranked and already sliced.
+    it(`⭐ AC-4: the RAIL picks at L${level} — each row hands on its own cell's address`, async () => {
       const { nav, drv } = await loadedNav();
-      nav._levelIndex = level;
+      frameLevel(nav, level);
       nav.render();
-      const tiles = drv.S.railTiles, gn = drv.S.mapProj.n;
+      const tiles = drv.S.railTiles;
       expect(tiles.length, 'the rail must publish its rows').toBeGreaterThan(2);
       for (const row of [0, 1, 2]) {
         const p = rowPoint(drv, row);
         nav._handleMouseMove({ clientX: p.x, clientY: p.y });
-        expect(nav._hoveredTile, `rail row ${row}`)
-          .toEqual({ col: tiles[row].i, row: gn - 1 - tiles[row].j });
+        expect(navGrid.sameAddress(nav._hoveredTile?.address, tiles[row].address), `rail row ${row}`).toBe(true);
+        expect(nav._hoveredTile.ref, 'the row names the cell its label spells').toBe(tiles[row].id);
       }
-      const p = rowPoint(drv, 1);
-      nav._handleMouseMove({ clientX: p.x, clientY: p.y });   // the click reads the LAST hover
-      clickAt(nav, p.x, p.y);
-      const tile = nav._viewSize / gn, ext = nav._viewSize / 2;
-      const target = level === 1 ? nav._viewStack[2].center : nav._localCenter;
-      expect(target.x, 'the rail row did not drill to its own tile')
-        .toBeCloseTo(nav._viewCenter.x - ext + (tiles[1].i + 0.5) * tile, 9);
     });
   }
 });
@@ -369,11 +364,13 @@ describe('a drawn row owns the whole band it was drawn in, and nothing outside i
       const { nav, drv } = await loadedNav();
       nav._levelIndex = level;
       nav.render();
-      const lg = drv.S.listGeom, tiles = drv.S.railTiles, gn = drv.S.mapProj.n;
+      const lg = drv.S.listGeom, tiles = drv.S.railTiles;
       expect(lg?.lead, "the band arithmetic needs the paint's own lead").toBeGreaterThan(1);
       expect(lg.rows, 'the sample needs rows either side of the ones probed').toBeGreaterThan(4);
       expect(tiles.length, 'the rail must publish a tile per drawn row').toBeGreaterThanOrEqual(lg.rows);
-      const tileOf = (i) => ({ col: tiles[i].i, row: gn - 1 - tiles[i].j });
+      // ⭐ naming-prism-segments AC-3: a row's pick is its cell's ADDRESS (was a z-flipped {col,row}).
+      const tileOf = (i) => tiles[i].address;
+      const hoverTile = (nav2, x, y) => { const h = hoverTileRaw(nav2, x, y); return h ? h.address : null; };
 
       for (const i of [1, 2, lg.rows - 1]) {
         const b = rowBand(drv, i);
@@ -790,7 +787,8 @@ describe('the ranked list sorts', () => {
     expect(drv.S.sortLabel).toBe('NAME');
     expect(localeAsc(drv.D.sectorRows.map((r) => String(r.s.name || '')))).toBe(true);
     expect(drv.D.sectorRows.map((r) => r.s.id)).not.toEqual(before);
-    expect(drv.D.sectorRows).toHaveLength(775);
+    // ⭐ RULING (naming-prism-segments AC-3): the GALAXY rows are the fixed grid's 293 drawn sectors.
+    expect(drv.D.sectorRows).toHaveLength(293);
   });
 
   it('⛔ THE `bodies` CACHE IS KEYED ON THE SYSTEM OBJECT — and AU was not the baseline it claimed', async () => {
@@ -1380,89 +1378,40 @@ describe("design 1's prism y-gauge is grabbable", () => {
 });
 
 // ═══════════════════════════════════════════════════════
-// AC-1, SECOND HALF — A DRAWN CELL'S DEAD CORNER RESOLVES TO THE SECTOR THE CELL WAS DRAWN FOR.
+// A DRAWN GALAXY CELL TAKES THE CLICK IN ITS CORNERS TOO — and an undrawn one never does.
+// ⭐ RULING (naming-prism-segments AC-3, 2026-10-02): the 8x8 grid over the 775-sector quadtree, its
+//    "dead corner" fallback and the disc-stub fixture that tested it are retired with it. A GALAXY cell
+//    IS one sector now, so the corner of a drawn cell is inside that sector by construction; what is
+//    left to prove is that the picker and the paint agree on which cells are drawn, at every corner.
 // ═══════════════════════════════════════════════════════
 describe("a drawn galaxy cell takes the click in its corners too", () => {
-  /**
-   * ⛔ BUILT, NOT FOUND. A disc of radius 18 under an 8x8 grid of 5-kpc cells: cell (7,3)'s centre
-   * (17.5, -2.5) is inside at R=17.7, its outer corner is not. The authority hands back a DISTINCT
-   * object per point so the tests can tell "the sector under the click" from "the sector under the
-   * cell's centre" by identity — a shared stub would let a wrong snap pass as a right one.
-   */
-  function disc() {
-    const made = new Map();
-    const getSectorAt = ({ x, z }) => {
-      if (Math.hypot(x, z) > 18) return null;
-      const key = `${x.toFixed(3)},${z.toFixed(3)}`;
-      if (!made.has(key)) made.set(key, { name: 'S' + key, x, z });
-      return made.get(key);
-    };
-    const nav = { _sectors: { getSectorAt } };
-    const live = new Set();
-    for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
-      if (getSectorAt({ x: (i + 0.5 - 4) * 5, z: (j + 0.5 - 4) * 5 })) live.add(j * 8 + i);
-    }
-    const S = { design: 1, level: 0, mapProj: { design: 1, level: 0, kind: 'square',
-      ox: 0, oy: 0, sq: 80, n: 8, cell: 10, cx: 0, cz: 0, size: 40 } };
-    return { nav, S, live, getSectorAt };
-  }
-
-  it('⭐⭐ THE OUTER CORNER OF A RIM CELL RESOLVES, to the sector under that cell\'s centre', () => {
-    const { nav, S, live, getSectorAt } = disc();
-    expect(live.has(3 * 8 + 7), 'the fixture must draw cell (7,3)').toBe(true);
-    // its outer corner texel: x = 79 (the last column of cell 7), y = 30 (the first row of cell 3)
-    const w = worldAt(S.mapProj, 79, 30);
-    expect(getSectorAt({ x: w.wx, z: w.wz }), 'the corner must be dead ground on its own').toBe(null);
-    const hit = pickSector(nav, S, 79, 30);
-    expect(hit, 'the corner of a drawn cell answered nothing').toBeTruthy();
-    expect(hit.sector).toBe(getSectorAt({ x: 17.5, z: -2.5 }));
-  });
-
-  it('⛔ A CULLED CELL STAYS A MISS — the fallback never re-invents the dead cells', () => {
-    const { nav, S, live } = disc();
-    expect(live.has(0 * 8 + 7), 'the fixture must cull cell (7,0)').toBe(false);
-    expect(pickSector(nav, S, 75, 5), 'a culled cell resolved to a sector').toBe(null);
-  });
-
-  it('⛔ A TEXEL THAT ANSWERS FOR ITSELF KEEPS ITS OWN SECTOR, not the centre\'s', () => {
-    // A cell can span more than one sector. The fallback must not snap interior clicks.
-    const { nav, S, getSectorAt } = disc();
-    const w = worldAt(S.mapProj, 72, 32);   // inside cell (7,3), inside the disc
-    const own = getSectorAt({ x: w.wx, z: w.wz });
-    expect(own, 'the fixture point must be live on its own').toBeTruthy();
-    expect(pickSector(nav, S, 72, 32).sector).toBe(own);
-    expect(own).not.toBe(getSectorAt({ x: 17.5, z: -2.5 }));
-  });
-
-  it('⭐ ON THE REAL GALAXY, every inset corner of every drawn cell resolves', async () => {
-    // The live sweep, headless: the same 4 corners per drawn cell the browser probe walked. Before
-    // the fallback 28 of 208 answered nothing on this seed.
-    const { nav, drv } = await loadedNav();
-    nav._levelIndex = 0; nav.render();
-    const p = drv.S.mapProj;
-    expect(p && p.kind, 'design 1 at GALAXY must publish its square').toBe('square');
-    // drawn = the paint's own predicate (centre resolves); the CORNERS are the independent probe
-    const live = new Set();
-    for (let k = 0; k < p.n * p.n; k++) {
-      const i = k % p.n, j = Math.floor(k / p.n), kk = p.size / p.n;
-      if (nav._sectors.getSectorAt({ x: p.cx + (i + 0.5 - p.n / 2) * kk, z: p.cz + (j + 0.5 - p.n / 2) * kk })) live.add(k);
-    }
-    expect(live.size, 'nothing culled — the fixture cannot show anything').toBeLessThan(p.n * p.n);
-    const r = projRect(p);
-    const gx = (i) => r.x + Math.round(p.sq * i / p.n), gy = (j) => r.y + Math.round(p.sq * j / p.n);
-    let probed = 0, dead = 0, culledResolving = 0;
-    for (let k = 0; k < p.n * p.n; k++) {
-      const i = k % p.n, j = Math.floor(k / p.n);
-      if (!live.has(k)) { if (pickSector(nav, drv.S, gx(i) + 13, gy(j) + 13)) culledResolving++; continue; }
-      for (const [x, y] of [[gx(i) + 1, gy(j) + 1], [gx(i + 1) - 1, gy(j) + 1], [gx(i) + 1, gy(j + 1) - 1], [gx(i + 1) - 1, gy(j + 1) - 1]]) {
-        probed++;
-        if (!pickSector(nav, drv.S, x, y)) dead++;
+  for (const mode of ['rail', 'bars']) {
+    it(`⭐ ${mode}: ON THE REAL GALAXY, every inset corner of every drawn cell resolves to THAT sector`, async () => {
+      const { nav, drv } = await loadedNav({ mode });
+      nav._levelIndex = 0;
+      nav._viewCenter = { x: 0.00390625, z: 0.00390625 }; nav._viewSize = 38;   // the whole naming area
+      nav.render();
+      const p = drv.S.mapProj, cells = drv.S.mapCells;
+      expect(p && p.kind, `${mode} at GALAXY must publish its grid`).toBe('grid');
+      expect(cells.length, 'every drawn sector is on the glass at the whole-galaxy frame').toBe(293);
+      let probed = 0, wrong = 0;
+      for (const c of cells) {
+        const { x, y, w, h } = c.rect;
+        for (const [px, py] of [[x + 1, y + 1], [x + w - 1, y + 1], [x + 1, y + h - 1], [x + w - 1, y + h - 1]]) {
+          probed++;
+          const hit = pickSector(nav, drv.S, px + 0.5, py + 0.5);
+          if (!hit || !navGrid.sameAddress(hit.address, c.address)) wrong++;
+        }
       }
-    }
-    expect(probed).toBe(live.size * 4);
-    expect(dead, `${dead} of ${probed} drawn-cell corners still answer nothing`).toBe(0);
-    expect(culledResolving, 'a culled cell\'s centre resolved').toBe(0);
-  });
+      expect(probed).toBe(293 * 4);
+      expect(wrong, `${wrong} of ${probed} drawn-cell corners answered another sector or nothing`).toBe(0);
+      // and an undrawn corner sector is a miss at its centre
+      const corner = boundsOf({ sector: { i: 0, j: 0 } });
+      const cx = p.x0 + ((corner.min.x + 1 - p.cx) / p.size + 0.5) * p.sq;
+      const cy = p.y0 + (0.5 - (corner.max.z - 1 - p.cz) / p.size) * p.sq;
+      expect(pickSector(nav, drv.S, cx, cy), 'an undrawn corner sector took the click').toBe(null);
+    });
+  }
 });
 
 // ═══════════════════════════════════════════════════════
@@ -2085,77 +2034,52 @@ describe('every planet row carries its orbital angle', () => {
 //     it, then zoom into it" — a SEQUENCE, so the frame has to be on the glass through the zoom.
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 describe('a clicked cell is highlighted, and stays highlighted into the zoom', () => {
-  for (const [mode, level] of [['rail', 1], ['bars', 1], ['rail', 2]]) {
-    it(`⭐ ${mode} L${level}: the click publishes the cell, and it survives the frames after it`, async () => {
+  // ⭐ RULING (naming-prism-segments AC-3, 2026-10-02): `S.pick` is `{ level, address, tMs }` — the
+  //    clicked CHILD's address at every 2D level, GALAXY included — replacing the design's own `i`/`j`
+  //    (2D levels) and the separate `sector` record (GALAXY). The painters frame that child's own box.
+  //    The drill the highlight rides is the host's (`navGridDrill.host.test.js` for SECTOR/REGION).
+  const centreOf = (c) => ({ x: c.rect.x + c.rect.w / 2, y: c.rect.y + c.rect.h / 2 });
+  /** A drawn cell well inside the picture, so the probe is unambiguous. */
+  const innerCell = (drv) => {
+    const cl = drv.S.mapProj.clip, mx = cl.x + cl.w * 0.4, my = cl.y + cl.h * 0.6;
+    let best = null, bd = Infinity;          // nearest drawn cell centre: a texel ON a rule has no interior
+    for (const c of drv.S.mapCells || []) {
+      const d = Math.hypot(c.rect.x + c.rect.w / 2 - mx, c.rect.y + c.rect.h / 2 - my);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best;
+  };
+
+  for (const [mode, level] of [['rail', 1], ['bars', 1], ['rail', 2], ['bars', 0]]) {
+    it(`⭐ ${mode} L${level}: the click publishes the cell's ADDRESS, and it survives the frames after it`, async () => {
       const { nav, drv } = await loadedNav({ mode });
-      nav._levelIndex = level;
+      frameLevel(nav, level);
       nav.render();
       expect(drv.S.pick, 'nothing has been clicked yet').toBe(null);
-      const p = drv.S.mapProj, r = projRect(p);
-      const i = 3, j = 5;
-      const x = r.x + (i + 0.5) * p.cell, y = r.y + (j + 0.5) * p.cell;
+      const c = innerCell(drv);
+      expect(c, 'the fixture needs a drawn cell under the probe').toBeTruthy();
+      const { x, y } = centreOf(c);
       nav._handleMouseMove({ clientX: x, clientY: y });
       clickAt(nav, x, y);
-
-      // ⛔ THE COORDINATES ARE THE DESIGN'S OWN `i`/`j`, NOT the game's col/row. `row = n-1-j` is the
-      // Z-flip, and handing the flipped pair to the lab would frame the MIRRORED cell — which looks
-      // like a plausible highlight, right up until it is not the one that zooms.
       expect(drv.S.pick, `${mode} L${level}: the click published no highlight`).toBeTruthy();
-      expect(drv.S.pick.i).toBe(i);
-      expect(drv.S.pick.j).toBe(j);
-      expect(drv.S.pick.j, 'the highlight is carrying the game\'s flipped row').not.toBe(p.n - 1 - j);
+      expect(drv.S.pick.address, 'the highlight names the clicked cell').toEqual(c.address);
       expect(drv.S.pick.level).toBe(level);
       expect(Number.isFinite(drv.S.pick.tMs)).toBe(true);
-
       // ⛔⛔ AND IT SURVIVES THE FRAMES. Written-and-cleared in one tick is what Max already has.
       nav.render();
       expect(drv.S.pick, `${mode} L${level}: ONE render() ate the highlight`).toBeTruthy();
-      expect([drv.S.pick.i, drv.S.pick.j]).toEqual([i, j]);
       nav.render(); nav.render(); nav.render();
-      expect(drv.S.pick, 'four frames of the zoom ate the highlight').toBeTruthy();
-      // ⭐ and the drill it is highlighting really is running, so this is the ZOOM's frames
-      expect(nav._anim?.toLevel, 'no drill was started, so there is no zoom to stay visible for')
-        .toBe(level + 1);
+      expect(drv.S.pick?.address, 'four frames ate the highlight').toEqual(c.address);
     }, 30000);
   }
 
-  it('⛔ IT GOES OUT WHEN THE DRILL LANDS, which is the level change and not a timer', async () => {
-    // `_startDrillAnim` does NOT move `_levelIndex`; `_updateAnim` assigns `toLevel` only once the
-    // 400-500 ms have elapsed (:1278-1281). So the highlight's life IS the zoom's, taken off the
-    // instrument's own state rather than from a clock racing it.
-    // ⚠ THE DRILL IS LANDED BY REWINDING ITS OWN `startTime`, NOT BY SETTING THE GLOBAL SIM CLOCK.
-    //    `_setSimClockMs` would have to be reached through a STATIC import here, while the harness
-    //    imports NavComputer DYNAMICALLY — and one `vi.resetModules()` earlier in this file leaves
-    //    those two holding different copies of `SimClock.js`, so the test writes one clock and the
-    //    instrument reads the other. Measured: it silently never landed the drill. Moving the anim's
-    //    own field touches nothing outside this nav.
-    const { nav, drv } = await loadedNav();
-    nav._levelIndex = 1;
-    nav.render();
-    const p = drv.S.mapProj, r = projRect(p);
-    const x = r.x + 2.5 * p.cell, y = r.y + 1.5 * p.cell;
-    nav._handleMouseMove({ clientX: x, clientY: y });
-    clickAt(nav, x, y);
-    expect(drv.S.pick).toBeTruthy();
-    expect(nav._levelIndex, 'the level moved before the zoom, so there was nothing to watch').toBe(1);
-    nav.render();
-    expect(drv.S.pick, 'the highlight went out during the zoom').toBeTruthy();
-    expect(nav._anim, 'no drill to land').toBeTruthy();
-    nav._anim.startTime -= nav._anim.duration + 100;      // the drill lands
-    nav.render();
-    expect(nav._levelIndex, 'the fixture did not actually land the drill').toBe(2);
-    expect(drv.S.pick, 'the highlight outlived the drill it belonged to').toBe(null);
-  }, 30000);
-
   it('⛔ A DRAG-PAN LIGHTS NOTHING — it is not a click and it drills nothing', async () => {
-    // `_handleClick` rejects a pointer that moved >5 texels (:4494-4496) AFTER `remapClick` has
-    // already run, so the highlight has to apply the same test itself or a pan lights a cell that
-    // is never going to zoom.
+    // `_handleClick` rejects a pointer that moved >5 texels AFTER `remapClick` has already run, so
+    // the highlight has to apply the same test itself or a pan lights a cell that is never going to zoom.
     const { nav, drv } = await loadedNav();
-    nav._levelIndex = 1;
+    frameLevel(nav, 1);
     nav.render();
-    const p = drv.S.mapProj, r = projRect(p);
-    const x = r.x + 2.5 * p.cell, y = r.y + 1.5 * p.cell;
+    const { x, y } = centreOf(innerCell(drv));
     nav._handleMouseDown({ clientX: x - 40, clientY: y - 30 });
     nav._handleMouseMove({ clientX: x, clientY: y });
     nav._handleMouseUp();
@@ -2172,9 +2096,8 @@ describe('a clicked cell is highlighted, and stays highlighted into the zoom', (
     clickAt(nav, nav._canvas.width * 0.1, g.tabY + 2);
     expect(drv.S.pick, 'a tab click lit a map cell').toBe(null);
     // and the drawn search, which consumes every click while it is open
-    nav._levelIndex = 1; nav.render();
-    const p = drv.S.mapProj, r = projRect(p);
-    const x = r.x + 2.5 * p.cell, y = r.y + 1.5 * p.cell;
+    frameLevel(nav, 1); nav.render();
+    const { x, y } = centreOf(innerCell(drv));
     drv.searchOpen();
     nav.render();
     clickAt(nav, x, y);
@@ -2191,33 +2114,19 @@ describe('a clicked cell is highlighted, and stays highlighted into the zoom', (
     expect(drv.S.pick, 'a star glyph published a grid cell').toBe(null);
   }, 30000);
 
-  it('⛔ AND NEITHER DOES GALAXY, WHICH DRAWS A GRID — the SECTOR is the drill target there', async () => {
-    // ⚠ THIS ONE IS NOT AN OVERSIGHT AND THE TEST EXISTS TO SAY SO. Design 1 draws an 8x8 lattice at
-    // level 0, but the identity `_handleClick` drills is the containing SECTOR — one of 775 in an
-    // irregular density-adaptive quadtree — and it flies to `s.centerX/centerZ` at `s.size`, which
-    // need not coincide with the cell under the cursor. A frame on the cell would be the glass
-    // promising "this is where you are going" about somewhere else.
-    //
-    // ⭐ AMENDED 2026-09-08 (AC-5's remaining half, INTERFACE §8): the exclusion was never "level 0
-    // gets no highlight", it was "level 0 gets no CELL highlight" — so the pick now carries the
-    // SECTOR, out of the same `pickSector` call the drill consumed, and the `i`/`j` a cell would have
-    // published are still absent. `pickCell` in designs.js declines a pick with no finite `i`/`j`,
-    // which is what keeps the lattice unframed. The sector's own framing is pinned in
-    // navClosePass3.test.js.
+  it('⭐ GALAXY: the highlight IS the sector the drill flies to — one box, not a cell and a sector', async () => {
     const { nav, drv } = await loadedNav();
     nav._levelIndex = 0;
     nav.render();
-    const p = drv.S.mapProj, r = projRect(p);
-    expect(p?.level, 'the fixture drew no level-0 map').toBe(0);
-    const x = r.x + r.w * 0.34, y = r.y + r.h * 0.55;
+    const c = innerCell(drv);
+    const { x, y } = centreOf(c);
     nav._handleMouseMove({ clientX: x, clientY: y });
     const sec = nav._hoveredTile?.sector;
     expect(sec, 'the fixture point must resolve to a sector').toBeTruthy();
     clickAt(nav, x, y);
-    expect(drv.S.pick?.i, 'GALAXY framed a cell it was not going to zoom into').toBeUndefined();
-    expect(drv.S.pick?.j).toBeUndefined();
-    expect(drv.S.pick?.sector, 'and it recorded the sector it IS going to zoom into')
-      .toEqual({ centerX: sec.centerX, centerZ: sec.centerZ, size: sec.size, name: sec.name });
+    expect(drv.S.pick?.address).toEqual(c.address);
+    const b = boundsOf(c.address);
+    expect(sec).toMatchObject({ centerX: (b.min.x + b.max.x) / 2, centerZ: (b.min.z + b.max.z) / 2, size: 2 });
     expect(nav._anim?.toLevel, 'and it still drilled — the highlight rides the click, it does not eat it')
       .toBe(1);
   }, 30000);

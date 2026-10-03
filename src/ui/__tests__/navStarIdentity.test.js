@@ -212,7 +212,11 @@ describe('⛔ each twin resolves to ITSELF on every path (AC-2)', () => {
   it('a keyless selection publishes the row it SITS ON, not a neighbour 0.05 pc away that comes first (findStar)', async () => {
     const { nav, drv, A, B } = await twinNav();
     for (const star of [A, B]) {
-      const ghost = { ...star, wx: star.wx + POSITION_MATCH_TOL / 2, key: `p:M:777777:${star === A ? 1 : 2}:0`, dist: 0 };
+      // ⚠ naming-prism-segments AC-5: list distances are measured from the PLAYER now (was the query
+      //   centre, which a `dist: 0` forged), so the ghost comes first by sitting half the tolerance
+      //   TOWARDS the player — a real neighbour, nearer the pilot, inside the same-star radius.
+      const toP = Math.sign(nav._playerX - star.wx) || 1;
+      const ghost = { ...star, wx: star.wx + toP * POSITION_MATCH_TOL / 2, key: `p:M:777777:${star === A ? 1 : 2}:0`, dist: 0 };
       nav._localStars = [ghost, ...nav._localStars.filter((s) => !s.key.startsWith('p:M:777777'))];
       const { key: _k, ident: _i, ...bare } = star;
       nav._selectedNavStar = bare;

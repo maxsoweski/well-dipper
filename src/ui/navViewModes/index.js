@@ -48,7 +48,8 @@ import { makeViewState, SORT_KEYS } from './state.js';
 import { makeDesigns } from './designs.js';
 import { railGeometry, barsGeometry, tabIndexAt } from './geometry.js';
 import { pickSector, pickTile, pickPrismStar, pickBody, bodyIdentity,
-         usableProj, insideProj, projRect, cellAt, gridNFallback, tileOf, HOVER_FIELD } from './picking.js';
+         usableProj, insideProj, projRect, gridCellAt, HOVER_FIELD } from './picking.js';
+import * as navGrid from '../navGrid.js';
 import { makeSearch } from './search.js';
 import { findStar } from './starIdentity.js';
 import { FACE, measurePixelText } from '../../rendering/PixelText.js';
@@ -196,7 +197,7 @@ export function makeViewModeDriver(nav) {
   function resetPicks() {
     S.mapProj = null; S.listGeom = null; S.tabRects = null; S.chipRect = null;
     S.searchGeom = null;
-    S.prismHits = []; S.bodyHits = []; S.railTiles = [];
+    S.prismHits = []; S.bodyHits = []; S.railTiles = []; S.mapCells = null;
     // ⭐ AC-2's ORBIT RINGS CLEAR HERE AND NOT IN DESIGN 1, because design 1 never draws one and a
     // field only design 2 publishes needs an owner that runs for BOTH. Without it, one press of V at
     // SYSTEM leaves design 2's rings live underneath design 1's ladder and a click on empty pane
@@ -254,64 +255,33 @@ export function makeViewModeDriver(nav) {
   /**
    * Record the cell a committed map click landed on, BEFORE `_handleClick` drills it.
    *
-   * ⛔ THE 2D LEVELS ONLY (0-2), AND GALAXY IS A DIFFERENT SHAPE OF PICK FROM THE OTHER TWO.
-   * PRISM and SYSTEM are excluded and obvious: they publish MARKS (`S.prismHits` / `S.bodyHits`), not
-   * a lattice, so there is no cell for the lab to frame. GALAXY records the containing SECTOR rather
-   * than a cell — see the `S.level === 0` branch below — because at
-   * level 0 THE CELL IS NOT WHAT GETS ZOOMED INTO: the drill identity is the containing SECTOR
-   * (`pickSector` → `getSectorAt`), one of 775 in an irregular density-adaptive quadtree, and
-   * `_handleClick` flies to `s.centerX/centerZ` at `s.size` — a rectangle that need not coincide
-   * with, or even sit inside, the 8x8 cell under the cursor. Framing the cell there would be the
-   * glass promising "this is where you are going" about somewhere else, which is the defect shape
-   * this workstream keeps finding rather than a smaller version of the feature. At 1-2 the cell IS
-   * the drill target, exactly (`tileOf`), which is what makes the highlight true.
-   * ⭐ SO GALAXY'S HIGHLIGHT IS THE SECTOR, PUBLISHED AS FOUR NUMBERS AND FRAMED BY EACH DESIGN
-   * THROUGH ITS OWN PROJECTION. That is what the note here used to say was missing; it is now the
-   * `S.level === 0` branch, and the two designs draw the same picked object at different sizes
-   * because their GALAXY views are different footprints, which is what §8 asks for.
-   * ⛔ AND AT 1-2 IT REUSES `cellAt`, NEVER ITS OWN ARITHMETIC. The `i`/`j` written here are the same pair
-   * `pickTile` hands to `tileOf` on its way to the `col`/`row` the drill consumes, so the cell that
-   * lights up and the cell that gets zoomed into cannot come apart. Restating the grid here would be
-   * the AC-4 defect shape — two copies of one geometry, one of them silently wrong.
+   * ⛔ THE 2D LEVELS ONLY (0-2). PRISM and SYSTEM publish MARKS (`S.prismHits` / `S.bodyHits`), not a
+   * lattice, so there is no cell for the lab to frame.
+   * ⭐ `S.pick = { level, address, tMs }` — THE CLICKED CHILD'S ADDRESS, AT EVERY 2D LEVEL
+   * (naming-prism-segments AC-3). Since every drawn cell is exactly one child box, the cell that
+   * lights up and the box the drill flies to are the same box at GALAXY too; the painters frame
+   * `navGrid.childCell(level, address).bounds` through their own projection.
+   * ⛔⛔ AND IT IS ONE OBJECT, TAKEN FROM THE FIELD THE DRILL READS — NOT TWO CALLS THAT AGREE
+   *    (INTERFACE §8f). `resolveHover` has just run at this click's own point (see `remapClick`'s
+   *    fall-throughs), so `nav._hoveredTile.address` IS the object about to be drilled; the map pick
+   *    is only the fallback for the case where no hover resolved at all.
    * ⚠ A DRAG IS NOT A CLICK, and this runs BEFORE the handler's own test says so. `_handleClick`
-   * rejects a pointer that moved more than 5 texels (`:4494-4496`) and `_handleMouseUp` never resets
-   * `_dragStartX/Y`, so the same test is available here and answers the same way. Without it a
-   * pan across the map would light a cell it is not going to drill.
+   * rejects a pointer that moved more than 5 texels and `_handleMouseUp` never resets
+   * `_dragStartX/Y`, so the same test is available here and answers the same way.
    */
   function notePick(x, y) {
     S.pick = null;
     if (S.level !== 0 && S.level !== 1 && S.level !== 2) return;
     const dx = x - nav._dragStartX, dy = y - nav._dragStartY;
     if (Number.isFinite(dx) && Number.isFinite(dy) && dx * dx + dy * dy > 25) return;
-    // ⭐⭐ AC-5's GALAXY HALF, AND IT CLOSES THE EXCLUSION THE BLOCK ABOVE ARGUED FOR RATHER THAN
-    // CONTRADICTING IT. The objection was never "level 0 should have no highlight" — it was that the
-    // CELL is not what gets zoomed into there, so framing the cell would promise the wrong
-    // destination. The identity IS the containing sector.
-    // ⛔⛔ AND IT IS ONE OBJECT, TAKEN FROM THE FIELD THE DRILL READS — NOT TWO CALLS THAT AGREE
-    //    (INTERFACE §8f). The comment here used to say `pickSector` was "the SAME call" the drill
-    //    consumes; it was not, it was a SECOND call at the same coordinates, and two calls agree only
-    //    while nothing between them moves. `_handleClick`:4633 drills `this._hoveredTile.sector`, so
-    //    THAT is what is recorded: `resolveHover` has just run at this click's own point (see
-    //    `remapClick`'s fall-throughs), and whatever it left in the field is the object about to be
-    //    flown to. `pickSector` remains as the fallback for the one case the field cannot answer —
-    //    no hover resolved at all — and never as a second opinion about a hover that did.
-    // ⚠ FOUR PLAIN NUMBERS AND A NAME, NOT THE SECTOR OBJECT. The designs read it unguarded every
-    //   frame it is set; handing them a live quadtree node would make the picture depend on whatever
-    //   else holds a reference to it.
-    if (S.level === 0) {
-      const hovered = nav._hoveredTile && nav._hoveredTile.sector;
-      const fallback = hovered ? null : pickSector(nav, S, x, y);
-      const s = hovered || (fallback && fallback.sector);
-      if (!s || !Number.isFinite(s.centerX) || !Number.isFinite(s.centerZ) || !Number.isFinite(s.size)) return;
-      S.pick = { level: 0, tMs: simClockMs(),
-                 sector: { centerX: s.centerX, centerZ: s.centerZ, size: s.size, name: s.name } };
-      return;
+    const hv = nav._hoveredTile;
+    let address = (hv && hv.level === S.level && hv.address) ? hv.address : null;
+    if (!address) {
+      const p = usableProj(S);
+      address = p ? gridCellAt(p, x, y) : null;
     }
-    const p = usableProj(S);
-    if (!p || !insideProj(p, x, y)) return;
-    const c = cellAt(p, x, y);
-    if (!c) return;
-    S.pick = { level: S.level, i: c.i, j: c.j, tMs: simClockMs() };
+    if (!address || !navGrid.childCell(S.level, address)) return;
+    S.pick = { level: S.level, address, tMs: simClockMs() };
   }
 
   /** Paint one frame in the active mode. Returns false if the mode is unknown — caller draws legacy. */
@@ -475,19 +445,17 @@ export function makeViewModeDriver(nav) {
   function pickFromRow(row, detail) {
     const i = rowBase() + row;
     if (S.level === 0) {
+      // ⭐ A SECTOR ROW IS A CELL OF THE FIXED GRID (naming-prism-segments AC-3): the same payload a
+      //    click on its cell makes, so the row and the cell drill to one box.
       const r = D.sectorRows[i];
-      return r ? { sector: r.s } : null;          // the shape `_handleClick`'s level-0 branch reads
+      return r && r.s && r.s.address ? navGrid.hoverTile(0, r.s.address) : null;
     }
     if (S.level === 1 || S.level === 2) {
-      // ⭐ AC-4's TWO HOLES. Rows 1-27 are drawn at SECTOR and REGION and clicking them did nothing
-      // at all — `hover()` answered {L0:true, L1:false, L2:false, L3:true, L4:true}. The tiles come
-      // from `S.railTiles`, which the paint publishes from the SAME `d1TileRows(v, v.n)` call it
-      // drew the rows from and has ALREADY sliced to the drawn count, so this indexes it directly.
+      // ⭐ AC-4's TWO HOLES. The rows come from `S.railTiles`, which the paint publishes from the
+      // SAME `gridRows()` call it drew them from and has ALREADY sliced to the drawn count. Each row
+      // carries its cell's ADDRESS, so a row and its cell are one pick.
       const t = (S.railTiles || [])[row];
-      if (!t || !Number.isFinite(t.i) || !Number.isFinite(t.j)) return null;
-      const p = usableProj(S);
-      const n = (p && p.n > 0) ? p.n : gridNFallback(S.level);
-      return tileOf(t.i, t.j, n);
+      return t && t.address ? navGrid.hoverTile(S.level, t.address) : null;
     }
     if (S.level === 3) {
       const s = D.starRows[i];
@@ -634,14 +602,10 @@ export function makeViewModeDriver(nav) {
     const level = S.level;
     const sx = (hit && Number.isFinite(hit.sx)) ? hit.sx : x;
     const sy = (hit && Number.isFinite(hit.sy)) ? hit.sy : y;
-    if (level === 0) {
-      return (hit && hit.sector) ? { level, kind: 'sector', sx, sy, ref: hit.sector } : null;
-    }
-    if (level === 1 || level === 2) {
-      if (!hit || !Number.isFinite(hit.col) || !Number.isFinite(hit.row)) return null;
-      const c = tileCentreKpc(hit.col, hit.row);
-      return c ? { level, kind: 'tile', sx, sy,
-                   ref: { col: hit.col, row: hit.row, kx: c.kx, kz: c.kz } } : null;
+    if (level === 0 || level === 1 || level === 2) {
+      // ⭐ ONE KIND FOR ALL THREE 2D SCREENS: the cell, with its reference, box and centre — the
+      //    callout names the cell the click would drill (naming-prism-segments AC-3).
+      return (hit && hit.address && hit.level === level) ? { level, kind: 'cell', sx, sy, ref: hit } : null;
     }
     if (level === 3) {
       return (hit && hit.star) ? { level, kind: 'star', sx, sy, ref: hit.star } : null;
@@ -664,33 +628,6 @@ export function makeViewModeDriver(nav) {
     } else return null;
     return { level, kind: 'body', sx: Number.isFinite(detail.x) ? detail.x : sx,
              sy: Number.isFinite(detail.y) ? detail.y : sy, ref };
-  }
-
-  /**
-   * ⭐ AC-1 — THE CENTRE OF A DRAWN TILE, IN KPC (SEAM §1).
-   *
-   * Function · invert the driver's own tile pick: `{col,row}` back to a world point.
-   * Intent · legacy's SECTOR/REGION tooltip is the tile centre as a kpc pair, so the callout needs
-   *   one. This is `picking.tileOf` run backwards over the SAME projection the pick inverted
-   *   (`S.mapProj`, whose `cx`/`cz`/`size` are `S.view`'s own numbers, published at the draw site),
-   *   which is the one arithmetic `NavComputer._handleClick:4652-4657` uses to fly there.
-   * Deliberate non-goals · no clamping and no fallback centre: a `col`/`row` that came from a pick
-   *   is inside the grid by construction, and a projection this frame did not publish answers `null`
-   *   rather than a plausible wrong point.
-   *
-   * ⛔ THE Z-FLIP IS THE WHOLE OF IT. `row = n - 1 - j` on the way in (`tileOf`), so `j = n - 1 - row`
-   *   on the way out; handing `row` straight to the `j` formula returns the MIRRORED tile's centre,
-   *   which looks like a plausible coordinate and is the wrong one.
-   */
-  function tileCentreKpc(col, row) {
-    const p = usableProj(S);
-    if (!p) return null;
-    const n = (p.n | 0) > 0 ? (p.n | 0) : gridNFallback(S.level);
-    const size = Number.isFinite(p.size) ? p.size : null;
-    if (!n || size == null) return null;
-    const j = n - 1 - row;
-    return { kx: p.cx + ((col + 0.5) / n - 0.5) * size,
-             kz: p.cz + ((j + 0.5) / n - 0.5) * size };
   }
 
   /** The entry `NavComputer._handleMouseMove` calls. Kept working; the render tail is the authority. */
@@ -932,7 +869,7 @@ export function makeViewModeDriver(nav) {
     const lg = S.listGeom;
     const g2 = geo(w, h);
     const rows = Number.isFinite(lg && lg.rows) ? lg.rows : (g2.listRows | 0);
-    const totals = [D.sectorRows.length, 64, 256, D.starRows.length, D.bodies.length];
+    const totals = [D.sectorRows.length, 256, 256, D.starRows.length, D.bodies.length];
     const total = Number.isFinite(lg && lg.total) ? lg.total : (totals[S.level] || 0);
     return { rows, total };
   }
@@ -1334,12 +1271,11 @@ export function makeViewModeDriver(nav) {
    * A restatement of `sq` / `blk` / `W` here would be the AC-4 defect shape — two copies of one
    * geometry, one silently wrong — in the one place where being wrong is invisible until you drag.
    *
-   * ⚠⚠ AND `'wide'` IS NOT `size / w`, WHICH IS WHERE THE OBVIOUS ONE-LINER IS WRONG. The seam sketched
-   *   this as `usableProj(S).scale / projRect(p).w`; that is right for the two SQUARE kinds, whose
-   *   `size` spans `r.w` texels, and wrong by a factor of `W` for `'wide'`, whose published `kpc` IS
-   *   ALREADY the per-texel scale (`worldAt` reads `cx + (x - ox) * kpc`, `designs.js:1511` sets it to
-   *   `v.size / W`). Both branches are checked against the audit's three measured ratios in
-   *   `navDefects2026.driver.test.js`, which is the only reason the difference is visible at all.
+   * ⚠⚠ AND IT IS `size / sq`, NOT `size / clip.w` (naming-prism-segments Phase 2). Both designs now
+   *   publish one `'grid'` projection whose `size` spans the SQUARE `sq`; design 2's `clip` is the
+   *   whole band, so dividing by the picture's width would pan it at the wrong rate exactly the way
+   *   `'wide'` once did. ⭐ With +z UP on the glass, the host's `center.z + dy` pan now moves the
+   *   cells WITH the pointer in both axes.
    *
    * @returns {?number} world units (kpc) per texel, or `null` when this frame published no usable
    *   projection — the host then keeps the legacy expression rather than panning by NaN.
@@ -1347,10 +1283,8 @@ export function makeViewModeDriver(nav) {
   function panKpcPerTexel() {
     const p = usableProj(S);
     if (!p) return null;
-    if (p.kind === 'wide') return (Number.isFinite(p.kpc) && p.kpc > 0) ? p.kpc : null;
-    const r = projRect(p);
-    if (!r || !(r.w > 0) || !(Number.isFinite(p.size) && p.size > 0)) return null;
-    return p.size / r.w;
+    // ⭐ THE SQUARE'S SCALE, not the clip's: `size` kpc span `sq` texels (picking.js's `worldAt`).
+    return p.size / p.sq;
   }
 
   /**

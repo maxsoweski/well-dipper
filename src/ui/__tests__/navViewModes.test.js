@@ -79,8 +79,14 @@ describe('the adapter feeds the designs real instrument state', () => {
     expect(D.starRows.every((r) => r.name), 'every ranked row carries a name').toBe(true);
     // sorted by distance, nearest first — the rail's whole premise
     for (let i = 1; i < D.starRows.length; i++) expect(D.starRows[i].dist).toBeGreaterThanOrEqual(D.starRows[i - 1].dist);
-    expect(D.here?.name, 'the system you are IN').toBe(D.starRows[0].name);
-    expect(D.sectorRows.length, 'all 775 sectors, ranked once').toBe(775);
+    // ⭐ RULING (naming-prism-segments AC-5, 2026-10-02): "here" is the PLAYER, not the nearest
+    //    browsed row. This harness never arrives anywhere — no star sits at the player's (8, 0, 0) —
+    //    so there is no here-row; the old assertion (here = the nearest row) is exactly what AC-5
+    //    retired. navHere.test.js covers a here-row at the player's own star.
+    expect(D.here, 'no star at the player, so no here-row').toBeNull();
+    // ⭐ RULING (AC-3): the GALAXY rows are the fixed grid's 293 drawn sectors, not the 775-sector
+    //    density quadtree — a row and a GALAXY cell are now one place.
+    expect(D.sectorRows.length, 'the 293 drawn sectors, ranked once').toBe(293);
   });
 
   it('⭐ takes the system the PILOT drilled into, not one it picked for itself', async () => {

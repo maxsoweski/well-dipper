@@ -53,6 +53,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as navGrid from '../navGrid.js';
 import { makeHeadlessNav, makeRecordingContext, clickAt } from './helpers/headlessNav.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -92,10 +93,25 @@ const hover = (n, x, y) => { n._handleMouseMove({ clientX: x, clientY: y }); n.r
 function drillFrom(n, x, y, level) {
   hover(n, x, y);
   const tile = n._hoveredTile;
-  if (!tile || tile.col === undefined) return null;
+  // ⭐ naming-prism-segments AC-3: a 2D pick is the cell's ADDRESS (`navGrid.hoverTile`), and the drill
+  //    must fly to that cell's own centre — the box the pointer was over, not "a" tile.
+  if (!tile || !tile.address) return null;
   clickAt(n, x, y);
   if (n._anim?.toLevel !== level + 1) return null;
-  return { tile, dest: { ...n._anim.toCenter } };
+  const dest = { ...n._anim.toCenter };
+  if (dest.x !== tile.center.x || dest.z !== tile.center.z) return null;
+  return { tile, dest };
+}
+/** The centre texel of the drawn cell nearest a fraction of the picture (the paint's own rectangles). */
+function cellPoint(n, fx, fy) {
+  const S = n._viewDriverInst.S, cl = S.mapProj.clip, tx = cl.x + cl.w * fx, ty = cl.y + cl.h * fy;
+  const c = (S.mapCells || []).find((k) => tx >= k.rect.x && tx < k.rect.x + k.rect.w && ty >= k.rect.y && ty < k.rect.y + k.rect.h);
+  return c ? { x: c.rect.x + c.rect.w / 2, y: c.rect.y + c.rect.h / 2 } : { x: tx, y: ty };
+}
+/** Frame the player's own parent exactly (the host's default stack after naming-prism-segments Phase 2). */
+function frameOwn(n, level) {
+  const v = navGrid.viewForAddress(level, navGrid.parentAt(3, n._playerX, n._playerZ));
+  n._viewCenter = { x: v.cx, z: v.cz }; n._viewSize = v.size; n.render();
 }
 
 // ── AC-4's SUB-VIEW (nav-restorations-2026-09-20, wave 2b) ────────────────────────────────────────
@@ -381,7 +397,7 @@ const VOCABULARY = [
       // ⭐ AIMED AT THE MIDDLE OF THE DISC ON PURPOSE. The square's corners are outside the galaxy,
       //    where `getSectorAt` correctly answers null — a probe that aimed there would report a
       //    working picker as broken.
-      const x = p.ox + p.sq / 2, y = p.oy + p.sq / 2;
+      const x = p.x0 + p.sq / 2, y = p.y0 + p.sq / 2;
       hover(n, x, y);
       const s = n._hoveredTile?.sector;
       if (!s) return false;
@@ -399,19 +415,21 @@ const VOCABULARY = [
     async probe() {
       for (const level of [1, 2]) {
         const n = await nav({ level });
+        frameOwn(n, level);
         const p = n._viewDriverInst.S.mapProj;
         if (!p) return false;
-        const a = drillFrom(n, p.ox + p.cell * 1.5, p.oy + p.cell * 1.5, level);
+        const pa = cellPoint(n, 0.1, 0.1), pb = cellPoint(n, 0.3, 0.4);
+        const a = drillFrom(n, pa.x, pa.y, level);
         // ⭐ THE FIRST DRILL'S EASE IS STOOD DOWN so the second click is not eaten by
         //    `_handleClick`'s `if (this._anim) return` gate. Nothing else about the level moves
         //    until the ease lands, so the second pointer meets the same picture as the first.
         n._anim = null;
-        const b = drillFrom(n, p.ox + p.cell * 3.5, p.oy + p.cell * 4.5, level);
+        const b = drillFrom(n, pb.x, pb.y, level);
         if (!a || !b) return false;
         // ⛔ THE DISCRIMINATOR. Two different tiles under two different pointers must drill to two
         //    different places; a click that drilled a constant — or the tile the LAST frame hovered
         //    — passes "something happened" and fails this.
-        if (a.tile.col === b.tile.col && a.tile.row === b.tile.row) return false;
+        if (a.tile.ref === b.tile.ref) return false;
         if (a.dest.x === b.dest.x && a.dest.z === b.dest.z) return false;
       }
       return true;
@@ -465,19 +483,22 @@ const VOCABULARY = [
         const p = n._viewDriverInst.S.mapProj;
         if (!p) return false;
         if (level === 0) {
-          // design 2 draws GALAXY as a full-width band (`kind: 'wide'`), whose `ox`/`oy` IS the centre
-          hover(n, p.ox, p.oy);
+          // design 2 draws GALAXY as the same square grid as its other 2D levels since Phase 2
+          const cx = p.x0 + p.sq / 2, cy = p.y0 + p.sq / 2;
+          hover(n, cx, cy);
           const s = n._hoveredTile?.sector;
           if (!s) return false;
-          clickAt(n, p.ox, p.oy);
+          clickAt(n, cx, cy);
           const dest = n._viewStack[1]?.center;
           if (n._anim?.toLevel !== 1 || !dest || dest.x !== s.centerX || dest.z !== s.centerZ) return false;
         } else {
-          const a = drillFrom(n, p.bx + p.cell * 1.5, p.by + p.cell * 1.5, level);
+          frameOwn(n, level);
+          const pa = cellPoint(n, 0.5, 0.15), pb = cellPoint(n, 0.55, 0.5);
+          const a = drillFrom(n, pa.x, pa.y, level);
           n._anim = null;
-          const b = drillFrom(n, p.bx + p.cell * 3.5, p.by + p.cell * 4.5, level);
+          const b = drillFrom(n, pb.x, pb.y, level);
           if (!a || !b) return false;
-          if (a.tile.col === b.tile.col && a.tile.row === b.tile.row) return false;
+          if (a.tile.ref === b.tile.ref) return false;
           if (a.dest.x === b.dest.x && a.dest.z === b.dest.z) return false;
         }
       }

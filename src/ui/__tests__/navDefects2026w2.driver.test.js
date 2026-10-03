@@ -161,7 +161,9 @@ describe('AC-14 — closing the nav ends what the pilot was in the middle of', (
 
     press(nav, 'BracketRight');                    // the sort key first — `cycleSort` resets the page
     press(nav, 'Equal');                           // page 2 of the sector list
-    clickAt(nav, 20, 10);                          // a real map click, which is what writes `S.pick`
+    // a real map click, which is what writes `S.pick` — at the picture's centre: since
+    // naming-prism-segments Phase 2 the top-left corner (20, 10) is the edge-label margin, not the map
+    { const c = drv.S.mapProj.clip; clickAt(nav, c.x + c.w / 2, c.y + c.h / 2); }
     press(nav, 'Slash');
     for (const [code, key] of [['KeyS', 's'], ['KeyO', 'o'], ['KeyL', 'l']]) press(nav, code, { key });
     nav.render();

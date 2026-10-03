@@ -174,7 +174,10 @@ describe('AC-18 — design 2 says CLICK TO ENTER at SECTOR and REGION, on the gl
       //   in the best tile under you. AC-18 names both as things to keep.
       const sector = (nav._viewDriverInst.D.playerSector?.name || '').toUpperCase();
       expect(line, `level ${level}: the sector name`).toContain(sector);
-      if (level > 0) expect(line, `level ${level}: a formatted count and its label`).toMatch(/[\d.]+[KMBT]? BEST TILE/);
+      // ⭐ RULING (naming-prism-segments AC-3): a SECTOR cell is a region and a REGION cell a prism, so
+      //    the clause names the cell: BEST REGION / BEST PRISM (was BEST TILE). It still fits and still
+      //    ends in the affordance — the two assertions above.
+      if (level > 0) expect(line, `level ${level}: a formatted count and its label`).toMatch(/[\d.]+[KMBT]? BEST (REGION|PRISM)/);
       else expect(line, 'GALAXY is untouched — its count clause still reads SYSTEMS').toMatch(/SYSTEMS/);
     }
   }, 60000);
