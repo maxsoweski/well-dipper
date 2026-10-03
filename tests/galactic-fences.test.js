@@ -26,7 +26,8 @@ function checkLabBoundary(source) {
 }
 
 // ── Fence 2: each cloud shader chunk exists in exactly one file ──
-const SHADER_MARKERS = ['void integrateCloud(', 'float logStructure(', 'uint hashU(', 'void sampleMedium(', 'vec3 applyColourMode('];
+const SHADER_MARKERS = ['void integrateCloud(', 'float logStructure(', 'uint hashU(', 'void sampleMedium(', 'vec3 applyColourMode(',
+  'vec3 cloudAtlasDirection(', 'vec2 cloudAtlasUV(', 'float cloudDepthCDF(', 'vec3 cloudStarTransmittance('];
 const SHADER_HOME = 'src/galactic/shaders/cloudField.glsl.js';
 
 function listSources() {

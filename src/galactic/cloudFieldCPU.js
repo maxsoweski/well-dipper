@@ -7,7 +7,7 @@
 // Frames and units: positions are in pc relative to the nebula centre, galactic axes. The pack's rotation
 // takes them into the nebula-local frame where the noise, cavity and ionizing source live.
 
-import { HASH_MUL_A, HASH_MUL_B, LUMA, FBM_STD } from './cloudConstants.js';
+import { HASH_MUL_A, HASH_MUL_B, LUMA, FBM_STD, DEPTH_KNOTS } from './cloudConstants.js';
 
 const LATTICE_BIAS = 1 << 20; // keeps lattice indices non-negative before the uint conversion
 
@@ -124,16 +124,24 @@ export function rayBounds(ro, rd, boundRadius) {
  * March a ray through the cloud over [tMin, tMax] ∩ bounds (entry clamped at 0, so starting inside needs no
  * special case). Each step treats the medium as constant over dt and integrates it EXACTLY:
  *   L += T * j * (1 - e^{-k dt}) / k,   T *= e^{-k dt}.
- * @returns {{L: number[], T: number[], t0: number, t1: number}}
+ * Also returns the scalar dust optical depth `tau` (extinction is k = scale·rho·rgb, so T_c = e^{-tau·rgb_c}
+ * exactly) and `G` — the cumulative fraction of tau reached at DEPTH_KNOTS of the chord [t0, t1] (twin of the
+ * GLSL integrateCloud; the sky bake stores it so stars are dimmed only by the dust in front of them).
+ * @returns {{L: number[], T: number[], t0: number, t1: number, tau: number, G: number[]}}
  */
 export function integrateRay(pack, ro, rd, steps = 64, tMin = 0, tMax = Infinity) {
   const L = [0, 0, 0], T = [1, 1, 1];
+  const G = DEPTH_KNOTS.slice();
   const b = rayBounds(ro, rd, pack.boundRadiusPc);
-  if (!b) return { L, T, t0: 0, t1: 0 };
+  if (!b) return { L, T, t0: 0, t1: 0, tau: 0, G };
   const t0 = Math.max(b.t0, tMin, 0);
   const t1 = Math.min(b.t1, tMax);
-  if (t1 <= t0) return { L, T, t0, t1 };
+  if (t1 <= t0) return { L, T, t0, t1, tau: 0, G };
   const dt = (t1 - t0) / steps;
+  const extG = Math.max(pack.extinction.rgb[1], 1e-6);
+  const knots = DEPTH_KNOTS.map((f) => f * steps);
+  const acc = [0, 0, 0, 0];
+  let tau = 0;
   for (let i = 0; i < steps; i++) {
     const s = t0 + (i + 0.5) * dt - b.tc; // position along the ray, measured from the closest-approach point
     const p = [b.h[0] + s * rd[0], b.h[1] + s * rd[1], b.h[2] + s * rd[2]];
@@ -143,8 +151,14 @@ export function integrateRay(pack, ro, rd, steps = 64, tMin = 0, tMax = Infinity
       L[c] += T[c] * (k[c] > 1e-6 ? (j[c] * (1 - a)) / k[c] : j[c] * dt);
       T[c] *= a;
     }
+    const tauNext = tau + (k[1] / extG) * dt;
+    for (let q = 0; q < 4; q++) {
+      if (knots[q] >= i && knots[q] < i + 1) acc[q] += tau + (tauNext - tau) * (knots[q] - i);
+    }
+    tau = tauNext;
   }
-  return { L, T, t0, t1 };
+  const g = tau > 1e-12 ? acc.map((v) => v / tau) : DEPTH_KNOTS.slice();
+  return { L, T, t0, t1, tau, G: g };
 }
 
 /** Segment composition: near then far along one ray. */

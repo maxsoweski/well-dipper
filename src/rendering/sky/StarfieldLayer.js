@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { assignName } from '../../util/scene-naming.js';
+import { CLOUD_STAR_DUST_GLSL } from '../../galactic/shaders/cloudField.glsl.js';
 
 /**
  * StarfieldLayer — background stars on a sky sphere.
@@ -24,7 +25,12 @@ export class StarfieldLayer {
     this._brightnessRange = brightnessRange;
     this.radius = radius;
 
+    // Galactic Engine star dust (enableDust): the observer the star distances are measured from.
+    this.observerKpc = null;
+    this.dustEnabled = false;
+
     if (typeof countOrData === 'object' && countOrData.positions) {
+      this.observerKpc = countOrData.playerPos ? { ...countOrData.playerPos } : null;
       this.count = countOrData.count;
       this.realStars = countOrData.realStars || [];
       this.mesh = this._buildMesh(countOrData.positions, countOrData.colors, countOrData.sizes);
@@ -74,11 +80,19 @@ export class StarfieldLayer {
   }
 
   _buildMesh(positions, colors, sizes) {
+    return new THREE.Points(this._buildGeometry(positions, colors, sizes), this._buildMaterial(false));
+  }
+
+  _buildGeometry(positions, colors, sizes) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    return geometry;
+  }
 
+  /** @param {boolean} dust — inject the Galactic Engine star-dust chunk (false = the shader as it always was) */
+  _buildMaterial(dust) {
     const material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -136,7 +150,7 @@ export class StarfieldLayer {
         varying float vSize;
         varying float vConverge;
         varying float vTunnelAmt;
-        varying float vClipped;
+        varying float vClipped;${dust ? CLOUD_STAR_DUST_GLSL : ''}
 
         // Stable pseudo-random from vec3 — gives on-axis stars a deterministic
         // azimuth when their perp component vanishes.
@@ -148,7 +162,7 @@ export class StarfieldLayer {
           vColor = color;
           vSize = aSize;
           vTunnelAmt = uTunnelPhase;
-          vClipped = 0.0;
+          vClipped = 0.0;${dust ? '\n          vDustT = cloudStarTransmittance(normalize(position), aDistPc);' : ''}
 
           // ── Tunnel warp (angular-to-depth remap) ──
           // At phase=0 this branch is skipped entirely and finalPos = position,
@@ -250,7 +264,7 @@ export class StarfieldLayer {
         varying float vSize;
         varying float vConverge;
         varying float vTunnelAmt;
-        varying float vClipped;
+        varying float vClipped;${dust ? '\n        varying vec3 vDustT;' : ''}
 
         float bayerDither(vec2 coord) {
           vec2 p = mod(floor(coord), 4.0);
@@ -290,14 +304,50 @@ export class StarfieldLayer {
           // At rest (uTint=1, vTunnelAmt=0, vClipped=0) this collapses to the
           // pre-port expression: vColor * uBrightness * shape.
           vec3 col = vColor * uTint * uBrightness * shape * (1.0 + vTunnelAmt * 0.3);
-          col *= (1.0 - vClipped);
+          col *= (1.0 - vClipped);${dust ? '\n          col *= vDustT; // Galactic Engine: dust between us and THIS star' : ''}
 
           gl_FragColor = vec4(min(col, vec3(1.0)), 1.0);
         }
       `,
     });
 
-    return new THREE.Points(geometry, material);
+    return material;
+  }
+
+  /**
+   * Galactic Engine (flag 'wd.galacticEngine' only): give every star its distance from this layer's observer
+   * (pc; stars with no world position — external galaxies, legacy random stars — count as infinitely far) and
+   * switch to the shader variant that dims each star by the dust in front of IT. The controller binds the
+   * uniforms each frame (GalacticController.bindStarDust); uDustOn = 0 renders exactly as before.
+   */
+  enableDust() {
+    if (this.dustEnabled) return;
+    this.dustEnabled = true;
+    const n = this.mesh.geometry.attributes.position.count;
+    const dist = new Float32Array(n).fill(1e9);
+    const o = this.observerKpc;
+    if (o) {
+      for (const e of this.realStars) {
+        const s = e.starData;
+        if (!s || s.worldX === undefined || e.index >= n) continue;
+        dist[e.index] = Math.hypot(s.worldX - o.x, s.worldY - o.y, s.worldZ - o.z) * 1000;
+      }
+    }
+    this.mesh.geometry.setAttribute('aDistPc', new THREE.BufferAttribute(dist, 1));
+    const old = this.mesh.material;
+    const mat = this._buildMaterial(true);
+    for (const [k, v] of Object.entries(old.uniforms)) mat.uniforms[k].value = v.value;
+    Object.assign(mat.uniforms, {
+      uDustOn: { value: 0 },
+      uDustLT: { value: null },
+      uDustG: { value: null },
+      uDustN: { value: 2 },
+      uDustObserverPc: { value: new THREE.Vector3() },
+      uDustBound: { value: 0 },
+      uDustExtRGB: { value: new THREE.Vector3(1, 1, 1) },
+    });
+    this.mesh.material = mat;
+    old.dispose();
   }
 
   update(cameraPosition) {

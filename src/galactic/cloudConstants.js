@@ -21,3 +21,14 @@ export const MAX_STEPS = 128;
 // Approximate std-dev of the zero-mean fBm sum used below, so `sigma` in the pack is in "standard" units.
 // Measured on the CPU twin (see tests/galactic-cloud-field.test.js); value noise fBm is narrower than Gaussian.
 export const FBM_STD = 0.116;
+
+// Optical-depth CDF knots: fractions of the ray's chord through the cloud's bounding sphere at which the bake
+// records the cumulative dust optical depth (as a fraction of the total). Stars are dimmed by the optical depth
+// up to THEIR distance, read off a piecewise-linear CDF through (0,0), these knots, and (1,1).
+export const DEPTH_KNOTS = [0.2, 0.4, 0.6, 0.8];
+
+// Sky bake atlas: the six cube faces laid out as a 3 x 2 grid of N x N cells in one 2D texture.
+// Texel centres are EDGE-INCLUSIVE (texel 0 and N-1 sit exactly on the face edges), so the two faces that share
+// an edge hold identical rays there and bilinear sampling is continuous across every seam and corner.
+export const ATLAS_COLS = 3;
+export const ATLAS_ROWS = 2;

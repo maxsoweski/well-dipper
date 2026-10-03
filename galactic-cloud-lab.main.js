@@ -28,14 +28,14 @@ const galacticMap = new GalacticMap();
 const sky = new SkyRenderer(galacticMap, StarfieldGenerator, settings.get('starDensity'));
 const subjects = findCloudSubjects(galacticMap);
 
-const state = { subject: subjects.procedural ? 'procedural' : 'orion', preset: '100 pc', distancePc: 100, mode: 'photo', volume: true };
+const state = { subject: subjects.procedural ? 'procedural' : 'orion', preset: '100 pc', distancePc: 100, mode: 'photo', volume: true, liveMarch: false, dust: true };
 const feature = () => subjects[state.subject];
 const observer = () => observerPositionFor(feature(), state.distancePc);
 
 sky.prepareForPosition(observer());
 sky.activate();
 retro.setSkyRenderer(sky);
-const api = mountGalacticEngine({ skyRenderer: sky, retroRenderer: retro, galacticMap, ctx: { label: 'lab' }, force: true });
+const api = mountGalacticEngine({ skyRenderer: sky, retroRenderer: retro, galacticMap, ctx: { label: 'lab', bakeTilesPerFrame: 8 }, force: true });
 api.pin(feature());
 api.setColourMode(state.mode);
 
@@ -79,7 +79,10 @@ view.add(state, 'distancePc', 0, 3000, 0.5).name('distance (pc)')
   .onFinishChange(rebuildSky);
 view.add(state, 'mode', COLOUR_MODES).name('colour (U)').onChange((m) => api.setColourMode(m));
 view.add(state, 'volume').name('volume (J = A/B)').onChange((on) => api.setEnabled(on));
-view.add(api.controller.ctx, 'steps', 8, 128, 1).name('ray steps (ctx)');
+view.add(api.controller.ctx, 'steps', 8, 128, 1).name('ray steps (ctx)').onFinishChange(() => api.controller.refresh());
+view.add(state, 'liveMarch').name('live march (reference)').onChange((on) => api.setSource(on ? 'live' : 'bake'));
+view.add(state, 'dust').name('dust dims stars').onChange((on) => api.setDust(on));
+view.add(api.controller.ctx, 'bakeTilesPerFrame', 1, 48, 1).name('bake tiles / frame (ctx)');
 view.add({ aim: aimAtCentre }, 'aim').name('look at centre');
 
 const tune = gui.addFolder('Render pack overrides (shared with the game)');
@@ -123,7 +126,8 @@ function frame() {
   if (t - hudAt > 0.5) {
     hudAt = t;
     const s = api.snapshot();
-    hud.textContent = `${s.featureId}\n${s.active ? 'VOLUME' : 'billboard'} · ${s.mode} · d=${s.distancePc?.toFixed(1)} pc · inside=${s.insideCloud}\nR=${s.radiusPc?.toFixed(1)} pc · params ${s.paramsHash} · ${s.volumeRes?.join('×')} · ${s.lastFrameMs?.toFixed(2)} ms cpu`;
+    const gpu = s.gpuMs ? `gpu composite ${s.gpuMs.composite?.toFixed(3) ?? '–'} ms · bake tile ${s.gpuMs.bakeTile?.toFixed(3) ?? '–'} ms` : 'gpu timer n/a';
+    hud.textContent = `${s.featureId}\n${s.active ? 'VOLUME' : 'billboard'} (${s.source}) · ${s.mode} · d=${s.distancePc?.toFixed(1)} pc · inside=${s.insideCloud}\nR=${s.radiusPc?.toFixed(1)} pc · params ${s.paramsHash} · bake ${s.bake.state} ${s.bake.faces} gen ${s.bake.generation}/${s.bake.publishedGeneration} · ${s.bake.faceSize}px faces\nstars: ${s.starDust} · ${(s.textureBytes / 1048576).toFixed(1)} MB · ${gpu}`;
   }
   requestAnimationFrame(frame);
 }

@@ -83,9 +83,10 @@ export class RetroRenderer {
   }
 
   /**
-   * Galactic Engine sky volume (flag 'wd.galacticEngine'): an object with isActive() and
-   * render(renderer, camera, skyTarget, pixelScale). Drawn into the sky target after glow + stars and
-   * before the feature billboards. null (the default) leaves the sky pass exactly as it was.
+   * Galactic Engine sky volume (flag 'wd.galacticEngine'): the GalacticController — preRender(renderer) each
+   * frame (bake tiles), bindStarDust(layers), and while isActive(): renderBeforeStars (sky·T after the glow)
+   * and renderAfterStars (+ L), before the feature billboards. null (the default) leaves the sky pass exactly
+   * as it was.
    */
   setSkyVolume(volume) {
     this._skyVolume = volume || null;
@@ -887,6 +888,9 @@ export class RetroRenderer {
   render() {
     const r = this.renderer;
 
+    // Galactic Engine: this frame's bake tiles + timer polling (flag-gated; null when off).
+    if (this._skyVolume) this._skyVolume.preRender(r);
+
     // Pass 1: Sky at full resolution (SkyRenderer scene or legacy starfieldScene)
     r.setRenderTarget(this.bgTarget);
     r.setClearColor(0x000000, 1);
@@ -914,11 +918,28 @@ export class RetroRenderer {
       const glowHidden = glowMesh?._hiddenForTitle;
       if (glowHidden && glowMesh) glowMesh.visible = false;
       if (featureGroup) featureGroup.visible = false;
-      r.render(skyScene, this.camera);
-
-      // Galactic Engine volume: sky * T + L over glow + stars (flag-gated; null when off).
+      const starLayers = this._skyVolume ? this._skyRenderer.getStarLayers() : null;
+      if (starLayers) this._skyVolume.bindStarDust(starLayers);
       if (this._skyVolume && this._skyVolume.isActive()) {
-        this._skyVolume.render(r, this.camera, this.bgTarget, this.pixelScale);
+        // Galactic Engine volume (flag-gated): glow → sky·T → stars (each dimmed by the dust in front of IT,
+        // in its own shader) → + L. Stars nearer than the cloud stay untouched.
+        const starMeshes = starLayers.map((l) => l.mesh);
+        const starVis = starMeshes.map((m) => m.visible);
+        starMeshes.forEach((m) => { m.visible = false; });
+        r.render(skyScene, this.camera);
+        this._skyVolume.renderBeforeStars(r, this.camera, this.bgTarget, this.pixelScale);
+        const vis = skyScene.children.map((c) => c.visible);
+        skyScene.children.forEach((c) => { c.visible = false; });
+        starMeshes.forEach((m, i) => { m.visible = starVis[i]; });
+        r.setRenderTarget(this.bgTarget);
+        r.autoClear = false;
+        r.render(skyScene, this.camera);
+        r.autoClear = true;
+        skyScene.children.forEach((c, i) => { c.visible = vis[i]; });
+        starMeshes.forEach((m, i) => { m.visible = starVis[i]; });
+        this._skyVolume.renderAfterStars(r, this.camera, this.bgTarget);
+      } else {
+        r.render(skyScene, this.camera);
       }
 
       // Now show features (absorption + emission), render on top

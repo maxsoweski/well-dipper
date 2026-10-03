@@ -90,7 +90,13 @@ export class SkyRenderer {
 
   /** Attach the Galactic Engine controller and re-pick against the sky that is already live. */
   setVolumeController(controller) {
+    if (this._volume && this._volume.onPublishChange) this._volume.onPublishChange = null;
     this._volume = controller || null;
+    if (this._volume) {
+      // When the drawn feature changes (a bake is published / dropped), the billboards must re-skip.
+      this._volume.onPublishChange = () => this.refreshVolumeFeature();
+      for (const layer of this.getStarLayers()) layer.enableDust();
+    }
     this.reselectVolumeFeature();
   }
 
@@ -100,11 +106,11 @@ export class SkyRenderer {
     this.refreshVolumeFeature();
   }
 
-  /** Rebuild the live billboards so the volume's feature is skipped only while the volume is drawing it
-   *  (the A/B key flips between the two). */
+  /** Rebuild the live billboards so the volume's feature is skipped only while the volume is DRAWING it
+   *  (the A/B key flips between the two; while a bake is pending the old billboard is the fallback). */
   refreshVolumeFeature() {
     if (!this._featureLayer || !this._activeFeatures || this._activeFeatures.length === 0) return;
-    const skipKey = this._volume && this._volume.isActive() ? this._volume.featureKey : null;
+    const skipKey = this._volume ? this._volume.skipKey() : null;
     this._featureLayer.setFeatures(this._activeFeatures, this._activePos, skipKey);
   }
 
@@ -113,6 +119,28 @@ export class SkyRenderer {
     this._activeFeatures = features;
     this._activePos = playerPos;
     return this._volume ? this._volume.onSkyFeatures(features || [], playerPos) : null;
+  }
+
+  /** The star layers currently in the sky scene (live + the legacy-crossover origin layer). */
+  getStarLayers() {
+    return [this._starfieldLayer, this._originStarfieldLayer].filter(Boolean);
+  }
+
+  /** Galactic Engine warp gating (main.js, FOLD start): keep the volume's published sky untouched while the
+   *  destination bakes. Released at the swap point: the dual-portal emergence crossing (main.js onTraversal
+   *  'OUTSIDE_B') or completeWarpTransition (arrival; legacy path + defensive). No-op when the flag is off. */
+  holdVolumeForWarp() {
+    if (this._volume) this._volume.setWarpHold(true);
+  }
+
+  releaseVolumeHold() {
+    if (this._volume) this._volume.setWarpHold(false);
+  }
+
+  /** New StarfieldLayer → the dust variant when the Galactic Engine is mounted. */
+  _withDust(layer) {
+    if (this._volume && layer) layer.enableDust();
+    return layer;
   }
 
   /**
@@ -146,6 +174,8 @@ export class SkyRenderer {
       );
       // Query nearby galactic features for sky overlays
       this._pendingFeatures = this._galacticMap.findNearbyFeatures(playerPos, 3.0);
+      // Galactic Engine: start baking the next sky's volume now (shown only once complete — see controller).
+      if (this._volume) this._volume.prepare(this._pendingFeatures, playerPos);
     } else {
       this._pendingData = null;
       this._pendingFeatures = null;
@@ -168,6 +198,7 @@ export class SkyRenderer {
         this._starfieldRadius
       );
       this._pendingFeatures = this._galacticMap.findNearbyFeatures(playerPos, 3.0);
+      if (this._volume) this._volume.prepare(this._pendingFeatures, playerPos);
     } else {
       this._pendingData = null;
       this._pendingFeatures = null;
@@ -213,11 +244,11 @@ export class SkyRenderer {
         // premultiplied alpha + Beer-Lambert — no glow shader absorption needed.
       }
 
-      this._starfieldLayer = new StarfieldLayer(
+      this._starfieldLayer = this._withDust(new StarfieldLayer(
         data,
         this._starfieldRadius,
         this._brightnessConfig.stars
-      );
+      ));
     } else {
       // Legacy mode — random starfield, no glow, no features
       this._starfieldLayer = new StarfieldLayer(
@@ -370,11 +401,11 @@ export class SkyRenderer {
         this._featureLayer.setFeatures(this._pendingFeatures, this._playerPos, skipKey);
       }
 
-      this._starfieldLayer = new StarfieldLayer(
+      this._starfieldLayer = this._withDust(new StarfieldLayer(
         data,
         this._starfieldRadius,
         this._brightnessConfig.stars
-      );
+      ));
     } else {
       // Legacy/random destination — unusual during warp, but handle it.
       this._starfieldLayer = new StarfieldLayer(
@@ -414,6 +445,7 @@ export class SkyRenderer {
    * destination starfield renders without clipping.
    */
   completeWarpTransition() {
+    this.releaseVolumeHold(); // arrival: the volume's destination may now be shown (no-op if already released)
     this._disposeOriginLayers();
     this._crossoverActive = false;
     if (this._starfieldLayer) {

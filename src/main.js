@@ -2318,7 +2318,7 @@ warpPortal.onTraversal = async (mode) => {
   // can't re-trigger it. The min-cruise gate in WarpEffect still bounds the
   // earliest this can happen.
   if (mode === 'OUTSIDE_B' && warpEffect.state === 'hyper') {
-    warpEffect.state = 'exit';
+    warpEffect.state = 'exit'; skyRenderer.releaseVolumeHold(); // galactic-engine S1 step 2: emergence = the volume's swap point (no-op with the flag off) — rides this line (line-anchored citations)
     warpEffect.elapsed = 0;
     // AC8: begin the arrival close-tween at the real emergence crossing. The
     // tunnel + ring stay visible and shrink+fade over ~3s as the camera coasts
@@ -6861,7 +6861,7 @@ warpEffect.onPrepareSystem = () => {
   // dispatch that observes _foldSnapshotTaken === false is therefore guaranteed to
   // have landed BEFORE this snapshot — the exact pre-FOLD/post-FOLD boundary
   // navDispatchDuringWarp routes on (pre-FOLD → overwrite, post-FOLD → stash).
-  _foldSnapshotTaken = true;
+  _foldSnapshotTaken = true; skyRenderer.holdVolumeForWarp(); // galactic-engine S1 step 2: keep the volume's origin sky until the swap point (no-op with the flag off) — rides this line
   pendingSystemDataPromise = (async () => {
     bodyInfo.hide();
     soundEngine.play('warpCharge');
