@@ -42,6 +42,16 @@
       "note": "slab loader + segment bar; option D confirmed or reopened here"
     },
     {
+      "phase": "3c",
+      "acs": [
+        "AC-15",
+        "AC-16",
+        "AC-17",
+        "AC-18"
+      ],
+      "note": "batch 2 — current/target colour system, grid polish, ship label, defects (Max 2026-10-03 review)"
+    },
+    {
       "phase": "3b",
       "acs": [
         "AC-14"
@@ -241,6 +251,54 @@
         "observable": "Max's verdict."
       },
       "layer": "uat"
+    },
+    {
+      "id": "AC-15",
+      "statement": "\"a visually meaning color-codedly consistent indicator that lets you know which thing selected is where you currently are and where the other thing selected is your target\" + \"Let's replace all references to you in the menus with the word Current\" + \"Rather than ship, the marker should say current\" — ONE CURRENT ink and ONE TARGET ink for every text and icon on every nav screen and look (galaxy, sector, region, prism, system, orrery, legacy; FLIGHT, ORRERY, tour); every YOU/SHIP word reads CURRENT; clickable CURRENT and TARGET indicators top-right that highlight the matching cell on the level being viewed; a selected search result and the selected star follow the TARGET rule; the level tabs use CURRENT ink.",
+      "verifyVia": {
+        "input": "Live: open the nav at Sol and at a foreign system with a target set; visit every level in designs 1 and 2 and legacy; check SYSTEM with the ship marker; click the CURRENT and TARGET indicators on GALAXY, SECTOR, REGION; select a search result.",
+        "observable": "No 'YOU' or 'SHIP' word drawn anywhere; every current-position text/mark is the CURRENT ink and every target text/mark is the TARGET ink (pixel-sampled), including the s-sky case (player icon and current system name same ink); clicking CURRENT/TARGET highlights the cell containing the player / the target at that level in that ink."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "OPEN",
+      "batch": 2
+    },
+    {
+      "id": "AC-16",
+      "statement": "Grid polish from Max's 2026-10-03 notes: dotted midline leaders from each edge label to the grid (g-galaxy); the hover label never covers the highlighted cell and its parenthetical numbers are the highlight colour (g-sector); no screen-door / square artifacts in the grid background (g-sector); the grid fills the window exactly, nothing drawn outside it (g-drag); while dragging only the window shows, cell boundaries stay visible and the row/column labels follow (g-neighbours — no clickable neighbour blocks); the star-count + density-bar column in the rail table is labelled.",
+      "verifyVia": {
+        "input": "Live captures of GALAXY, SECTOR (hover several cells incl. edge cells), REGION, and mid-drag, in designs 1 and 2.",
+        "observable": "Leaders present on every edge label; hover label rect ∩ highlighted cell = 0 px for every probed cell; no periodic screen-door pattern in the background (capture comparison); zero drawn pixels outside the grid window on every grid level incl. mid-drag; cell boundary lines visible mid-drag and labels track the moved cells; the rail column has a header."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "OPEN",
+      "batch": 2
+    },
+    {
+      "id": "AC-17",
+      "statement": "The ship marker's distance label has ONE meaning everywhere (moon review .astra/jobs/20261003-002012-moon-view-gameplay-review): today it is planet-distance in one place and target-distance in another.",
+      "verifyVia": {
+        "input": "Live: SYSTEM / moon close-up with and without a target, both designs.",
+        "observable": "The distance beside the CURRENT marker measures the same thing in every view, and the label says what it measures."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "OPEN",
+      "batch": 2
+    },
+    {
+      "id": "AC-18",
+      "statement": "Batch 2 defects: (a) N works after leaving HELM with the cockpit nav zoomed (_cockpitNavZoomed() no longer sticks); (b) the HELM↔ORRERY renderer crash is investigated (dumps in C:\\temp\\chrome-mcp-filmstrip\\Crashpad\\reports\\) with a cause or a bounded 'not reproduced in N tries'; (c) Max's s-goto question answered: hiding the ship in ORRERY costs no serious resources (measured); (d) design 2's legend right end is not clipped.",
+      "verifyVia": {
+        "input": "Live: HELM → zoom cockpit nav → ORRERY → N; HELM↔ORRERY round trips ×10 with N; frame cost with ship hidden vs shown; design 2 legend capture.",
+        "observable": "(a) N opens the overlay; (b) a written finding; (c) a number; (d) legend fully inside the frame."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "OPEN",
+      "batch": 2
     }
   ],
   "architecturalConnections": {
