@@ -146,3 +146,19 @@ describe('fence: Realistic vs Photo (CPU render through the shared integrator)',
     expect(() => checkColourModes(photo, photo)).toThrow(/saturation/);
   });
 });
+
+// Regression (2026-10-03, found live): rays built from the inverse projection were NaN on the GPU — the game's
+// near plane is 1e-9 and in float32 the far-plane w cancels to exactly 0. Rays must come from the FOV.
+import { cameraTanHalf } from '../src/rendering/galactic/GalacticController.js';
+import { CLOUD_VOLUME_FRAG } from '../src/galactic/shaders/cloudField.glsl.js';
+describe('volume ray basis', () => {
+  it('does not depend on the near plane', () => {
+    const cam = (near) => ({ fov: 70, aspect: 1.63, near, far: 200000 });
+    expect(cameraTanHalf(cam(1e-9))).toEqual(cameraTanHalf(cam(0.1)));
+    expect(cameraTanHalf(cam(1e-9))[1]).toBeCloseTo(Math.tan(35 * Math.PI / 180), 12);
+  });
+  it('the volume shader never builds rays from the inverse projection', () => {
+    expect(CLOUD_VOLUME_FRAG).not.toMatch(/uInvProjection|projectionMatrixInverse/);
+    expect(CLOUD_VOLUME_FRAG).toMatch(/uTanHalf/);
+  });
+});

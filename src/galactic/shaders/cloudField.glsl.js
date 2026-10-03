@@ -168,14 +168,15 @@ export const CLOUD_VOLUME_FRAG = /* glsl */ `
 precision highp float;
 precision highp int;
 ${CLOUD_FIELD_GLSL}
-uniform mat4 uInvProjection;
+// Ray directions come from the field of view, never the inverse projection: the game's near plane is
+// 1e-9, and in float32 the inverse projection's w at the far plane cancels to exactly 0 (every ray NaN).
+uniform vec2 uTanHalf;     // (tan(fov/2) * aspect, tan(fov/2))
 uniform mat4 uCameraWorld;
 in vec2 vUv;
 layout(location = 0) out vec4 outL;
 layout(location = 1) out vec4 outT;
 void main() {
-  vec4 v = uInvProjection * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
-  vec3 rd = normalize(mat3(uCameraWorld) * normalize(v.xyz / v.w));
+  vec3 rd = normalize(mat3(uCameraWorld) * normalize(vec3((vUv * 2.0 - 1.0) * uTanHalf, -1.0)));
   vec3 L, T;
   integrateCloud(uObserverPc, rd, L, T);
   outL = vec4(L, 1.0);

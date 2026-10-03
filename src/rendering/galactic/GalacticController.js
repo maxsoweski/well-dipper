@@ -28,6 +28,12 @@ export function buildPack(feature, colourMode) {
   return renderPack(featureHistory(feature), { colourMode });
 }
 
+/** (tan(fov/2) * aspect, tan(fov/2)) — the volume's ray basis. Independent of near/far on purpose. */
+export function cameraTanHalf(camera) {
+  const t = Math.tan((camera.fov * Math.PI) / 360);
+  return [t * camera.aspect, t];
+}
+
 export class GalacticController {
   constructor(ctx = {}) {
     this.ctx = { ...DEFAULT_CTX, ...ctx };
@@ -131,7 +137,7 @@ export class GalacticController {
       uEmissionScale: u(0), uHa: u(new THREE.Vector3()), uOiii: u(new THREE.Vector3()),
       uExtScale: u(0), uExtRGB: u(new THREE.Vector3()),
       uSteps: u(Math.min(this.ctx.steps, MAX_STEPS)),
-      uInvProjection: u(new THREE.Matrix4()), uCameraWorld: u(new THREE.Matrix4()),
+      uTanHalf: u(new THREE.Vector2(1, 1)), uCameraWorld: u(new THREE.Matrix4()),
     };
     this._volumeMaterial = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -229,7 +235,8 @@ export class GalacticController {
     this._ensureTarget(Math.ceil(skyTarget.width / ps), Math.ceil(skyTarget.height / ps));
 
     camera.updateMatrixWorld();
-    this._volumeUniforms.uInvProjection.value.copy(camera.projectionMatrixInverse);
+    const th = cameraTanHalf(camera);
+    this._volumeUniforms.uTanHalf.value.set(th[0], th[1]);
     this._volumeUniforms.uCameraWorld.value.copy(camera.matrixWorld);
     this._volumeUniforms.uSteps.value = Math.min(this.ctx.steps, MAX_STEPS);
 
@@ -267,8 +274,8 @@ export class GalacticController {
       return Array.from(buf.slice(0, 3), (x) => THREE.DataUtils.fromHalfFloat(x));
     };
     // Same ray the shader built for the centre of that pixel.
-    const ndc = new THREE.Vector4(((px + 0.5) / w) * 2 - 1, ((py + 0.5) / h) * 2 - 1, 1, 1).applyMatrix4(camera.projectionMatrixInverse);
-    const dir = new THREE.Vector3(ndc.x / ndc.w, ndc.y / ndc.w, ndc.z / ndc.w).normalize().transformDirection(camera.matrixWorld);
+    const th = cameraTanHalf(camera);
+    const dir = new THREE.Vector3((((px + 0.5) / w) * 2 - 1) * th[0], (((py + 0.5) / h) * 2 - 1) * th[1], -1).normalize().transformDirection(camera.matrixWorld);
     const cpu = integrateRay(this._pack, this.observerRelPc(), dir.toArray(), Math.min(this.ctx.steps, MAX_STEPS));
     return { pixel: [px, py], gpu: { L: read(0), T: read(1) }, cpu: { L: cpu.L, T: cpu.T, display: applyColourMode(cpu.L, this._pack) } };
   }
