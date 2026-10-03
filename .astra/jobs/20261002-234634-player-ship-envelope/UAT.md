@@ -25,3 +25,16 @@ CC reading: B is the player ship (bubble 2.95 m, inside the contract). A is kept
 
 Max, 2026-10-03, confirming CC's reading that "make the whole ship a bit bigger ... human-sized bubble" was about A only:
 "Yes, confirm your open item. You understood it correctly." → B stays 18 m with its 2.95 m bubble.
+
+## Round 02 (B fix list) — CC review
+| check | result |
+|---|---|
+| Probe (`glb_info.py`) | 18.03 × 10.90 × 10.40 m; 2,092 tris (≤ 2,200); 10 slots incl. `engine_glow`, `thrusters`, `hatch`; 0 textures/cameras/lights |
+| Symmetry (CC's own GLB parse, independent of Astra's audit) | max mirror mismatch 0.0 m over 1,148 unique vertices — PASS |
+| A untouched | `envelope-A.glb` timestamp unchanged (00:12) — PASS |
+| Simple gates by eye | belly centre empty, two module rows; bubble ahead of and below the head; rounded lip over the carrier in the rear view; ports on head, flanks, modules, rear |
+| Seen and flagged | side overlay still shows a thin upright plate at the very back behind the lip |
+Review page item "B round 2 — your fix list". Max judges.
+
+## Max's verdict on round 02
+(pending)
