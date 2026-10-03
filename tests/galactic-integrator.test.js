@@ -46,20 +46,27 @@ describe('analytic emitting/absorbing sphere', () => {
   });
 });
 
-describe('segment composition: L = Lnear + Tnear*Lfar, T = Tnear*Tfar', () => {
+// Both shape versions. The broken control needs real dust in the near half, so it runs on shape v1 (v2's lit gas
+// carries only 20% of its dust, and this ray's near half is nearly transparent: the control could not fail there).
+const cloudV1 = renderPack(featureHistory(findCloudSubjects(gm).procedural), { overrides: {}, shapeVersion: 1 });
+const segments = (pack) => {
   const ro = [3, -2, 120], rd = [0, 0, -1];
-  const full = integrateRay(cloud, ro, rd, 512);
+  const full = integrateRay(pack, ro, rd, 512);
   const tm = (full.t0 + full.t1) / 2;
-  const near = integrateRay(cloud, ro, rd, 256, 0, tm);
-  const far = integrateRay(cloud, ro, rd, 256, tm, Infinity);
+  return { full, near: integrateRay(pack, ro, rd, 256, 0, tm), far: integrateRay(pack, ro, rd, 256, tm, Infinity) };
+};
+describe('segment composition: L = Lnear + Tnear*Lfar, T = Tnear*Tfar', () => {
+  for (const [label, pack] of [['shape v2', cloud], ['shape v1', cloudV1]]) {
+    it(`composed near+far equals one full march within 1% (${label})`, () => {
+      const { full, near, far } = segments(pack);
+      const c = composeSegments(near, far);
+      expect(within(c.L, full.L, 0.01)).toBe(true);
+      expect(within(c.T, full.T, 0.01)).toBe(true);
+    });
+  }
 
-  it('composed near+far equals one full march within 1%', () => {
-    const c = composeSegments(near, far);
-    expect(within(c.L, full.L, 0.01)).toBe(true);
-    expect(within(c.T, full.T, 0.01)).toBe(true);
-  });
-
-  it('BROKEN CONTROL: adding segments without Tnear fails', () => {
+  it('BROKEN CONTROL: adding segments without Tnear fails (shape v1)', () => {
+    const { full, near, far } = segments(cloudV1);
     const wrong = near.L.map((l, c) => l + far.L[c]);
     expect(within(wrong, full.L, 0.01)).toBe(false);
   });

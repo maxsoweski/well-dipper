@@ -126,7 +126,9 @@ export class GalacticController {
     this._bakeSupported = null; // decided on the first frame (needs the renderer)
     this._timer = null;
     this._starDustState = 'off:no-layer';
-    this._staged = false;
+    this._prepared = null;      // {feature, observerKpc}: a sky being baked before it goes live (never drawn)
+    this._liveReq = null;       // {key, gen}: the newest bake request for the LIVE target
+    this._stagedReq = null;     // {key, gen}: the newest bake request for the prepared target
     this.onPublishChange = null; // SkyRenderer: rebuild billboards when the drawn feature changes
     const N = this.ctx.bakeFaceSize;
     this._tilesPerFace = Math.ceil(N / this.ctx.bakeRowsPerTile);
@@ -164,14 +166,15 @@ export class GalacticController {
     this.refresh();
   }
 
-  /** SkyRenderer.prepareForPosition*: the next sky's features are known → start baking it now (FOLD). */
+  /** SkyRenderer.prepareForPosition*: the next sky's features are known → start baking it now (FOLD).
+   *  The prepared sky is its OWN target and never replaces the live one: a refresh (shape/colour flip, slider)
+   *  before it goes live must not re-aim the drawn volume at a sky that is not on screen. */
   prepare(features, playerPosKpc) {
-    this._staged = true; // baked now, shown only when this sky goes live (onSkyFeatures / activate)
-    try {
-      this.setTarget(this._pinned || pickVolumeFeature(features), playerPosKpc);
-    } finally {
-      this._staged = false;
-    }
+    const f = this._pinned || pickVolumeFeature(features);
+    this._prepared = f && f.type === 'emission-nebula' && playerPosKpc ? { feature: f, observerKpc: { ...playerPosKpc } } : null;
+    this._stagedReq = null;
+    this._requestPrepared();
+    this._applyEvents();
   }
 
   /** Called by SkyRenderer whenever it (re)builds the sky. Returns the feature key the billboard layer must
@@ -180,7 +183,9 @@ export class GalacticController {
     this.setTarget(this._pinned || pickVolumeFeature(features), playerPosKpc);
     // This sky is now live: a prepared (staged) bake of it may be shown once complete.
     const j = this.scheduler.latest();
-    if (j && j.staged) this.scheduler.commit(j.gen);
+    if (j && j.staged && this._liveReq && this._liveReq.gen === j.gen) this.scheduler.commit(j.gen);
+    this._prepared = null;
+    this._stagedReq = null;
     this._applyEvents();
     return this.skipKey();
   }
@@ -267,25 +272,57 @@ export class GalacticController {
     const rel = this.observerRelPc();
     if (!this._pack || !rel) {
       if (this.scheduler.job || this.scheduler.published) this.scheduler.clear();
+      this._liveReq = null;
+      this._stagedReq = null;
       this._applyEvents();
       return;
     }
-    const bakeHash = bakeHashOf(this._pack);
-    const key = `${this.featureKey}|${bakeHash}|${rel.join(',')}|${this.ctx.steps}`;
-    const j = this.scheduler.latest();
-    if (j && j.snapshot.key === key && j.state !== 'failed') return; // same sky already baking / baked / queued
-    const staged = !!this._staged;
-    this.scheduler.request({
+    this._liveReq = this._request(this._feature, this._pack, rel, this._observerOverridePc ? null : this._observerKpc, false, this._liveReq);
+    // A new live request may have superseded the prepared sky's bake: re-queue it (it waits behind the live one).
+    this._requestPrepared();
+    this._applyEvents();
+  }
+
+  _requestPrepared() {
+    const p = this._prepared;
+    if (!p) return;
+    const c = p.feature.position, o = p.observerKpc;
+    const rel = [(o.x - c.x) * 1000, (o.y - c.y) * 1000, (o.z - c.z) * 1000];
+    this._stagedReq = this._request(p.feature, buildPack(p.feature, this._mode, this._shape), rel, o, true, this._stagedReq);
+  }
+
+  /** Is generation `gen` still requested (queued, baking, ready or on screen)? */
+  _alive(gen) {
+    const s = this.scheduler;
+    if (s.deferred && s.deferred.gen === gen) return true;
+    if (s.published && s.published.gen === gen) return true;
+    return !!(s.job && s.job.gen === gen && s.job.state !== 'failed');
+  }
+
+  /** Request a bake unless the same sky is already requested and alive. Returns the {key, gen} memo. */
+  _request(feature, pack, rel, observerKpc, staged, memo) {
+    const bakeHash = bakeHashOf(pack);
+    const key = `${featureKeyOf(feature)}|${bakeHash}|${rel.join(',')}|${this.ctx.steps}`;
+    if (memo && memo.key === key && this._alive(memo.gen)) return memo;
+    if (!staged) {
+      // The sky that just went live may be exactly the one prepared (staged) or already on screen: adopt that
+      // bake rather than redoing it — unless a different live bake is pending, which would replace it.
+      const s = this.scheduler, j = s.latest();
+      if (j && j.snapshot.key === key && j.state !== 'failed') return { key, gen: j.gen };
+      const otherLivePending = s.job && !s.job.staged && s.job.state !== 'failed' && s.job.state !== 'published';
+      if (s.published && s.published.snapshot.key === key && !otherLivePending) return { key, gen: s.published.gen };
+    }
+    const gen = this.scheduler.request({
       key,
-      feature: this._feature,
-      featureKey: this.featureKey,
-      pack: JSON.parse(JSON.stringify(this._pack)),
+      feature,
+      featureKey: featureKeyOf(feature),
+      pack: JSON.parse(JSON.stringify(pack)),
       bakeHash,
       observerRelPc: rel,
-      observerKpc: this._observerOverridePc ? null : { ...this._observerKpc },
+      observerKpc: observerKpc ? { ...observerKpc } : null,
       steps: Math.min(this.ctx.steps, MAX_STEPS),
     }, { staged });
-    this._applyEvents();
+    return { key, gen };
   }
 
   getPack() { return this._pack; }
@@ -315,7 +352,7 @@ export class GalacticController {
       uSteps: u(Math.min(this.ctx.steps, MAX_STEPS)),
       uShape: u(1), uInvAxes: u(new THREE.Vector3(1, 1, 1)), uLobeAmp: u(0), uLobeFreq: u(2), uLobeOffset: u(new THREE.Vector3()),
       uOpenDir: u(new THREE.Vector3(0, 0, 1)), uBlister: u(0), uWallGradient: u(0), uFrontRadius: u(1),
-      uFront: u(new THREE.Vector2(0.7, 1.3)), uFrontClump: u(0), uDustDestroy: u(0),
+      uFront: u(new THREE.Vector2(0.7, 1.3)), uFrontClump: u(0), uDustDestroy: u(0), uDiffuse: u(0.5),
       uTanHalf: u(new THREE.Vector2(1, 1)), uCameraWorld: u(new THREE.Matrix4()),
       uAtlasN: u(this.ctx.bakeFaceSize),
     };
@@ -385,6 +422,7 @@ export class GalacticController {
       U.uFront.value.fromArray(sh.front);
       U.uFrontClump.value = sh.frontClump;
       U.uDustDestroy.value = sh.dustDestroy;
+      U.uDiffuse.value = sh.diffuse;
     }
   }
 

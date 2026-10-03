@@ -149,8 +149,8 @@ export function sampleMedium(p, pack) {
   };
 }
 
-/** Shape v2 medium (R2 + R3): ionization front u = (ds/Rs)·rho^(2/3); emission ∝ rho²·x; [O III] inside the
- *  same front; dust only in the neutral gas. */
+/** Shape v2 medium (R2 + R3): ionization front u = (ds/Rs)·rho_large^(2/3); emission ∝ x·rho_large²·(diffuse +
+ *  (1 - diffuse)·clumps²); [O III] inside the same front; dust only in the neutral gas. */
 export function sampleMediumV2(p, pack) {
   const pl = toLocal(p, pack.rotation);
   const dp = densityPartsV2(pl, pack);
@@ -163,7 +163,9 @@ export function sampleMediumV2(p, pack) {
   const u = (ds / sh.frontRadiusPc) * Math.pow(dp.large * Math.exp(sh.frontClump * dp.log), 2 / 3);
   const x = 1 - smoothstep(sh.front[0], sh.front[1], u);
   const w = ion.hardness * (1 - smoothstep(0, sh.front[0], u));
-  const e = pack.emission.scale * rho * rho * x;
+  // Emission ∝ density² inside the front: a diffuse glow from the large-scale density (the lit volume and its
+  // walls glow throughout) plus the clumps as highlights (exp(2·lg - σ²) has mean 1, so the split is by fraction).
+  const e = pack.emission.scale * x * dp.large * dp.large * (sh.diffuse + (1 - sh.diffuse) * Math.exp(2 * dp.log - pack.noise.sigma * pack.noise.sigma));
   const ex = pack.extinction.scale * rho * (1 - x * sh.dustDestroy);
   const ha = pack.emission.ha, o3 = pack.emission.oiii, kr = pack.extinction.rgb;
   return {

@@ -15,9 +15,9 @@ export const DEFAULT_COLOUR_MODE = 'photo';
  *  front with density-squared emission, dust only in neutral gas, triaxial lobed outline. */
 export const SHAPE_VERSIONS = [1, 2];
 export const DEFAULT_SHAPE_VERSION = 2;
-// Shape v2 brightness calibration: mean ionized weight of exp(-sigma^2)·rho^2·x along a central chord, measured on
-// the CPU twin (tests/galactic-shape.test.js keeps v2's image luminance in the same range as v1's).
-export const V2_ION_WEIGHT = 0.3;
+// Shape v2 brightness calibration: the effective lit fraction of a mean chord, measured on the CPU twin so v2's mean
+// luminance over its visible footprint matches v1's from 2000/500/100 pc and from inside (tests/galactic-shape.test.js).
+export const V2_ION_WEIGHT = 1.05;
 
 /** Display/derivation constants. Each entry is a slider in the lab (min/max/step) and a default in the game. */
 export const TUNABLES = {
@@ -37,6 +37,7 @@ export const TUNABLES = {
   frontScale:       { value: 1.0,  min: 0.1,  max: 3,    step: 0.05, why: 'v2: multiplier on the ionization-front (Stromgren) radius' },
   frontWidth:       { value: 0.3,  min: 0.02, max: 0.9,  step: 0.01, why: 'v2: softness of the ionization front' },
   frontClump:       { value: 0,    min: 0,    max: 1,    step: 0.05, why: 'v2: how much small-scale clumping moves the ionization front (1 = every clump gets a bright skin → foam of small rings)' },
+  diffuseGlow:      { value: 0.5,  min: 0,    max: 1,    step: 0.05, why: 'v2: share of the ionized emission that is a smooth glow (the rest is clumps/knots as highlights)' },
   dustDestroy:      { value: 0.8,  min: 0,    max: 1,    step: 0.01, why: 'v2: fraction of dust absent from ionized gas (dense neutral gas reads dark)' },
   lobeScale:        { value: 1.0,  min: 0,    max: 2,    step: 0.05, why: 'v2: multiplier on the outline lobes' },
   wallGradient:     { value: 1.5,  min: 0,    max: 3,    step: 0.05, why: 'v2: log-density rise per radius away from the open side (the cloud wall behind the blister)' },
@@ -180,12 +181,13 @@ function applyShapeV2(pack, history, t, { R, growth, cavityRadiusPc, softness })
   const Rn = R / Math.hypot(n[0] * invAxes[0], n[1] * invAxes[1], n[2] * invAxes[2]);
   const srcDist = Math.min(offLen + 0.5 * blister * R, 0.8 * Rn);
   const cavDist = Math.max(srcDist, srcDist + (Rn - cavityRadiusPc - srcDist) * blister);
-  // Front radius at mean density: the cavity IS the bubble the ionized gas blew, so the front sits just past its
-  // wall (the cavity radius already grows with source strength ∝ Q^1/3 and with age). Denser wall gas has its front
-  // nearer the source (rho^-2/3), so dense clumps get neutral cores with ionized skins.
-  const frontRadiusPc = Math.max(1.15 * cavityRadiusPc, 0.2 * R) * clamp(t.frontScale, 0.05, 5);
+  // Front radius at mean density, scaled from the cavity (the bubble the ionized gas blew; it already grows with
+  // source strength ∝ Q^1/3 and with age). 2.9x reaches through the thin side and into the walls, so the lit volume
+  // glows throughout; the dense wall behind the blister (rho_large^-2/3) stays neutral and dark. Set 2026-10-03 so
+  // the visible-footprint luminance matches v1 both from outside and from inside (tests/galactic-shape.test.js).
+  const frontRadiusPc = Math.max(2.9 * cavityRadiusPc, 0.5 * R) * clamp(t.frontScale, 0.05, 5);
   const fw = clamp(t.frontWidth, 0.02, 0.9);
-  // Mean chord through the ellipsoid (geometric-mean axis), and <rho^2> = exp(sigma^2) for the lognormal field.
+  // Mean chord through the ellipsoid (geometric-mean axis). The clump term of the emission has mean 1 by construction.
   const meanPath = 2 * R * Math.cbrt(axes[0] * axes[1] * axes[2]) * (1 - softness / 2);
   const lobeRng = new SeededRandom(`galactic-pack|${pack.featureId}|lobe-offset`);
   return {
@@ -196,7 +198,7 @@ function applyShapeV2(pack, history, t, { R, growth, cavityRadiusPc, softness })
     ionizing: { ...pack.ionizing, centrePc: n.map((c) => c * srcDist) },
     emission: {
       ...pack.emission,
-      scale: (t.targetLum * Math.sqrt(ion.strength)) / (meanPath * V2_ION_WEIGHT * Math.exp(t.sigma * t.sigma)),
+      scale: (t.targetLum * Math.sqrt(ion.strength)) / (meanPath * V2_ION_WEIGHT),
     },
     shape: {
       invAxes,
@@ -209,6 +211,7 @@ function applyShapeV2(pack, history, t, { R, growth, cavityRadiusPc, softness })
       front: [1 - fw, 1 + fw],
       frontClump: clamp(t.frontClump, 0, 1),
       dustDestroy: clamp(t.dustDestroy, 0, 1),
+      diffuse: clamp(t.diffuseGlow, 0, 1),
       // Scaled by blister: a young, closed region has no preferred side yet.
       wallGradient: t.wallGradient * blister,
     },

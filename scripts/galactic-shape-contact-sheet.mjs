@@ -48,7 +48,7 @@ for (const name of ['procedural', 'orion']) {
     const metrics = imgs[v].map((im) => ringMetrics(im));
     rows.push({ name, version: v, imgs: imgs[v], expo, metrics, views });
     console.log(`\n${name} v${v}  (blister ${h.blister.toFixed(2)}, axes ${h.axes.map((a) => a.toFixed(2)).join(':')}, lobeAmp ${h.lobeAmp.toFixed(2)})`);
-    metrics.forEach((m, i) => console.log(`  ${views[i].name.padEnd(30)} ring ${m.ringRatio.toFixed(2).padStart(5)}  CV ${m.angularCV.toFixed(3)}  off ${m.centroidOff.toFixed(3)}  circ ${m.circularity.toFixed(2)}  meanY ${m.meanY.toExponential(2)}  ${readsAsRing(m) ? 'RING' : '-'}`));
+    metrics.forEach((m, i) => console.log(`  ${views[i].name.padEnd(30)} ring ${m.ringRatio.toFixed(2).padStart(5)}  CV ${m.angularCV.toFixed(3)}  off ${m.centroidOff.toFixed(3)}  circ ${m.circularity.toFixed(2)}  aspect ${m.aspect.toFixed(2)}  meanY ${m.meanY.toExponential(2)}  ${readsAsRing(m) ? 'RING' : '-'}`));
   }
 }
 console.log(`\nrendered in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
@@ -76,7 +76,7 @@ writeFileSync(OUT, PNG.sync.write(png));
 const labels = {
   rows: rows.map((r) => `${r.name} v${r.version}${r.version === 1 ? ' (ring)' : ''}`),
   cols: rows[0].views.map((v) => v.name),
-  metrics: rows.map((r) => r.metrics.map((m) => `ring ${m.ringRatio.toFixed(2)} CV ${m.angularCV.toFixed(2)} circ ${m.circularity.toFixed(2)}`)),
+  metrics: rows.map((r) => r.metrics.map((m) => `ring ${m.ringRatio.toFixed(2)} CV ${m.angularCV.toFixed(2)} circ ${m.circularity.toFixed(2)} asp ${m.aspect.toFixed(2)}`)),
   tile, gap: GAP,
 };
 try {

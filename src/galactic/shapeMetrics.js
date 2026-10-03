@@ -8,7 +8,8 @@
 //   angularCV    — coefficient of variation of brightness around that annulus over 16 sectors (low = uniform ring)
 //   centroidOff  — light centroid's distance from the projected feature centre, in units of the radius of the
 //                  faint outline (the > 1%-of-max mask: the whole visible cloud, not just its bright core)
-//   circularity  — perimeter² / (4π·area) of the > 10%-of-max mask (1 = disc; larger = less round)
+//   circularity  — perimeter² / (4π·area) of the > 10%-of-max mask (1 = disc; larger = more ragged)
+//   aspect       — elongation of that mask: sqrt of the ratio of its second-moment eigenvalues (1 = round)
 
 import { integrateRay, luminance } from './cloudFieldCPU.js';
 
@@ -83,6 +84,14 @@ export function ringMetrics(img, { sectors = 16, maskFrac = 0.1 } = {}) {
     edges += (!m(x - 1, y)) + (!m(x + 1, y)) + (!m(x, y - 1)) + (!m(x, y + 1));
   }
   const perimeter = edges * Math.PI / 4;
+  // Elongation from the mask's second moments.
+  let mx = 0, my = 0;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (m(x, y)) { mx += x; my += y; }
+  mx /= Math.max(area, 1); my /= Math.max(area, 1);
+  let sxx = 0, syy = 0, sxy = 0;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (m(x, y)) { sxx += (x - mx) ** 2; syy += (y - my) ** 2; sxy += (x - mx) * (y - my); }
+  const tr = sxx + syy, det = sxx * syy - sxy * sxy, disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+  const aspect = Math.sqrt((tr / 2 + disc) / Math.max(tr / 2 - disc, 1e-9));
   const circularity = (perimeter * perimeter) / (4 * Math.PI * Math.max(area, 1));
   const rM = Math.sqrt(area / Math.PI);
   let faint = 0;
@@ -123,17 +132,56 @@ export function ringMetrics(img, { sectors = 16, maskFrac = 0.1 } = {}) {
     angularCV: mean > 0 ? sd / mean : 0,
     centroidOff: Math.hypot(cx - g, cy - g) / Math.max(rOut, 1),
     circularity,
+    aspect,
     maskRadiusPx: rM,
     meanY: tot / (n * n),
     maxY: max,
   };
 }
 
-/** The verdict the shape tests assert on — what Max described ("a ring... a circle"): light spread evenly round the
- *  cloud's middle (low angular CV of the brightest annulus) AND centred on it (small centroid offset). ringRatio is
- *  reported but not required: a limb-brightened shell (ratio > 1) and an even disc (ratio ≈ 1) both read as a circle.
- *  Thresholds sit between the measured v1 maxima (CV 0.41, offset 0.125) and v2 minima, measured 2026-10-03. */
-export const RING_THRESHOLDS = Object.freeze({ angularCVMax: 0.5, centroidOffMax: 0.15 });
+/** The verdict the shape tests assert on — what Max described ("a ring... a circle"): a round outline (aspect < 1.25),
+ *  light spread evenly round the cloud's middle (low angular CV of the brightest annulus) AND centred on it (small
+ *  centroid offset). ringRatio is reported but not required: a limb-brightened shell (ratio > 1) and an even disc
+ *  (ratio ≈ 1) both read as a circle. Thresholds sit between the measured v1 maxima (CV 0.41, offset 0.125, aspect
+ *  1.13) and the v2 values, measured 2026-10-03. */
+export const RING_THRESHOLDS = Object.freeze({ angularCVMax: 0.5, centroidOffMax: 0.15, aspectMax: 1.25 });
 export function readsAsRing(m, th = RING_THRESHOLDS) {
-  return m.angularCV < th.angularCVMax && m.centroidOff < th.centroidOffMax;
+  return m.angularCV < th.angularCVMax && m.centroidOff < th.centroidOffMax && m.aspect < th.aspectMax;
+}
+
+/**
+ * What the eye sees of the cloud: the mean luminance over its projected FOOTPRINT — every ray along which the cloud
+ * is visible at all: it dims the stars behind by more than 1% (T < 0.99) or adds more than one 8-bit display step
+ * of light (luminance > 1/255) — from an observer.
+ * Outside (|observer| > bound): a perspective image of n x n rays framed on the bounding sphere. Inside: `n²`
+ * directions spread evenly over the whole sky.
+ * @param {number[]} observerPc — observer relative to the nebula centre (pc, galactic axes)
+ * @returns {{meanY: number, footprint: number, rays: number}}
+ */
+export function footprintLuminance(pack, observerPc, { n = 48, steps = 48 } = {}) {
+  const d = Math.hypot(observerPc[0], observerPc[1], observerPc[2]);
+  const dirs = [];
+  if (d > pack.boundRadiusPc * 1.001) {
+    const v = observerPc.map((c) => -c / d);
+    const e1 = norm(cross(v, Math.abs(v[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
+    const e2 = cross(e1, v);
+    const half = Math.tan(Math.asin(pack.boundRadiusPc / d)) * 1.02;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const a = ((x + 0.5) / n * 2 - 1) * half, b = ((y + 0.5) / n * 2 - 1) * half;
+      dirs.push(norm([0, 1, 2].map((c) => v[c] + a * e1[c] + b * e2[c])));
+    }
+  } else {
+    const m = n * n;
+    for (let i = 0; i < m; i++) {
+      const z = 1 - (2 * (i + 0.5)) / m, ph = i * 2.399963229728653, s = Math.sqrt(1 - z * z);
+      dirs.push([s * Math.cos(ph), s * Math.sin(ph), z]);
+    }
+  }
+  let sum = 0, fp = 0;
+  for (const rd of dirs) {
+    const r = integrateRay(pack, observerPc, rd, steps);
+    const Y = luminance(r.L);
+    if (r.T[1] < 0.99 || Y > 1 / 255) { sum += Y; fp++; }
+  }
+  return { meanY: fp ? sum / fp : 0, footprint: fp, rays: dirs.length };
 }

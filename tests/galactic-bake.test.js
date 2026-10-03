@@ -189,6 +189,7 @@ function checkBakeTolerance(res) {
 describe(`bake (${N}px faces) vs live march: RMS <= 1%, p99 <= 3%`, () => {
   const dir = approachDirection(feature);
   const poses = [
+    ['200 pc', dir.map((c) => c * 200)],
     ['100 pc', dir.map((c) => c * 100)],
     ['edge', dir.map((c) => c * R)],
     ['centre (inside)', [0, 0, 0]],
@@ -480,6 +481,46 @@ describe('controller: warp lifecycle with immutable snapshots', () => {
     const job = c.scheduler.job;
     expect(Object.isFrozen(job.snapshot)).toBe(true);
     c.dispose();
+  });
+});
+
+// ── Regression (2026-10-03, seen live): a shape flip after a prepared-but-not-live sky showed the BILLBOARD ──
+// prepare() used to overwrite the live target, so the next refresh (setShape) re-baked the PREPARED feature as a
+// live bake and published it: the volume jumped to a nebula not on screen and the real one fell back to its
+// billboard. The flip must end with the live feature's new volume published and its billboard skipped.
+function checkFlipKeepsLiveVolume(Ctrl) {
+  const live = subjects.procedural, other = subjects.orion;
+  const c = new Ctrl({ bakeTilesPerFrame: 8 });
+  const r = fakeRenderer();
+  const liveKey = `emission-nebula:${live.seed}`;
+  const skips = [];
+  c.onPublishChange = () => skips.push(c.skipKey());
+  c.setTarget(live, observerPositionFor(live, 200));
+  for (let i = 0; i < 20; i++) c.preRender(r);
+  c.prepare([other], { ...other.position });   // e.g. the title screen's sky, prepared and never activated
+  for (let i = 0; i < 20; i++) c.preRender(r);
+  c.setShapeVersion(c.getShapeVersion() === 2 ? 1 : 2);
+  for (let i = 0; i < 40; i++) c.preRender(r);
+  const s = c.snapshot();
+  try {
+    if (skips.some((k) => k !== liveKey)) throw new Error(`billboard fallback / wrong feature during the flip: ${skips.join(', ')}`);
+    if (c.skipKey() !== liveKey) throw new Error(`after the flip the volume draws ${c.skipKey()}, not the live feature`);
+    if (s.bake.publishedFeatureId !== liveKey) throw new Error('published bake is not the live feature');
+    if (c.scheduler.published.snapshot.pack.shapeVersion !== (c.getShapeVersion() === 2 ? 2 : undefined)) throw new Error('published bake is not the new shape');
+  } finally {
+    c.dispose();
+  }
+  return s;
+}
+describe('controller: a shape flip ends with the new volume on the live feature (billboard stays hidden)', () => {
+  it('flip after a prepared (not live) sky', () => {
+    expect(() => checkFlipKeepsLiveVolume(GalacticController)).not.toThrow();
+  });
+  it('BROKEN CONTROL: a prepare() that overwrites the live target (the old behaviour) fails', () => {
+    class Old extends GalacticController {
+      prepare(features, pos) { this.setTarget(features[0], pos); }
+    }
+    expect(() => checkFlipKeepsLiveVolume(Old)).toThrow(/not the live feature|wrong feature/);
   });
 });
 

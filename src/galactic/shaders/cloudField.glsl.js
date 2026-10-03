@@ -49,6 +49,7 @@ uniform float uFrontRadius;
 uniform vec2 uFront;
 uniform float uFrontClump;
 uniform float uDustDestroy;
+uniform float uDiffuse;
 
 const vec3 CLOUD_LUMA = vec3(${f(LUMA[0])}, ${f(LUMA[1])}, ${f(LUMA[2])});
 
@@ -147,7 +148,8 @@ float cloudDensity(vec3 p) {
   return env * cav * exp(logStructure(pl));
 }
 
-// Shape v2 medium (R2 + R3): ionization front u = (ds/Rs)·(large·exp(frontClump·lg))^(2/3); emission ∝ rho²·x;
+// Shape v2 medium (R2 + R3): ionization front u = (ds/Rs)·(large·exp(frontClump·lg))^(2/3);
+// emission ∝ x·large²·(diffuse + (1 - diffuse)·exp(2·lg - σ²)) (a diffuse glow + clumps as highlights);
 // [O III] inside the same front; dust only in the neutral gas.
 void sampleMediumV2(vec3 p, out vec3 j, out vec3 k) {
   j = vec3(0.0);
@@ -160,7 +162,7 @@ void sampleMediumV2(vec3 p, out vec3 j, out vec3 k) {
   float u = (ds / uFrontRadius) * pow(large * exp(uFrontClump * lg), ${f(2 / 3)});
   float x = 1.0 - smoothstep(uFront.x, uFront.y, u);
   float w = uHardness * (1.0 - smoothstep(0.0, uFront.x, u));
-  j = uEmissionScale * rho * rho * x * mix(uHa, uOiii, w);
+  j = uEmissionScale * x * large * large * (uDiffuse + (1.0 - uDiffuse) * exp(2.0 * lg - uSigma * uSigma)) * mix(uHa, uOiii, w);
   k = uExtScale * rho * (1.0 - x * uDustDestroy) * uExtRGB;
 }
 
