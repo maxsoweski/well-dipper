@@ -50,8 +50,8 @@ addEventListener('pointerup', () => { drag = null; });
 addEventListener('pointermove', (e) => {
   if (!drag) return;
   const k = (camera.fov * Math.PI / 180) / innerHeight;
-  camera.rotation.y += (e.clientX - drag.x) * k;
-  camera.rotation.x = Math.max(-1.55, Math.min(1.55, camera.rotation.x + (e.clientY - drag.y) * k));
+  camera.rotation.y -= (e.clientX - drag.x) * k;
+  camera.rotation.x = Math.max(-1.55, Math.min(1.55, camera.rotation.x - (e.clientY - drag.y) * k));
   drag = { x: e.clientX, y: e.clientY };
 });
 addEventListener('resize', () => retro.resize());
