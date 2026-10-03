@@ -86,3 +86,7 @@ _(no note)_
 - **Order:** "Ok to start phase three." → Phase 3 (with the g-region prism notes folded in) → current/target colour system + grid polish → sprite pipeline → System screen redesign → naming phases → nav manual → cockpit screens.
 - **Ship marker label:** "Rather than ship, the marker should say current." → the player marker reads CURRENT in every look and mode (FLIGHT, ORRERY, tour), in the current colour; goes in the colour-system batch with "YOU" → "CURRENT".
 - **Moon close-up** (agent + Astra, `.astra/jobs/20261003-002012-moon-view-gameplay-review`): keep as built; fix the "SHIP <distance>" label meaning (planet vs target) in the polish batch; stations-era rules deferred.
+
+## Found by the Phase 3 re-trace (2026-10-03), logged for the next batch
+- **N stuck after leaving HELM with the cockpit nav zoomed:** in ORRERY, N never opens the overlay — `_cockpitNavZoomed()` stays true so `toggleNavComputer` keeps closing. Workaround: back to HELM, unzoom, M. → fix in the colour/polish batch.
+- **Renderer crash, cause undetermined:** once ~2 s after N in ORRERY following a HELM↔ORRERY round trip with the cockpit nav zoomed (dump `C:\temp\chrome-mcp-filmstrip\Crashpad\reports\56f7cf3e…dmp`; earlier dumps 04:07, 04:22 in the previous live session). JS heap 97 MB, no long tasks before it; not reproduced on retry. → investigate.
