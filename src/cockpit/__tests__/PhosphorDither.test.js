@@ -157,16 +157,16 @@ function expectedInkFraction(lum, { threshold, gamma }) {
 /**
  * NavComputer's own palette, transcribed from `src/ui/NavComputer.js`.
  *
- * These are the actual colours the nav map draws with — the cyan you-are-here,
- * the green selection, the gold labels, the near-black backdrop, a warm star.
+ * These are the actual colours the nav map draws with — the CURRENT ink (you are here),
+ * the TARGET ink (the selection), the gold labels, the near-black backdrop, a warm star.
  * The two-colour law is checked over a field built from THESE rather than over
  * random noise, because random noise proves the law holds for colours nobody
  * will ever send, and these are the ones that will arrive on every frame.
  */
 const NAV_PALETTE = [
   [5, 5, 8],        // #050508 — the backdrop fill in render()
-  [0, 212, 255],    // #00d4ff — you-are-here
-  [0, 255, 128],    // #00ff80 — selected
+  [46, 230, 192],   // #2ee6c0 — CURRENT (you are here, the ship) — AC-15, 2026-10-03; was cyan #00d4ff
+  [255, 176, 58],   // #ffb03a — TARGET (selected, warp target) — AC-15; was green #00ff80
   [255, 200, 80],   // #ffc850 — labels
   [85, 255, 136],   // #55ff88 — corner brackets
   [255, 239, 176],  // #ffefb0 — a default star colour
@@ -423,7 +423,7 @@ describe('Rec.709 luminance, which is what keeps the nav map\'s hues in order', 
   it('ranks the nav computer\'s markers above its backdrop', () => {
     const lum = (rgb) => luminance709(rgb[0], rgb[1], rgb[2]);
     const backdrop = lum([5, 5, 8]);
-    for (const marker of [[0, 212, 255], [0, 255, 128], [255, 200, 80], [255, 239, 176]]) {
+    for (const marker of [[46, 230, 192], [255, 176, 58], [255, 200, 80], [255, 239, 176]]) {
       expect(lum(marker), `marker ${marker} would not out-read the backdrop`).toBeGreaterThan(backdrop);
     }
   });

@@ -13352,7 +13352,7 @@ function renderFrame(alpha) {
     retroRenderer.setCockpit(_cockpitRig.scene, _cockpitCamera);
   } else {
     // NO PASS AT ALL in ORRERY — not a transparent one. See AC-HELM-ONLY.
-    retroRenderer.setCockpit(null, null);
+    retroRenderer.setCockpit(null, null);  _cockpitRig?.mover?.settle();   /* ⭐ naming-prism-segments AC-18(a) (2026-10-03) — A COCKPIT NOBODY CAN SEE HAS NO PANEL AT THE EYE. The mover's tween only advances inside `_cockpitRig.update()` above, which is HELM-only, so leaving HELM with the NAV panel zoomed froze it in `zoomed`/`toRest` and `zoomedRole` stayed 'NAV' forever: `_cockpitNavZoomed()` read true in ORRERY, `toggleNavComputer` took its close branch on every N (closeNavComputer → mover.dismiss() → still 'NAV'), and the overlay never opened (the Phase 3 re-trace defect; the Esc cascade's `mover.zoomedRole` gate ate Esc the same way). Asked HERE, every frame the cockpit is not drawn, rather than at the flip: `setScManual` runs before `_cockpitRig`'s `let` is initialised on some boot paths, and this is the same re-decided-every-frame shape as `_syncCockpitNavKeys`. `settle()` is a no-op at rest and lands the exact rest pose, so back in HELM the panel is in its socket. */
   }
 
   // ── HUD (yaw + system map + gravity well) ──

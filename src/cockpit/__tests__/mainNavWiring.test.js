@@ -368,3 +368,25 @@ describe('autopilot always has a cockpit, and the screensaver stays closed', () 
     });
   });
 });
+
+describe('leaving HELM puts a zoomed panel back (naming-prism-segments AC-18(a), 2026-10-03)', () => {
+  // The Phase 3 re-trace: HELM, zoom the cockpit nav, M to ORRERY, N — the overlay never opened.
+  // `_cockpitNavZoomed()` reads `mover.zoomedRole`, the mover only advances inside the HELM-only
+  // `_cockpitRig.update()`, so the toggle's close branch ran on every N. The fix is ONE call in
+  // the frame loop's not-drawn branch; PanelMover.test.js proves what `settle()` does.
+  it('the frame loop settles the mover in the branch where the cockpit is NOT drawn', () => {
+    const gate = at('if (_cockpitShouldRender()) {', at('_syncCockpitNavKeys();  _syncNavShip();'));
+    const elseAt = at('} else {', gate);
+    const branch = SRC.slice(elseAt, SRC.indexOf('\n  }', elseAt));
+    expect(branch, 'the ORRERY branch no longer clears the cockpit pass — this scan is stale').toContain('retroRenderer.setCockpit(null, null);');
+    expect(branch, 'nothing settles a panel left zoomed when HELM is left').toMatch(/_cockpitRig\?\.mover\?\.settle\(\);/);
+    // and NOT in the drawn branch, where it would yank every zoom back on the frame it starts
+    expect(SRC.slice(gate, elseAt)).not.toMatch(/\.settle\(\)/);
+  });
+
+  it('CONTROL: the toggle still asks the mover, so the settle is what frees N', () => {
+    expect(fnBody('_cockpitNavZoomed')).toContain("_cockpitRig.mover.zoomedRole === 'NAV'");
+    expect(fnBody('toggleNavComputer')).toContain('if (_navComputerOpen || _cockpitNavZoomed()) closeNavComputer();');
+  });
+});
+

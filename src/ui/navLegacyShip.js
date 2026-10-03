@@ -23,11 +23,34 @@
  *    expression the moon dot is drawn with), and the planet detail resolves a target by PARENT AND
  *    MOON (`legacyDetailTarget`): a target outside this planet gets an edge triangle, not the centre.
  *
- * Deliberate non-goals · legacy's own ink (`#00ff80`, dashes [6, 4], alpha 0.6, the 12-px arrow
- *   offset) is untouched; only the geometry moves. No binary-star special case: a ship at a star is
- *   placed by coordinates.
+ * Deliberate non-goals · legacy's dashes [6, 4], alpha 0.6 and the 12-px arrow offset are untouched;
+ *   only the geometry moves. No binary-star special case: a ship at a star is placed by coordinates.
+ *   (Its ink is no longer its own — see LEGACY_INK.)
  */
 import { deriveShip, focusShip, liveMoonRelE, planetTrueScene } from './navViewModes/shipState.js';
+
+/**
+ * ⭐ THE TWO INKS, ON THE LEGACY LOOK TOO (naming-prism-segments AC-15, Max 2026-10-03).
+ *
+ * Max: *"a visually meaning color-codedly consistent indicator that lets you know which thing
+ * selected is where you currently are and where the other thing selected is your target"* and
+ * (s-foreign) *"so that people learn to associate one of these colors in the menus with the
+ * targeted system or system object and the other color with the current position of the player"*.
+ *
+ * Legacy had THREE: cyan `#00d4ff` for "you are here", and one green `#00ff80` that meant BOTH the
+ * ship (diamond, its word, its route) AND the target (the warp diamond, the selected star's ring,
+ * WARP TARGET). Now: everything that says where the player IS takes CURRENT, everything that says
+ * where he is GOING takes TARGET — the same two hexes the 240p designs use (designs.js INK.CURRENT,
+ * formerly INK.YOU, and INK.TARGET), so a pilot who switches looks reads the same colours. The ship's route starts at the
+ * ship and is drawn in CURRENT, as the designs draw theirs in the ship's ink.
+ *
+ * ⛔ Nothing else in legacy may use either (the AUTOPILOT ON toggle, which was ship green, moved to
+ * legacy's blue). `*_RGB` is for legacy's translucent tints — this look is not the 240p one.
+ */
+export const LEGACY_INK = Object.freeze({
+  CURRENT: '#2ee6c0', TARGET: '#ffb03a',
+  CURRENT_RGB: '46, 230, 192', TARGET_RGB: '255, 176, 58',
+});
 
 /** The ship for this nav's displayed system, or `null` (not published for it, or cleared). */
 export function legacyShip(nav) {
@@ -184,11 +207,11 @@ export function legacyDetailTarget(target, idx, sys, project, w, h) {
   return edgePoint(d.o.x, d.o.y, d.dx, d.dy, w, h);
 }
 
-/** The outward edge triangle, in legacy's own ink. */
+/** The outward edge triangle — the ship off the picture, or its route's far end: CURRENT ink. */
 export function legacyEdgeTriangle(ctx, pt) {
   if (!pt) return;
   const tx = pt.x + pt.ux * 6, ty = pt.y + pt.uy * 6;
-  ctx.fillStyle = '#00ff80';
+  ctx.fillStyle = LEGACY_INK.CURRENT;
   ctx.globalAlpha = 0.6;
   ctx.beginPath();
   ctx.moveTo(tx, ty);

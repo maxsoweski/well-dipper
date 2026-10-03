@@ -57,7 +57,7 @@ function frame(nav) {
   try { nav.render(); } finally {
     nav._ctx = real; nav._drawPlayerMarker = pm; nav._findNearestStar = fn;
   }
-  const HERE_INK = '#00d4ff';
+  const HERE_INK = '#2ee6c0';   // ⭐ AC-15 (2026-10-03): the CURRENT ink — legacy's cyan #00d4ff retired into it
   return { ...rec, marker, nearest, hereRings: rec.arcs.filter((a) => a.ink === HERE_INK) };
 }
 

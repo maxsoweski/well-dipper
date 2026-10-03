@@ -706,6 +706,66 @@ describe('PanelMover — the state machine says what it is doing', () => {
   });
 });
 
+describe('PanelMover — settle(): a cockpit nobody can see has no panel at the eye (AC-18(a), 2026-10-03)', () => {
+  // The Phase 3 re-trace defect: leave HELM with the NAV panel zoomed, and in ORRERY N never
+  // opens the overlay. `update()` is only called from `CockpitRig.update()`, which is HELM-only,
+  // so a `dismiss()` issued in ORRERY starts a travel nothing ever finishes and `zoomedRole`
+  // keeps answering the role — main.js's toggle reads that as "the nav is open" and closes it.
+  const build = syntheticCockpit;
+  const settled = (panels, mover, cam) => { mover.zoom(panels[0].role, cam); runToRest(mover); return mover.state; };
+
+  it('THE STALL, as the host saw it: dismiss() with no update() leaves zoomedRole set forever', () => {
+    const { root } = build();
+    const panels = panelsOf(root);
+    const mover = new PanelMover({ panels, root, durationMs: 400 });
+    expect(settled(panels, mover, makeCamera())).toBe('zoomed');
+    for (let i = 0; i < 5; i++) mover.dismiss();   // five N presses in ORRERY — no frame advances the tween
+    expect(mover.zoomedRole, 'the defect this method exists for no longer reproduces — re-read the header').toBe(panels[0].role);
+    mover.dispose();
+  });
+
+  for (const [label, prep] of [
+    ['from zoomed', (m, cam, role) => { m.zoom(role, cam); runToRest(m); }],
+    ['from toRest (dismissed, never advanced)', (m, cam, role) => { m.zoom(role, cam); runToRest(m); m.dismiss(); m.update(8); }],
+    ['from mid toZoom', (m, cam, role) => { m.zoom(role, cam); for (let i = 0; i < 10; i++) m.update(8); }],
+  ]) {
+    it(`lands rest at once, role null, the panel exactly on its measured mount — ${label}`, () => {
+      const { root } = build();
+      const panels = panelsOf(root);
+      const before = panels.map((p) => measure(p.mesh));
+      const mover = new PanelMover({ panels, root, durationMs: 400 });
+      prep(mover, makeCamera(), panels[0].role);
+      expect(mover.state).not.toBe('rest');
+      expect(V(measure(panels[0].mesh).centre).distanceTo(V(before[0].centre)), 'fixture: the panel never left').toBeGreaterThan(1e-4);
+      mover.settle();
+      expect(mover.state).toBe('rest');
+      expect(mover.zoomedRole).toBe(null);
+      expect(mover.isMoving).toBe(false);
+      panels.forEach((p, i) => {
+        expect(V(measure(p.mesh).centre).distanceTo(V(before[i].centre)), `${p.role} is off its mount`).toBeLessThan(1e-12);
+      });
+      // and the next zoom is a fresh travel, as it would be after a HELM return
+      mover.zoom(panels[0].role, makeCamera());
+      expect(mover.state).toBe('toZoom');
+      expect(mover.progress).toBe(0);
+      mover.dispose();
+    });
+  }
+
+  it('is a no-op at rest (the host calls it every ORRERY frame)', () => {
+    const { root } = build();
+    const panels = panelsOf(root);
+    const before = panels.map((p) => measure(p.mesh));
+    const mover = new PanelMover({ panels, root });
+    for (let i = 0; i < 50; i++) mover.settle();
+    expect(mover.state).toBe('rest');
+    panels.forEach((p, i) => {
+      expect(V(measure(p.mesh).centre).distanceTo(V(before[i].centre))).toBeLessThan(1e-12);
+    });
+    mover.dispose();
+  });
+});
+
 describe('PanelMover — the source carries no cockpit geometry', () => {
   const SOURCE = readFileSync(join(HERE, '..', 'PanelMover.js'), 'utf8');
   const CODE = SOURCE

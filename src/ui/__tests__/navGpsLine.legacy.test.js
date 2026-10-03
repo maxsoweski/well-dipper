@@ -1,7 +1,8 @@
 /**
  * THE GPS LINE (2026-10-02) — the LEGACY painter (`NavComputer._renderSystem` and
- * `_renderPlanetDetail`), which keeps its own ink (`#00ff80`, dashes [6, 4], alpha 0.6, the 12-px
- * arrow offset) and changes only its geometry.
+ * `_renderPlanetDetail`), which keeps its dashes [6, 4], alpha 0.6 and the 12-px arrow offset and
+ * changes only its geometry. Its ink was its own ship green (`#00ff80`) until naming-prism-segments
+ * AC-15 (Max 2026-10-03): the ship, its word and its route are the CURRENT ink now.
  *
  * Max (verbatim): *"the GPS line should also draw to moons, and again it should draw from wherever
  * the player is currently."*
@@ -19,7 +20,7 @@ import { earthRadiiToScene } from '../../core/ScaleConstants.js';
 const W = 614, H = 512;
 const E = earthRadiiToScene(1);
 const O = { x: 0, y: 0, z: 0 };
-const GREEN = '#00ff80';
+const GREEN = '#2ee6c0';   // ⭐ AC-15: the CURRENT ink (was legacy's own ship green #00ff80) — the name is kept so the cases below read as they were written
 
 function pathRecorder() {
   const ops = [];

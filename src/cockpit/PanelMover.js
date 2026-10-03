@@ -417,6 +417,34 @@ export class PanelMover {
   }
 
   /**
+   * Put the panel back on its mount NOW — no tween — and report `rest`.
+   *
+   * ⭐ FOR THE MOMENT THE COCKPIT STOPS BEING DRAWN (naming-prism-segments AC-18(a), 2026-10-03).
+   * `dismiss()` only STARTS a travel; `update()` is what finishes it, and the host calls
+   * `update()` from `CockpitRig.update()`, which runs only while the cockpit renders (HELM).
+   * Leave HELM with a panel zoomed and nothing ever advances the tween: `zoomedRole` keeps
+   * answering 'NAV' through `toRest` forever, so main.js's `toggleNavComputer` read the nav as
+   * open on every N press in ORRERY and only ever closed it. A surface nobody can see has no
+   * travel to show, so leaving it lands the endpoint at once — the exact rest pose, the same
+   * copy `update()` lands with, so the drift guarantee of the round-trip test still holds.
+   *
+   * Idempotent: at rest it does nothing.
+   */
+  settle() {
+    if (this._state === 'rest') return;
+    const rig = this._rigs.get(this._role);
+    if (rig) {
+      rig.pivot.position.copy(rig.restPosition);
+      rig.pivot.quaternion.copy(rig.restQuaternion);
+      rig.pivot.updateMatrixWorld(true);
+    }
+    this._state = 'rest';
+    this._role = null;
+    this._camera = null;
+    this._t = 1;
+  }
+
+  /**
    * Advance the travel.
    *
    * @param {number} dtMs milliseconds since the last call

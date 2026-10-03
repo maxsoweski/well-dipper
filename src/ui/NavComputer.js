@@ -3,7 +3,7 @@ import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { realStarSeed } from '../generation/realStarSeed.js';  import { realStarKey } from '../generation/GalaxyGrid.js';   // ⚠ second statement on this line to keep line numbers stable
-import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';  import { findStar, isStarKey } from './navViewModes/starIdentity.js';  import { legacyShip, livePlanetAngle, legacyMoonAngle, legacyOrreryShip, legacyOrreryTarget, legacyDetailMoonPoint, legacyDetailShip, legacyDetailTarget, legacyEdgeTriangle } from './navLegacyShip.js';   /* ⭐ GPS line 2026-10-02 — a third statement, same reason */   // ⚠ second statement on this line to keep line numbers stable
+import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';  import { findStar, isStarKey } from './navViewModes/starIdentity.js';  import { legacyShip, livePlanetAngle, legacyMoonAngle, legacyOrreryShip, legacyOrreryTarget, legacyDetailMoonPoint, legacyDetailShip, legacyDetailTarget, legacyEdgeTriangle, LEGACY_INK as INK } from './navLegacyShip.js';   /* ⭐ GPS line 2026-10-02 — a third statement, same reason */   // ⚠ second statement on this line to keep line numbers stable
 import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
@@ -203,7 +203,7 @@ export class NavComputer {
     //
     // When true the SYSTEM view drops every word and every clickable control and
     // keeps the graphics: star, orbit ellipses, habitable-zone ring, belt annuli,
-    // planet discs, moons, the green ship diamond and the dashed trajectory line.
+    // planet discs, moons, the CURRENT-ink ship diamond and the dashed trajectory line.
     // The rule is graphics stay, words go.
     //
     // This flag is an INTENT — "this host wants a bare screen wherever bare makes
@@ -1649,9 +1649,9 @@ export class NavComputer {
       for (const c of navGrid.childGrid(this._levelIndex, parent)) ctx.strokeRect(...box(c.bounds));
 
       // "You are here" — highlight the grid cell containing the player
-      // in cyan. Replaces the old player marker (pulsing ring) which was
+      // in CURRENT ink (AC-15). Replaces the old player marker (pulsing ring) which was
       // too detailed at this zoom level. The highlighted cell + the
-      // density backdrop tells the user where they are; the green target
+      // density backdrop tells the user where they are; the TARGET-ink
       // diamond (below) tells them where they're going.
       // ⭐ The player's cell is the child of THIS screen's parent that holds the player's point
       // (GalaxyGrid.addressOf, half-open boxes), so a player exactly on an edge belongs to exactly
@@ -1660,9 +1660,9 @@ export class NavComputer {
       const mine = navGrid.cellAt(this._levelIndex, parent, this._playerX, this._playerZ);
       if (mine) {
         const r = box(navGrid.childCell(this._levelIndex, mine).bounds);
-        ctx.fillStyle = 'rgba(0, 212, 255, 0.08)';
+        ctx.fillStyle = `rgba(${INK.CURRENT_RGB}, 0.08)`;
         ctx.fillRect(...r);
-        ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
+        ctx.strokeStyle = INK.CURRENT;   /* AC-15: the player's cell — CURRENT, solid, so a pixel read finds the one ink */
         ctx.lineWidth = 2;
         ctx.strokeRect(...r);
       }
@@ -1690,9 +1690,9 @@ export class NavComputer {
 
     // No player marker at 2D levels — the highlighted cell (above) or
     // sector (galaxy level) serves as the "you are here" indicator.
-    // Only the green warp-target diamond is drawn here.
+    // Only the TARGET-ink warp-target diamond is drawn here.
 
-    // External warp target indicator (green diamond)
+    // External warp target indicator (TARGET-ink diamond)
     const target = this._externalTarget;
     if (target) {
       const tx = ox + (target.x - cx + ext) / viewSize * drawSize;
@@ -1835,11 +1835,11 @@ export class NavComputer {
       const bx = ox + (b.min.x - cx + ext) * k;
       const by = oy + (-(b.max.z - cz) + ext) * k;
 
-      // Highlight current sector — cyan "you are here" cell
+      // Highlight current sector — CURRENT-ink "you are here" cell
       if (mine && navGrid.sameAddress(mine, c.address)) {
-        ctx.fillStyle = 'rgba(0, 212, 255, 0.08)';
+        ctx.fillStyle = `rgba(${INK.CURRENT_RGB}, 0.08)`;
         ctx.fillRect(bx, by, sw, sw);
-        ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
+        ctx.strokeStyle = INK.CURRENT;   /* AC-15 */
         ctx.lineWidth = 2;
         ctx.strokeRect(bx, by, sw, sw);
       } else {
@@ -1938,7 +1938,7 @@ export class NavComputer {
       // Highlight the cell the player is centered in
       const playerCellX = Math.floor(cx / cellSize) * cellSize;
       const playerCellZ = Math.floor(cz / cellSize) * cellSize;
-      ctx.strokeStyle = 'rgba(0, 255, 128, 0.3)';
+      ctx.strokeStyle = INK.CURRENT;
       ctx.lineWidth = 2;
       const c0 = project(playerCellX, planeY, playerCellZ);
       const c1 = project(playerCellX + cellSize, planeY, playerCellZ);
@@ -1951,7 +1951,7 @@ export class NavComputer {
 
       // Player dot stays at screen center (you ARE the center)
       const debugP = { x: centerSX, y: centerSY };
-      ctx.fillStyle = '#00ff80';
+      ctx.fillStyle = INK.CURRENT;
       ctx.beginPath(); ctx.arc(debugP.x, debugP.y, 6, 0, Math.PI * 2); ctx.fill();
 
       // Forward direction line (where W takes you) — projected from center
@@ -2043,7 +2043,7 @@ export class NavComputer {
     // `_prismColumn`). There it is the loaded row that IS the player's star — the identity rule,
     // `findStar` at the player's position (0.1 pc) — else the row carrying `_currentSystemName`
     // (a catalogue star the merge renamed). On any other column there is no here-mark at all:
-    // no cyan ring (the `tier` and ring below) and no player marker (the fallback at the end of
+    // no CURRENT ring (the `tier` and ring below) and no player marker (the fallback at the end of
     // this method, gated on the same test).
     // ⛔ THE OLD FALLBACK WAS `_findNearestStar()`, THE NEAREST LOADED ROW. Once the pilot can browse
     // a column that is not his, the nearest row is a stranger, and the YOU mark sat on it. The
@@ -2134,28 +2134,28 @@ export class NavComputer {
         });
       }
 
-      // Selected star: green highlight ring
+      // Selected star: TARGET-ink highlight ring (it is the warp target)
       if (isSelected) {
         const pulse = 1 + Math.sin(Date.now() * 0.004) * 0.15;
-        ctx.strokeStyle = '#00ff80';
+        ctx.strokeStyle = INK.TARGET;
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(starP.x, starP.y, 10 * pulse, 0, Math.PI * 2); ctx.stroke();
         // Inner ring
-        ctx.strokeStyle = 'rgba(0, 255, 128, 0.4)';
+        ctx.strokeStyle = `rgba(${INK.TARGET_RGB}, 0.4)`;
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(starP.x, starP.y, 6, 0, Math.PI * 2); ctx.stroke();
       }
 
-      // Current-system "you are here" highlight: cyan pulsing ring around
-      // the star matching the player's position. Distinct color (#00d4ff)
-      // from the green warp-target highlight so they read differently.
+      // Current-system "you are here" highlight: CURRENT-ink pulsing ring around
+      // the star matching the player's position. CURRENT (#2ee6c0, AC-15)
+      // from the TARGET warp-target highlight so they read differently.
       if (star === currentSystemStar) {
         const pulse = 1 + Math.sin(Date.now() * 0.003) * 0.2;
-        ctx.strokeStyle = '#00d4ff';
+        ctx.strokeStyle = INK.CURRENT;
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(starP.x, starP.y, (baseRadius + 5) * pulse, 0, Math.PI * 2); ctx.stroke();
         // Subtle inner ring
-        ctx.strokeStyle = 'rgba(0, 212, 255, 0.4)';
+        ctx.strokeStyle = `rgba(${INK.CURRENT_RGB}, 0.4)`;
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(starP.x, starP.y, baseRadius + 3, 0, Math.PI * 2); ctx.stroke();
       }
@@ -2176,7 +2176,7 @@ export class NavComputer {
     this._drawLabelPass(ctx);
 
     // Player marker — only if no star at the player's position (prism not
-    // loaded yet, or player between systems). Otherwise the cyan "you are
+    // loaded yet, or player between systems). Otherwise the CURRENT "you are
     // here" ring on the matched star already shows the player's location.
     if (!currentSystemStar && navDrill.onPlayerColumn(this)) {   /* AC-5: no player marker on a column that is not the player's */
       const playerP = project(this._playerX, this._playerY, this._playerZ);
@@ -2187,11 +2187,11 @@ export class NavComputer {
     if (this._selectedNavStar) {
       const s = this._selectedNavStar;
       ctx.font = '11px "DotGothic16", monospace';
-      ctx.fillStyle = '#00ff80';
+      ctx.fillStyle = INK.TARGET;
       ctx.textAlign = 'center';
       ctx.fillText('WARP TARGET', w / 2, drawH - 24);
       ctx.font = '14px "DotGothic16", monospace';
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = INK.TARGET;   /* AC-15: the target's NAME is target ink too, not white */
       ctx.fillText(s.name || 'Unnamed', w / 2, drawH - 8);
       ctx.textAlign = 'left';
     }
@@ -2935,8 +2935,8 @@ export class NavComputer {
       // Draw ship diamond indicator
       if (shipP) {
         const s = 5; // half-size of diamond
-        ctx.fillStyle = '#00ff80';
-        ctx.strokeStyle = '#00ff80';
+        ctx.fillStyle = INK.CURRENT;
+        ctx.strokeStyle = INK.CURRENT;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(shipP.x, shipP.y - s * 1.4); // top
@@ -2951,9 +2951,9 @@ export class NavComputer {
         // position is the one thing Max named as must-keep, and the glyph is
         // what carries it; the label only names what the glyph already shows.
         ctx.font = '7px "DotGothic16", monospace';
-        ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
+        ctx.fillStyle = INK.CURRENT;
         ctx.textAlign = 'center';
-        if (!this._bare && !this._compact) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        if (!this._bare && !this._compact) ctx.fillText('CURRENT', shipP.x, shipP.y + s * 0.8 + 10);
         ctx.textAlign = 'left';
 
         // ── Trajectory line from ship to hovered/selected body ──
@@ -2972,8 +2972,8 @@ export class NavComputer {
            *
            */
           if (destP) {
-            // Dashed trajectory line — green for burn (current system)
-            const trajColor = '#00ff80';
+            // Dashed trajectory line — CURRENT ink: the route starts at the ship (AC-15)
+            const trajColor = INK.CURRENT;
             ctx.strokeStyle = trajColor;
             ctx.lineWidth = 1;
             ctx.setLineDash([6, 4]);
@@ -3021,7 +3021,7 @@ export class NavComputer {
 
     // ── Selection ring on selected body ──
     if (this._selectedBody) {
-      const selColor = isCurrent ? '#00ff80' : 'rgba(100, 180, 255, 0.9)';
+      const selColor = INK.TARGET;   /* AC-15: the selected body IS the target, in this system or a foreign one — was ship green here, blue there */
       const pulse = 0.6 + 0.4 * Math.sin(performance.now() * 0.004);
       ctx.strokeStyle = selColor;
       ctx.lineWidth = 2;
@@ -3058,7 +3058,7 @@ export class NavComputer {
     if (this._selectedBody && this._commitAction && !this._bare) {
       // Draw commit button — click commits the pending action
       const btnText = isCurrent ? (this.commitIsView ? '[ GO TO ]' : '[ BURN ]') : '[ WARP ]';   /* ⭐ UAT walk fix C (Astra 2026-10-02): in ORRERY this button no longer burns — main.js `dispatchNavAction` GLIDES THE VIEW — so the word follows the host's `commitIsView`, as the designs' commit row does. HELM still reads BURN. */
-      const btnColor = isCurrent ? '#00ff80' : 'rgba(100, 180, 255, 0.9)';
+      const btnColor = INK.TARGET;   /* AC-15: the button commits to the TARGET — Max (s-sky): the readiness indicator matching the target's name "is great" */
       // ⭐ ONE FUNCTION, TWO CALLERS. `btnW = 180, btnH = 28, btnY = drawH - 52` used to be written
       // out HERE and again in `_renderPlanetDetail`, both publishing into the SAME
       // `_commitButtonRect` that one hit-test reads — so fixing WARP and missing BURN was a click
@@ -3067,7 +3067,7 @@ export class NavComputer {
       const btn = navCommitButton(w, drawH, h);
       const btnW = btn.w, btnH = btn.h;
       const btnX = btn.x, btnY = btn.y;
-      ctx.fillStyle = isCurrent ? 'rgba(0, 255, 128, 0.1)' : 'rgba(100, 180, 255, 0.1)';
+      ctx.fillStyle = `rgba(${INK.TARGET_RGB}, 0.1)`;
       ctx.fillRect(btnX, btnY, btnW, btnH);
       ctx.strokeStyle = btnColor;
       ctx.lineWidth = 1;
@@ -3400,8 +3400,8 @@ export class NavComputer {
       if (shipP) {
         const s = 5; if (shipP.edge) legacyEdgeTriangle(ctx, shipP); else {   // ⭐ GPS line: off this picture → an outward edge triangle instead of the diamond
         /* (`s` is declared on the line above, outside the else, because the SHIP word below still uses it) */
-        ctx.fillStyle = '#00ff80';
-        ctx.strokeStyle = '#00ff80';
+        ctx.fillStyle = INK.CURRENT;
+        ctx.strokeStyle = INK.CURRENT;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(shipP.x, shipP.y - s * 1.4);
@@ -3413,9 +3413,9 @@ export class NavComputer {
         ctx.stroke(); }
 
         ctx.font = '7px "DotGothic16", monospace';
-        ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
+        ctx.fillStyle = INK.CURRENT;
         ctx.textAlign = 'center';
-        if (!this._bare && !this._compact) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        if (!this._bare && !this._compact) ctx.fillText('CURRENT', shipP.x, shipP.y + s * 0.8 + 10);
         ctx.textAlign = 'left';
 
         // Trajectory line to hovered/selected moon
@@ -3434,7 +3434,7 @@ export class NavComputer {
            *
            */
           if (destP) {
-            const trajColor = '#00ff80';
+            const trajColor = INK.CURRENT;
             ctx.strokeStyle = trajColor;
             ctx.lineWidth = 1;
             ctx.setLineDash([6, 4]);
@@ -3490,7 +3490,7 @@ export class NavComputer {
         const selP = legacyDetailMoonPoint(p, selMoonIdx, project);
         /* (was: the orbit, the phase and a third inline copy of the projection) */
         const pulse = 0.6 + 0.4 * Math.sin(performance.now() * 0.004);
-        ctx.strokeStyle = '#00ff80';
+        ctx.strokeStyle = INK.TARGET;
         ctx.lineWidth = 2;
         ctx.globalAlpha = pulse;
         ctx.beginPath(); ctx.arc(selP.x, selP.y, 12, 0, Math.PI * 2); ctx.stroke();
@@ -3509,13 +3509,13 @@ export class NavComputer {
       const btn = navCommitButton(w, drawH, h);
       const btnW = btn.w, btnH = btn.h;
       const btnX = btn.x, btnY = btn.y;
-      ctx.fillStyle = 'rgba(0, 255, 128, 0.1)';
+      ctx.fillStyle = `rgba(${INK.TARGET_RGB}, 0.1)`;
       ctx.fillRect(btnX, btnY, btnW, btnH);
-      ctx.strokeStyle = '#00ff80';
+      ctx.strokeStyle = INK.TARGET;
       ctx.lineWidth = 1;
       ctx.strokeRect(btnX, btnY, btnW, btnH);
       ctx.font = '12px "DotGothic16", monospace';
-      ctx.fillStyle = '#00ff80';
+      ctx.fillStyle = INK.TARGET;
       ctx.textAlign = 'center';
       ctx.fillText(btnText, w / 2, btnY + btn.labelDy);
       this._commitButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
@@ -3643,14 +3643,14 @@ export class NavComputer {
     ctx.lineTo(camScreenX + camFwd * 6, camScreenY - fwdLen);
     ctx.stroke();
 
-    // Player home position — cyan to match "you are here" convention
+    // Player home position — CURRENT ink, the "you are here" convention
     const playerDX = (this._playerX - blockCenter.x) / cubeHalf;
     const playerDZ = (this._playerZ - blockCenter.z) / cubeHalf;
     const playerRight = playerDX * cosC + playerDZ * sinC;
     const playerScreenX = mapX + xzSize / 2 + playerRight * xzSize / 2;
     const playerScreenY = mapY + ySize * (1 - (this._playerY - minStarY) / yRange);
 
-    ctx.fillStyle = '#00d4ff';
+    ctx.fillStyle = INK.CURRENT;
     ctx.beginPath();
     ctx.arc(playerScreenX, playerScreenY, 2.5, 0, Math.PI * 2);
     ctx.fill();
@@ -3953,27 +3953,27 @@ export class NavComputer {
   // ════════════════════════════════════════════════════
 
   _drawPlayerMarker(ctx, x, y, size = 10) {
-    // Pulsing cyan ring + center dot. Cyan (#00d4ff) distinguishes "you
-    // are here" from the green (#00ff80) warp-target markers across all
+    // Pulsing ring + center dot in CURRENT (#2ee6c0, AC-15), told apart from "you
+    // are going" — the TARGET (#ffb03a) warp-target markers across all
     // nav levels. Cross lines were removed — they overlapped star icons
     // in prism view and read as a "weird reticle over the star".
     const pulse = 1 + Math.sin(Date.now() * 0.003) * 0.2;
-    ctx.strokeStyle = '#00d4ff';
+    ctx.strokeStyle = INK.CURRENT;
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(x, y, (size - 2) * pulse, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = '#00d4ff';
+    ctx.fillStyle = INK.CURRENT;
     ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
   }
 
   /**
-   * Draw a green diamond marker for the warp target at 2D levels.
+   * Draw a TARGET-ink diamond marker for the warp target at 2D levels.
    */
   _drawTargetMarker(ctx, x, y, size = 8) {
     const pulse = 1 + Math.sin(Date.now() * 0.004) * 0.2;
     const s = size * pulse;
 
     // Outer diamond
-    ctx.strokeStyle = '#00ff80';
+    ctx.strokeStyle = INK.TARGET;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(x, y - s);
@@ -3984,7 +3984,7 @@ export class NavComputer {
     ctx.stroke();
 
     // Inner dot
-    ctx.fillStyle = '#00ff80';
+    ctx.fillStyle = INK.TARGET;
     ctx.beginPath();
     ctx.arc(x, y, 2, 0, Math.PI * 2);
     ctx.fill();
@@ -3992,7 +3992,7 @@ export class NavComputer {
     // Label
     if (this._externalTarget?.name) {
       ctx.font = '10px "DotGothic16", monospace';
-      ctx.fillStyle = '#00ff80';
+      ctx.fillStyle = INK.TARGET;
       ctx.textAlign = 'center';
       // ⭐ KEPT, NOT DROPPED — this is the one string on a 2D level that says WHERE YOU ARE AIMED,
       // and the marker can sit at the top edge, where `y - s - 4` puts its cap row off the glass
@@ -4012,7 +4012,7 @@ export class NavComputer {
     const edgeX = cx + Math.cos(angle) * (size / 2 - 10);
     const edgeY = cy + Math.sin(angle) * (size / 2 - 10);
 
-    ctx.fillStyle = '#00ff80';
+    ctx.fillStyle = INK.TARGET;
     ctx.beginPath();
     ctx.moveTo(edgeX + Math.cos(angle) * 6, edgeY + Math.sin(angle) * 6);
     ctx.lineTo(edgeX - Math.cos(angle) * 4 + Math.sin(angle) * 4,
@@ -4024,19 +4024,19 @@ export class NavComputer {
   }
 
   _drawPlayerArrow(ctx, ox, oy, size, px, pz) {
-    // Clamp to edge and draw arrow — cyan to match "you are here" color
+    // Clamp to edge and draw arrow — CURRENT ink, the "you are here" colour
     const cx = ox + size / 2, cy = oy + size / 2;
     const angle = Math.atan2(pz - cy, px - cx);
     const edgeX = cx + Math.cos(angle) * (size / 2 - 10);
     const edgeY = cy + Math.sin(angle) * (size / 2 - 10);
 
-    ctx.fillStyle = '#00d4ff';
+    ctx.fillStyle = INK.CURRENT;
     ctx.beginPath();
     ctx.arc(edgeX, edgeY, 4, 0, Math.PI * 2);
     ctx.fill();
 
     // Small arrow
-    ctx.strokeStyle = '#00d4ff';
+    ctx.strokeStyle = INK.CURRENT;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(edgeX, edgeY);
@@ -4174,11 +4174,11 @@ export class NavComputer {
       const x = i * tabW;
 
       // Background
-      ctx.fillStyle = active ? 'rgba(100, 180, 255, 0.15)' : 'rgba(20, 25, 35, 0.8)';
+      ctx.fillStyle = active ? `rgba(${INK.CURRENT_RGB}, 0.15)` : 'rgba(20, 25, 35, 0.8)';
       ctx.fillRect(x, tabY, tabW, tabH);
 
       // Border
-      ctx.strokeStyle = active ? 'rgba(100, 180, 255, 0.5)' : 'rgba(100, 180, 255, 0.1)';
+      ctx.strokeStyle = active ? INK.CURRENT : 'rgba(100, 180, 255, 0.1)';
       ctx.lineWidth = 1;
       ctx.strokeRect(x, tabY, tabW, tabH);
 
@@ -4212,10 +4212,10 @@ export class NavComputer {
     // against a 43-row panel — the last block alone is five lines that all land below the glass.
     // Nothing upstream changes: drop the driver and every one of them draws exactly as it does now.
     if (this._currentSystemName && this._levelIndex !== 4 && !this._bare && !this._compact) {
-      ctx.fillStyle = '#00ff80';
+      ctx.fillStyle = INK.CURRENT;
       ctx.fillText('CURRENT SYSTEM', 16, 24);
       ctx.font = '16px "DotGothic16", monospace';
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = INK.CURRENT;   /* AC-15 (s-sky): the name of the system you are IN is CURRENT, the same ink as your marker */
       ctx.fillText(this._currentSystemName, 16, 44);
     }
 
@@ -4223,7 +4223,7 @@ export class NavComputer {
     // reason as above, and equally unable to change a pixel today.
     if (this._currentSector && this._levelIndex !== 4 && !this._bare && !this._compact) {
       ctx.font = '11px "DotGothic16", monospace';
-      ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
+      ctx.fillStyle = INK.CURRENT;
       ctx.fillText(this._currentSector.name, 16, 60);
     }
 
@@ -4237,10 +4237,10 @@ export class NavComputer {
     if (!this._bare && !this._compact) {
       const tabH = navTabHeight(h);
       const btnText = this._autopilotActive ? '▶ AUTOPILOT ON' : '▷ AUTOPILOT OFF';
-      const btnColor = this._autopilotActive ? '#00ff80' : 'rgba(255,255,255,0.35)';
+      const btnColor = this._autopilotActive ? 'rgba(100, 180, 255, 0.9)' : 'rgba(255,255,255,0.35)';
       const btnW = 140, btnH = 24;
       const btnX = 8, btnY = h - tabH - btnH - 8;
-      ctx.fillStyle = this._autopilotActive ? 'rgba(0, 255, 128, 0.08)' : 'rgba(255,255,255,0.03)';
+      ctx.fillStyle = this._autopilotActive ? 'rgba(100, 180, 255, 0.08)' : 'rgba(255,255,255,0.03)';
       ctx.fillRect(btnX, btnY, btnW, btnH);
       ctx.strokeStyle = btnColor;
       ctx.lineWidth = 1;
