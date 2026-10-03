@@ -2,7 +2,7 @@
   "workstream": "galactic-engine-s1-one-cloud-2026-10-03",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "scoping",
+  "status": "building",
   "feature": "docs/FEATURES/galactic-engine-PLAN.md",
   "skill": "lab-wired-to-game",
   "acceptanceCriteria": [
@@ -114,8 +114,18 @@
       "live": true
     },
     {
+      "id": "AC-13",
+      "statement": "A Realistic / Photo colour switch: Realistic shows what the eye would see (dim, mostly grey-teal, colour only in the brightest parts); Photo shows long-exposure colours (Hα red/pink, [O III] teal). Both keep realistic brightness (never brighter as you approach). Flippable live in the lab and the game; may become a player option.",
+      "verifyVia": {
+        "input": "Flip the colour switch in the game and in the lab at the same pose, inside and outside the test nebula.",
+        "observable": "The debug snapshot reports the mode; mean saturation of the nebula's pixels is lower in Realistic than in Photo; in Realistic, saturation is low below the colour-vision brightness threshold and higher only in the brightest parts; the luminance image differs by no more than a declared tolerance between modes; the same switch value reaches lab and game through the shared render packs."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
       "id": "AC-12",
-      "statement": "Max: at each distance it looks how a nebula would realistically look that close, enhanced to match the game's look and be interesting — a giant layered cloud with denser and lighter parts, filaments, and stars around and in it.",
+      "statement": "Max: at each distance it looks how a nebula would realistically look that close, enhanced to match the game's look and be interesting — a giant layered cloud with denser and lighter parts, filaments, and stars around and in it. Both colour modes are judged.",
       "verifyVia": {
         "input": "Max flies the live game to the test nebula and through it, and uses the review page.",
         "observable": "Max's verdict, in his words."

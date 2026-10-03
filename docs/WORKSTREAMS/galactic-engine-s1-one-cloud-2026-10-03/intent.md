@@ -46,3 +46,7 @@ photographs show them red/magenta. (Colour choice: see open item in the scoping 
 
 ## Test subjects
 One procedurally generated emission nebula, plus Orion (the real one already in the game's catalogue).
+
+## Colour (Max, 2026-10-03)
+"I would like a filter option or a color option here, realistic and photo style, so that I can, you know, flip
+between them and maybe this is even a feature I want to bring into the game if I like being able to do this."
