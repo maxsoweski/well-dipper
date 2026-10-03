@@ -542,10 +542,18 @@ const LEGACY_TEXT = {
   3: 'e0159ebab2298b53',
   4: 'd9934e059a736f56',
 };
+// ⚠ RE-PINNED 2026-10-02 — naming-prism-segments Phase 2 (AC-3), RULING NOTED. Plan §6: "the legacy
+//   look's grids share the same picking and drilling, so in Phase 2 they draw the fixed grid too". So
+//   GALAXY / SECTOR / REGION issue different instructions ON PURPOSE, and only there. Measured against
+//   HEAD's NavComputer.js (git show into a sibling module, this harness, fresh 417x240 legacy nav):
+//   TEXT streams identical at 0/1/2; the call streams differ only in grid strokes — GALAXY strokeRect
+//   781 → 299 (the 775-sector quadtree → the 293 drawn sectors of the 19 × 19 grid), SECTOR / REGION
+//   9 / 17 beginPath·moveTo·lineTo·stroke pairs of view-relative lines → 256 world-locked cell
+//   strokeRects. HEAD's values were 0: df3025c11613b1b5, 1: 875c015b0dad36e1, 2: 90ecebeb47aa76ca.
 const LEGACY_CALLS = {
-  0: 'df3025c11613b1b5',
-  1: '875c015b0dad36e1',
-  2: '90ecebeb47aa76ca',
+  0: '4704b767619c16a8',
+  1: '6e73d1440c48f57a',
+  2: '494c205c23074d2a',
   4: '5542b2f88f086705',
 };
 

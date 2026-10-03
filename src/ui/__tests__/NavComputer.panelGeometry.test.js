@@ -135,7 +135,11 @@ describe('AC-4 — the 2D map and its two hit-tests still describe the same squa
 
   it('hovers a tile at the map centre, which is what the sector drill reads', async () => {
     const { nav } = await panelNav();
-    nav._levelIndex = 1;                              // SECTOR — an 8x8 grid of tiles
+    nav._levelIndex = 1;                              // SECTOR — the player's sector, 16 x 16 regions
+    // naming-prism-segments Phase 2 (AC-3) — RULING NOTED: a SECTOR cell is now a region OF THE
+    // SCREEN'S SECTOR, so the frame must be that sector (as every entry path leaves it), not the
+    // constructor's untouched 44 kpc default, where the sector is ~1 texel and the centre misses it.
+    nav.setPlayerPosition({ x: 8, y: 0, z: 0 });
     nav.render();
     nav._handleMouseMove({ clientX: PANEL_W / 2, clientY: navMapInset(PANEL_H) / 2 + 6 });
     expect(nav._hoveredTile,
@@ -147,6 +151,7 @@ describe('AC-4 — the 2D map and its two hit-tests still describe the same squa
   it('drills sector -> region on a tile click at 43 rows', async () => {
     const { nav } = await panelNav();
     nav._levelIndex = 1;
+    nav.setPlayerPosition({ x: 8, y: 0, z: 0 });      // the sector frame, as above (AC-3 ruling)
     nav.render();
     const y = navMapInset(PANEL_H) / 2 + 6;
     nav._handleMouseMove({ clientX: PANEL_W / 2, clientY: y });
@@ -195,14 +200,29 @@ describe('AC-4 — the screensaver\'s performed cursor lands on the panel', () =
     const { AutopilotNavSequence } = await import('../../auto/AutopilotNavSequence.js');
     const seq = Object.create(AutopilotNavSequence.prototype);
     seq._nav = nav;
-
-    for (const [gx, gz] of [[-22, -22], [0, 0], [8, 0], [22, 22]]) {
+    // naming-prism-segments Phase 2 (AC-4) — RULING NOTED: the cursor is now placed through the map
+    // that is DRAWN (`navDrill.screenPointOf`: the legacy square here), so the autopilot's crosshair
+    // sits on the cell it lights. It is clamped to the canvas, so "inside the panel" alone can no
+    // longer fail; the bar is now that, at the GALAXY frame, each point lands INSIDE THE MAP SQUARE,
+    // unclamped, and distinct points land on distinct texels (no collapsed band).
+    const navGrid = await import('../navGrid.js');
+    const navDrill = await import('../navDrill.js');
+    navDrill.jumpTo(nav, 0, null);
+    const P = navDrill.legacyProj(nav);
+    const seen = new Set();
+    for (const [gx, gz] of [[-15, -9], [0, 0], [8, 0], [15, 9]]) {
+      expect(navGrid.cellAt(0, null, gx, gz), `(${gx}, ${gz}) is a drawn sector`).toBeTruthy();
       seq._setCursorAtGalactic(gx, gz);
       const c = nav._autoCursor;
       expect(c.x >= 0 && c.x <= PANEL_W && c.y >= 0 && c.y <= PANEL_H,
         `the performed cursor for (${gx}, ${gz}) landed at (${c.x.toFixed(1)}, ${c.y.toFixed(1)}), `
         + `off a ${PANEL_W}x${PANEL_H} panel`).toBe(true);
+      expect(c.x >= P.ox && c.x <= P.ox + P.drawSize && c.y >= P.oy && c.y <= P.oy + P.drawSize,
+        `the cursor for (${gx}, ${gz}) is off the drawn map`).toBe(true);
+      expect(c).toEqual({ x: P.toX(gx), y: P.toY(gz) });
+      seen.add(`${Math.round(c.x)},${Math.round(c.y)}`);
     }
+    expect(seen.size, 'the galaxy collapsed onto fewer texels than points').toBe(4);
   });
 
   it('still spreads the galaxy across the canvas rather than collapsing it', () => {

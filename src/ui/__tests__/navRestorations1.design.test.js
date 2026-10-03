@@ -48,6 +48,7 @@
  * and that is the last case below.
  */
 import { describe, it, expect } from 'vitest';
+import * as navGrid from '../navGrid.js';
 import { makeHeadlessNav } from './helpers/headlessNav.mjs';
 import { makeDesigns } from '../navViewModes/designs.js';
 import { FACE, drawPixelText, measurePixelText } from '../../rendering/PixelText.js';
@@ -368,7 +369,7 @@ describe('AC-2 — drop lines, the plane lattice and far-first drawing', () => {
 
   it('⛔ AT THE WIDEST THE CELL IS THE SMALLEST POWER OF TWO WHOSE TIGHTER SPACING CLEARS 8 TEXELS', async () => {
     // ⚠ TWO RADII, REACHED TWO WAYS, AND THE DIFFERENCE IS STATED: the wheel's own ceiling in this
-    //   harness (0.01 — `_localCubeSize` is unset here, see the block above) and the lab's
+    //   harness (navGrid.PRISM_ZOOM_MAX_KPC = 0.015625 since naming-prism-segments Phase 2) and the lab's
     //   `ZOOM_STOPS[3]` (0.01034, the cube size at the lab's fixture), which no wheel can land on
     //   and which is therefore written to the field. Both are "the camera pulled back"; the rule is
     //   the same at both and is derived, per camera, from the projection alone.
@@ -378,8 +379,11 @@ describe('AC-2 — drop lines, the plane lattice and far-first drawing', () => {
       nav._seedViewModeCam();
       const notches = wheelToClamp(nav, 120);
       const clamp = nav._localRadius;
+      // naming-prism-segments Phase 2 (AC-3) — RULING NOTED: the wheel's ceiling is no longer the
+      // density box (`_localCubeSize || 0.01`); plan §6 fixes it at max(0.01 kpc, 2 × column width)
+      // = navGrid.PRISM_ZOOM_MAX_KPC (0.015625), so the pilot can pull back past the column's edge.
       expect(clamp, `design ${design}: ${notches} notches of wheel did not reach the wheel's ceiling`)
-        .toBe(nav._localCubeSize || 0.01);
+        .toBe(navGrid.PRISM_ZOOM_MAX_KPC);
       const wide = [{ how: 'the wheel\'s own ceiling', radius: clamp },
                     { how: 'the field, at the lab\'s ZOOM_STOPS[3]', radius: paint(nav, design).d.ZOOM_STOPS[3] }];
       for (const stop of wide) {

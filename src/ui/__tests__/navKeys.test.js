@@ -31,6 +31,8 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { makeHeadlessNav, clickAt, tabCentre } from './helpers/headlessNav.mjs';
 import { makeViewModeDriver } from '../navViewModes/index.js';
+import * as navGrid from '../navGrid.js';
+import { addressOf } from '../../generation/GalaxyGrid.js';
 import { simClockMs, _setSimClockMs, _advanceSimClock } from '../../core/SimClock.js';
 
 /** The driver surface the KEYS clauses call, per INTERFACE.md §3. */
@@ -596,11 +598,18 @@ describe('AC-11 — the camera is re-seeded onto the design\'s own default', () 
     // `:4685-4686` starts the prism top-down and tweens 600 ms to a literal 0.5. With the designs
     // reading the game's rotation, that lands the prism ~8° off the frame the lab draws and leaves it
     // there — a settle that ends in the wrong place is worse than no settle.
+    // naming-prism-segments Phase 2 (AC-3) — RULING NOTED: the drill now reads a navGrid.hoverTile
+    // payload (`{ level, address, … }`), never a view-relative `{ col, row }`, so the fixture clicks a
+    // REAL drawn REGION cell through the design's own picker instead of hand-setting `{ col: 3, row: 4 }`.
     const { nav } = await loadedNav({ mode: 'rail', level: 2 });
+    nav.setPlayerPosition({ x: 8, y: 0, z: 0 });   // the REGION frame is the player's region, as on every real open
     nav._levelIndex = 2;
     nav._localRotY = 0.3;
-    nav._hoveredTile = { col: 3, row: 4 };
-    clickAt(nav, 200, 100);
+    nav.render();
+    const c = nav._viewDriverInst.S.mapCells.find((k) => k.rect.w > 4);
+    const cx = c.rect.x + c.rect.w / 2, cy = c.rect.y + c.rect.h / 2;
+    nav._handleMouseMove({ clientX: cx, clientY: cy });
+    clickAt(nav, cx, cy);
     expect(nav._tiltAnim, 'the level-2 tile drill did not fire').toBeTruthy();
     expect(D_K * Math.sin(nav._tiltAnim.to)).toBeCloseTo(D_DZ, 12);
     expect(nav._localRotY, 'the designs draw the prism at rotY 0').toBe(0);
@@ -611,7 +620,9 @@ describe('AC-11 — the camera is re-seeded onto the design\'s own default', () 
     nav.viewMode = null;
     nav._levelIndex = 2;
     nav._localRotY = 0.3;
-    nav._hoveredTile = { col: 3, row: 4 };
+    // RULING NOTED (naming-prism-segments AC-3): the hover payload is a navGrid.hoverTile — a prism of
+    // the REGION on the glass — not the old view-relative `{ col: 3, row: 4 }`.
+    nav._hoveredTile = navGrid.hoverTile(2, addressOf(nav._viewCenter.x, 0, nav._viewCenter.z));
     clickAt(nav, 200, 100);
     expect(nav._tiltAnim.to).toBe(0.5);
     expect(nav._localRotY).toBe(0.3);

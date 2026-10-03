@@ -20,10 +20,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import * as navDrill from '../navDrill.js';
 import { makeHeadlessNav, clickAt } from './helpers/headlessNav.mjs';
 import { makeDesigns } from '../navViewModes/designs.js';
 import { SORT_KEYS } from '../navViewModes/state.js';
-import { projRect, worldAt, pickBody, pickOrbitRing, pickSector, gridNFallback } from '../navViewModes/picking.js';
+import { projRect, worldAt, pickBody, pickOrbitRing, pickSector } from '../navViewModes/picking.js';
+import * as navGrid from '../navGrid.js';
+import { boundsOf } from '../../generation/GalaxyGrid.js';
 import { simClockMs, _setSimClockMs } from '../../core/SimClock.js';
 /** ⛔ THE HOST'S OWN PAN SCALE, IMPORTED. `_handleMouseMove`'s 2D branch converts texels to kpc with
  *  `_viewSize / navMapSize(w, h)`; a test restating that ratio would be a second copy of the
@@ -642,8 +645,12 @@ describe("design 2's locator centres the frame on the player", () => {
     const { nav, drv } = await loadedNav({ mode: 'bars' });
     // ⚠ THE HARNESS NEVER CALLS `setPlayerPosition`, so `_currentSector` is null and the stack
     //   rebuild has no sector to name. The running game always has one; this is that fixture, taken
-    //   from the same `getSectorAt` call `:1183` makes.
-    nav._currentSector = nav._sectors.getSectorAt({ x: nav._playerX, z: nav._playerZ });
+    //   from the same call `:1183` makes.
+    // naming-prism-segments Phase 2 (AC-3) — RULING NOTED: that call is now `navDrill.sectorRecordAt`,
+    //   the player's sector of the FIXED 19 × 19 grid (named by its grid reference until Phase 4), not
+    //   the 775-sector quadtree's `getSectorAt`; and the loader's block is the player's COLUMN
+    //   (`_prismColumn`), which the stack rebuild now sets alongside `_viewStack`.
+    nav._currentSector = navDrill.sectorRecordAt(nav._playerX, nav._playerZ);
     expect(nav._currentSector, 'the player must be inside the disc for this fixture').toBeTruthy();
     nav._localCenter = { x: 20, y: 1, z: -15 };
     nav._viewStack[1] = { center: { x: 20, z: -15 }, size: 2, sectorName: 'FOREIGN' };
@@ -659,6 +666,8 @@ describe("design 2's locator centres the frame on the player", () => {
     //    straight back on the next frame.
     expect(nav._viewStack[1].sectorName, 'the view stack still names the foreign sector')
       .toBe(nav._currentSector.name);
+    expect(navGrid.addressKey(nav._prismColumn?.address), 'the loader\'s block is not the player\'s column')
+      .toBe(navGrid.addressKey(navGrid.parentAt(3, nav._playerX, nav._playerZ)));
     expect(nav._loadedYMin, 'the prism loader kept the band it had already fetched').toBe(null);
   }, 60000);
 
@@ -930,22 +939,35 @@ describe("design 1's SYSTEM ladder counter is a handle", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
-// AC-5 — THE GALAXY HIGHLIGHT IS THE PICKED SECTOR, NOT THE CELL UNDER THE CURSOR.
+// AC-5 — THE GALAXY HIGHLIGHT IS THE SECTOR THE DRILL FLIES TO.
+// ⭐ RULING (naming-prism-segments AC-3, 2026-10-02): *"each cell in the galaxy should represent a
+//    single sector"*. The cell and the sector are no longer different objects, so the highlight is the
+//    clicked cell's own box and `S.pick` is `{ level: 0, address }` (was `{ level: 0, sector }` off the
+//    775-sector quadtree). Every intent below is kept: the frame is the drilled box, it is drawn last,
+//    it is clipped to the picture, a pan or a tap cannot split the highlight from the drill.
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
-  /** The frame `d1TwoD` / `d2TwoD` must draw, through the projection THIS design published. */
-  function expectedFrame(p, sec) {
-    const r = projRect(p);
-    const toX = (x) => (p.kind === 'wide' ? p.ox + (x - p.cx) / p.kpc
-                                          : r.x + ((x - p.cx) / p.size + 0.5) * r.w);
-    const toY = (z) => (p.kind === 'wide' ? p.oy + (z - p.cz) / p.kpc
-                                          : r.y + ((z - p.cz) / p.size + 0.5) * r.h);
-    const x0 = Math.max(r.x, Math.round(toX(sec.centerX - sec.size / 2)));
-    const y0 = Math.max(r.y, Math.round(toY(sec.centerZ - sec.size / 2)));
-    const x1 = Math.min(r.x + r.w, Math.round(toX(sec.centerX + sec.size / 2)));
-    const y1 = Math.min(r.y + r.h, Math.round(toY(sec.centerZ + sec.size / 2)));
-    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  /** The frame `gridScreen` draws for a box, through the projection THIS design published (+z up,
+   *  each edge rounded on its own, the frame one texel wider than the box so it sits on both rules). */
+  function expectedFrame(p, address) {
+    const b = boundsOf(address), r = projRect(p);
+    const toX = (x) => p.x0 + ((x - p.cx) / p.size + 0.5) * p.sq;
+    const toY = (z) => p.y0 + (0.5 - (z - p.cz) / p.size) * p.sq;
+    const x0r = Math.round(toX(b.min.x)), x1r = Math.round(toX(b.max.x)) + 1;
+    const y0r = Math.round(toY(b.max.z)), y1r = Math.round(toY(b.min.z)) + 1;
+    const x0 = Math.max(r.x, x0r), y0 = Math.max(r.y, y0r);
+    const x1 = Math.min(r.x + r.w, x1r), y1 = Math.min(r.y + r.h, y1r);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, raw: { x0: x0r, y0: y0r, x1: x1r, y1: y1r } };
   }
+  /** The drawn cell whose centre is nearest a texel (a texel ON a grid rule belongs to no interior). */
+  const cellAtTexel = (drv, x, y) => {
+    let best = null, bd = Infinity;
+    for (const c of drv.S.mapCells || []) {
+      const d = Math.hypot(c.rect.x + c.rect.w / 2 - x, c.rect.y + c.rect.h / 2 - y);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best;
+  };
 
   for (const mode of ['rail', 'bars']) {
     it(`⭐⭐ ${mode}: the click records the SECTOR and the design frames it in INK.KEY`, async () => {
@@ -954,25 +976,23 @@ describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
       expect(p?.level, `${mode} must publish a level-0 projection`).toBe(0);
       const r = projRect(p);
       const x = r.x + r.w * 0.34, y = r.y + r.h * 0.55;
-      const { wx, wz } = worldAt(p, x, y);
-      const expected = nav._sectors.getSectorAt({ x: wx, z: wz });
-      expect(expected, 'the fixture point must be inside the disc').toBeTruthy();
+      const w = worldAt(p, x, y);
+      const expected = navGrid.cellAt(0, null, w.wx, w.wz);
+      expect(expected, 'the fixture point must be on a drawn sector').toBeTruthy();
 
       expect(drv.S.pick, 'nothing is highlighted before a click').toBe(null);
       nav._handleMouseMove({ clientX: x, clientY: y });
       clickAt(nav, x, y);
-      // ⛔ THE IDENTITY IS `pickSector`'s, WHICH IS THE SAME CALL THE DRILL CONSUMED — so what lights
-      //    up and where the zoom is going cannot come apart.
       expect(drv.S.pick?.level, 'a GALAXY click recorded no highlight').toBe(0);
-      expect(drv.S.pick.sector).toEqual({ centerX: expected.centerX, centerZ: expected.centerZ,
-                                          size: expected.size, name: expected.name });
+      expect(drv.S.pick.address).toEqual(expected);
+      const b = boundsOf(expected);
       expect(nav._viewStack[1].center, 'the drill went somewhere else')
-        .toEqual({ x: expected.centerX, z: expected.centerZ });
+        .toEqual({ x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2 });
 
       // …and the design DRAWS it, in the lab's own key ink, on the sector's own rectangle.
       const { ctx, fills } = inkRecorder(nav._canvas.width, nav._canvas.height);
       drv.render(ctx, nav._canvas.width, nav._canvas.height);
-      const want = expectedFrame(drv.S.mapProj, drv.S.pick.sector);
+      const want = expectedFrame(drv.S.mapProj, drv.S.pick.address);
       expect(want.w, 'the picked sector is cropped off this design entirely').toBeGreaterThan(0);
       const key = fills.filter((f) => f.ink === INK.KEY);
       const has = (q) => key.some((f) => f.x === q.x && f.y === q.y && f.w === q.w && f.h === q.h);
@@ -1013,9 +1033,6 @@ describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
 
   for (const mode of ['rail', 'bars']) {
     it(`⛔ ${mode}: NOTHING IS FRAMED UNTIL A CLICK COMMITS ONE — and the frame goes with the pick`, async () => {
-      // ⛔ THE DEFAULT PICTURE MAX RULED ON CANNOT MOVE, so "the highlight is drawn" needs a case that
-      //    fails if it were drawn ALWAYS. Counting the key ink inside the picture with `S.pick` null,
-      //    then with it set, then with it forced null again is that: the first and third must agree.
       const { nav, drv } = await galaxyNav(mode);
       const W = nav._canvas.width, H = nav._canvas.height;
       const r0 = projRect(drv.S.mapProj);
@@ -1039,107 +1056,49 @@ describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
     }, 60000);
   }
 
-  it('⛔ A RIM SECTOR IS CLIPPED TO THE PAINTED BAND — design 2 crops half the disc by construction', async () => {
-    // ⛔ THE WIDE FIELD IS ±(mapH/2)·kpc AND ABOUT HALF THE DISC IS OFF THE GLASS. A sector picked at
-    //    the top of the band has world bounds that reach ABOVE it (measured: raw y0 = -26 against a
-    //    band starting at 8), so an unclipped frame would paint over the topbar's rule — chrome that
-    //    is not the map's to write on. The band is the design's own `clip`, out of `projRect`.
-    const { nav, drv } = await galaxyNav('bars');
-    const W = nav._canvas.width, H = nav._canvas.height;
-    const p = drv.S.mapProj, r = projRect(p);
-    const toX = (X) => p.ox + (X - p.cx) / p.kpc, toY = (Z) => p.oy + (Z - p.cz) / p.kpc;
-    // walk the band's top row inward until a pick's own rect leaves the band
-    let hit = null;
-    for (let yy = r.y + 1; yy < r.y + r.h && !hit; yy += 2) {
-      for (let xx = r.x + 4; xx < r.x + r.w && !hit; xx += 7) {
-        const s = pickSector(nav, drv.S, xx, yy);
-        if (!s) continue;
-        const raw = { x0: Math.round(toX(s.sector.centerX - s.sector.size / 2)),
-                      y0: Math.round(toY(s.sector.centerZ - s.sector.size / 2)),
-                      x1: Math.round(toX(s.sector.centerX + s.sector.size / 2)),
-                      y1: Math.round(toY(s.sector.centerZ + s.sector.size / 2)) };
-        if (raw.x0 < r.x || raw.y0 < r.y || raw.x1 > r.x + r.w || raw.y1 > r.y + r.h) hit = { xx, yy, raw };
+  for (const mode of ['rail', 'bars']) {
+    it(`⛔ ${mode}: A FRAME PANNED HALF OFF THE PICTURE IS CLIPPED TO IT — the picture is the clip`, async () => {
+      // ⚠ A pan is what produces the case: the lit sector walks toward the picture's edge under the
+      //   pilot's hand, and the frame must stop at the edge, not draw over the rail, the bars or the
+      //   label margin. The pan is derived from the driver's own `panKpcPerTexel`, the scale the host uses.
+      const { nav, drv } = await galaxyNav(mode);
+      const W = nav._canvas.width, H = nav._canvas.height;
+      const p = drv.S.mapProj, r = projRect(p);
+      const x = r.x + r.w * 0.5, y = r.y + r.h * 0.5;
+      expect(armPick(nav, drv, x, y), 'the fixture point was eaten').not.toBe(null);
+      const addr = drv.S.pick?.address;
+      expect(addr, 'the fixture recorded no highlight').toBeTruthy();
+      const b = boundsOf(addr);
+      // pan so the sector's LEFT edge lands two texels left of the picture's left edge
+      const scale = drv.panKpcPerTexel() ?? (nav._viewSize / navMapSize(W, H));
+      const leftNow = p.x0 + ((b.min.x - p.cx) / p.size + 0.5) * p.sq;
+      const dxTexels = (r.x - 2) - leftNow;                  // move the picture right by this much
+      nav._handleMouseDown({ clientX: x, clientY: y, button: 0 });
+      nav._handleMouseMove({ clientX: x + dxTexels, clientY: y });
+      nav._handleMouseUp();
+      nav._handleMouseMove({ clientX: W - 2, clientY: H - 2 });   // park the pointer off the map: no callout
+      nav.render();
+      expect(drv.S.pick?.address, 'the pan cleared the highlight').toEqual(addr);
+      const want = expectedFrame(drv.S.mapProj, addr);
+      expect(want.raw.x0, 'the pan did not put the sector past the picture — the case is vacuous')
+        .toBeLessThan(projRect(drv.S.mapProj).x);
+      expect(want.w, 'the pan took the whole sector off — the case is vacuous').toBeGreaterThan(0);
+      const { ctx, fills } = inkRecorder(W, H);
+      drv.render(ctx, W, H);
+      const r2 = projRect(drv.S.mapProj);
+      const key = fills.filter((f) => f.ink === INK.KEY && f.h === 1 && f.w > 2);
+      for (const f of key.filter((f) => f.y >= r2.y && f.y < r2.y + r2.h)) {
+        expect(f.x >= r2.x && f.x + f.w <= r2.x + r2.w,
+          `a frame edge escaped the picture: ${JSON.stringify(f)} vs ${JSON.stringify(r2)}`).toBe(true);
       }
-    }
-    expect(hit, 'no sector on this band reaches past it — the case would be vacuous').toBeTruthy();
-
-    expect(armPick(nav, drv, hit.xx, hit.yy), 'the rim point was eaten').not.toBe(null);
-    expect(drv.S.pick?.level).toBe(0);
-    const { ctx, fills } = inkRecorder(W, H);
-    drv.render(ctx, W, H);
-    const key = keyIn(fills, projRect(drv.S.mapProj));
-    expect(key.length, 'nothing was framed at the rim at all').toBeGreaterThan(0);
-    const band = projRect(drv.S.mapProj);
-    for (const f of key) {
-      expect(f.x >= band.x && f.x + f.w <= band.x + band.w
-             && f.y >= band.y && f.y + f.h <= band.y + band.h,
-        `a frame edge escaped the painted band: ${JSON.stringify(f)} vs ${JSON.stringify(band)}`).toBe(true);
-    }
-    // …and it IS the clamped rectangle, not a smaller one that happens to fit
-    const want = expectedFrame(drv.S.mapProj, drv.S.pick.sector);
-    expect(key.some((f) => f.x === want.x && f.y === want.y && f.w === want.w && f.h === 1),
-      `no clamped top edge at ${JSON.stringify(want)}; got ${JSON.stringify(key.slice(0, 6))}`).toBe(true);
-  }, 60000);
-
-  it('⛔ AND THE SAME CLIP IN DESIGN 1, WHERE IT TAKES A PAN TO REACH — the square is the picture', async () => {
-    // ⚠ MEASURED, AND THE COMMENT SAYS SO: on the ENTRY frame design 1's re-fitted square is exactly
-    //   the reachable disc, and no sector a click can resolve reaches past it — the rim sweep finds
-    //   nothing. What produces the case is the gesture the `levelView(0)` fix made real: a 2D PAN at
-    //   GALAXY, through the host's own `_panStartCenter` branch. A lit sector then walks toward the
-    //   square's edge under the pilot's hand, and the frame must stop at the edge, not draw past it.
-    const { nav, drv } = await galaxyNav();
-    const W = nav._canvas.width, H = nav._canvas.height;
-    const p = drv.S.mapProj, r = projRect(p);
-    const x = r.x + 2.5 * p.cell, y = r.y + 3.5 * p.cell;
-    expect(armPick(nav, drv, x, y), 'the fixture point was eaten').not.toBe(null);
-    const sec = drv.S.pick?.sector;
-    expect(sec, 'the fixture recorded no highlight').toBeTruthy();
-
-    // The pan that puts the sector's left edge TWO TEXELS outside the square while its right edge
-    // stays inside — derived from the published projection, `toX(left) = ox - 2`. It has to STRADDLE:
-    // pan far enough and the intersection is empty and the design correctly draws nothing, which
-    // would make the clip assertion below vacuous.
-    // ⭐ TWO THINGS MOVED HERE ON 2026-09-18, BOTH BECAUSE THE FIXTURE ENCODED A DEFECT.
-    //   (a) AC-3: the host no longer scales a design's pan by `_viewSize / navMapSize` (160 texels)
-    //       but by the DRAWN map — design 1's square is 216 — so a derivation off the legacy ratio
-    //       lands the frame 1.35x too far and this case's own assertion fires. The number now comes
-    //       from the same method the host calls, with the legacy ratio as the no-projection fallback.
-    //   (b) AC-4: the press was at `clientX: 300`, which at 417 wide is on design 1's RAIL (x 264..413),
-    //       not on its map (x 0..252). A press on chrome no longer arms a pan — correctly — so the
-    //       drag moved nothing at all. It now presses at the fixture's own map point `x`.
-    const overshootKpc = (p.size * 2) / r.w;
-    const targetCx = sec.centerX - sec.size / 2 + p.size / 2 + overshootKpc;
-    const scale = drv.panKpcPerTexel() ?? (nav._viewSize / navMapSize(W, H));
-    const dxTexels = -(targetCx - nav._viewCenter.x) / scale;      // `_viewCenter.x = start.x - dx`
-    nav._handleMouseDown({ clientX: x, clientY: y, button: 0 });
-    nav._handleMouseMove({ clientX: x + dxTexels, clientY: y });
-    nav._handleMouseUp();
-    nav.render();
-    expect(nav._viewCenter.x, 'the pan did not move the frame where the derivation said')
-      .toBeCloseTo(targetCx, 6);
-    expect(drv.S.pick?.sector?.name, 'the pan cleared the highlight').toBe(sec.name);
-
-    const p2 = drv.S.mapProj, r2 = projRect(p2);
-    const rawLeft = Math.round(r2.x + ((sec.centerX - sec.size / 2 - p2.cx) / p2.size + 0.5) * r2.w);
-    expect(rawLeft, 'the pan did not put the sector past the square — the case is vacuous')
-      .toBeLessThan(r2.x);
-    const { ctx, fills } = inkRecorder(W, H);
-    drv.render(ctx, W, H);
-    const key = keyIn(fills, projRect(drv.S.mapProj));
-    expect(key.length, 'nothing was framed after the pan').toBeGreaterThan(0);
-    for (const f of key) {
-      expect(f.x >= r2.x && f.x + f.w <= r2.x + r2.w && f.y >= r2.y && f.y + f.h <= r2.y + r2.h,
-        `a frame edge escaped the square: ${JSON.stringify(f)} vs ${JSON.stringify(r2)}`).toBe(true);
-    }
-    const want = expectedFrame(drv.S.mapProj, drv.S.pick.sector);
-    expect(want.x, "the clamped frame does not start on the square's own left edge").toBe(r2.x);
-    expect(key.some((f) => f.x === want.x && f.y === want.y && f.w === want.w && f.h === 1),
-      `no clamped top edge at ${JSON.stringify(want)}`).toBe(true);
-  }, 60000);
+      expect(key.some((f) => f.x === want.x && f.y === want.y && f.w === want.w),
+        `no clamped top edge at ${JSON.stringify(want)}`).toBe(true);
+      expect(want.x, "the clamped frame does not start on the picture's own left edge").toBe(r2.x);
+      expect(scale).toBeGreaterThan(0);
+    }, 60000);
+  }
 
   it('⭐ THE FRAME IS DRAWN AFTER THE YOU MARKER — an acknowledgement a rule can cross is not one', async () => {
-    // `d1TwoD` draws the player's 3x3 block in INK.YOU and the picked sector LAST, over the grid, the
-    // tile ids and that block. Order is a fact about `rec.calls`, so it is asserted there.
     const { nav, drv } = await galaxyNav();
     const W = nav._canvas.width, H = nav._canvas.height;
     const p = drv.S.mapProj, r = projRect(p);
@@ -1149,7 +1108,7 @@ describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
     drv.render(ctx, W, H);
     const youAt = fills.findIndex((f) => f.ink === INK.YOU && f.w === 3 && f.h === 3);
     expect(youAt, "design 1's 3x3 YOU block was not drawn — the case is vacuous").toBeGreaterThanOrEqual(0);
-    const want = expectedFrame(drv.S.mapProj, drv.S.pick.sector);
+    const want = expectedFrame(drv.S.mapProj, drv.S.pick.address);
     const frameAt = fills.findIndex((f) => f.ink === INK.KEY
       && f.x === want.x && f.y === want.y && f.w === want.w && f.h === 1);
     expect(frameAt, 'the picked sector was not framed at all').toBeGreaterThanOrEqual(0);
@@ -1158,37 +1117,30 @@ describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
 
   for (const mode of ['rail', 'bars']) {
     it(`⭐⭐ ${mode}: THE GALAXY PICTURE FOLLOWS THE GAME'S OWN FRAME — a pan moves it`, async () => {
-      // ⛔ `levelView(0)` READS `S.view` SINCE 2026-09-08 (INTERFACE §8f). It used to return the fixed
-      //    `{ 0, 0, 44 }`, and measured live the host's 2D pan moved `_viewCenter.x` 0 → -16.5 kpc
-      //    without changing one bit of the canvas — a gesture live at every 2D level moving a frame
-      //    nothing drew. This is that line, in both designs.
-      // ⛔ AND THE ENTRY FRAME IS UNMOVED, which is the half that keeps the picture Max ruled on:
-      //    `_viewStack[0]` is `{ 0, 0, 44 }`, so at entry `cx` is 0 and design 1's square is still
-      //    re-fitted to `min(44, 2R)` = 36 kpc.
+      // ⛔ `levelView(0)` READS `S.view` (INTERFACE §8f): the host's 2D pan must move the picture.
+      // ⭐ RULING (AC-3): design 1's re-fit to the 775-sector footprint is retired with that table —
+      //    the GALAXY frame is the host's own (`navGrid.viewForAddress(0)` once the host lands it).
       const { nav, drv } = await galaxyNav(mode);
       const entry = drv.S.mapProj;
-      expect(entry.cx, 'the entry frame is not the stack\'s own galaxy view').toBe(0);
-      expect(entry.cz).toBe(0);
-      if (mode === 'rail') expect(entry.size, "design 1's re-fit moved at entry").toBe(36);
+      expect(entry.cx, 'the entry frame is not the stack\'s own galaxy view').toBe(nav._viewCenter.x);
+      expect(entry.cz).toBe(nav._viewCenter.z);
+      expect(entry.size, 'the picture is not the game\'s frame').toBe(nav._viewSize);
 
       nav._viewCenter.x = -5;
       nav.render();
       expect(drv.S.mapProj.cx, 'the GALAXY picture ignored the frame the game panned').toBe(-5);
-      if (mode === 'rail') expect(drv.S.mapProj.size, 'a pan also changed the re-fit').toBe(36);
+      expect(drv.S.mapProj.size, 'a pan also changed the scale').toBe(entry.size);
     }, 60000);
   }
 
   for (const mode of ['rail', 'bars']) {
     it(`⭐⭐ ${mode}: THE DRILL ZOOMS AT GALAXY — the level is still 0 while the frame closes`, async () => {
-      // Max: *"clicking on a cell from the grid should highlight it, then zoom into it"*. `_updateAnim`
-      // walks `_viewCenter`/`_viewSize` for 500 ms and only THEN moves `_levelIndex`, so a design
-      // reading a fixed disc CUT to SECTOR after half a second. The zoom is the frame closing.
       const { nav, drv } = await galaxyNav(mode);
       const t0 = simClockMs();
       try {
         _setSimClockMs(t0);
         const p = drv.S.mapProj, r = projRect(p);
-        const size0 = mode === 'rail' ? p.size : p.kpc;
+        const size0 = p.size;
         const x = r.x + r.w * 0.34, y = r.y + r.h * 0.55;
         nav._handleMouseMove({ clientX: x, clientY: y });
         clickAt(nav, x, y);
@@ -1196,7 +1148,7 @@ describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
         _setSimClockMs(t0 + 250);
         nav.render();
         expect(nav._levelIndex, 'the drill landed early and this is no longer a GALAXY frame').toBe(0);
-        const size1 = mode === 'rail' ? drv.S.mapProj.size : drv.S.mapProj.kpc;
+        const size1 = drv.S.mapProj.size;
         expect(size1, `the GALAXY frame did not close during the drill: ${size0} -> ${size1}`)
           .toBeLessThan(size0);
       } finally { _setSimClockMs(t0); }
@@ -1204,45 +1156,34 @@ describe('a GALAXY click highlights the SECTOR it is about to drill', () => {
   }
 
   it('⭐⭐ A TAP WITH NO POINTER MOVE DRILLS WHAT IT FRAMES — AC-5 identity, the touch case', async () => {
-    // ⛔ THE GESTURE THE OLD BUILD GOT WRONG. `clickAt` is mousedown → mouseup → click with NO
-    //    `_handleMouseMove` — a tap, and the shipped panel path. Before §8f's fix the hover field was
-    //    whatever the last RENDER's `resolveHover(_mouseX, _mouseY)` left, so the click lit the sector
-    //    under the pointer and drilled the previous frame's one — or, with no pointer move at all,
-    //    drilled NOTHING while lighting a sector. `remapClick` now resolves hover at the click point.
+    // ⛔ `clickAt` is mousedown → mouseup → click with NO `_handleMouseMove` — a tap. `remapClick`
+    //    resolves hover at the click point, so the sector lit and the sector flown to are one.
     const { nav, drv } = await galaxyNav();
     const p = drv.S.mapProj, r = projRect(p);
-    const x = r.x + (2 + 0.5) * p.cell, y = r.y + (3 + 0.5) * p.cell;
-    clickAt(nav, x, y);
+    const c = cellAtTexel(drv, r.x + r.w * 0.3, r.y + r.h * 0.4);
+    expect(c, 'the fixture needs a drawn sector under the tap').toBeTruthy();
+    clickAt(nav, c.rect.x + c.rect.w / 2, c.rect.y + c.rect.h / 2);
     expect(nav._anim, 'a tap with no preceding pointer move drilled nothing').toBeTruthy();
     expect(drv.S.pick?.level, 'a tap recorded no highlight').toBe(0);
-    expect(drv.S.pick.sector.name, 'the tap framed one sector and flew to another')
-      .toBe(nav._viewStack[1].sectorName);
+    expect(drv.S.pick.address, 'the tap framed another sector').toEqual(c.address);
+    const b = boundsOf(c.address);
+    expect(nav._viewStack[1].center, 'the tap framed one sector and flew to another')
+      .toEqual({ x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2 });
   }, 60000);
 
   it('⭐⭐ AND THE HIGHLIGHT AND THE DRILL ARE ONE OBJECT, NOT TWO CALLS THAT AGREE', async () => {
-    // ⛔ HOW IDENTITY IS PINNED WHEN THE FIELD IS A COPY. `S.pick.sector` is four numbers and a name
-    //    (the designs read it unguarded, so it cannot be a live quadtree node), so `toBe` on the
-    //    object is not available. What IS available is a liveness probe: stamp every `getSectorAt`
-    //    answer with the call number that produced it. If `notePick` asked `pickSector` a second time
-    //    the two stamps differ, and the case goes red — which is exactly the mutant §8f names.
+    // ⛔ IDENTITY, PINNED BY REFERENCE: `notePick` must record the very address object the hover
+    //    resolved at the click's own point (the object `_handleClick` drills), never a second pick at
+    //    the same coordinates — two calls agree only while nothing between them moves.
     const { nav, drv } = await galaxyNav();
     const p = drv.S.mapProj, r = projRect(p);
     const x = r.x + r.w * 0.34, y = r.y + r.h * 0.55;
-    const real = nav._sectors.getSectorAt.bind(nav._sectors);
-    let n = 0;
-    nav._sectors.getSectorAt = (q) => {
-      const s = real(q);
-      return s ? { ...s, name: `${s.name}#${++n}` } : s;
-    };
-    try {
-      nav._handleMouseDown({ clientX: x, clientY: y, button: 0 });
-      nav._handleMouseUp();
-      drv.remapClick({ x, y }, nav._canvas.width, nav._canvas.height);
-      const hovered = nav._hoveredTile && nav._hoveredTile.sector;
-      expect(hovered, 'the click resolved no hover at its own point').toBeTruthy();
-      expect(drv.S.pick?.sector?.name, 'the highlight came from a second call, not from the drill\'s object')
-        .toBe(hovered.name);
-    } finally { nav._sectors.getSectorAt = real; }
+    nav._handleMouseDown({ clientX: x, clientY: y, button: 0 });
+    nav._handleMouseUp();
+    drv.remapClick({ x, y }, nav._canvas.width, nav._canvas.height);
+    const hovered = nav._hoveredTile && nav._hoveredTile.address;
+    expect(hovered, 'the click resolved no hover at its own point').toBeTruthy();
+    expect(drv.S.pick?.address, 'the highlight came from a second call, not from the drill\'s object').toBe(hovered);
   }, 60000);
 });
 
@@ -1254,6 +1195,10 @@ describe('AC-6 — tabbing INTO PRISM/SYSTEM closes the frame instead of cutting
   async function atRegion(mode = 'rail') {
     const h = await loadedNav({ mode });
     h.nav._setupViewStackForPlayer();
+    // ⭐ naming-prism-segments Phase 2: REGION frames the player's own fixed region exactly
+    //    (`navGrid.viewForAddress`), with its address on the stack — the host's default view.
+    const ra = navGrid.parentAt(2, h.nav._playerX, h.nav._playerZ), rv = navGrid.viewForAddress(2, ra);
+    h.nav._viewStack[2] = { center: { x: rv.cx, z: rv.cz }, size: rv.size, address: ra };
     h.nav._levelIndex = 2;
     h.nav._applyLevelView();
     h.nav.render();
@@ -1304,7 +1249,7 @@ describe('AC-6 — tabbing INTO PRISM/SYSTEM closes the frame instead of cutting
     // ⛔ THE MONOTONIC SAMPLES ABOVE CANNOT TELL A CORRECT TARGET FROM A WRONG ONE — any shrinking
     //    curve passes them. These are the END values, to 1e-9: the centre is the prism's own
     //    `_localCenter` and the window is the mirror of `:4476`'s outbound `fromSize`,
-    //    `_viewSize / (gridNForLevel(from) * 2)`, read through the driver's own `gridNFallback`.
+    //    `_viewSize / (gridNForLevel(from) * 2)`, read through `navGrid.easeSize` (naming-prism-segments Phase 2).
     // ⚠ AND THE PRISM IS MOVED OFF THE PLAYER FIRST, WHICH IS WHAT MAKES THE CENTRE ASSERTION SAY
     //   ANYTHING. At REGION `_viewStack[2].center` IS `{ _playerX, _playerZ }` and `_localCenter` is
     //   the same point, so on the stock fixture "the frame arrived on `_localCenter`" is true whether
@@ -1324,7 +1269,7 @@ describe('AC-6 — tabbing INTO PRISM/SYSTEM closes the frame instead of cutting
       const lag = drv.S.levelLag;
       expect(lag?.kind, 'the first Tab must start the map ease').toBe('map');
       expect(lag.toView.size, 'the target window is not the outbound ease mirrored')
-        .toBeCloseTo(fromSize / (gridNFallback(2) * 2), 12);
+        .toBeCloseTo(navGrid.easeSize(2, fromSize), 12);
       expect(lag.toView.cx, "the target centre is not the prism's own").toBe(nav._localCenter.x);
       expect(lag.toView.cz).toBe(nav._localCenter.z);
 
@@ -1341,7 +1286,7 @@ describe('AC-6 — tabbing INTO PRISM/SYSTEM closes the frame instead of cutting
       expect(drv.S.view.cx, 'the frame did not arrive on the prism centre').toBeCloseTo(nav._localCenter.x, 9);
       expect(drv.S.view.cz).toBeCloseTo(nav._localCenter.z, 9);
       expect(drv.S.view.size, 'the frame did not close to one tile of the level being left')
-        .toBeCloseTo(fromSize / (gridNFallback(2) * 2), 9);
+        .toBeCloseTo(navGrid.easeSize(2, fromSize), 9);
     } finally { _setSimClockMs(t0); }
   }, 60000);
 
@@ -1439,7 +1384,7 @@ describe('AC-6 — tabbing INTO PRISM/SYSTEM closes the frame instead of cutting
       expect(drv.S.levelLag?.kind).toBe('map');
       _setSimClockMs(t0 + 349.9999);
       nav.render();
-      expect(drv.S.view.size).toBeCloseTo(fromSize / (gridNFallback(2) * 2), 9);
+      expect(drv.S.view.size).toBeCloseTo(navGrid.easeSize(2, fromSize), 9);
       _setSimClockMs(t0 + 400);
       nav.render();
       expect(drv.S.level).toBe(3);

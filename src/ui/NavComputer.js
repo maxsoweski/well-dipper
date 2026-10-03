@@ -16,7 +16,7 @@ import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
 import alea from 'alea';
-import { simClockMs } from '../core/SimClock.js';  import { navTabHeight, navChromeReserve, navDrawH, navMapOriginY, navMapSize, navCommitButton, navTextInset } from './navLayout.js';  import { wrapPixelTypeCtx, navUnitCap } from './navPixelType.js';  import { prismMarkerMayShow } from './navPrismCull.js';  import { makeViewModeDriver, nextViewMode, loadViewMode, saveViewMode, applySurface } from './navViewModes/index.js';   // ⚠ appended to this line, not added as new lines: ~700 line-anchored citations ride this file
+import { simClockMs } from '../core/SimClock.js';  import { navTabHeight, navChromeReserve, navDrawH, navMapOriginY, navMapSize, navCommitButton, navTextInset } from './navLayout.js';  import { wrapPixelTypeCtx, navUnitCap } from './navPixelType.js';  import { prismMarkerMayShow } from './navPrismCull.js';  import { makeViewModeDriver, nextViewMode, loadViewMode, saveViewMode, applySurface } from './navViewModes/index.js';  import * as navGrid from './navGrid.js';  import * as navDrill from './navDrill.js';   // ⚠ appended to this line, not added as new lines: ~700 line-anchored citations ride this file
 
 /**
  * NavComputer — 5-level interactive galaxy navigation.
@@ -69,7 +69,7 @@ const GRID_N = 8; // tiles per axis (sector uses 8, region uses 16)
 const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;
 
 function gridNForLevel(levelIndex) {
-  return levelIndex === 2 ? 16 : 8; // region = 16x16, sector = 8x8
+  return navGrid.childCount(levelIndex); // naming-prism-segments AC-3: GALAXY 19, SECTOR 16, REGION 16 — the fixed grid's own counts
 }   const DESIGN_PRISM_DZ = 0.42, DESIGN_PRISM_DY = 0.55, PRISM_ROT_X = Math.atan2(DESIGN_PRISM_DZ, DESIGN_PRISM_DY), ORRERY_TILT = 0.42, ORRERY_ROT_X = Math.asin(ORRERY_TILT);   /* ⭐ THE DESIGNS’ TWO ROTATION DEFAULTS, DERIVED FROM THE GAINS AND NEVER THE OTHER WAY ROUND (nav-screens-close-pass/INTERFACE.md §1). `projectPrism` scales dz by 0.42 and dy by 0.55, which factors as an elevation-only rotation times an anisotropic scale, so the prism’s default elevation is atan2(0.42, 0.55) = 0.6521714117570698. `d2System`’s TILT is a true sine, so the orrery’s is asin(0.42) = 0.43344532006988595 and round-trips exactly. ⛔ WRITING THE ANGLES AS LITERALS AND DERIVING 0.42/0.55 BACK OUT IS 1-2 ULP OFF, and those raw floats feed the bounds culls and go unrounded into `S.prismHits` where `nearestHit` measures distance. This direction cannot drift. */
 
 /**
@@ -1180,12 +1180,12 @@ export class NavComputer {
     this._playerY = galacticPos.y || 0;
     this._playerZ = galacticPos.z;
     console.log(`[NAV] setPlayerPosition: Y=${galacticPos.y?.toFixed(4) || '0'} → _playerY=${this._playerY.toFixed(4)}`);
-    this._currentSector = this._sectors.getSectorAt({ x: this._playerX, z: this._playerZ });
+    this._currentSector = navDrill.sectorRecordAt(this._playerX, this._playerZ);   /* naming-prism-segments AC-3: the player's sector of the FIXED 19 × 19 grid ({id, name, centerX, centerZ, size, address}) — no longer the 775-sector density quadtree */
 
     // Center local view on player's actual 3D position (including height above plane)
     this._localCenter = { x: this._playerX, y: this._playerY, z: this._playerZ };
-    // Cube size based on local density
-    this._localCubeSize = Math.max(0.003, this._computeTileSize(this._playerX, this._playerZ, 150));
+    // PRISM's half-width is the fixed column's (3.90625 pc), set below by _setupViewStackForPlayer →
+    // navDrill.setColumn. It used to be a density-adaptive box around the player (plan §2.4, §6).
     this._localRadius = 0.0015; // ~5 light years default zoom
     // Fixed grid cell size — 1 pc (0.001 kpc), like tiles on a floor
     this._localGridCell = 0.001;
@@ -1198,29 +1198,29 @@ export class NavComputer {
   }
 
   _setupViewStackForPlayer() {
-    const ext = 22;
-    this._viewStack = [
-      { center: { x: 0, z: 0 }, size: ext * 2 }, // galaxy
-    ];
-
-    // Sector level — center on player's sector
-    if (this._currentSector) {
-      this._viewStack.push({
-        center: { x: this._currentSector.centerX, z: this._currentSector.centerZ },
-        size: this._currentSector.size,
-        sectorName: this._currentSector.name,
-      });
-    } else {
-      this._viewStack.push({ center: { x: this._playerX, z: this._playerZ }, size: 2 });
-    }
-
-    // Region — single 16x16 grid (merged district+block)
-    const regionSize = this._computeTileSize(this._playerX, this._playerZ, 10000) * 16;
-    this._viewStack.push({
-      center: { x: this._playerX, z: this._playerZ },
-      size: regionSize,
-    });
-
+    // ⭐ naming-prism-segments AC-3 — EVERY DEFAULT VIEW IS ONE PARENT'S EXACT SQUARE (plan §6).
+    //
+    // Max's rule: "each cell in the galaxy should represent a single sector … Every cell in the
+    // sector view should be displaying a single region. Every cell in the region view should be
+    // displaying a single prism." So the stack is navGrid.viewForAddress for the player's own
+    // parents: GALAXY = the 19 × 19 naming area (38 kpc), SECTOR = the player's 2 kpc sector,
+    // REGION = the player's 125 pc region ("the default REGION view snaps"). Each entry carries
+    // its `address`, which is what the screens cut into cells — a pan moves `_viewCenter`, never
+    // the address, so the cells stay the same places.
+    // ⛔ THE REGION ENTRY USED TO BE A DENSITY-SIZED TILE CENTRED ON THE PLAYER
+    // (`_computeTileSize(…, 10000) * 16`), so its cells were nobody's prisms.
+    this._viewStack = navDrill.stackFor(this._playerX, this._playerZ);
+    // ⭐ AND PRISM SHOWS THE PLAYER'S OWN COLUMN until the pilot drills another one: the loader's
+    // box, the camera's orbit centre and the WASD clamp all read `_prismColumn`.
+    navDrill.setColumn(this, navDrill.columnAt(this._playerX, this._playerZ));
+    // ⚠ ONE STACK FOR EVERY ENTRY PATH. The drill (`_handleClick` → navDrill.drillInto) rewrites
+    // `_viewStack[level + 1]` with the clicked child's own entry, the autopilot builds its stacks
+    // with the same `navDrill.stackEntry`, and ESC / the tab strip animate back to these entries —
+    // so whichever way a screen is reached, it frames the same square and cuts the same cells.
+    // `recentreOnPlayer` (navViewModes/index.js, design 2's HERE) calls this method to snap back.
+    // ⛔ `_viewStack[2]` IS THE REGION, NEVER THE COLUMN. The REGION → PRISM drill used to overwrite
+    // it with the clicked tile's centre and size so the loader could read it, which left ESC from
+    // PRISM landing on a tile-sized frame; the column now lives in `_prismColumn` on its own.
     // Set current view based on level
     this._applyLevelView();
   }
@@ -1398,12 +1398,12 @@ export class NavComputer {
         this._localCenter.x += dx;
         this._localCenter.z += dz;
 
-        // Clamp to block boundaries (XZ only — Y is unconstrained)
-        const blockCenter = this._viewStack[2]?.center;
-        if (blockCenter && this._localCubeSize) {
-          const half = this._localCubeSize;
-          this._localCenter.x = Math.max(blockCenter.x - half, Math.min(blockCenter.x + half, this._localCenter.x));
-          this._localCenter.z = Math.max(blockCenter.z - half, Math.min(blockCenter.z + half, this._localCenter.z));
+        // ⭐ naming-prism-segments AC-3 — WASD STOPS AT THE COLUMN'S EDGE (XZ only — Y is unconstrained).
+        // PRISM is ONE fixed 7.8125 pc column (`_prismColumn`, navGrid.enterColumn); to step sideways the
+        // pilot goes up to REGION and picks the next column, so the column word never changes underneath him.
+        if (this._prismColumn) {
+          const cc = navGrid.clampToColumn(this._prismColumn, this._localCenter.x, this._localCenter.z);
+          this._localCenter.x = cc.x; this._localCenter.z = cc.z;
         }
         // Don't re-query stars — we have the full block cached
       }
@@ -1630,60 +1630,60 @@ export class NavComputer {
     if (this._levelIndex === 0) {
       this._renderSectorOverlay(ctx, ox, oy, drawSize, cx, cz, ext);
     } else {
-      // Grid tiles — region uses 16x16, sector uses 8x8
-      const gn = gridNForLevel(this._levelIndex);
-      const tileW = drawSize / gn;
+      // ⭐ naming-prism-segments AC-3 — THE LEGACY LOOK CUTS THE SAME FIXED GRID THE DESIGNS DO.
+      // Max's rule: "Every cell in the sector view should be displaying a single region. Every cell
+      // in the region view should be displaying a single prism." The cells are the screen parent's
+      // own 16 × 16 child boxes (navGrid.childGrid), drawn through this map's projection, so a pan
+      // slides them across the glass and never re-cuts them. The hover (`_handleMouseMove`) and the
+      // drill (`_handleClick` → navDrill.drillInto) read the same boxes, so the cell framed under
+      // the pointer is the cell the click flies to. Colours and strokes are the shipped ones — the
+      // legacy look is kept correct here, not restyled (its segment widget is a follow-up).
+      // ⛔ IT USED TO BE A VIEW-RELATIVE 8 × 8 / 16 × 16 LATTICE over whatever the frame showed:
+      // after any drag its cells straddled regions, and its hover named a `{col, row}` of the
+      // frame, not a place.
+      const P = navDrill.legacyProj(this, w, h);
+      const box = (b) => { const x0 = P.toX(b.min.x), y0 = P.toY(b.max.z); return [x0, y0, P.toX(b.max.x) - x0, P.toY(b.min.z) - y0]; };
+      const parent = navDrill.legacyParent(this, this._levelIndex);
       ctx.strokeStyle = 'rgba(100, 180, 255, 0.12)';
       ctx.lineWidth = 1;
-      for (let i = 0; i <= gn; i++) {
-        ctx.beginPath();
-        ctx.moveTo(ox + i * tileW, oy);
-        ctx.lineTo(ox + i * tileW, oy + drawSize);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(ox, oy + i * tileW);
-        ctx.lineTo(ox + drawSize, oy + i * tileW);
-        ctx.stroke();
-      }
+      for (const c of navGrid.childGrid(this._levelIndex, parent)) ctx.strokeRect(...box(c.bounds));
 
       // "You are here" — highlight the grid cell containing the player
       // in cyan. Replaces the old player marker (pulsing ring) which was
       // too detailed at this zoom level. The highlighted cell + the
       // density backdrop tells the user where they are; the green target
       // diamond (below) tells them where they're going.
-      const tileSize = viewSize / gn;
-      const rawCol = Math.floor((this._playerX - (cx - ext)) / tileSize);
-      const rawRow = Math.floor(((cz + ext) - this._playerZ) / tileSize);
-      // Clamp to [0, gn-1]: when the player sits exactly on a tile edge
-      // (e.g. playerZ = cz - ext), floor produces gn which is one past the
-      // last valid tile. Clamping snaps it to the nearest in-bounds cell.
-      // If the player is genuinely outside the view (col/row far out of
-      // range), the wider bounds check below prevents a false highlight.
-      const playerCol = Math.max(0, Math.min(gn - 1, rawCol));
-      const playerRow = Math.max(0, Math.min(gn - 1, rawRow));
-      if (rawCol >= -1 && rawCol <= gn && rawRow >= -1 && rawRow <= gn) {
+      // ⭐ The player's cell is the child of THIS screen's parent that holds the player's point
+      // (GalaxyGrid.addressOf, half-open boxes), so a player exactly on an edge belongs to exactly
+      // one cell and no clamp is needed. A player outside this parent gets no highlight — the
+      // cell he stands in is not one of this screen's cells.
+      const mine = navGrid.cellAt(this._levelIndex, parent, this._playerX, this._playerZ);
+      if (mine) {
+        const r = box(navGrid.childCell(this._levelIndex, mine).bounds);
         ctx.fillStyle = 'rgba(0, 212, 255, 0.08)';
-        ctx.fillRect(ox + playerCol * tileW, oy + playerRow * tileW, tileW, tileW);
+        ctx.fillRect(...r);
         ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
         ctx.lineWidth = 2;
-        ctx.strokeRect(ox + playerCol * tileW, oy + playerRow * tileW, tileW, tileW);
+        ctx.strokeRect(...r);
       }
 
-      // Hovered tile
-      if (this._hoveredTile) {
-        const { col, row } = this._hoveredTile;
+      // Hovered tile — a navGrid.hoverTile payload: the child's own box, named by its grid
+      // reference (the plan's "hover shows the cell's word"; Phase 4 gives sectors real words).
+      const hv = this._hoveredTile;
+      if (hv && hv.level === this._levelIndex && hv.bounds) {
+        const r = box(hv.bounds);
         ctx.strokeStyle = 'rgba(100, 180, 255, 0.7)';
         ctx.lineWidth = 2;
-        ctx.strokeRect(ox + col * tileW, oy + row * tileW, tileW, tileW);
+        ctx.strokeRect(...r);
 
         // Tile info
-        const tileCx = cx - ext + (col + 0.5) * tileSize;
-        const tileCz = cz + ext - (row + 0.5) * tileSize;
-        const label = `(${tileCx.toFixed(1)}, ${tileCz.toFixed(1)})`;
+        // ⚠ The label was the tile's centre in kpc, `(8.1, -0.3)`: at REGION that is the same
+        // string for many neighbouring prisms, so it could not tell the pilot which cell he was on.
+        const label = hv.ref;
         ctx.font = '11px "DotGothic16", monospace';
         ctx.fillStyle = 'rgba(100, 180, 255, 0.9)';
         ctx.textAlign = 'center';
-        ctx.fillText(label, ox + (col + 0.5) * tileW, oy + row * tileW - 4);
+        ctx.fillText(label, r[0] + r[2] / 2, r[1] - 4);
         ctx.textAlign = 'left';
       }
     }
@@ -1819,21 +1819,24 @@ export class NavComputer {
   }
 
   _renderSectorOverlay(ctx, ox, oy, drawSize, cx, cz, ext) {
-    const sectors = this._sectors.getSectorsInBounds(
-      cx - ext, cx + ext, cz - ext, cz + ext
-    );
-
-    for (const s of sectors) {
-      const sx = ox + (s.centerX - cx + ext) / (ext * 2) * drawSize;
-      const sy = oy + (-(s.centerZ - cz) + ext) / (ext * 2) * drawSize;
-      const sw = s.size / (ext * 2) * drawSize;
+    // ⭐ naming-prism-segments AC-3 — GALAXY CELLS ARE THE 19 × 19 FIXED SECTORS, ONE CELL = ONE SECTOR.
+    // Max: "each cell in the galaxy should represent a single sector". The 293 sectors that touch
+    // R ≤ 18 kpc are drawn (`live`); the 68 corners are not and cannot be hovered. This replaces the
+    // 775-sector density quadtree (`GalacticSectors`), whose 0.25 kpc sectors were 1.5 texels wide and
+    // whose names repeated. `ox/oy/drawSize/cx/cz/ext` are this map's projection, as before.
+    const k = drawSize / (ext * 2);
+    const mine = this._currentSector && this._currentSector.address;
+    for (const c of navGrid.childGrid(0, null)) {
+      if (!c.live) continue;
+      const b = c.bounds;
+      const sw = (b.max.x - b.min.x) * k;  const sx = ox + ((b.min.x + b.max.x) / 2 - cx + ext) * k;
 
       // Sector boundary
-      const bx = ox + (s.minX - cx + ext) / (ext * 2) * drawSize;
-      const by = oy + (-(s.maxZ - cz) + ext) / (ext * 2) * drawSize;
+      const bx = ox + (b.min.x - cx + ext) * k;
+      const by = oy + (-(b.max.z - cz) + ext) * k;
 
       // Highlight current sector — cyan "you are here" cell
-      if (this._currentSector && s.id === this._currentSector.id) {
+      if (mine && navGrid.sameAddress(mine, c.address)) {
         ctx.fillStyle = 'rgba(0, 212, 255, 0.08)';
         ctx.fillRect(bx, by, sw, sw);
         ctx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
@@ -1845,20 +1848,17 @@ export class NavComputer {
         ctx.strokeRect(bx, by, sw, sw);
       }
 
-      // Hover detection
-      if (this._mouseX >= bx && this._mouseX <= bx + sw &&
-          this._mouseY >= by && this._mouseY <= by + sw) {
-        this._hoveredTile = { sector: s };
+      // Hover detection — half-open, like the grid's own boxes, so a pointer on a shared edge names
+      // exactly one sector. The payload is navGrid.hoverTile: it carries `.sector` (the exact square
+      // the level-0 drill flies to) and `.address`. ⛔ Not under a 240p design: the driver owns the
+      // hover there and resolves it at the tail of render() through its own projection.
+      if (!this.viewMode && this._mouseX >= bx && this._mouseX < bx + sw && this._mouseY >= by && this._mouseY < by + sw) {
+        this._hoveredTile = navGrid.hoverTile(0, c.address);
         ctx.strokeStyle = 'rgba(100, 180, 255, 0.7)';
         ctx.lineWidth = 2;
         ctx.strokeRect(bx, by, sw, sw);
-
-        // Sector name tooltip
-        ctx.font = '12px "DotGothic16", monospace';
-        ctx.fillStyle = 'rgba(100, 180, 255, 0.9)';
-        ctx.textAlign = 'center';
-        ctx.fillText(s.name, sx, by - 4);
-        ctx.textAlign = 'left';
+        ctx.font = '12px "DotGothic16", monospace';   // sector name tooltip — its grid reference until Phase 4
+        ctx.fillStyle = 'rgba(100, 180, 255, 0.9)'; ctx.textAlign = 'center'; ctx.fillText(c.ref, sx, by - 4); ctx.textAlign = 'left';
       }
     }
   }
@@ -1884,7 +1884,7 @@ export class NavComputer {
     // 3D projection — orbit around the block center, not the camera position.
     // The camera can WASD around within the block, but rotation always pivots
     // around the prism's central axis.
-    const blockCenter = this._viewStack[2]?.center || { x: cx, z: cz };
+    const blockCenter = this._prismColumn?.center || { x: cx, z: cz };   /* naming-prism-segments AC-3: the camera orbits the COLUMN's axis (navGrid.enterColumn), not `_viewStack[2]` — that is the REGION frame now */
     const orbitX = blockCenter.x;
     const orbitZ = blockCenter.z;
 
@@ -2037,26 +2037,26 @@ export class NavComputer {
     this._hoveredLocalStar = null;
     const hitDist = 12;
 
-    // Find the current-system star. Two strategies:
-    // 1. Match by name (reliable for known/real stars like Sol, Alpha
-    //    Centauri — _currentSystemName is set from main.js and the real
-    //    star catalog merge gives _localStars entries the same name).
-    // 2. Fall back to _findNearestStar() for hash grid systems where the
-    //    generated name might differ between main.js and the prism view.
-    //
-    // Position-based matching fails here because the player's galactic
-    // coordinates (_playerX/Y/Z) don't exactly match the hash grid star
-    // that represents their system — in a dense field of 43K+ stars,
-    // a different nearby star can be closer.
-    let currentSystemStar = null;
-    if (this._currentSystemName) {
-      currentSystemStar = this._localStars.find(
-        s => s.name === this._currentSystemName
-      );
-    }
-    if (!currentSystemStar) {
-      currentSystemStar = this._findNearestStar();
-    }
+    // ⭐ naming-prism-segments AC-5 — "HERE" IS THE PLAYER, NOT A LIST ROW (plan §6).
+    // The current-system star is looked for ONLY when the column on the glass is the player's own
+    // (`navDrill.onPlayerColumn`: GalaxyGrid.addressOf of the player's position against
+    // `_prismColumn`). There it is the loaded row that IS the player's star — the identity rule,
+    // `findStar` at the player's position (0.1 pc) — else the row carrying `_currentSystemName`
+    // (a catalogue star the merge renamed). On any other column there is no here-mark at all:
+    // no cyan ring (the `tier` and ring below) and no player marker (the fallback at the end of
+    // this method, gated on the same test).
+    // ⛔ THE OLD FALLBACK WAS `_findNearestStar()`, THE NEAREST LOADED ROW. Once the pilot can browse
+    // a column that is not his, the nearest row is a stranger, and the YOU mark sat on it. The
+    // matching rule for the 240p designs is the same one (navViewModes/state.js, `D.here`).
+    // ⚠ The note that lived here said position matching fails because the player's coordinates do
+    // not match his star's; arrival now sets the player ON the resolved star's position (main.js
+    // `playerGalacticPos = { x: resolvedStar.worldX, … }`), and the identity rule matches within
+    // POSITION_MATCH_TOL rather than exactly. `_findNearestStar` itself stays: the SYSTEM tab's
+    // auto-select (`_handleClick`) still wants "the star nearest the player", which is a different
+    // question from "which row is the player's star".
+    // The where-am-I text (`_renderHUD`) prints `_currentSystemName` and `_currentSector.name`,
+    // both set from the player, never from a browsed row.
+    const currentSystemStar = navDrill.hereStar(this, this._localStars);
 
     // Deferred label pass (AC9): collect real-star name labels during the loop,
     // place + draw them AFTER so drawn labels never overlap. Frame-reused array.
@@ -2178,7 +2178,7 @@ export class NavComputer {
     // Player marker — only if no star at the player's position (prism not
     // loaded yet, or player between systems). Otherwise the cyan "you are
     // here" ring on the matched star already shows the player's location.
-    if (!currentSystemStar) {
+    if (!currentSystemStar && navDrill.onPlayerColumn(this)) {   /* AC-5: no player marker on a column that is not the player's */
       const playerP = project(this._playerX, this._playerY, this._playerZ);
       this._drawPlayerMarker(ctx, playerP.x, playerP.y, 8);
     }
@@ -3547,7 +3547,7 @@ export class NavComputer {
     if (this._compact) return;
 
     const cubeHalf = this._localCubeSize || 0.01;
-    const blockCenter = this._viewStack[2]?.center || this._localCenter;
+    const blockCenter = this._prismColumn?.center || this._localCenter;   /* AC-3: the column's centre */
 
     // Find Y extent of all stars
     let minStarY = Infinity, maxStarY = -Infinity;
@@ -3694,7 +3694,7 @@ export class NavComputer {
    * Then schedules background expansion to pre-load above and below.
    */
   _ensureStarsLoaded(cx, cy, cz, yHalf) {
-    const blockCenter = this._viewStack[2]?.center || { x: cx, z: cz };
+    const blockCenter = this._prismColumn?.center || { x: cx, z: cz };   /* ⭐ naming-prism-segments AC-3: TODAY'S LOADER, POINTED AT THE FIXED COLUMN — `_prismColumn` (navGrid.enterColumn) and its half-width (`_localCubeSize` = 3.90625 pc, navDrill.setColumn). Phase 3 replaces the loader itself with the slab loader; until then its box is exactly the column the screen names, not a density-sized box around the clicked point (plan §2.4). */
     const blockHalf = this._localCubeSize || 0.005;
 
     // If block changed (navigated to new block), reset everything
@@ -3753,7 +3753,7 @@ export class NavComputer {
 
     for (const s of stars) {
       const key = s.key;   /* naming-prism-segments AC-2: the generator's (tier, cell) identity — the old `${seed}-${x.toFixed(6)}` ignored Y, Z and tier */
-      if (!this._loadedSeen.has(key)) {
+      if (!this._loadedSeen.has(key) && (!this._prismColumn || navGrid.inFootprint(this._prismColumn.bounds, s.worldX, s.worldZ))) {   /* naming-prism-segments AC-3: the query box is closed, the grid's boxes are half-open — a star on a shared face belongs to exactly ONE column */
         this._loadedSeen.add(key);
         let name = '';
         try { name = generateSystemName(this._makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch (e) {
@@ -3765,8 +3765,8 @@ export class NavComputer {
           wx: s.worldX, wy: s.worldY, wz: s.worldZ,
           name, spectral: s.type,
           color: NavComputer._SPECTRAL_COLORS[s.type] || '#ff9664',
-          seed: s.seed, key: s.key, ident: s.ident, dist: s.dist,
-          distPc: (s.dist * 1000).toFixed(0),
+          seed: s.seed, key: s.key, ident: s.ident, dist: navDrill.playerDistKpc(this, s.worldX, s.worldY, s.worldZ),   /* naming-prism-segments AC-5 (plan §6): `dist` is from the PLAYER, not the query's centre — once the pilot browses a column that is not his, the query centre is a stranger */
+          distPc: (navDrill.playerDistKpc(this, s.worldX, s.worldY, s.worldZ) * 1000).toFixed(0),
         });
       }
     }
@@ -4374,19 +4374,19 @@ export class NavComputer {
     }
 
     // Hover detection for 2D levels
+    // ⭐ naming-prism-segments AC-3 — THE LEGACY HOVER IS THE FIXED CELL UNDER THE POINTER: the child
+    // of this screen's parent that holds the pointer's world point (`navDrill.legacyHoverAt` →
+    // navGrid.cellAt), published as a navGrid.hoverTile payload `{ level, address, ref, bounds, … }`
+    // that `_handleClick` drills (navDrill.drillInto) and `_render2DLevel` frames — one box for all
+    // three. Off the parent (a neighbour, or off the map) it is null: not this screen's cell.
+    // ⛔ It used to be `{ col, row }` of a view-relative lattice, re-cut after every drag, so after
+    // a pan the framed tile and the drilled place were two different boxes.
+    // ⛔ AND NOT UNDER A 240p DESIGN: `hover()` above already ran the driver's picker, which writes
+    // this field for its own map (a miss writes null), and a legacy write here would put a cell of
+    // the LEGACY projection under a design's pointer. The driver re-resolves at the tail of render().
     if (this._levelIndex > 0 && this._levelIndex <= 2) {
-      const drawSize = navMapSize(this._canvas.width, this._canvas.height);
-      const ox = (this._canvas.width - drawSize) / 2;
-      const oy = navMapOriginY(this._canvas.height);
-      const gn = gridNForLevel(this._levelIndex);
-      const tileW = drawSize / gn;
-      const col = Math.floor((p.x - ox) / tileW);
-      const row = Math.floor((p.y - oy) / tileW);
-      if (col >= 0 && col < gn && row >= 0 && row < gn) {
-        this._hoveredTile = { col, row };
-      } else {
-        this._hoveredTile = null;
-      }
+      if (!this.viewMode) this._hoveredTile = navDrill.legacyHoverAt(this, this._levelIndex, p.x, p.y);
+      // (the legacy GALAXY hover is resolved during the paint, in `_renderSectorOverlay`)
     } else if (this._levelIndex === 0) {
       // Galaxy level — hover handled in renderSectorOverlay
       this._hoveredTile = null;
@@ -4473,7 +4473,7 @@ export class NavComputer {
           if (this._onDrillSound) this._onDrillSound(idx);
           const wasDeep = this._levelIndex > 2;   /* ⭐ AC-6: CAPTURED BEFORE THE LEVEL MOVES, because the transitions Max lost are exactly the ones this branch takes — `:4450` animates only when BOTH ends are 2D, so everything touching PRISM (3) or SYSTEM (4) jumped. */
           this._levelIndex = idx;  this._applyLevelView();  this._densityCacheKey = '';   /* ⛔ THE LEVEL STILL MOVES SYNCHRONOUSLY AND THAT IS NOT NEGOTIABLE. `drv.tabLevel` synthesises its click through here and four suites read `nav._levelIndex` on the next statement (navPicking.test.js:769 wraps GALAXY→SYSTEM, navSearch.test.js:438-448 walks three levels with no frame between presses). Deferring the index the way `_startDrillAnim` does would have eaten the second and third press. */
-          if (this.viewMode && wasDeep && idx <= 2) { const gn2 = gridNForLevel(idx) * 2; this._viewEase = { startTime: simClockMs(), duration: 350, fromCenter: { x: this._localCenter.x, z: this._localCenter.z }, fromSize: this._viewSize / gn2, toCenter: { x: this._viewCenter.x, z: this._viewCenter.z }, toSize: this._viewSize }; }   /* ⭐ AC-6 — A REAL ZOOM-OUT ON THE WAY BACK FROM PRISM/SYSTEM: the 2D frame opens from a tile-sized window on the prism’s own centre to the level’s own frame, the mirror of the region→prism drill’s `tileSize * 0.5` (:4688). ⛔ THE INBOUND HALF (2D → PRISM/SYSTEM) IS DELIBERATELY NOT HERE, AND IT IS NOT MINE TO ADD: under a mode the design overpaints the legacy frame entirely and branches on `S.level`, which is `nav._levelIndex` (state.js:408), so an inbound animation needs the DESIGN to keep drawing its 2D map while the frame zooms — a lag in `S.level`, in navViewModes/, not a tween here. Animating the legacy painter instead would move pixels nobody can see. ⚠ Gated on `viewMode`: with no mode this whole clause is unreachable and today’s nav still jumps exactly as it always has. */
+          if (this.viewMode && wasDeep && idx <= 2) { this._viewEase = { startTime: simClockMs(), duration: 350, fromCenter: { x: this._localCenter.x, z: this._localCenter.z }, fromSize: navGrid.easeSize(idx, this._viewSize),   /* naming-prism-segments AC-3: the SAME ease window the driver's inbound half uses (navGrid.easeSize, state.js), so out and in are mirror images */ toCenter: { x: this._viewCenter.x, z: this._viewCenter.z }, toSize: this._viewSize }; }   /* ⭐ AC-6 — A REAL ZOOM-OUT ON THE WAY BACK FROM PRISM/SYSTEM: the 2D frame opens from a tile-sized window on the prism’s own centre to the level’s own frame, the mirror of the region→prism drill’s `tileSize * 0.5` (:4688). ⛔ THE INBOUND HALF (2D → PRISM/SYSTEM) IS DELIBERATELY NOT HERE, AND IT IS NOT MINE TO ADD: under a mode the design overpaints the legacy frame entirely and branches on `S.level`, which is `nav._levelIndex` (state.js:408), so an inbound animation needs the DESIGN to keep drawing its 2D map while the frame zooms — a lag in `S.level`, in navViewModes/, not a tween here. Animating the legacy painter instead would move pixels nobody can see. ⚠ Gated on `viewMode`: with no mode this whole clause is unreachable and today’s nav still jumps exactly as it always has. */
         }
         this._hoveredTile = null;
         if (idx !== 3 && idx !== 4) {
@@ -4629,80 +4629,80 @@ export class NavComputer {
       return;
     }
 
-    // Galaxy level — click a sector
-    if (this._levelIndex === 0 && this._hoveredTile && this._hoveredTile.sector) {
-      const s = this._hoveredTile.sector;
-      this._viewStack[1] = {
-        center: { x: s.centerX, z: s.centerZ },
-        size: s.size,
-        sectorName: s.name,
-      };
-      if (this._onDrillSound) this._onDrillSound(1);
-      this._startDrillAnim(
-        { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
-        { x: s.centerX, z: s.centerZ }, s.size,
-        1, 500
-      );
-      this._hoveredTile = null;
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    // ⭐⭐ naming-prism-segments AC-3 / AC-4 — A CLICK ON A 2D CELL DRILLS TO EXACTLY THAT CELL.
+    // ════════════════════════════════════════════════════════════════════════════════════════
+    //
+    // Max's rule (2026-10-02): "each cell in the galaxy should represent a single sector …
+    // Every cell in the sector view should be displaying a single region. Every cell in the region
+    // view should be displaying a single prism."
+    //
+    // `_hoveredTile` is a navGrid.hoverTile payload — `{ level, address, ref, bounds, center,
+    // size, sector? }` — written by whichever picker owns the pointer: the 240p designs' driver
+    // (navViewModes/picking.js, through `navGrid.cellAt` of its own projection), the legacy map
+    // (`_handleMouseMove` / `_renderSectorOverlay`, through navDrill.legacyHoverAt and
+    // navGrid.childGrid), or a design's list row (the row's own address). Whatever wrote it, the
+    // click goes to `navGrid.nextView(level, address)`:
+    //
+    //   GALAXY → SECTOR   `_viewStack[1]` = the clicked sector's exact 2 kpc square + its address;
+    //   SECTOR → REGION   `_viewStack[2]` = the clicked region's exact 125 pc square + its address;
+    //   REGION → PRISM    `_prismColumn` = navGrid.enterColumn(the clicked prism) — ONE fixed
+    //                     7.8125 pc column; the camera starts on its centre at the player's
+    //                     height, and the frame eases into it through navGrid.easeSize.
+    //
+    // ⭐ ONE FUNCTION FOR EVERY CALLER (`navDrill.drillInto`). The autopilot
+    // (AutopilotNavSequence.js) drills through the same function with the cells
+    // `navGrid.drillPath(dest)` names, so the cell it highlights at each level, the box it flies
+    // to and the column it opens are the ones a pilot's clicks to the same place would give.
+    //
+    // ⛔ WHAT THIS REPLACES. Two branches that each re-derived a place from the frame on the glass:
+    //   · GALAXY read `.sector` from the 775-sector density quadtree (`GalacticSectors`), whose
+    //     cells did not match design 1's 8 × 8 GALAXY grid — a click could fly somewhere the cell
+    //     under the pointer did not name;
+    //   · SECTOR / REGION turned a `{ col, row }` of an 8 × 8 / 16 × 16 lattice over WHATEVER THE
+    //     VIEW FRAMED into a centre — so after a drag the drilled box straddled two regions — and
+    //     REGION → PRISM loaded a density-sized box (`_computeTileSize(…, 150)`, min 3 pc) around
+    //     that centre, then overwrote `_viewStack[2]` with it so the loader could find it.
+    //
+    // ⚠ THE LEVEL MUST MATCH. A payload from another level (a hover that survived a level change)
+    // names a cell of a different screen, and drilling it would land somewhere this screen does
+    // not show — so it is ignored, the way a stale `{ col, row }` never was.
+    //
+    // ⛔ THE SETTLE ANGLE STAYS THE HOST'S: with a design on, the 600 ms tilt has to land on the
+    // design's own default (`PRISM_ROT_X`, INTERFACE §1) and the azimuth goes to 0; with no mode it
+    // settles to the literal 0.5 it always has and `_localRotY` is untouched.
+    const hv = this._hoveredTile;
+    if (this._levelIndex <= 2 && hv && hv.level === this._levelIndex && hv.address) {
+      navDrill.drillInto(this, this._levelIndex, hv.address, {
+        tiltTo: this.viewMode ? PRISM_ROT_X : 0.5,
+        rotY: this.viewMode ? 0 : undefined,
+      });
       return;
     }
-
-    // Sector/Region — click a tile to drill down
-    if (this._levelIndex >= 1 && this._levelIndex <= 2 && this._hoveredTile && this._hoveredTile.col !== undefined) {
-      const { col, row } = this._hoveredTile;
-      const gn = gridNForLevel(this._levelIndex);
-      const tileSize = this._viewSize / gn;
-      const ext = this._viewSize / 2;
-      const newCx = this._viewCenter.x - ext + (col + 0.5) * tileSize;
-      const newCz = this._viewCenter.z + ext - (row + 0.5) * tileSize;
-
-      if (this._levelIndex === 1) {
-        // Sector → Region — zoom into the clicked tile
-        const nextSize = tileSize; // the region view subdivides this tile into 16×16
-        this._viewStack[2] = {
-          center: { x: newCx, z: newCz },
-          size: nextSize,
-        };
-        if (this._onDrillSound) this._onDrillSound(2);
-        this._startDrillAnim(
-          { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
-          { x: newCx, z: newCz }, nextSize,
-          2, 400
-        );
-        this._hoveredTile = null;
-      } else {
-        // Region (level 2) → Prism (level 3) — zoom into tile then switch
-        this._localCenter = { x: newCx, y: this._playerY, z: newCz };
-        // Update viewStack so orbit center matches the tile center
-        this._viewStack[2] = { center: { x: newCx, z: newCz }, size: tileSize };
-        this._localCubeSize = Math.max(0.003, this._computeTileSize(newCx, newCz, 150));
-        // Default zoom: ~5 light years (5 ly ≈ 1.53 pc ≈ 0.00153 kpc)
-        this._localRadius = 0.0015;
-        this._localGridCell = 0.001;
-        this._localStars = [];
-        this._resetPrismLoad();
-        // Start prism view top-down, then tilt to default angle
-        this._localRotX = Math.PI / 2; // top-down (matches 2D view)
-        this._tiltAnim = { startTime: null, duration: 600, from: Math.PI / 2, to: this.viewMode ? PRISM_ROT_X : 0.5 };  if (this.viewMode) this._localRotY = 0;   /* ⛔ THE 600 ms SETTLE HAS TO LAND ON THE DESIGN’S ANGLE, NOT ON 0.5 (INTERFACE §1). The line above starts the prism top-down and this tween brings it over; with the designs reading the game’s rotation, a `to: 0.5` would settle the prism 8° off the frame Max ruled on and leave it there. ⚠ With no mode the target is the literal 0.5 this line has always carried and `_localRotY` is untouched — the drill is byte-identical. */
-        // Animate zoom into the tile, then switch to prism at completion
-        const localSize = tileSize * 0.5;
-        if (this._onDrillSound) this._onDrillSound(3);
-        this._startDrillAnim(
-          { x: this._viewCenter.x, z: this._viewCenter.z }, this._viewSize,
-          { x: newCx, z: newCz }, localSize,
-          3, 500
-        );
-        this._hoveredTile = null;
-      }
-      return;
-    }
+    // Nothing drillable under the pointer — a click outside the screen's parent (a dimmed
+    // neighbour, or off the map), or one of the 68 undrawn GALAXY corners: a miss, never a clamp.
+    //
+    // (Deliberately no fall-back to a coordinate: `_handleClick` reads hover state, not the
+    // click's position, so the cell that was framed is the only cell that can be drilled.)
+    //
+    // Tests: src/ui/__tests__/navGridDrill.host.test.js (every screen, both designs, after a drag;
+    // the legacy look; PRISM's column, WASD clamp and zoom range) and the AC-4 test in
+    // src/auto/__tests__/AutopilotNavSequence.drill.test.js (the autopilot's cells = the manual
+    // drill's cells, level by level).
+    //
+    // ⚠ THE LINES BELOW ARE SPACERS: the two branches this replaced were 67 lines, and this file is held
+    // at 4711 lines (navKeys.test.js:375) because ~700 citations ride the line numbers after this point.
+    //
+    //
+    //
+    //
   }
 
   _handleWheel(e) {
     e.preventDefault();
     if (this._levelIndex === 3) {
       const factor = e.deltaY > 0 ? 1.15 : 0.87;
-      this._localRadius = Math.max(0.0015, Math.min(this._localCubeSize || 0.01, this._localRadius * factor));   /* ⛔ AC-5: THE LOWER CLAMP WAS 0.002 AND THE PRISM ENTRY RADIUS IS 0.0015 (:1189, :4680), SO IT SAT ABOVE THE VALUE THE VIEW OPENS AT. Once the camera is fed to the designs, the FIRST wheel event in either direction snapped the zoom out by 33% before the picture had moved at all — deltaY>0 multiplies by 1.15 and lands on 0.001725, which the clamp then raised to 0.002. The clamp must be the entry value, not above it. ⚠ The level-4 SYSTEM branch below is untouched: _systemZoom is a multiplier that enters at 1.0 and its 0.3 floor is genuinely below that. */
+      this._localRadius = Math.max(navGrid.PRISM_ZOOM_MIN_KPC, Math.min(navGrid.PRISM_ZOOM_MAX_KPC, this._localRadius * factor));   /* ⭐ naming-prism-segments AC-3 (plan §6): ZOOM IS NO LONGER TIED TO THE COLUMN'S WIDTH — 0.0015 kpc up to max(0.01 kpc, 2 × column width) = 0.015625 kpc, so the pilot can pull back past the column's edge without the column moving. The upper clamp used to be `_localCubeSize`, the density-sized box. */   /* ⛔ AC-5: THE LOWER CLAMP WAS 0.002 AND THE PRISM ENTRY RADIUS IS 0.0015 (:1189, :4680), SO IT SAT ABOVE THE VALUE THE VIEW OPENS AT. Once the camera is fed to the designs, the FIRST wheel event in either direction snapped the zoom out by 33% before the picture had moved at all — deltaY>0 multiplies by 1.15 and lands on 0.001725, which the clamp then raised to 0.002. The clamp must be the entry value, not above it. ⚠ The level-4 SYSTEM branch below is untouched: _systemZoom is a multiplier that enters at 1.0 and its 0.3 floor is genuinely below that. */
     } else if (this._levelIndex === 4) {
       const factor = e.deltaY > 0 ? 0.87 : 1.15;
       this._systemZoom = Math.max(0.3, Math.min(5.0, this._systemZoom * factor));

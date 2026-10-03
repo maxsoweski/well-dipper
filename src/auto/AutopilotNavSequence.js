@@ -15,7 +15,7 @@
  */
 
 import { simClockMs } from '../core/SimClock.js';
-import { simRandom } from '../core/SimRandom.js';  import { navDrawH } from '../ui/navLayout.js';   // ⚠ appended, not a new line — this file is line-cited
+import { simRandom } from '../core/SimRandom.js';  import * as navGrid from '../ui/navGrid.js';  import * as navDrill from '../ui/navDrill.js';   // ⚠ appended, not a new line — this file is line-cited
 
 // ── Navigation styles with weights ──
 // Higher weight = more likely to be picked. Weighted random, not rotation.
@@ -120,57 +120,36 @@ export class AutopilotNavSequence {
   // ── Style: Full Journey (Galaxy → Sector → Region → Prism → Star) ──
 
   _startAtGalaxy(dest) {
-    this._nav._levelIndex = 0;
-    this._nav._viewCenter = { x: 0, z: 0 };
-    this._nav._viewSize = 44;
-    this._nav._viewStack = [];
-    this._nav._hoveredTile = null;
-    this._nav._localStars = [];
-    this._nav._resetPrismLoad();
+    // naming-prism-segments AC-4 — the GALAXY screen's own frame (the 19 × 19 naming area), from the
+    // same `navDrill.jumpTo` / `navGrid.viewForAddress` every other entry path uses.
+    navDrill.jumpTo(this._nav, navGrid.GALAXY, null);
     if (this._soundEngine) this._soundEngine.play('navDrill0');
 
     // Pause at galaxy (2-3s)
-    this._delay(2000 + simRandom() * 1000, () => this._drillToSector(dest));
+    this._delay(2000 + simRandom() * 1000, () => this._hoverThenDrill(dest, navGrid.GALAXY));
   }
 
   // ── Style: Sector Hop (skip galaxy, start at sector level) ──
 
   _startAtSector(dest) {
-    const sector = this._sectorForDest(dest);
-    this._nav._levelIndex = 1;
-    this._nav._viewCenter = { x: sector.cx, z: sector.cz };
-    this._nav._viewSize = sector.size;
-    this._nav._viewStack = [undefined, { center: { x: sector.cx, z: sector.cz }, size: sector.size }];
-    this._nav._hoveredTile = null;
-    this._nav._localStars = [];
-    this._nav._resetPrismLoad();
+    // naming-prism-segments AC-4 — straight onto the destination's own SECTOR (its exact 2 kpc
+    // square, with its address on the view stack), not a cell of a private 8 × 8 / 44 kpc grid.
+    navDrill.jumpTo(this._nav, navGrid.SECTOR, navGrid.parentAt(navGrid.SECTOR, dest.x, dest.z));
     if (this._soundEngine) this._soundEngine.play('navDrill1');
 
     // Pause at sector (1.5-2.5s), then hover+drill to region
-    this._delay(1500 + simRandom() * 1000, () => this._hoverThenDrillRegion(dest, sector.cx, sector.cz, sector.size));
+    this._delay(1500 + simRandom() * 1000, () => this._hoverThenDrill(dest, navGrid.SECTOR));
   }
 
   // ── Style: Region Browse (start at region level) ──
 
   _startAtRegion(dest) {
-    const sector = this._sectorForDest(dest);
-    const region = this._regionForDest(dest, sector.cx, sector.cz, sector.size);
-
-    this._nav._levelIndex = 2;
-    this._nav._viewCenter = { x: region.cx, z: region.cz };
-    this._nav._viewSize = region.size;
-    this._nav._viewStack = [
-      undefined,
-      { center: { x: sector.cx, z: sector.cz }, size: sector.size },
-      { center: { x: region.cx, z: region.cz }, size: region.size },
-    ];
-    this._nav._hoveredTile = null;
-    this._nav._localStars = [];
-    this._nav._resetPrismLoad();
+    // The destination's own REGION (exact 125 pc square), the stack above it built the same way.
+    navDrill.jumpTo(this._nav, navGrid.REGION, navGrid.parentAt(navGrid.REGION, dest.x, dest.z));
     if (this._soundEngine) this._soundEngine.play('navDrill2');
 
     // Pause at region (1.5-2s), then hover+drill to prism
-    this._delay(1500 + simRandom() * 500, () => this._hoverThenDrillPrism(dest, region.cx, region.cz, region.size));
+    this._delay(1500 + simRandom() * 500, () => this._hoverThenDrill(dest, navGrid.REGION));
   }
 
   // ── Style: Prism Scroll (open prism, scroll Y, pick star) ──
@@ -223,155 +202,79 @@ export class AutopilotNavSequence {
 
   // ── Shared drill-down steps ──
 
-  _drillToSector(dest) {
+  /**
+   * ⭐ naming-prism-segments AC-4 — ONE STEP OF THE DRILL, THROUGH THE PILOT'S OWN CELLS.
+   *
+   * The cell this step lights and clicks is `navGrid.drillPath(dest)[level].child` — the child of the
+   * screen's parent that holds the destination — and the click is `navDrill.drillInto`, the function
+   * `NavComputer._handleClick` calls for a pilot's click. So at every level the autopilot shows and
+   * flies to exactly the cell a pilot drilling to the same place would, and REGION → PRISM opens the
+   * same fixed 7.8125 pc column.
+   * ⛔ IT USED TO CARRY ITS OWN GRID: an 8 × 8 split of a 44 kpc square for the sector
+   * (`_sectorForDest`), 16 × 16 view-relative tiles for the region and the hover (`{ col, row }`), a
+   * hover on a quadtree sector that was not the square it then flew to, and an adaptive density box
+   * around the destination for PRISM. None of those matched what the screens draw.
+   *
+   * Timing is the shipped choreography: hover 800 ms at GALAXY / 700 ms below, then drill (600 /
+   * 500 / 600 ms), then a pause on the new screen before the next step.
+   */
+  _hoverThenDrill(dest, level) {
     if (this._aborted) return;
-    const sector = this._sectorForDest(dest);
-
-    // Simulate hover + cursor on the target sector
-    const sectors = this._nav._sectors;
-    if (sectors) {
-      const match = sectors.getSectorAt?.({ x: dest.x, z: dest.z });
-      if (match) {
-        this._nav._hoveredTile = { sector: match };
-        // Position cursor at sector center on canvas
-        this._setCursorAtGalactic(dest.x, dest.z);
-      }
+    const step = navGrid.drillPath(dest.x, dest.z)?.[level];
+    if (!step || !step.child) {
+      console.warn(`[NAV-SEQ] No cell for dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) at level ${level}, aborting`);
+      this._nav._autoCursor = null;
+      this._finish();
+      return;
     }
 
-    // Hover + cursor visible for 800ms, then drill
-    this._delay(800, () => {
-      if (this._aborted) return;
-      this._nav._viewStack[1] = { center: { x: sector.cx, z: sector.cz }, size: sector.size };
-      this._nav._startDrillAnim(
-        { x: this._nav._viewCenter.x, z: this._nav._viewCenter.z }, this._nav._viewSize,
-        { x: sector.cx, z: sector.cz }, sector.size,
-        1, 600
-      );
-      this._nav._hoveredTile = null;
-      this._nav._autoCursor = null;
-      if (this._soundEngine) this._soundEngine.play('navDrill1');
+    // Simulate hover + cursor on the target cell (the pilot's highlight, on the pilot's grid)
+    const tile = navDrill.showPick(this._nav, level, step.child);
+    this._setCursorAtGalactic(tile.center.x, tile.center.z);
 
-      // Pause at sector level (1.5-2.5s)
-      this._delay(1500 + simRandom() * 1000, () => this._hoverThenDrillRegion(dest, sector.cx, sector.cz, sector.size));
+    // Hover + cursor visible, then drill
+    this._delay(level === navGrid.GALAXY ? 800 : 700, () => {
+      if (this._aborted) return;
+      this._nav._autoCursor = null;
+      if (level === navGrid.REGION) {
+        console.log(`[NAV-SEQ] Drilling to prism: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) column=${navGrid.addressKey(navGrid.childOf(level, step.child))} currentLevel=${this._nav._levelIndex}`);
+      }
+      // Tilt from top-down to angled (like entering 3D view) at REGION → PRISM; the camera starts on
+      // the column's centre at the destination's height.
+      navDrill.drillInto(this._nav, level, step.child, {
+        duration: level === navGrid.SECTOR ? 500 : 600, sound: false,
+        y: dest.y || 0, tiltTo: 0.5, tiltStart: simClockMs(), rotY: 0,
+      });
+      if (this._soundEngine) this._soundEngine.play(`navDrill${level + 1}`);
+
+      if (level === navGrid.REGION) {
+        // ⛔ AND UNDER A VIEW MODE THAT 0.5 IS THE WRONG ANGLE. The two 240p designs read the game's
+        // own rotation now, and they were drawn at atan2(0.42, 0.55) = 0.652, so a settle to 0.5
+        // leaves the prism ~8 degrees off the frame Max ruled on for the rest of the drill.
+        // `_seedViewModeCam` owns that number and retargets an in-flight `_tiltAnim`; with no mode
+        // active it returns before touching anything, so the legacy autopilot drill is unchanged.
+        this._nav._seedViewModeCam?.();
+        console.log(`[NAV-SEQ] Drill anim started → level 3, waiting for stars...`);
+        // Wait for stars to load, then select
+        this._delay(2000 + simRandom() * 500, () => this._selectStar(dest));
+        return;
+      }
+      // Pause on the new screen (sector 1.5-2.5s, region 1.5-2s), then the next step
+      const pause = level === navGrid.GALAXY ? 1500 + simRandom() * 1000 : 1500 + simRandom() * 500;
+      this._delay(pause, () => this._hoverThenDrill(dest, level + 1));
     });
   }
 
-  _hoverThenDrillRegion(dest, parentCx, parentCz, parentSize) {
-    if (this._aborted) return;
-    const region = this._regionForDest(dest, parentCx, parentCz, parentSize);
-
-    // Simulate hover on the target tile (blue highlight)
-    const gn = 16;
-    const tileSize = parentSize / gn;
-    const ext = parentSize / 2;
-    const col = Math.max(0, Math.min(gn - 1, Math.floor((dest.x - (parentCx - ext)) / tileSize)));
-    const row = Math.max(0, Math.min(gn - 1, Math.floor((dest.z - (parentCz - ext)) / tileSize)));
-    this._nav._hoveredTile = { col, row };
-
-    // Set cursor on the tile
-    this._setCursorAtTile(col, row, gn, parentCx, parentCz, parentSize);
-
-    // Hover + cursor visible for 700ms, then drill
-    this._delay(700, () => {
-      if (this._aborted) return;
-      this._nav._viewStack[2] = { center: { x: region.cx, z: region.cz }, size: region.size };
-      this._nav._startDrillAnim(
-        { x: this._nav._viewCenter.x, z: this._nav._viewCenter.z }, this._nav._viewSize,
-        { x: region.cx, z: region.cz }, region.size,
-        2, 500
-      );
-      this._nav._hoveredTile = null;
-      this._nav._autoCursor = null;
-      if (this._soundEngine) this._soundEngine.play('navDrill2');
-
-      // Pause at region (1.5-2s), then hover target tile and drill to prism
-      this._delay(1500 + simRandom() * 500, () => this._hoverThenDrillPrism(dest, region.cx, region.cz, region.size));
-    });
-  }
-
-  _hoverThenDrillPrism(dest, regionCx, regionCz, regionSize) {
-    if (this._aborted) return;
-
-    // Simulate hover + cursor on the target tile in region view
-    const gn = 16;
-    const tileSize = regionSize / gn;
-    const ext = regionSize / 2;
-    const col = Math.max(0, Math.min(gn - 1, Math.floor((dest.x - (regionCx - ext)) / tileSize)));
-    const row = Math.max(0, Math.min(gn - 1, Math.floor((dest.z - (regionCz - ext)) / tileSize)));
-    this._nav._hoveredTile = { col, row };
-    this._setCursorAtTile(col, row, gn, regionCx, regionCz, regionSize);
-
-    // Hover + cursor visible for 700ms, then drill to prism
-    this._delay(700, () => {
-      if (this._aborted) return;
-      this._nav._hoveredTile = null;
-      this._nav._autoCursor = null;
-
-      console.log(`[NAV-SEQ] Drilling to prism: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) regionSize=${regionSize.toFixed(4)} currentLevel=${this._nav._levelIndex}`);
-
-      this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
-      // Use adaptive cube sizing like the real nav (targets ~150 stars)
-      // instead of raw regionSize which can be huge in dense areas
-      this._nav._localCubeSize = Math.max(0.003, this._nav._computeTileSize?.(dest.x, dest.z, 150) || regionSize * 0.1);
-      this._nav._localRadius = 0.0015;
-      this._nav._localGridCell = 0.001;
-      this._nav._localStars = [];
-      this._nav._resetPrismLoad();
-
-      // Tilt from top-down to angled (like entering 3D view)
-      this._nav._localRotX = Math.PI / 2;
-      this._nav._localRotY = 0;
-      this._nav._tiltAnim = {
-        startTime: simClockMs(),
-        duration: 600,
-        from: Math.PI / 2,
-        to: 0.5,
-      };
-      // ⛔ AND UNDER A VIEW MODE THAT 0.5 IS THE WRONG ANGLE. The two 240p designs read the game's
-      // own rotation now, and they were drawn at atan2(0.42, 0.55) = 0.652, so a settle to 0.5
-      // leaves the prism ~8 degrees off the frame Max ruled on for the rest of the drill.
-      // `_seedViewModeCam` owns that number and retargets an in-flight `_tiltAnim`; with no mode
-      // active it returns before touching anything, so the legacy autopilot drill is unchanged.
-      this._nav._seedViewModeCam?.();
-
-      const localSize = regionSize * 0.8;
-      this._nav._startDrillAnim(
-        { x: this._nav._viewCenter.x, z: this._nav._viewCenter.z }, this._nav._viewSize,
-        { x: dest.x, z: dest.z }, localSize,
-        3, 600
-      );
-      if (this._soundEngine) this._soundEngine.play('navDrill3');
-
-      console.log(`[NAV-SEQ] Drill anim started → level 3, waiting for stars...`);
-      // Wait for stars to load, then select
-      this._delay(2000 + simRandom() * 500, () => this._selectStar(dest));
-    });
-  }
-
-  /** Set up prism view directly (no animation from 2D level) */
+  /** Set up prism view directly (no animation from 2D level) — the destination's own fixed column,
+   *  entered through the same `navDrill.jumpTo` → `navGrid.enterColumn` the drill uses. ⛔ It used to
+   *  be an adaptive density box around the destination and a synthetic 0.01 kpc REGION frame. */
   _setupPrismView(dest) {
-    const cubeSize = Math.max(0.003, this._nav._computeTileSize?.(dest.x, dest.z, 150) || 0.005);
-    console.log(`[NAV-SEQ] _setupPrismView: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) prevLevel=${this._nav._levelIndex} cubeSize=${cubeSize.toFixed(4)}`);
-    this._nav._levelIndex = 3;
-    this._nav._localCenter = { x: dest.x, y: dest.y || 0, z: dest.z };
-    this._nav._localCubeSize = Math.max(0.003, this._nav._computeTileSize?.(dest.x, dest.z, 150) || 0.005);
-    this._nav._localRadius = 0.0015;
-    this._nav._localGridCell = 0.001;
+    const column = navGrid.parentAt(navGrid.PRISM, dest.x, dest.z);
+    console.log(`[NAV-SEQ] _setupPrismView: dest=(${dest.x.toFixed(2)},${dest.z.toFixed(2)}) prevLevel=${this._nav._levelIndex} column=${navGrid.addressKey(column)}`);
+    navDrill.jumpTo(this._nav, navGrid.PRISM, column, { y: dest.y || 0 });
     this._nav._localRotX = 0.5;
     this._nav._localRotY = 0;
     this._nav._seedViewModeCam?.();   // same reason as the tilt above: no-op without a view mode
-    this._nav._localStars = [];
-    this._nav._resetPrismLoad();
-
-    // Set view state so the prism renders properly
-    // _viewStack[2] must have center matching the prism position
-    // (used by _ensureStarsLoaded for block center)
-    this._nav._viewCenter = { x: dest.x, z: dest.z };
-    this._nav._viewSize = 0.01;
-    this._nav._viewStack = [
-      undefined, undefined,
-      { center: { x: dest.x, z: dest.z }, size: 0.01 },
-    ];
   }
 
   // ── Star selection ──
@@ -457,32 +360,6 @@ export class AutopilotNavSequence {
     }
 
     this._finish();
-  }
-
-  // ── Coordinate helpers ──
-
-  _sectorForDest(dest) {
-    const sectorCol = Math.max(0, Math.min(7, Math.floor(((dest.x + 22) / 44) * 8)));
-    const sectorRow = Math.max(0, Math.min(7, Math.floor(((dest.z + 22) / 44) * 8)));
-    const sectorSize = 44 / 8;
-    return {
-      cx: -22 + (sectorCol + 0.5) * sectorSize,
-      cz: -22 + (sectorRow + 0.5) * sectorSize,
-      size: sectorSize,
-    };
-  }
-
-  _regionForDest(dest, parentCx, parentCz, parentSize) {
-    const gn = 16;
-    const tileSize = parentSize / gn;
-    const ext = parentSize / 2;
-    const col = Math.max(0, Math.min(gn - 1, Math.floor((dest.x - (parentCx - ext)) / tileSize)));
-    const row = Math.max(0, Math.min(gn - 1, Math.floor((dest.z - (parentCz - ext)) / tileSize)));
-    return {
-      cx: parentCx - ext + (col + 0.5) * tileSize,
-      cz: parentCz - ext + (row + 0.5) * tileSize,
-      size: tileSize,
-    };
   }
 
   // ── Style picker ──
@@ -618,45 +495,22 @@ export class AutopilotNavSequence {
 
   // ── Cursor positioning helpers ──
 
-  /** Set blinking cursor at a galactic position (for galaxy view) */
+  /**
+   * Set the blinking cursor on a galactic point, at the texel the map ON THE GLASS draws it —
+   * a 240p design's published `S.mapProj`, else the legacy map square (`navDrill.screenPointOf`).
+   * ⛔ IT USED TO HAVE ITS OWN PROJECTION (a fixed −22…+22 kpc square in `min(w, drawH) * 0.85`),
+   * which never agreed with `_render2DLevel`'s and so put the crosshair ~20-25 px off the tile it
+   * pointed at; with the autopilot now drilling the pilot's own cells, the cursor sits on the cell it
+   * lights (naming-prism-segments AC-4). Off the map it is clamped to the canvas.
+   */
   _setCursorAtGalactic(gx, gz) {
     const canvas = this._nav._canvas;
     if (!canvas) return;
-    const w = canvas.width;
-    const h = canvas.height;
-    // ⛔ DERIVED FROM THE LIVE CANVAS. This runs on WHICHEVER NavComputer is live, and in HELM that
-    // is the 52x43 cockpit panel (`main.js:5119` re-binds `liveNavComputer()` every tour). The
-    // literal 50 made `drawH = -7` there: the projection inverted, every destination in the galaxy
-    // collapsed into a ~6px band clipped off the TOP of the panel, and the performed cursor sat
-    // there, identically, every tour. `navDrawH` returns `h - 50` at every overlay-sized canvas.
-    // ⚠ KNOWN, PRE-EXISTING, AND DELIBERATELY NOT FIXED HERE: this helper's `min(w, drawH) * 0.85`
-    // has NEVER agreed with `_render2DLevel`'s `min(w, h) - 80` / `oy = 10`, so the crosshair has
-    // always landed ~20-25px off the tile it points at on the overlay. Converging them is the right
-    // fix and it MOVES THE OVERLAY'S PIXELS, which this step's contract forbids. Logged, not done.
-    const drawH = navDrawH(h); // tab bar height
-    const size = Math.min(w, drawH) * 0.85;
-    const ox = (w - size) / 2;
-    const oy = (drawH - size) / 2;
-    // Galaxy coords: -22 to +22 kpc mapped to canvas
-    const px = ox + ((gx + 22) / 44) * size;
-    const py = oy + ((-gz + 22) / 44) * size;
-    this._nav._autoCursor = { x: px, y: py };
-  }
-
-  /** Set blinking cursor at a tile position (for sector/region views) */
-  _setCursorAtTile(col, row, gridN, viewCx, viewCz, viewSize) {
-    const canvas = this._nav._canvas;
-    if (!canvas) return;
-    const w = canvas.width;
-    const h = canvas.height;
-    const drawH = navDrawH(h); // see `_setCursorAtGalactic` above for why this is derived
-    const size = Math.min(w, drawH) * 0.85;
-    const ox = (w - size) / 2;
-    const oy = (drawH - size) / 2;
-    const tileW = size / gridN;
-    const px = ox + (col + 0.5) * tileW;
-    const py = oy + (row + 0.5) * tileW;
-    this._nav._autoCursor = { x: px, y: py };
+    const p = navDrill.screenPointOf(this._nav, gx, gz);
+    this._nav._autoCursor = {
+      x: Math.max(0, Math.min(canvas.width, p.x)),
+      y: Math.max(0, Math.min(canvas.height, p.y)),
+    };
   }
 
   // ── Utilities ──

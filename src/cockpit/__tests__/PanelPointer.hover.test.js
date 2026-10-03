@@ -190,6 +190,11 @@ describe('PanelPointerAdapter — the hover channel', () => {
     nav._levelIndex = 1; // SECTOR. Assigned deliberately: the drill route is
     // NavComputer's business and under test elsewhere; what is under test here
     // is which branch of the move handler a hover versus a drag reaches.
+    // naming-prism-segments Phase 2 (AC-3) — RULING NOTED: a SECTOR cell is a region OF THE SCREEN'S
+    // sector, so the frame has to be that sector, as every entry path leaves it. The stack rebuild
+    // (`setPlayerPosition` → `_setupViewStackForPlayer`) does that; the untouched constructor frame is
+    // 44 kpc wide, the sector a few texels of it, and the centre point missed it.
+    nav.setPlayerPosition({ x: nav._playerX, y: nav._playerY, z: nav._playerZ });
     const mid = hitAtPixel(nav, nav._canvas.width / 2, nav._canvas.height / 2);
 
     adapter.pointerHover(mid);
