@@ -1,0 +1,150 @@
+{
+  "workstream": "galactic-engine-s1-one-cloud-2026-10-03",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "feature": "docs/FEATURES/galactic-engine-PLAN.md",
+  "skill": "lab-wired-to-game",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "statement": "The cloud has denser and lighter parts and filaments, not uniform fog: the density field is lognormal-like with filamentary ridges, is identical for the same seed, and differs for different seeds.",
+      "verifyVia": {
+        "input": "Sample the shared density field headlessly on a grid for two seeds and repeat one seed.",
+        "observable": "Same seed: byte-identical samples. Different seeds: correlation < 0.5. log(density) histogram is single-peaked with skew; a ridge detector finds elongated structures (aspect ratio >= 4) in a projected slice. Each check has a committed broken control (constant field) that fails it."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-2",
+      "statement": "Light through the cloud adds up correctly: a glowing/absorbing test sphere matches its exact answer, and getting closer makes a cloud bigger but not brighter per pixel.",
+      "verifyVia": {
+        "input": "Integrate rays through the analytic test sphere; render a uniform cloud from distance d and d/2 at the same pixel footprint.",
+        "observable": "Radiance and transmittance within 1% of the analytic solution; near/far segment composition (L = Lnear + Tnear*Lfar) equals one full march within 1%; central surface brightness at d and d/2 equal within 5%."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-3",
+      "statement": "The cloud's look comes from its story: one function turns a nebula's generated history into render parameters, and lab and game call it and get identical results.",
+      "verifyVia": {
+        "input": "Call the history constructor and render packs for the procedural test nebula and Orion through the lab entry point and the game entry point.",
+        "observable": "Serialized parameters identical between entry points; changing one history input (e.g. ionizing strength) changes the parameters in the declared direction; a negative control (an altered input that must fail parity) fails by name; the lab imports only from src/ (boundary fence) and each shader chunk exists in exactly one file."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-4",
+      "statement": "In the game, the nebula you warp to is drawn as a 3D cloud instead of a flat picture, and an A/B key flips back to the old picture.",
+      "verifyVia": {
+        "input": "Load the game with the Galactic Engine flag on, warp to the procedural test nebula, press the A/B key twice.",
+        "observable": "The debug snapshot reports the volume path active for that feature with no billboard for it; after the first press the old billboard path is active and the volume is not; after the second press the volume is back. Captures differ between the two states inside the nebula's footprint."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-5",
+      "statement": "Far to near to inside, the nebula never vanishes: it grows, gains structure, and when you are inside it surrounds you.",
+      "verifyVia": {
+        "input": "In the game, place the camera at a fixed sequence of distances from the test nebula's centre (about 2000, 500, 100, 30 pc, its edge, its centre) and capture the six axis views at each.",
+        "observable": "At every pose the nebula contributes visible emission (non-zero, above the dither floor). The sky fraction it covers increases monotonically with each step closer. At the centre, at least 5 of 6 axis views contain nebula emission, and per-pixel surface brightness never exceeds its far-away value by more than 5%."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-6",
+      "statement": "Detail appears as you approach without popping between detail levels.",
+      "verifyVia": {
+        "input": "Render the test nebula at 40 log-spaced distances spanning all three regimes (distant, landmark, inside), same direction.",
+        "observable": "The largest image change between neighbouring distances is no more than 2x the median neighbouring change; no spike at a regime boundary. The detail level each pose used is reported in the debug snapshot."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-7",
+      "statement": "Dust in the cloud dims and reddens stars behind it, and leaves stars in front of it alone.",
+      "verifyVia": {
+        "input": "Inside or beside the test nebula, compare a star known to be behind a dense part with the same star with the cloud's dust switched off, and a star known to be in front.",
+        "observable": "The star behind is dimmer and its blue/red ratio lower with dust on; the star in front is unchanged within 1/255 per channel."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-8",
+      "statement": "The lab shows the same picture as the game.",
+      "verifyVia": {
+        "input": "Open the cloud lab and the game at the same nebula, pose, time (frozen) and window size; capture both after a page reload.",
+        "observable": "The lab renders through the game's RetroRenderer and the shared controller; sky captures differ by at most 1/255 per channel, including after a world-origin rebase and a resize."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-9",
+      "statement": "Warping keeps working: the new sky is prepared during the warp and never shows half-built or stale.",
+      "verifyVia": {
+        "input": "Run 20 consecutive warps in the game with the flag on, including retargeting mid-warp and one deliberately delayed bake.",
+        "observable": "No partial cube or previous destination's sky ever shown (generation token check in the debug snapshot); the origin sky is untouched until arrival; GPU texture count does not grow after warm-up; no console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-10",
+      "statement": "It runs smoothly on Max's desktop.",
+      "verifyVia": {
+        "input": "On Max's desktop (RTX 5080), measure steady frames inside and outside the nebula, and warps into it.",
+        "observable": "Steady-state cost of the cloud composition <= 1 ms per frame (GPU timer); the per-system preparation finishes within the warp without a frame over 2x the median frame time. Cold-compile time recorded separately."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-11",
+      "statement": "Max can judge the cloud on a review page built from the game's own code.",
+      "verifyVia": {
+        "input": "Run the publish script; open the review page.",
+        "observable": "The page runs a build of the cloud lab generated from src/ (stamped with the commit it came from), lets Max move between far, landmark and inside views, and autosaves Passes / Needs a fix and his words to the page db, which reads back with ArtifactData. If the review page cannot run the renderer, this AC is replaced by reviewing in the local lab and that is recorded."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-12",
+      "statement": "Max: at each distance it looks how a nebula would realistically look that close, enhanced to match the game's look and be interesting — a giant layered cloud with denser and lighter parts, filaments, and stars around and in it.",
+      "verifyVia": {
+        "input": "Max flies the live game to the test nebula and through it, and uses the review page.",
+        "observable": "Max's verdict, in his words."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "GalacticMap feature records (position, radius, seed, colour, context) and findNearbyFeatures",
+      "KnownObjectProfiles (Orion) via GalacticMap's known-object injection",
+      "The per-warp sky rebuild: prepareForPositionAsync / the dual-portal warp lifecycle in main.js",
+      "RetroRenderer's sky pass (bgTarget) and its dither/posterize",
+      "The star field layer (needs per-star distance for dust dimming)"
+    ],
+    "outputs": [
+      "src/galactic/ headless history + render packs + CPU field twin (reused by later slices and the Milky Way)",
+      "src/galactic/shaders/ the one GLSL source for the cloud field and integrator",
+      "src/rendering/galactic/ the production controller used by game and lab",
+      "The cloud lab page and the review-page publish script",
+      "Debug snapshot hooks on window for live checks"
+    ],
+    "mustStayWorking": [
+      "The Milky Way band (ProceduralGlowLayer) and all other nebula billboards when the flag is off, and for every feature except the one being drawn as a volume",
+      "Warp transitions (FOLD/ENTER/HYPER/arrival) and the warp tunnel",
+      "Clicking a nebula in the sky to set it as a warp target",
+      "Nav computer and its galaxy backdrop (untouched in S1)",
+      "Full vitest suite baseline",
+      "World Engine planets and moons (shared renderer, no regressions)"
+    ]
+  }
+}
