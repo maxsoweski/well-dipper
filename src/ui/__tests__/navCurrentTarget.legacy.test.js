@@ -18,8 +18,10 @@
  */
 import { describe, it, expect } from 'vitest';
 import { makeHeadlessNav } from './helpers/headlessNav.mjs';
+import * as navDrill from '../navDrill.js';
 import { planetTrueScene } from '../navViewModes/shipState.js';
 import { earthRadiiToScene } from '../../core/ScaleConstants.js';
+import * as navGrid from '../navGrid.js';
 
 const CURRENT = '#2ee6c0';
 const TARGET = '#ffb03a';
@@ -32,10 +34,14 @@ const O = { x: 0, y: 0, z: 0 };
 function inkRecorder() {
   const ops = [];
   const st = { fillStyle: '#000', strokeStyle: '#000', font: '10px x', textAlign: 'left', globalAlpha: 1, lineWidth: 1 };
-  let first = null;
+  let first = null, ty = 0;
+  const stack = [];
   const ctx = new Proxy({}, {
     get(_t, k) {
       switch (k) {
+        case 'save': return () => { stack.push(ty); };
+        case 'restore': return () => { if (stack.length) ty = stack.pop(); };
+        case 'translate': return (_x, y) => { ty += y; };
         case 'canvas': return { width: W, height: H };
         case 'beginPath': return () => { first = null; };
         case 'moveTo': case 'arc': return (x, y) => { if (!first) first = { x, y }; };
@@ -43,7 +49,7 @@ function inkRecorder() {
         case 'stroke': return () => ops.push({ op: 'stroke', style: st.strokeStyle, at: first });
         case 'fillRect': return (x, y, w, h) => ops.push({ op: 'fillRect', style: st.fillStyle, at: { x, y, w, h } });
         case 'strokeRect': return (x, y, w, h) => ops.push({ op: 'strokeRect', style: st.strokeStyle, at: { x, y, w, h } });
-        case 'fillText': case 'strokeText': return (s, x, y) => ops.push({ op: 'text', s: String(s), style: k === 'fillText' ? st.fillStyle : st.strokeStyle, at: { x, y } });
+        case 'fillText': case 'strokeText': return (s, x, y) => ops.push({ op: 'text', s: String(s), style: k === 'fillText' ? st.fillStyle : st.strokeStyle, at: { x, y }, ty });
         case 'measureText': return (s) => ({ width: String(s).length * 6 });
         case 'createLinearGradient': case 'createRadialGradient': case 'createPattern': return () => ({ addColorStop() {} });
         case 'getImageData': case 'createImageData': return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(0, w * h * 4)) });
@@ -171,6 +177,20 @@ describe('AC-15 legacy — the player marker reads CURRENT, in the CURRENT ink',
       expect(ops.some((o) => o.op === 'strokeRect' && o.style === CURRENT && o.at.y >= H - 40), 'the active tab').toBe(true);
     }, 60000);
   }
+  it('⭐ batch 2 fixup — a BROWSED sector\'s tab is not CURRENT (CURRENT only on the player\'s own place, as the designs)', async () => {
+    // ⛔ SABOTAGE RUN: `own` back to `active` (every viewed tab CURRENT) → red.
+    const nav = await at2D(1);
+    const own = navGrid.parentAt(1, nav._playerX, nav._playerZ);
+    const east = { sector: { i: own.sector.i + 1, j: own.sector.j } };
+    const v = navGrid.viewForAddress(1, east);
+    nav._viewStack[1] = { center: { x: v.cx, z: v.cz }, size: v.size, address: east };
+    nav._viewCenter = { x: v.cx, z: v.cz };
+    const ops = frame(nav);
+    const tabs = ops.filter((o) => o.op === 'strokeRect' && o.at.y >= H - 40);
+    expect(tabs.length, 'fixture: no tabs').toBe(5);
+    expect(tabs.filter((o) => o.style === CURRENT).length, 'a browsed sector\'s tab is CURRENT').toBe(0);
+    expect(tabs.some((o) => o.style === '#64b4ff'), 'the active tab lost its highlight').toBe(true);
+  }, 60000);
 });
 
 describe('AC-15 legacy — the target is TARGET ink, and nothing else uses either ink', () => {
@@ -196,5 +216,127 @@ describe('AC-15 legacy — the target is TARGET ink, and nothing else uses eithe
     const ap = texts(ops).find((o) => /AUTOPILOT ON/.test(o.s));
     expect(ap, 'fixture: autopilot label not drawn').toBeTruthy();
     expect([CURRENT, TARGET]).not.toContain(String(ap.style).toLowerCase());
+  }, 60000);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// ⭐ BATCH 2 FIXUP — the live step's legacy FAIL (s-sky on SYSTEM, the gold star names, the search box over the
+//    HUD) and Astra's legacy findings 2, 3, 4 (2026-10-03).
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('batch 2 fixup — legacy s-sky, star names, search', () => {
+  it('⭐⭐ SYSTEM (orrery): the system title is CURRENT when it is the system you are in, white when it is not', async () => {
+    // ⛔ SABOTAGE RUN: `_drawSystemHeader`'s fillStyle back to '#fff' → red. (The old s-sky test only ran at
+    //    SECTOR, where this header is never drawn — Astra 12.)
+    let nav = await atSystem();
+    expect(nav._isCurrentSystem(), 'fixture: the ship must be in this system').toBe(true);
+    let ops = legacyOps(nav);
+    expect(wordAt(ops, 'Test')?.style, 'home: the system title').toBe(CURRENT);
+    expect(ops.some((o) => o.op === 'fill' && o.style === CURRENT), 'home: the CURRENT marker beside it').toBe(true);
+    nav = await atSystem();
+    nav._playerX += 0.5;
+    expect(nav._isCurrentSystem(), 'fixture: now foreign').toBe(false);
+    ops = legacyOps(nav);
+    expect(wordAt(ops, 'Test')?.style, 'foreign: the system title is not CURRENT').toBe('#fff');
+  }, 60000);
+
+  it('⭐ SYSTEM (orrery): the selected planet\'s name is TARGET, like its ring', async () => {
+    // ⛔ SABOTAGE RUN: the planet label's fillStyle back to 'rgba(255,255,255,0.4)' for every planet → red.
+    const nav = await atSystem({ selected: { type: 'planet', planetIndex: 4 } });
+    const ops = legacyOps(nav);
+    const name = nav._planetDisplayName(4, 'Test');
+    expect(wordAt(ops, name)?.style, `the selected planet's name (${name})`).toBe(TARGET);
+    expect(wordAt(ops, nav._planetDisplayName(3, 'Test'))?.style, 'an unselected planet keeps its grey').toBe('rgba(255,255,255,0.4)');
+  }, 60000);
+
+  /** PRISM with the player standing on a loaded star, named and catalogued so the label pass names it. */
+  async function prismOnOwnStar() {
+    const nav = await at2D(3);
+    nav.setExternalTarget?.(null);
+    nav._externalTarget = null;
+    frame(nav);
+    const rows = nav._localStars || [];
+    const s = rows.find((r) => Number.isFinite(r.wx) && r.dist > 0.0005) || rows[0];
+    if (!s) throw new Error('fixture: no prism rows loaded');
+    s.isReal = true; s.name = 'OWNSTAR';
+    nav._playerX = s.wx; nav._playerY = s.wy; nav._playerZ = s.wz;
+    nav._localCenter = { x: s.wx, y: s.wy, z: s.wz };
+    return { nav, s, rows };
+  }
+
+  it('⭐⭐ PRISM: your own star, selected, is CURRENT — its name, no TARGET ring, no "WARP TARGET" banner (live FAIL 2 on legacy)', async () => {
+    // ⛔ SABOTAGE RUN: the ring test back to `if (isSelected)` → a TARGET stroke on your own star, red; the
+    //    label `ink` back to TARGET-first → red.
+    const { nav, s } = await prismOnOwnStar();
+    nav._selectedNavStar = s;
+    const ops = frame(nav);
+    expect(navDrill.hereStar(nav, nav._localStars), 'fixture: the player must be on the star').toBe(s);
+    const lbl = texts(ops).find((o) => o.s.startsWith('OWNSTAR'));
+    expect(lbl, 'fixture: your own star is not labelled').toBeTruthy();
+    expect(lbl.style, 'your own star\'s name').toBe(CURRENT);
+    expect(texts(ops).some((o) => o.s === 'WARP TARGET'), 'a WARP TARGET banner for the system you are in').toBe(false);
+    expect(ops.filter((o) => o.op === 'stroke' && o.style === TARGET).length, 'a TARGET ring on your own star').toBe(0);
+  }, 60000);
+
+  it('⭐ PRISM after a warp: the selection is the OLD column\'s row object for the star you are now at — still no WARP TARGET banner (live, Sirius)', async () => {
+    // ⛔ SABOTAGE RUN: the banner test without `isHereStar` (object identity only) → "WARP TARGET" drawn, red.
+    const { nav, s } = await prismOnOwnStar();
+    nav._selectedNavStar = { ...s };                  // the same star, not the same object
+    const ops = frame(nav);
+    expect(texts(ops).some((o) => o.s === 'WARP TARGET'), 'a WARP TARGET banner for the system you are in').toBe(false);
+  }, 60000);
+
+  it('⭐⭐ PRISM: no star name is gold (#ffc850, 24 units off TARGET); the target\'s name is TARGET, the rest a neutral that is neither', async () => {
+    // ⛔ SABOTAGE RUN: the label pass's fillStyle back to '#ffc850' → red.
+    const { nav, s, rows } = await prismOnOwnStar();
+    const other = rows.find((r) => r !== s && Number.isFinite(r.wx));
+    other.isReal = true; other.name = 'OTHERSTAR';
+    rows.filter((r) => r !== s && r !== other).slice(0, 6).forEach((r, i) => { r.isReal = true; r.name = `ZZSTAR${i}`; });
+    nav._selectedNavStar = other;
+    const ops = frame(nav);
+    const labels = texts(ops).filter((o) => /^(OWNSTAR|OTHERSTAR|ZZSTAR\d)/.test(o.s));
+    expect(labels.length, 'fixture: no star labels').toBeGreaterThan(1);
+    expect(labels.filter((o) => String(o.style).toLowerCase() === '#ffc850').map((o) => o.s), 'gold names').toEqual([]);
+    expect(texts(ops).find((o) => o.s.startsWith('OTHERSTAR'))?.style, 'the target\'s name').toBe(TARGET);
+    const rest = labels.filter((o) => !o.s.startsWith('OTHERSTAR') && !o.s.startsWith('OWNSTAR'));
+    for (const o of rest) expect([CURRENT, TARGET], `${o.s}: a plain star name in a reserved ink`).not.toContain(String(o.style).toLowerCase());
+  }, 60000);
+
+  it('⭐ the search box\'s highlighted row is TARGET (s-search on legacy; it was blue / white)', async () => {
+    // ⛔ SABOTAGE RUN: the `.nav-search-row.hl` rule back to `rgba(60,130,220,0.28)` / `#eaf4ff` → red.
+    const nav = await nav0();
+    const saved = globalThis.document;
+    let css = '';
+    const el = () => ({ style: {}, className: '', setAttribute() {}, appendChild() {}, addEventListener() {}, blur() {}, focus() {} });
+    globalThis.document = { getElementById: () => null, createElement: () => el(), head: { appendChild: (n) => { css += n.textContent || ''; } } };
+    const realCanvas = nav._canvas, realDom = nav._searchDom;
+    try {
+      nav._searchDom = null;
+      nav._canvas = Object.assign(Object.create(realCanvas), { parentElement: { appendChild() {} } });
+      nav._ensureSearchDom();
+    } finally { globalThis.document = saved; nav._canvas = realCanvas; nav._searchDom = realDom; }
+    const rule = (css.match(/\.nav-search-row\.hl\s*\{[^}]*\}/) || [''])[0];
+    expect(rule, 'fixture: no highlight rule').not.toBe('');
+    expect(rule).toContain('255, 176, 58');
+    expect(rule.toLowerCase()).toContain('#ffb03a');
+  }, 60000);
+
+  it('⭐⭐ the top-left HUD steps down clear of the open search box (CURRENT SYSTEM and its name were under it)', async () => {
+    // ⛔ SABOTAGE RUN: `_searchShift` returning 0 → the HUD's first line is drawn under the box, red.
+    const nav = await at2D(1);
+    const realDom = nav._searchDom, realRect = nav._canvas.getBoundingClientRect;
+    const boxBottom = 46;   // CSS px: the box is 12 px from the top and 34 tall, as the overlay's CSS lays it out
+    nav._searchDom = { root: { style: { display: 'block' } }, input: { getBoundingClientRect: () => ({ left: 12, top: 12, bottom: boxBottom, height: 34 }) } };
+    nav._canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: nav._canvas.width, height: nav._canvas.height });
+    let ops;
+    try { ops = frame(nav); } finally { nav._searchDom = realDom; nav._canvas.getBoundingClientRect = realRect; }
+    for (const s of ['CURRENT SYSTEM', 'HOME SYSTEM']) {
+      const o = wordAt(ops, s);
+      expect(o, `fixture: ${s} not drawn`).toBeTruthy();
+      expect(o.style, `${s}: still CURRENT`).toBe(CURRENT);
+      expect(o.at.y + o.ty - 16, `${s}: its top (baseline ${o.at.y + o.ty}) is under the search box (bottom ${boxBottom})`).toBeGreaterThanOrEqual(boxBottom);
+    }
+    // …and with no search box nothing moves (every other headless frame)
+    const plain = frame(await at2D(1));
+    expect(wordAt(plain, 'CURRENT SYSTEM').ty, 'the HUD moved with no search box').toBe(0);
   }, 60000);
 });

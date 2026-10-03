@@ -428,3 +428,173 @@ describe('AC-17 — the CURRENT marker\'s number means one thing: the true range
     }
   }, 60000);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// ⭐ BATCH 2 FIXUP — the live step's four AC-15 FAILs and Astra's confirmed defects (2026-10-03).
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+/** PRISM on the player's own star, with that star selected — Sol's state when the nav opens (the host
+ *  pre-selects the current system). */
+async function atOwnStarSelected(mode) {
+  const nav = await nav0();
+  nav.viewMode = mode; nav._levelIndex = 3; nav.render();
+  const drv = nav._viewDriverInst;
+  const s = drv.D.starRows.find((r) => r.key && r.key.startsWith('p:') && r.dist > 0.0005);
+  nav._playerX = s.wx; nav._playerY = s.wy; nav._playerZ = s.wz; nav._localCenter = { x: s.wx, y: s.wy, z: s.wz };
+  nav.render();
+  // ⚠ design 2 names only CATALOGUE stars (`d2Prism`'s label loop: `!s.isReal` → no label); Sol, the live case, is
+  //   one, so the fixture's procedural row is marked as one to put its name on the glass in both designs.
+  drv.D.here.isReal = true;
+  nav._selectedNavStar = drv.D.here; nav.render();
+  return nav;
+}
+
+describe('batch 2 fixup — AC-15 live FAILs', () => {
+  it('⭐⭐ FAIL 2 — your own star, selected, is CURRENT at PRISM in both designs: name, mark, rail row and detail; never TARGET', async () => {
+    // ⛔ SABOTAGE RUN: `starInk` back to selStar-first → the label is TARGET, red; design 1's mark loop back to
+    //    `s === D.selStar` first → a TARGET 5x5 frame on the star, red.
+    for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
+      const nav = await atOwnStarSelected(mode);
+      const drv = nav._viewDriverInst;
+      expect(drv.D.targetIsHere, 'fixture: the selection must be the star the player is at').toBe(true);
+      const p = paint(nav, design);
+      const name = String(drv.D.here.name).toUpperCase();
+      const hit = p.S.prismHits.find((z) => z.ref === drv.D.here);
+      expect(hit, 'fixture: the player\'s star is not on the glass').toBeTruthy();
+      const words = p.lines.filter((l) => l.s.includes(name));
+      expect(words.length, `design ${design}: fixture — the star's name is not drawn`).toBeGreaterThan(0);
+      expect(words.filter((l) => l.color === TARGET).map((l) => l.s), `design ${design}: your own star's name in TARGET`).toEqual([]);
+      expect(words.some((l) => l.color === CURRENT), `design ${design}: your own star's name is not CURRENT anywhere`).toBe(true);
+      const hx = Math.round(hit.x), hy = Math.round(hit.y);
+      const near = (f) => f.x >= hx - 4 && f.x <= hx + 4 && f.y >= hy - 4 && f.y <= hy + 4;
+      expect(p.fills.filter((f) => near(f) && f.ink === TARGET).length, `design ${design}: a TARGET mark on your own star`).toBe(0);
+      expect(p.fills.some((f) => near(f) && f.ink === CURRENT), `design ${design}: no CURRENT mark on your own star`).toBe(true);
+      // ⭐ and NOTHING on the frame is TARGET but the TARGET chip's own diamond (no target exists): found live at Sol,
+      //    the segment bar's TARGET tick and the column outline still read `D.selStar` (fixup round 2).
+      // ⛔ SABOTAGE RUN: `slabBar`'s `tgt` back to `D.selStar || D.target` → a TARGET tick, red.
+      const tc = p.chips.find((c) => c.who === 'target');
+      const stray = p.fills.filter((f) => f.ink === TARGET && !(f.x >= tc.x && f.x < tc.x + tc.w && f.y < tc.y + tc.h));
+      expect(stray.map((f) => `${f.x},${f.y} ${f.w}x${f.h}`), `design ${design}: TARGET ink with no target`).toEqual([]);
+    }
+  }, 120000);
+
+  it('⭐ FAIL 2 control — another star selected still wears TARGET (the fix is "here wins", not "TARGET gone")', async () => {
+    // ⛔ SABOTAGE RUN: `isTgtStar` always false → red.
+    for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
+      const nav = await atOwnStarSelected(mode);
+      const drv = nav._viewDriverInst;
+      const other = (drv.S.prismHits || []).find((h) => h.ref !== drv.D.here);
+      nav._selectedNavStar = other.ref; nav.render();
+      expect(drv.D.targetIsHere).toBe(false);
+      const p = paint(nav, design);
+      const h = p.S.prismHits.find((z) => z.ref === drv.D.selStar);
+      const hx = Math.round(h.x), hy = Math.round(h.y);
+      expect(p.fills.some((f) => f.ink === TARGET && Math.abs(f.x - hx) <= 3 && Math.abs(f.y - hy) <= 3), `design ${design}`).toBe(true);
+    }
+  }, 120000);
+
+  it('⭐⭐ FAIL 1 — design 1\'s SECTOR / REGION detail names the target\'s cell in TARGET ink, and the dim dash only with no target', async () => {
+    // ⛔ SABOTAGE RUN: the detail's last line back to `['TARGET  —', INK.DIM]` → red.
+    for (const level of [1, 2]) {
+      const nav = await at2D('rail', level);
+      let p = paint(nav, 1);
+      const none = p.lines.find((l) => l.s.startsWith('TARGET '));
+      expect(none && none.s.trim(), `L${level}: control — no target`).toBe('TARGET  —');
+      farTarget(nav);
+      p = paint(nav, 1);
+      const line = p.lines.find((l) => l.s.startsWith('TARGET '));
+      const t = nav._externalTarget;
+      const c = navGrid.childCell(level, navGrid.parentAt(level + 1, t.x, t.z));
+      expect(line && line.color, `L${level}: the TARGET line is not TARGET ink`).toBe(TARGET);
+      expect(line.s, `L${level}: the TARGET line does not name the target's cell`).toContain(navGrid.addressKey(c.address).split(' ').pop());
+      expect(line.s).toContain('FARAWAY'.slice(0, 3));
+    }
+  }, 60000);
+
+  it('⭐⭐ FAIL 4 — design 2 SYSTEM: the CURRENT word never lands on the legend rows (they are painted last, over it)', async () => {
+    // ⛔ SABOTAGE RUN: `shipWord` placing against the whole map (`cl`) instead of `bd` → a sweep position puts
+    //    the word on the legend band, red.
+    const nav = await atSystem('bars');
+    const far = P(nav, 5), R5 = Math.hypot(far.x, far.z);
+    let hits = 0;
+    for (const k of [0.15, 0.4, 0.7, 1.0, 1.3, 2, 4]) for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      publish(nav, { x: Math.cos(a) * R5 * k, y: 0, z: Math.sin(a) * R5 * k });
+      const p = paint(nav, 2);
+      const word = p.lines.find((l) => /^CURRENT\b/.test(l.s) && inMap(p, { x: l.x, y: l.y }));
+      if (!word) continue;
+      hits++;
+      const m = p.regions.map, legTop = m.y + m.h - FACE.h - 1 - (FACE.h + 1) - 1;
+      expect(word.y + FACE.h + 1, `k ${k} a ${i}/24: the CURRENT word (y ${word.y}) reaches the legend band (from ${legTop})`).toBeLessThanOrEqual(legTop);
+    }
+    expect(hits, 'fixture: the sweep drew no CURRENT word').toBeGreaterThan(20);
+  }, 180000);
+});
+
+describe('batch 2 fixup — Astra\'s confirmed defects', () => {
+  it('⭐⭐ Astra 7 — design 2\'s indicator chips never run into the tab strip, at 300 / 320 / 360 / 417', async () => {
+    // ⛔ SABOTAGE RUN: the old `Math.max(FACE.advance, …)` floors and an always-kept LY distance → 17 texels of
+    //    overlap at 300 and the layout guard fires, red.
+    for (const w of [300, 320, 360, 417]) {
+      const nav = await at2D('bars', 1);
+      farTarget(nav);
+      const { S, D } = nav._viewDriverInst;
+      const viol = [];
+      const { ctx } = inkRecordingContext();
+      const d = makeDesigns({ S, D, onViolation: (l) => viol.push(l), face: FACE, measurePixelText, drawPixelText });
+      S.design = 2; d.resetRegions(); d.resetViolations();
+      d.drawDesign2(ctx, w, H);
+      const tabsEnd = Math.max(...S.tabRects.map((r) => r.x + r.w));
+      for (const c of S.indicatorRects || []) expect(c.x + 1, `@${w}: the ${c.who} chip starts inside the tab strip`).toBeGreaterThanOrEqual(tabsEnd);
+      for (const c of S.indicatorRects || []) expect(c.x + c.w - 1, `@${w}: the ${c.who} chip runs off the glass`).toBeLessThanOrEqual(w);
+      expect(viol.filter((v) => /tab strip vs indicators/.test(v)), `@${w}: the layout guard fired`).toEqual([]);
+      if (w === 417) expect((S.indicatorRects || []).length, 'control: both chips at Max\'s width').toBe(2);
+    }
+  }, 120000);
+
+  it('⭐⭐ Astra 8 — PRISM: a TARGET click rings the target star when the target is set WITHOUT a selection (by its key)', async () => {
+    // ⛔ SABOTAGE RUN: `locateMarks` back to `cur ? D.here : D.selStar` → no ring, red.
+    for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
+      const nav = await nav0();
+      nav.viewMode = mode; nav._levelIndex = 3; nav.render();
+      const drv = nav._viewDriverInst;
+      const s = (drv.S.prismHits || []).map((h) => h.ref).find((r) => r !== drv.D.here && r.key);
+      expect(s, 'fixture: no keyed star on the glass').toBeTruthy();
+      nav._selectedNavStar = null;
+      nav._externalTarget = { name: 'KEYED', x: s.wx, y: s.wy, z: s.wz, key: s.key }; nav.render();
+      expect(drv.D.selStar).toBe(null);
+      const [, tChip] = paint(nav, design).chips;
+      expect(clickChip(nav, tChip)).toBe(null);
+      nav.render();
+      const p = paint(nav, design);
+      const h = p.S.prismHits.find((z) => z.ref && z.ref.key === s.key);
+      expect(h, 'the target star left the glass').toBeTruthy();
+      const x0 = Math.round(h.x) - 6, y0 = Math.round(h.y) - 6;
+      expect(p.fills.some((f) => f.ink === TARGET && f.y === y0 && f.h === 1 && f.x <= x0 + 1 && f.x + f.w >= x0 + 12),
+        `design ${design}: the target star is not ringed`).toBe(true);
+    }
+  }, 120000);
+
+  it('⭐⭐ Astra 8 — SYSTEM at home, no body, a star target: the TARGET click blinks the WARP commit (the target\'s only place here)', async () => {
+    // ⛔ SABOTAGE RUN: `commitFlash` always false → the commit stays a plain TARGET fill, no TARGET frame on BG, red.
+    for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
+      const nav = await atSystem(mode);
+      farTarget(nav);
+      const drv = nav._viewDriverInst;
+      expect(drv.D.target && !drv.D.targetIsHere, 'fixture: a live star target').toBe(true);
+      const [, tChip] = paint(nav, design).chips;
+      expect(clickChip(nav, tChip)).toBe(null);
+      nav.render();
+      const p = paint(nav, design);
+      if (design === 1) {
+        // inverted: the bar is BG and its word TARGET (no frame — it struck the word through, live)
+        const lbl = p.lines.find((l) => /^WARP TO/.test(l.s));
+        expect(lbl && lbl.color, 'design 1: the commit word is not TARGET on the flash').toBe(TARGET);
+        expect(p.fills.some((f) => f.ink === TARGET && f.x === 0 && f.w === W && f.h > 1), 'design 1: the bar is still a solid TARGET fill').toBe(false);
+      } else {
+        const r = p.S.chipRect;
+        expect(p.fills.some((f) => f.ink === TARGET && f.x === r.x && f.y === r.y && f.w === r.w && f.h === 1), 'design 2: the [WARP] chip is not framed in TARGET').toBe(true);
+      }
+    }
+  }, 120000);
+
+});

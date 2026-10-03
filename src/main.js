@@ -13100,7 +13100,7 @@ let _lastRenderT = -1;
 function renderFrame(alpha) {
   // Sky-debug + gallery branches do their own rendering inside simStep
   // and early-return; skip the main render in those cases.
-  if (window._skyDebug || galleryMode) return;
+  if (window._skyDebug || galleryMode) { _cockpitRig?.mover?.settle(); return; }   /* ⭐ batch 2 fixup (Astra 9): the AC-18(a) settle below is never reached on these early returns; a cockpit nobody draws has no panel at the eye here too */
 
   // Real wall-clock render delta for render-side time-based updates.
   // Per Glenn Fiedler "Free the Physics" — render uses real dt, sim uses

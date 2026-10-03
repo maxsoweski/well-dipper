@@ -3,7 +3,7 @@ import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { realStarSeed } from '../generation/realStarSeed.js';  import { realStarKey } from '../generation/GalaxyGrid.js';   // ⚠ second statement on this line to keep line numbers stable
-import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';  import { findStar, isStarKey } from './navViewModes/starIdentity.js';  import { legacyShip, livePlanetAngle, legacyMoonAngle, legacyOrreryShip, legacyOrreryTarget, legacyDetailMoonPoint, legacyDetailShip, legacyDetailTarget, legacyEdgeTriangle, LEGACY_INK as INK } from './navLegacyShip.js';   /* ⭐ GPS line 2026-10-02 — a third statement, same reason */   // ⚠ second statement on this line to keep line numbers stable
+import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';  import { findStar, isStarKey, isHereStar } from './navViewModes/starIdentity.js';  import { legacyShip, livePlanetAngle, legacyMoonAngle, legacyOrreryShip, legacyOrreryTarget, legacyDetailMoonPoint, legacyDetailShip, legacyDetailTarget, legacyEdgeTriangle, LEGACY_INK as INK } from './navLegacyShip.js';  const LABEL_INK = '#c8d6e8';   /* ⭐ batch 2 fixup: legacy's star-name neutral — neither CURRENT nor TARGET */   /* ⭐ GPS line 2026-10-02 — a third statement, same reason */   // ⚠ second statement on this line to keep line numbers stable
 import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
@@ -524,7 +524,7 @@ export class NavComputer {
   _topY(ctx, fallback) {
     return this._compact ? ctx.__navTop : fallback;
   }
-
+  _searchShift() { const d = this._searchDom, c = this._canvas; if (!d || !c || this._compact || d.root.style.display === 'none' || typeof c.getBoundingClientRect !== 'function') return 0; const ir = d.input.getBoundingClientRect(), cr = c.getBoundingClientRect(); if (!(cr.height > 0) || !(ir.height > 0) || ir.left - cr.left > cr.width / 3) return 0; return Math.max(0, Math.ceil((ir.bottom - cr.top) * (c.height / cr.height)) + 6 - 10); }   /* ⭐ batch 2 fixup (live FAIL 3): the always-open DOM search box sits over the top-left HUD (CURRENT SYSTEM, the system title); this is how far, in canvas px, that block steps down to clear it. 0 with no DOM (every headless test), so nothing else moves */
   /**
    * The left margin of a header line, in canvas pixels — the old literal `16`.
    *
@@ -672,7 +672,7 @@ export class NavComputer {
         .nav-search-results:empty { display:none; }
         .nav-search-row { display:flex; justify-content:space-between; gap:10px; padding:6px 10px; color:#bcd6f0; font:12px 'Courier New',monospace; cursor:pointer; border-bottom:1px solid rgba(100,180,255,0.08); }
         .nav-search-row:last-child { border-bottom:none; }
-        .nav-search-row:hover, .nav-search-row.hl { background:rgba(60,130,220,0.28); color:#eaf4ff; }
+        .nav-search-row:hover, .nav-search-row.hl { background:rgba(${INK.TARGET_RGB},0.22); color:${INK.TARGET}; }
         .nav-search-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .nav-search-kind { color:rgba(140,180,220,0.7); text-transform:uppercase; font-size:10px; letter-spacing:0.08em; align-self:center; flex:0 0 auto; }
         .nav-search-empty { padding:6px 10px; color:rgba(150,180,210,0.55); font:12px 'Courier New',monospace; }
@@ -938,7 +938,7 @@ export class NavComputer {
   _drawSystemHeader(ctx, sys, markerName, planetCount) {
     const title = deriveSystemTitle(sys, markerName);
     ctx.font = '14px "DotGothic16", monospace';
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = (typeof this._isCurrentSystem === 'function' && this._isCurrentSystem()) ? INK.CURRENT : '#fff';   /* ⭐ batch 2 fixup (live FAIL 3, Astra 2 — s-sky): the name of the system you are IN is CURRENT, the same ink as your marker beside it */
     ctx.textAlign = 'left';
     // ⛔ BOTH ANCHORS DERIVED, NOT JUST THE Y. `_leftX` saturates to the old 16 at every canvas the
     // overlay or the test corpus has; on a 52-texel panel it is 4, which is the difference between
@@ -2085,7 +2085,7 @@ export class NavComputer {
       ctx.beginPath(); ctx.arc(planeP.x, planeP.y, 1.5, 0, Math.PI * 2); ctx.fill();
 
       // Star — real named stars are slightly larger
-      const isSelected = this._selectedNavStar === star;
+      const isSelected = this._selectedNavStar === star, isTgt = isSelected && star !== currentSystemStar;   /* ⭐ batch 2 fixup (live FAIL 2): your own star selected is CURRENT, not TARGET */
       const baseRadius = star.isReal ? 4.5 : 3.5;
       const drawR = isSelected ? baseRadius + 1 : baseRadius;
 
@@ -2129,13 +2129,13 @@ export class NavComputer {
           anchorY: starP.y,
           homeX: starP.x + baseRadius + 4,   // text baseline home x (was the inline x)
           homeY: starP.y + 3,                // text baseline home y (was the inline y)
-          tier,
+          tier, ink: isTgt ? INK.TARGET : star === currentSystemStar ? INK.CURRENT : LABEL_INK,   /* ⭐ batch 2 fixup (Astra 3): names were all gold #ffc850, a few units off TARGET */
           dist: star.dist ?? Infinity,
         });
       }
 
       // Selected star: TARGET-ink highlight ring (it is the warp target)
-      if (isSelected) {
+      if (isTgt) {
         const pulse = 1 + Math.sin(Date.now() * 0.004) * 0.15;
         ctx.strokeStyle = INK.TARGET;
         ctx.lineWidth = 2;
@@ -2184,7 +2184,7 @@ export class NavComputer {
     }
 
     // Selected star info banner (shown below HUD)
-    if (this._selectedNavStar) {
+    if (this._selectedNavStar && this._selectedNavStar !== currentSystemStar && !isHereStar(this, this._selectedNavStar)) {   /* fixup: no WARP TARGET banner for the system you are in (by identity — after a warp the selection is the old column's row object, live at Sirius) */
       const s = this._selectedNavStar;
       ctx.font = '11px "DotGothic16", monospace';
       ctx.fillStyle = INK.TARGET;
@@ -2370,14 +2370,14 @@ export class NavComputer {
       const q = p._q;
       const baselineY = p.y + FONT_SIZE;  // box top -> baseline
       if (p.leader) {
-        ctx.strokeStyle = 'rgba(255, 200, 80, 0.35)';
+        ctx.strokeStyle = 'rgba(200, 214, 232, 0.35)';   /* fixup: the leader is the label's neutral, not gold */
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(q.anchorX, q.anchorY);
         ctx.lineTo(p.x, baselineY - FONT_SIZE / 2);
         ctx.stroke();
       }
-      ctx.fillStyle = '#ffc850'; // gold/amber
+      ctx.fillStyle = q.ink || LABEL_INK;   // ⭐ batch 2 fixup: CURRENT / TARGET / a neutral that is neither (was gold #ffc850 for every name)
       ctx.globalAlpha = p.faded ? 0.35 : 1;
       ctx.fillText(q.name, p.x, baselineY);
       ctx.globalAlpha = 1;
@@ -2821,7 +2821,7 @@ export class NavComputer {
 
       // Planet label
       ctx.font = '9px "DotGothic16", monospace';
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillStyle = (this._selectedBody && this._selectedBody.type === 'planet' && (this._selectedBody.planetIndex ?? this._selectedBody.index) === i) ? INK.TARGET : 'rgba(255,255,255,0.4)';   /* ⭐ batch 2 fixup: the selected body's NAME is TARGET, like its ring */
       ctx.textAlign = 'center';
       // ⛔ THE IN-SCENE BODY LABELS COME OFF THE GLASS AT PANEL RESOLUTION, and this is the one
       // suppression that was found by a test rather than by arithmetic. Seven planet names are
@@ -3012,7 +3012,7 @@ export class NavComputer {
     // ── Header (AC3: system-identity title + component annotation) ──
     // One call site, but up to THREE text lines inside (title, `via <component>`
     // annotation, type/planet-count/age) — guarding the call covers all three.
-    if (!this._bare) this._drawSystemHeader(ctx, sys, starName, planets.length);
+    if (!this._bare) { const sy = this._searchShift(); if (sy > 0) { ctx.save(); ctx.translate(0, sy); } this._drawSystemHeader(ctx, sys, starName, planets.length); if (sy > 0) ctx.restore(); }   /* ⭐ batch 2 fixup: clear of the search box */
 
     // ── Far-companion edge chips (AC4: wide members the orrery can't place) ──
     // Called unconditionally on purpose: the method's own chrome-less guard runs
@@ -4170,15 +4170,15 @@ export class NavComputer {
     const tabW = w / LEVELS.length;
 
     for (let i = 0; i < LEVELS.length; i++) {
-      const active = i === this._levelIndex;
+      const active = i === this._levelIndex, own = active && navDrill.onPlayerPlace(this, i);   /* ⭐ batch 2 fixup: CURRENT only on the player's own place, as the 240p designs; browsing elsewhere is legacy blue */
       const x = i * tabW;
 
       // Background
-      ctx.fillStyle = active ? `rgba(${INK.CURRENT_RGB}, 0.15)` : 'rgba(20, 25, 35, 0.8)';
+      ctx.fillStyle = own ? `rgba(${INK.CURRENT_RGB}, 0.15)` : active ? 'rgba(100, 180, 255, 0.15)' : 'rgba(20, 25, 35, 0.8)';
       ctx.fillRect(x, tabY, tabW, tabH);
 
       // Border
-      ctx.strokeStyle = active ? INK.CURRENT : 'rgba(100, 180, 255, 0.1)';
+      ctx.strokeStyle = own ? INK.CURRENT : active ? '#64b4ff' : 'rgba(100, 180, 255, 0.1)';
       ctx.lineWidth = 1;
       ctx.strokeRect(x, tabY, tabW, tabH);
 
@@ -4198,7 +4198,7 @@ export class NavComputer {
   }
 
   _renderHUD(ctx, w, h) {
-    ctx.font = '14px "DotGothic16", monospace';
+    ctx.font = '14px "DotGothic16", monospace';  const hudSy = this._searchShift(); if (hudSy > 0) { ctx.save(); ctx.translate(0, hudSy); }   /* ⭐ batch 2 fixup: the top-left HUD clear of the search box (restored after the sector line) */
 
     // _renderHUD is MIXED — the autopilot crosshair at the bottom is a wordless
     // graphic and survives — so it is guarded block by block, not wholesale.
@@ -4225,7 +4225,7 @@ export class NavComputer {
       ctx.font = '11px "DotGothic16", monospace';
       ctx.fillStyle = INK.CURRENT;
       ctx.fillText(this._currentSector.name, 16, 60);
-    }
+    }  if (hudSy > 0) ctx.restore();
 
     // Autopilot toggle button (bottom-left, above tabs). This one is NOT already
     // suppressed — it sits in a bare block with no level test, so it draws over

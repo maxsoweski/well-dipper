@@ -25,6 +25,13 @@ import { FACE, drawPixelText, measurePixelText } from '../../rendering/PixelText
 
 const W = 417, H = 240;
 const RULE = '#1d3a4a', BG = '#04070c', KEY = '#d8fbff', BODY = '#7fd8e8';
+const CURRENT = '#2ee6c0';
+/** Is `r` the player's own cell — the CURRENT frame's TOP edge AND its LEFT edge on this rectangle? (Top alone also
+ *  matches the cell under it: the frame is `w + 1, h + 1`, so its bottom edge is the next row's top.) */
+const isOwnCell = (fills, r) => fills.some((f) => f.ink === CURRENT && f.x === r.x && f.y === r.y && f.h === 1 && f.w >= r.w)
+  && fills.some((f) => f.ink === CURRENT && f.x === r.x && f.y === r.y + 1 && f.w === 1 && f.h >= r.h - 1);
+/** The ink the LAST fill covering texel (x, y) left there — what the glass shows. */
+const lastInkAt = (fills, x, y) => { let ink = null; for (const f of fills) if (x >= f.x && x < f.x + f.w && y >= f.y && y < f.y + f.h) ink = f.ink; return ink; };
 
 function recorder() {
   const fills = [], images = [];
@@ -32,7 +39,7 @@ function recorder() {
   const ctx = new Proxy(base, {
     get(t, k) {
       if (k === 'fillRect') return (x, y, w, h) => fills.push({ x, y, w, h, ink: t.fillStyle });
-      if (k === 'drawImage') return (...a) => images.push(a.length >= 9 ? { x: a[5], y: a[6], w: a[7], h: a[8] } : { x: a[1], y: a[2], w: a[3], h: a[4] });
+      if (k === 'drawImage') return (...a) => images.push(a.length >= 9 ? { x: a[5], y: a[6], w: a[7], h: a[8], src: a[0] } : { x: a[1], y: a[2], w: a[3], h: a[4], src: a[0] });
       if (k in t) return t[k];
       if (typeof k === 'symbol') return undefined;
       return () => {};
@@ -47,9 +54,9 @@ function recorder() {
  *  lay their "COMPUTING DENSITY" placeholder — a RULE checker across the whole window, which would read as
  *  leader dots and lattice to every case below. The game's GPU path is synchronous; this is that path. */
 const FAKE_IMG = { width: 512, height: 512 };
-function paint(nav, design, w = W) {
+function paint(nav, design, w = W, img = FAKE_IMG) {
   const { S, D } = nav._viewDriverInst;
-  D.nav = { render: () => FAKE_IMG };
+  D.nav = { render: () => img };
   const lines = [];
   const { ctx, fills, images } = recorder();
   const d = makeDesigns({
@@ -126,6 +133,10 @@ describe('AC-16 — the hover label is on the grid and never over the highlighte
         return [0, 1, n >> 1, n - 2, n - 1].includes(cc.i) && [0, 1, n >> 1, n - 2, n - 1].includes(cc.j);
       });
       expect(probe.length, 'fixture: no probe cells').toBeGreaterThan(8);
+      // the player's own cell is always probed too (the fixup's case: hover over the CURRENT outline)
+      const ownCell = base.cells.find((c) => isOwnCell(base.fills, c.rect));
+      if (ownCell && !probe.includes(ownCell)) probe.push(ownCell);
+      let sawOwn = false;
       for (const c of probe) {
         const r = c.rect;
         S.hover = { level, kind: 'cell', sx: r.x + (r.w >> 1), sy: r.y + (r.h >> 1), ref: navGrid.hoverTile(level, c.address) };
@@ -136,12 +147,22 @@ describe('AC-16 — the hover label is on the grid and never over the highlighte
         expect(overlap, `${c.ref}: the label covers its cell`).toBe(false);
         expect(b.x >= cl.x && b.y >= cl.y && b.x + b.w <= cl.x + cl.w && b.y + b.h <= cl.y + cl.h,
           `${c.ref}: the label is not on the grid`).toBe(true);
-        expect(p.fills.some((f) => f.ink === KEY && f.x === r.x && f.y === r.y && f.w >= r.w && f.h === 1),
+        // ⭐ batch 2 fixup — ON THE PLAYER'S OWN CELL the KEY frame steps one texel inside, so the CURRENT outline
+        //    is still the ink on the cell's edge (it was the same rectangle, and the hover painted over it).
+        const own = isOwnCell(p.fills, r);
+        const k = own ? 1 : 0;
+        expect(p.fills.some((f) => f.ink === KEY && f.x === r.x + k && f.y === r.y + k && f.w >= r.w - 2 * k && f.h === 1),
           `${c.ref}: the hovered cell is not highlighted`).toBe(true);
+        if (own) {
+          // ⛔ SABOTAGE RUN: `keyFrame` without the inset → the last ink on the CURRENT cell's top edge is KEY, red.
+          sawOwn = true;
+          expect(lastInkAt(p.fills, r.x + (r.w >> 1), r.y), `${c.ref}: hovering your own cell hid its CURRENT outline`).toBe(CURRENT);
+        }
         const nums = p.lines.find((l) => l.s.startsWith('('));
         expect(nums && nums.color, `${c.ref}: the parenthetical numbers are not the highlight's ink`).toBe(KEY);
       }
       S.hover = null;
+      if (ownCell) expect(sawOwn, 'fixture: the player\'s own cell was not probed').toBe(true);
     }, 120000);
   }
 });
@@ -240,7 +261,10 @@ describe('AC-16 — the density image\'s screen door: the Bayer dither averaged 
     const Wd = 64, Hd = 64, b = 0.4372;
     const out = dequantRGBA(dithered(Wd, Hd, () => b), Wd, Hd);
     const inSrc = dithered(Wd, Hd, () => b);
-    const vals = (a) => { const v = []; for (let y = 8; y < Hd - 8; y++) for (let x = 8; x < Wd - 8; x++) v.push(a[(y * Wd + x) * 4]); return v; };
+    // ⭐ batch 2 fixup (Astra 10) — THE WHOLE IMAGE, BORDER INCLUDED: the window slides inward at an edge, so the
+    //    4-pixel border cancels like the interior. ⛔ SABOTAGE RUN: the edge window clamped (repeating the edge
+    //    pixel) instead of slid → the border keeps a 106-116 spread, red.
+    const vals = (a) => { const v = []; for (let y = 0; y < Hd; y++) for (let x = 0; x < Wd; x++) v.push(a[(y * Wd + x) * 4]); return v; };
     const spread = (v) => Math.max(...v) - Math.min(...v);
     expect(spread(vals(inSrc)), 'fixture: the input must carry the dither').toBeGreaterThan(15);
     expect(spread(vals(out)), 'the dither survived the filter').toBeLessThanOrEqual(1);
@@ -253,6 +277,43 @@ describe('AC-16 — the density image\'s screen door: the Bayer dither averaged 
     for (let i = 1; i < row.length; i++) expect(row[i], `x ${i + 8}`).toBeGreaterThanOrEqual(row[i - 1] - 1);
     expect(row[row.length - 1] - row[0]).toBeGreaterThan(150);
   });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('AC-16 — the image the grid screens BLIT is the dequantised one (the real draw path, Astra 12)', () => {
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16);
+  const Wd = 64, Hd = 64, b = 0.4372;
+  const raw = new Uint8ClampedArray(Wd * Hd * 4);
+  for (let y = 0; y < Hd; y++) for (let x = 0; x < Wd; x++) {
+    const v = Math.floor(b * 12 + BAYER[((x >> 1) & 3) + ((y >> 1) & 3) * 4]) / 12 * 255;
+    raw.set([v, v, v, 255], (y * Wd + x) * 4);
+  }
+  it('both designs, SECTOR: the blitted source is the 8x8-averaged copy, flat across a flat dithered field', async () => {
+    // ⛔ SABOTAGE RUN: `lumImage` returning `D.nav.render(...)` without `dequantLum` → the raw dithered image is
+    //    what gets blitted, red. (The fake image used everywhere else has no `getContext`, so `dequantLum`
+    //    returned it untouched and this path was never run by a test.)
+    const made = [];
+    class FakeImageData { constructor(data, w, h) { this.data = data; this.width = w; this.height = h; } }
+    const fakeCanvas = () => { const cv = { width: 0, height: 0, put: null,
+      getContext: () => ({ putImageData: (id) => { cv.put = id; } }) }; made.push(cv); return cv; };
+    const src = { width: Wd, height: Hd, getContext: () => ({ getImageData: () => ({ data: raw }) }) };
+    const saved = { document: globalThis.document, ImageData: globalThis.ImageData };
+    for (const [mode, design] of [['rail', 1], ['bars', 2]]) {
+      const nav = await at2D(mode, 1);
+      globalThis.document = { createElement: () => fakeCanvas() }; globalThis.ImageData = FakeImageData;
+      let p;
+      try { p = paint(nav, design, W, src); }
+      finally { globalThis.document = saved.document; globalThis.ImageData = saved.ImageData; }
+      const blits = p.images.filter((i) => i.src);
+      expect(blits.length, `D${design}: fixture — nothing was blitted`).toBeGreaterThan(0);
+      expect(blits.some((i) => i.src === src), `D${design}: the raw dithered image was blitted`).toBe(false);
+      const dq = blits.find((i) => made.includes(i.src));
+      expect(dq && dq.src.put, `D${design}: no dequantised image was blitted`).toBeTruthy();
+      const d = dq.src.put.data; let mn = 255, mx = 0;
+      for (let i = 0; i < d.length; i += 4) { mn = Math.min(mn, d[i]); mx = Math.max(mx, d[i]); }
+      expect(mx - mn, `D${design}: the blitted image still carries the dither`).toBeLessThanOrEqual(1);
+    }
+  }, 120000);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════════

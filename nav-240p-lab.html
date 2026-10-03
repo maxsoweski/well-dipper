@@ -138,6 +138,7 @@ const _fired = new Set();
 let _violations = 0;
 /** Every region a design declares this frame, so a caller cannot invent one that is not on the glass. */
 let REGIONS = {};
+let legendBandY = Infinity;   // ⭐ batch 2 fixup: design 2's on-map legend rows start here; nothing placed may reach them
 function region(name, x, y, w, h) { REGIONS[name] = { x, y, w, h }; return REGIONS[name]; }
 
 /**
@@ -353,7 +354,12 @@ const INK = {
 const isHere = () => S.level === 4 && (D.isCurrent != null ? !!D.isCurrent : !!(D.sysStar && D.here && D.sysStar.seed === D.here.seed));   // the game publishes D.isCurrent from NavComputer._isCurrentSystem(); the seed test is only the lab's own stand-in (in Sol the two seeds are 'Sol' and a hash number, so it was false at home)
 /** ⭐ batch 2 (AC-15) — the ink a star's NAME wears: the selected star is the TARGET, the player's own star
  *  is CURRENT, anything else keeps the caller's ink. One spelling for both designs' prism labels. */
-const starInk = (s, dflt) => (s && s === D.selStar) ? INK.TARGET : (s && s === D.here) ? INK.CURRENT : dflt;
+/* ⭐ batch 2 fixup (live FAIL 2, Astra 1) — THE SELECTED STAR IS THE TARGET ONLY WHEN IT IS NOT WHERE YOU ARE. At Sol the
+ *  host pre-selects Sol, so "selected" put SOL in TARGET orange beside `CURRENT SYSTEM` in teal while the TARGET chip
+ *  sat disabled (`targetIsHere`). CURRENT wins: the player's own star is CURRENT whether or not it is also selected. */
+const isTgtStar = (s) => !!s && s === D.selStar && !D.targetIsHere;
+const isCurStar = (s) => !!s && (s === D.here || (s === D.selStar && !!D.targetIsHere));
+const starInk = (s, dflt) => isCurStar(s) ? INK.CURRENT : isTgtStar(s) ? INK.TARGET : dflt;
 const SPECTRAL = { O:'#9db0ff', B:'#abbfff', A:'#c9d6ff', F:'#f7f7ff', G:'#fff5ea',
                    K:'#ffd1a1', M:'#ff9f70', D:'#d9e6ff' };
 
@@ -1253,7 +1259,7 @@ function prismCells(g, cxp, cyp, halfW, halfH, cl) {
     }
   };
   if (D.player) outline(D.player.x, D.player.z, INK.CURRENT);
-  const tgt = D.selStar || D.target;
+  const tgt = D.targetIsHere ? null : (D.selStar || D.target);   // ⭐ batch 2 fixup: not a TARGET outline over your own column
   if (tgt) outline(tgt.wx, tgt.wz, INK.TARGET);
 }
 
@@ -1331,6 +1337,7 @@ function pickCell(level) {
 // DESIGN 1 — THE 71x40.  A character-cell nav computer: a map pane and a persistent ranked rail.
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 function drawDesign1(g, W, H) {
+  legendBandY = Infinity;   // ⭐ batch 2 fixup: design 1's legend is in the tab row, not on the map
   // ⭐ EVERY LABEL THIS FRAME DRAWS, CLEARED BEFORE IT DRAWS ANY (INTERFACE §6). Design 2 clears its
   // whole published set at the head of its own paint for the same reason; a stale label rectangle
   // makes a hit-test that should say "nothing there" quietly answer against the frame before it.
@@ -1523,9 +1530,11 @@ function drawDesign1(g, W, H) {
   // ⭐ batch 2 (AC-15) — ARMED IS ALWAYS THE TARGET'S INK. The BURN bar used to wear `YOU`, but what
   //    the row names is the SELECTED body, i.e. the target (Max, s-sky: *"The readiness indicator color
   //    at the bottom … matches the information about the target system's name … which is great."*).
-  rect(g, 0, ry(rows - 1), W, LEAD, armed ? INK.TARGET : INK.RULE);
+  const cfl = armed && commitFlash();   // ⭐ batch 2 fixup: the TARGET chip's flash, when the target lives only here
+  rect(g, 0, ry(rows - 1), W, LEAD, cfl ? INK.BG : armed ? INK.TARGET : INK.RULE);
+  // (no frame here: a 6-row bar's top and bottom rows are the glyphs' own rows, and a frame struck the word through — live)
   const labelFull = label + (S.sabotage ? SAB : '');
-  T(g, fit(labelFull, W - 4), W / 2, ry(rows - 1), { color: armed ? INK.BG : INK.DIM, align: 'center', rgn: 'commit', what: 'commit label' });
+  T(g, fit(labelFull, W - 4), W / 2, ry(rows - 1), { color: cfl ? INK.TARGET : armed ? INK.BG : INK.DIM, align: 'center', rgn: 'commit', what: 'commit label' });
   // the guard must see the UNCLIPPED string, or it is not a guard — it is the clip
   if (S.sabotage) assertFits('D1 commit label (unclipped)', 'commit', W / 2 - measurePixelText(labelFull) / 2, ry(rows - 1),
                              measurePixelText(labelFull), FACE.h);
@@ -1779,6 +1788,20 @@ function playerCell(level) {
 }
 
 /** The player's cell reference on this screen: "H9" inside this parent, the full "N10 H9" outside. */
+/** ⭐ batch 2 fixup (live FAIL 1) — the TARGET's cell reference on this screen, spelled as `playerCellRef` spells
+ *  the player's ("P16" inside this parent, the full "N10 P16" outside), or null with no live star target. */
+function targetCellRef(level) {
+  const c = targetCell(level);
+  if (!c) return null;
+  return navGrid.sameAddress(navGrid.parentOf(level, c.address), gridParent(level)) ? c.ref : navGrid.addressKey(c.address);
+}
+/** The rail's `TARGET` line at SECTOR / REGION: the target's cell and name in TARGET ink, the dim dash only when
+ *  there is no target. It said `TARGET  —` in DIM unconditionally (measured live at Sirius with a target set). */
+function targetDetailLine(cols) {
+  const ref = targetCellRef(S.level);
+  if (!ref) return ['TARGET  —', INK.DIM];
+  return [`TARGET  ${fit(`${ref} ${String(D.target.name || '').toUpperCase()}`.trim(), (cols - 8) * FACE.advance)}`, INK.TARGET];
+}
 function playerCellRef(level) {
   const c = playerCell(level);
   if (!c) return '—';
@@ -1836,7 +1859,11 @@ function gridScreen(g, L, clip, opt) {
   gridEdgeLabels(g, level, cells, n, P, L, clip, plate, nbs);
   // ⭐ THE CLICK-HIGHLIGHT (INTERFACE §5): the clicked cell's OWN box, the one the drill flies to.
   const pk = pickCell(level);
-  if (pk) { const r = boxRect(P, pk); frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.KEY, clip); }
+  // ⭐ batch 2 fixup — ON THE PLAYER'S OWN CELL THE KEY FRAME STEPS ONE TEXEL INSIDE, so a hover or a click never paints
+  //    over the CURRENT outline (they were the same rectangle, and the last one drawn won).
+  const keyFrame = (c, b) => { const r = boxRect(P, b), own = pc && navGrid.sameAddress(pc.address, c);
+                               frameClip(g, r.x + (own ? 1 : 0), r.y + (own ? 1 : 0), r.w + (own ? -1 : 1), r.h + (own ? -1 : 1), INK.KEY, clip); };
+  if (pk) keyFrame(S.pick.address, pk);
   // ⭐ batch 2 (AC-16, g-sector) — THE HOVERED CELL IS HIGHLIGHTED, in `KEY` (the pick's own ink, so a hover
   //    and the click that commits it are one highlight), and the callout is placed off it, never over it,
   //    with its parenthetical numbers in this same ink (`hoverCallout`). Only a cell of THIS screen: a
@@ -1845,7 +1872,7 @@ function gridScreen(g, L, clip, opt) {
   if (hv && hv.kind === 'cell' && hv.level === level && hv.ref && hv.ref.address && !S.search.open) {
     const hc = navGrid.childCell(level, hv.ref.address);
     if (hc && navGrid.sameAddress(navGrid.parentOf(level, hc.address), parent)) {
-      const r = boxRect(P, hc.bounds); frameClip(g, r.x, r.y, r.w + 1, r.h + 1, INK.KEY, clip);
+      keyFrame(hc.address, hc.bounds);
     }
   }
   // ⭐ batch 2 (AC-15) — THE LOCATE FLASH: a click on the CURRENT or TARGET chip rings the cell holding the
@@ -1961,8 +1988,8 @@ function d1Prism(g, mapW, mapY, mapH, gaugeX) {
   for (const { s, p } of shown) {
     prismDrop(g, p, REGIONS.map);                                                // the stem, under the mark
     rect(g, p.x, p.py, 1, 1, INK.RULE);                                          // the plane dot
-    if (s === D.selStar) { frame(g, p.x - 2, p.y - 2, 5, 5, INK.TARGET); continue; }
-    if (s === D.here)    { frame(g, p.x - 2, p.y - 2, 5, 5, INK.CURRENT); continue; }   // ⭐ AC-5: the player's OWN star, never "the row at the query centre"
+    if (isCurStar(s))    { frame(g, p.x - 2, p.y - 2, 5, 5, INK.CURRENT); continue; }   // ⭐ batch 2 fixup: CURRENT first (`isCurStar`)
+    if (isTgtStar(s))    { frame(g, p.x - 2, p.y - 2, 5, 5, INK.TARGET); continue; }    // ⭐ AC-5: the player's OWN star is `D.here`, never "the row at the query centre"
     // ⭐ AC-2 — A CATALOGUE STAR TAKES ITS SPECTRAL INK AND A RING; A PROCEDURAL ONE KEEPS THE DOT.
     //    Legacy colours every marker by `star.color` and rings the catalogue ones in amber
     //    (NavComputer.js:2104/2109-2113). Design 2 already spends the SPECTRAL table; design 1 spent
@@ -2656,7 +2683,7 @@ function d1Rail(g, x, y, w, cols, rowCount) {
       [`SYSTEMS ${s ? fmtK(estStars(s.centerX, s.centerZ, s.size)) : '—'}`, INK.BODY],
       [`SPAN    ${s ? `${s.size.toFixed(2)} KPC` : '—'}`, INK.BODY], ['', INK.BODY],
       [`CURRENT ${fit(s ? s.name.toUpperCase() : 'UNKNOWN', (cols - 8) * FACE.advance)}`, INK.CURRENT],
-      [`TARGET  ${fit((D.targetIsHere ? '—' : (D.target?.name || '—')).toUpperCase(), (cols - 8) * FACE.advance)}`, INK.TARGET]);
+      [`TARGET  ${fit((D.targetIsHere ? '—' : (D.target?.name || '—')).toUpperCase(), (cols - 8) * FACE.advance)}`, (D.target && !D.targetIsHere) ? INK.TARGET : INK.DIM]);   // ⭐ batch 2 fixup: the dash is DIM, as at SECTOR / REGION
   } else if (S.level === 1 || S.level === 2) {
     // ⭐ THE ROWS ARE THIS SCREEN'S OWN CELLS (naming-prism-segments AC-3): each one is a region (or a
     //   prism) of the parent on the glass, named by the same reference its column and row labels
@@ -2686,12 +2713,12 @@ function d1Rail(g, x, y, w, cols, rowCount) {
     const dp = S.level === 1 ? 2 : 3;   // a 125 pc region needs pc, a 7.8 pc prism needs a tenth of one
     detail.push([t.id, INK.KEY], [`CENTRE  ${Number.isFinite(t.x) ? `${t.x.toFixed(dp)}, ${t.z.toFixed(dp)}` : '—'}`, INK.BODY],
       [`SYSTEMS ${fmtK(t.n)}`, INK.BODY], [`SPAN    ${navGrid.childKpc(S.level).toFixed(4)} KPC`, INK.BODY],
-      ['', INK.BODY], [`CURRENT ${playerCellRef(S.level)}`, INK.CURRENT], ['TARGET  —', INK.DIM]);
+      ['', INK.BODY], [`CURRENT ${playerCellRef(S.level)}`, INK.CURRENT], targetDetailLine(cols));
   } else if (S.level === 3) {
     lines = D.starRows.slice(off, off + listRows).map((s, i) => ({
       txt: `${off + i < 8 && s !== D.here ? off + i + 1 : '·'} ${pad(s.name.toUpperCase() || 'UNNAMED', cols - 13)} ` +
            `${rpad(pcOf(s).toFixed(1), 5)} ${pad(s.spectral, 2)} ${s.mult > 1 ? s.mult : '·'}`,
-      bar: 0, sel: s === D.selStar, ink: s === D.selStar ? INK.TARGET : s === D.here ? INK.CURRENT : null }));   // ⭐ batch 2 (AC-15)
+      bar: 0, sel: s === D.selStar, ink: isCurStar(s) ? INK.CURRENT : isTgtStar(s) ? INK.TARGET : null }));   // ⭐ batch 2 (AC-15) + fixup: CURRENT first
     /*  Function · the camera block — where the eye is, in the units legacy used.
      *  Intent · AC-3 and AC-9 (restorations). Max, UAT 2026-08-01, on this very screen: *"I still
      *    can't use the up/down controls to rise and lower below the galactic plane."* R and F move
@@ -2714,7 +2741,8 @@ function d1Rail(g, x, y, w, cols, rowCount) {
     detail.push([pn.height, INK.BODY], [`       ${pn.slab} · ${pn.region}`, INK.DIM],
       [pn.playerY, INK.BODY], [pn.yRange, INK.DIM], [pn.view, INK.BODY]);
     const s = D.selStar;
-    if (s) detail.push([fit(s.name.toUpperCase(), w), INK.TARGET], [`${s.spectral}   ${s.isReal ? 'CATALOG' : 'PROCEDURAL'}`, INK.BODY],
+    if (s) detail.push([fit(s.name.toUpperCase(), w), D.targetIsHere ? INK.CURRENT : INK.TARGET],   // ⭐ batch 2 fixup: your own star's name is CURRENT
+      [`${s.spectral}   ${s.isReal ? 'CATALOG' : 'PROCEDURAL'}`, INK.BODY],
       [`DIST   ${pcOf(s).toFixed(2)} PC`, INK.BODY], [`       ${lyOf(s).toFixed(1)} LY`, INK.BODY],
       [`PLANE  ${((s.wy - D.player.y) * 1000).toFixed(0)} PC`, INK.BODY],
       [`COMPS  ${s.mult > 1 ? 'MULTIPLE (' + s.mult + ')' : 'SINGLE'}`, INK.BODY],
@@ -3005,7 +3033,7 @@ function yGauge(g, gx, gy, gh) {
   if (Math.abs(po) <= gaugeSpan - 2) rect(g, gx + 1, gaugeCy - po, 3, 1, INK.CURRENT);
   else if (po > 0) { rect(g, gx + 2, gy + 1, 1, 1, INK.CURRENT); rect(g, gx + 1, gy + 2, 3, 1, INK.CURRENT); }   // ▲ the ship is above
   else { rect(g, gx + 1, gy + gh - 3, 3, 1, INK.CURRENT); rect(g, gx + 2, gy + gh - 2, 1, 1, INK.CURRENT); }   // ▼ …or below
-  if (D.selStar) rect(g, gx, gaugeTexel(D.selStar.wy), 5, 1, INK.TARGET);
+  if (isTgtStar(D.selStar)) rect(g, gx, gaugeTexel(D.selStar.wy), 5, 1, INK.TARGET);   // ⭐ batch 2 fixup: not for your own star
   if (Math.abs(camY - D.player.y) > 1e-9) rect(g, gx + 1, gaugeTexel(camY), 4, 1, INK.KEY);
   S.yGaugeRect = { x: gx, y: gy, w: 6, h: gh,
                    cy: gaugeCy, span: gaugeSpan, halfKpc: GAUGE_HALF_KPC, base };
@@ -3040,7 +3068,7 @@ function slabBar(g, bx, by, bh) {
   const loaded = L && L.loadedSlabs, empty = L && L.emptySlabs;
   const kView = slabBarGeo.slabIndexOfY((S.cam && Number.isFinite(S.cam.y)) ? S.cam.y : 0);
   const kShip = D.player && Number.isFinite(D.player.y) ? slabBarGeo.slabIndexOfY(D.player.y) : null;
-  const tgt = D.selStar || D.target;
+  const tgt = D.targetIsHere ? null : (D.selStar || D.target);   // ⭐ batch 2 fixup: your own star selected is not a TARGET tick (live, Sol)
   const kTgt = tgt && Number.isFinite(tgt.wy) ? slabBarGeo.slabIndexOfY(tgt.wy) : null;
   const LAYER_INK = { thin: INK.THIN, thick: INK.THICK, halo: INK.HALOL };
   for (let i = 0; i < slabBarGeo.BAR_CELLS; i++) {
@@ -3429,7 +3457,8 @@ function shipWord(g, hits, taken, ax, ay, words) {
     // ⚠ BELOW FIRST (today's slot, so an uncrowded frame is unchanged), THEN ABOVE: on a ladder the room
     //   under the axis is the names' (`gy = -14`), and a word carrying a range is worth a second try.
     const w = measurePixelText(txt);
-    const pos = placeLabel(taken, hits, ax, ay, 4, -10, w, cl, null) || placeLabel(taken, hits, ax, ay, 4, 18, w, cl, null);   // `hits` carries the lit route (the callers pass `hits.concat(st.path)`)
+    const bd = { x: cl.x, y: cl.y, w: cl.w, h: Math.min(cl.h, legendBandY - cl.y) };   // ⭐ batch 2 fixup: never on design 2's legend rows
+    const pos = placeLabel(taken, hits, ax, ay, 4, -10, w, bd, null) || placeLabel(taken, hits, ax, ay, 4, 18, w, bd, null);   // `hits` carries the lit route (the callers pass `hits.concat(st.path)`)
     if (pos) { plated(g, txt, pos.x, pos.y, INK.CURRENT, 'map', 'ship label'); return; }
   }
 }
@@ -4003,12 +4032,18 @@ function indicatorChips(g, xl, xr, y, hitH, rgn) {
   const GAP = 8, ICON = 7;                                // a 5-texel diamond and two texels of air
   const t = targetInfo(), cName = currentName();
   const room = Math.max(0, xr - xl);
+  // ⭐ batch 2 fixup (Astra 7) — NOTHING HERE MAY BE WIDER THAN `room`. The old floors (`Math.max(FACE.advance, …)`)
+  //    and an LY distance kept whatever the name was cut to ran the pair 9-17 texels into design 2's tab strip at
+  //    a 300-320 buffer. Now: the distance goes first, then the names shorten, and below two diamonds' room nothing.
+  S.indicatorRects = [];
+  if (room < 2 * ICON + GAP) return xr;
   // the current chip takes what it needs up to a third of the room; the target gets the rest
-  const cTxt = fit(cName, Math.max(FACE.advance, Math.floor(room / 3) - ICON));
+  const cTxt = fit(cName, Math.max(0, Math.floor(room / 3) - ICON));
   const cW = ICON + measurePixelText(cTxt);
-  const tRoom = Math.max(FACE.advance, room - cW - GAP - ICON);
+  const tRoom = Math.max(0, room - cW - GAP - ICON);
   const distW = t.dist ? measurePixelText(' ' + t.dist) : 0;
-  const tTxt = t.dist ? fit(t.name, Math.max(FACE.advance, tRoom - distW)) + ' ' + t.dist : fit(t.name, tRoom);
+  const keepDist = t.dist && tRoom - distW >= 3 * FACE.advance;
+  const tTxt = keepDist ? fit(t.name, tRoom - distW) + ' ' + t.dist : fit(t.name, tRoom);
   const tW = ICON + measurePixelText(tTxt);
   const tx = xr - tW, cx = tx - GAP - cW;
   const chip = (x, w, txt, ink, textInk, who, live) => {
@@ -4071,20 +4106,32 @@ function locateMarks(g) {
   if (!ink || !cl) return;
   const cur = ink === INK.CURRENT;
   if (S.level === 3) {
-    const want = cur ? D.here : D.selStar;
-    const h = want && (S.prismHits || []).find((z) => z.ref === want);
+    // ⭐ batch 2 fixup (Astra 8) — THE TARGET IS `D.target`, NOT ONLY `D.selStar`: the driver's click centres on
+    //    `D.target`, so the ring finds the same star — the selection, else the row with the target's key.
+    const tg = D.target, tk = tg && tg.key;
+    const h = (S.prismHits || []).find((z) => z.ref && (cur ? z.ref === D.here
+      : (z.ref === D.selStar || (tk != null && z.ref.key === tk))));
     if (h) locateRing(g, h.x, h.y, ink, cl);
     return;
   }
   if (S.level !== 4) return;
   if (cur) { if (S.currentMark) locateRing(g, S.currentMark.x, S.currentMark.y, ink, cl); return; }
   const b = D.selBody;
+  // ⚠ batch 2 fixup (Astra 8) — NO BODY BUT A LIVE STAR TARGET only happens AT HOME (on a foreign system the host
+  //    selects its star, NavComputer.js `_renderSystem`'s COMMIT block); the target's place there is the commit (`commitFlash`).
   if (!b) return;
   const hits = S.bodyHits || [];
   const h = b.kind === 'star' ? hits.find((z) => z.star)
           : hits.find((z) => z.ref === b && !(z.moon >= 0))
             || (b.kind === 'moon' ? hits.find((z) => z.ref && z.ref.pIdx === b.pIdx && z.moon === b.mIdx) : null);
   if (h) locateRing(g, h.x, h.y, ink, cl);
+}
+
+/** ⭐ batch 2 fixup (Astra 8) — AT HOME ON SYSTEM WITH NO BODY PICKED, THE TARGET IS ANOTHER SYSTEM and the one place
+ *  this screen shows it is the armed WARP commit. A TARGET chip click blinks that commit INVERTED (BG fill, TARGET word;
+ *  design 2's chip also takes a TARGET frame) on the flash's own beat, so the click always answers. */
+function commitFlash() {
+  return S.level === 4 && isHere() && !D.selBody && !!D.target && !D.targetIsHere && locateInk(4) === INK.TARGET;
 }
 
 /* ⭐ batch 2 (AC-18d) — A LEGEND IS CLAUSES, AND WHAT DOES NOT FIT IS A WHOLE CLAUSE DROPPED, NEVER A WORD CUT.
@@ -4140,6 +4187,10 @@ function drawDesign2(g, W, H) {
   //    branch, so without a clear here the rows of a planet the pilot left would stay on offer under
   //    the whole-system list — geometry out of nobody's paint, which is the defect this block names.
   S.railBodies = null;
+  // ⭐ batch 2 fixup (live FAIL 4) — THE LEGEND ROWS ARE CLAIMED BEFORE THE PAINTERS RUN. They are drawn last, on a
+  //    BG knockout, so a CURRENT label placed on their rows was painted over (at Sirius only "IT" survived).
+  legendBandY = (!S.search.open && !(S.level === 3 && S.list))
+    ? mapY + mapH - FACE.h - 1 - (S.level >= 3 ? FACE.h + 1 : 0) - 1 : Infinity;
   if (S.level <= 2) d2TwoD(g, W, mapY, mapH);
   else if (S.level === 3) d2Prism(g, W, mapY, mapH);
   else d2System(g, W, mapY, mapH);
@@ -4284,9 +4335,11 @@ function drawDesign2(g, W, H) {
   if (S.sabotage) assertFits('D2 status line (unclipped)', 'botbar', 4, H - BAR + 2, measurePixelText(full), FACE.h);
   const armed = !!(isHere() && !homeWarp ? D.selBody : (D.target && !D.targetIsHere));   // not the system you are in (state.js `targetIsHere`)
   const chipX = W - chipW - 2;
-  if (armed) rect(g, chipX, H - BAR, chipW, BAR, INK.TARGET);
+  const cfl = armed && commitFlash();   // ⭐ batch 2 fixup: see design 1's commit row
+  if (armed) rect(g, chipX, H - BAR, chipW, BAR, cfl ? INK.BG : INK.TARGET);
+  if (cfl) frame(g, chipX, H - BAR, chipW, BAR, INK.TARGET);
   T(g, chipTxt, chipX + 3, H - BAR + 2,
-    { color: armed ? INK.BG : INK.DIM, rgn: 'botbar', what: 'commit chip' });
+    { color: cfl ? INK.TARGET : armed ? INK.BG : INK.DIM, rgn: 'botbar', what: 'commit chip' });
   // ⭐ THE CHIP'S RECTANGLE AND ITS ARMED STATE, from the two locals the fill and the label already
   // used. The button that LOOKS live and the button that IS live now cannot come apart, and neither
   // can WARP and BURN: one rectangle, one `armed`, one commit.
@@ -4457,8 +4510,8 @@ function d2Prism(g, W, mapY, mapH) {
   for (const { s, p } of onScreen) {
     prismDrop(g, p, REGIONS.map);                             // the stem — the dashed line, restored
     rect(g, p.x, p.py, 1, 1, INK.RULE);                       // plane dot, not a dashed line
-    if (s === D.here) { for (const d of [[-4,-4],[2,-4],[-4,2],[2,2]]) { rect(g, p.x+d[0], p.y+d[1], 3, 1, INK.CURRENT); rect(g, p.x+d[0], p.y+d[1], 1, 3, INK.CURRENT); } continue; }
-    if (s === D.selStar) { frame(g, p.x - 3, p.y - 3, 7, 7, INK.TARGET); continue; }   // ⭐ batch 2 (AC-15): the selected star is the TARGET, in its ink (Phase 3 left it in KEY)
+    if (isCurStar(s)) { for (const d of [[-4,-4],[2,-4],[-4,2],[2,2]]) { rect(g, p.x+d[0], p.y+d[1], 3, 1, INK.CURRENT); rect(g, p.x+d[0], p.y+d[1], 1, 3, INK.CURRENT); } continue; }
+    if (isTgtStar(s)) { frame(g, p.x - 3, p.y - 3, 7, 7, INK.TARGET); continue; }   // ⭐ batch 2 (AC-15): the selected star is the TARGET, in its ink (Phase 3 left it in KEY)
     if (s.isReal) { plus(g, p.x, p.y, SPECTRAL[s.spectral] || INK.BODY); if (s.mult > 1) { rect(g, p.x+2, p.y-2, 1, 1, INK.BODY); rect(g, p.x-2, p.y+2, 1, 1, INK.BODY); } }
     else rect(g, p.x, p.y, 1, 1, SPECTRAL[s.spectral] || INK.DIM);
   }
@@ -4621,7 +4674,8 @@ function d2List(g, W, mapY, mapH) {
   drawn.forEach((s, i) => {
     const y = mapY + 4 + (i + 1) * LEAD;
     const sel = s === D.selStar;
-    if (sel) rect(g, 2, y - 1, rowEdge - 2, LEAD, INK.TARGET);   // ⭐ batch 2 (AC-15): the selected star is the TARGET
+    if (sel) rect(g, 2, y - 1, rowEdge - 2, LEAD, D.targetIsHere ? INK.CURRENT : INK.TARGET);   // fixup: your own star selected is CURRENT
+      // ⭐ batch 2 (AC-15): the selected star is the TARGET
     const ink = sel ? INK.BG : (s.isReal ? INK.BODY : INK.DIM);
     const put = (c, str, maxw) => cols[c] < W - 10 && cols[c] < rowEdge &&
       T(g, fit(str, Math.min(maxw, W - cols[c] - 6, rowEdge - cols[c])), cols[c], y, { color: ink, rgn: 'map', what: 'list row ' + i });

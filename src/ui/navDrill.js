@@ -316,6 +316,23 @@ export function onPlayerColumn(nav) {
 }
 
 /**
+ * Is the screen a legacy level shows the PLAYER'S OWN PLACE at that level? The galaxy always; the
+ * player's own sector / region (`legacyParent` against the parent under the player); the player's
+ * column (`onPlayerColumn`); the system the ship is in (`_isCurrentSystem`).
+ * ⭐ batch 2 fixup (AC-15) — the legacy tab strip wears CURRENT on exactly these, the rule the 240p
+ * designs' `onPlayerPlace` (designs.js) already draws; browsing anywhere else is not "current".
+ */
+export function onPlayerPlace(nav, level) {
+  if (level === navGrid.GALAXY) return true;
+  if (level === navGrid.SECTOR || level === navGrid.REGION) {
+    if (!Number.isFinite(nav._playerX) || !Number.isFinite(nav._playerZ) || !nav._viewCenter) return false;
+    return navGrid.sameAddress(navGrid.parentAt(level, nav._playerX, nav._playerZ), legacyParent(nav, level));
+  }
+  if (level === navGrid.PRISM) return onPlayerColumn(nav);
+  return typeof nav._isCurrentSystem === 'function' && !!nav._isCurrentSystem();
+}
+
+/**
  * The legacy prism's "here" row: on the PLAYER'S column, the loaded row that IS the player's own star
  * (`hereRowOf` — the one resolver both designs and the self-warp guard use); on any other column,
  * none — never the nearest browsed row (plan §6; NavComputer.js:2052).
