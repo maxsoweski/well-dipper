@@ -1879,7 +1879,7 @@ export class NavComputer {
     // Expands automatically as the user scrolls with R/F.
     const yWindowHalf = rad * 2; // matches render window below
     this._ensureStarsLoaded(cx, cy, cz, yWindowHalf);
-
+    if (this.viewMode) return;   /* ⭐ naming-prism-segments AC-6 (Phase 3 fixup) — UNDER A DESIGN THE LEGACY PRISM PICTURE IS NOT PAINTED. The load above is all this method owes a design; everything below draws pixels the design's opaque first fill erases, and at a 172k-row bulge column it was ~35 ms a frame of whole-column filter / project / sort / name-set / minimap scans (Astra, phase3 review finding 1). Hover is re-resolved from the design's own geometry at the tail of the driver's render (index.js `resolveHover`), so nothing a design reads is lost. */
 
     // 3D projection — orbit around the block center, not the camera position.
     // The camera can WASD around within the block, but rotation always pivots

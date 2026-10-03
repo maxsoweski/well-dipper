@@ -661,18 +661,34 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *  Deliberate non-goals · no spatial index (rows carry their slab, but top-down every slab lands on the
    *    plane, so a slab filter would be wrong there); the order of the walk is untouched. */
   function prismCull(cx, cy, halfW, halfH, x0, y0, x1, y1) {
+    const at = prismXY(cx, cy, halfW, halfH);
+    const lx = x0 - 4, hx = x1 + 4, ly = y0 - 4, hy = y1 + 4;
+    return (s) => {
+      const p = at(s);
+      return p.x < lx || p.x > hx || p.y < ly || p.y > hy;
+    };
+  }
+  /*  Function · `projectPrism`'s (x, y), as a per-frame closure that ALLOCATES NOTHING: every call writes
+   *    into the one object it returns, so read it before the next call.
+   *  Intent · naming-prism-segments AC-6 (Phase 3 fixup). `prismCull` and design 2's list starfield
+   *    (`listField`) both need the screen point of every row in a 172k-row column; a fresh object per row
+   *    was most of a top-down list frame. ⛔ THE SAME ARITHMETIC AS `projectPrism`, OPERATION FOR OPERATION
+   *    — on the default angle `dx·1 − dz·0` is `dx` and `dx·0 + dz·1` is `dz` exactly — so a point it
+   *    returns is the point `projectPrism` would have, and a bounds test on it decides the same way.
+   *  Deliberate non-goals · no depth, no `py` (the callers that need those still call `projectPrism`). */
+  function prismXY(cx, cy, halfW, halfH) {
     const cam = S.cam, r = Math.max(cam.radius, 1e-9), rx = 0.92;
     const rotX = cam.rotX === undefined ? PRISM_ROTX0 : cam.rotX;
     const rotY = cam.rotY === undefined ? PRISM_ROTY0 : cam.rotY;
     const def = (rotX === PRISM_ROTX0 && rotY === PRISM_ROTY0);
     const ca = def ? 1 : Math.cos(rotY), sa = def ? 0 : Math.sin(rotY);
     const tilt = def ? PRISM_TILT0 : PRISM_K * Math.sin(rotX), rise = def ? PRISM_RISE0 : PRISM_K * Math.cos(rotX);
-    const lx = x0 - 4, hx = x1 + 4, ly = y0 - 4, hy = y1 + 4;
+    const out = { x: 0, y: 0 };
     return (s) => {
       const dx = (s.wx - cam.x) / r, dz = (s.wz - cam.z) / r, dy = (s.wy - cam.y) / r;
-      const x = cx + (dx * ca - dz * sa) * halfW * rx;
-      const y = cy + (dx * sa + dz * ca) * halfH * tilt - dy * halfH * rise;
-      return x < lx || x > hx || y < ly || y > hy;
+      out.x = cx + (dx * ca - dz * sa) * halfW * rx;
+      out.y = cy + (dx * sa + dz * ca) * halfH * tilt - dy * halfH * rise;
+      return out;
     };
   }
 
@@ -694,6 +710,9 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *    SAME forward arithmetic `projectPrism` uses, so a grid line through a star's foot passes through it.
    *  ⚠ EDGE-ON IS A REAL STATE AND IT DIVIDES BY ZERO: at elevation 0 the tilt is 0, the plane is a line
    *    and the inverse's `az` term is Infinity. There is no lattice to draw there, so there is none.
+   *    ⭐ (Phase 3 fixup) BUT THE FRAME IS STILL RETURNED, flagged `edgeOn`: its FORWARD maps are fine at
+   *    tilt 0, and `prismCells`' pillars are exactly what a side view should show (Astra: at rotation 0
+   *    they vanished with the lattice). Only the inverse (`back`) is meaningless there.
    *  Deliberate non-goals · no player-cell fill, no horizon fade, no axis labels. */
   const PLANE_SUB = 8;             // lattice lines per prism: 7.8125 pc / 8 = 0.977 pc, legacy's ~1 pc floor
   const PLANE_MAX_LINES = 48;      // a bound on the loop at the widest zoom stop, not a picture choice
@@ -710,7 +729,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     const def = (rotX === PRISM_ROTX0 && rotY === PRISM_ROTY0);
     const tilt = def ? PRISM_TILT0 : PRISM_K * Math.sin(rotX);
     const rise = def ? PRISM_RISE0 : PRISM_K * Math.cos(rotX);
-    if (!(Math.abs(tilt) > 1e-6)) return null;         // edge-on: the plane IS a line
+    const edgeOn = !(Math.abs(tilt) > 1e-6);           // edge-on: the plane IS a line (see `prismPlane`)
     const ca = def ? 1 : Math.cos(rotY), sa = def ? 0 : Math.sin(rotY);
     const camY = Number.isFinite(cam.y) ? cam.y : 0;
     // dx, dz in camera radii from the camera; wy in kpc
@@ -720,12 +739,12 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
                              return { dx: ax * ca + az * sa, dz: -ax * sa + az * ca }; };
     const col = D.column || navGrid.enterColumn(navGrid.parentAt(3, cam.x, cam.z));
     const P = navGrid.childKpc(2);                     // one prism, 7.8125 pc — the grid's own pitch
-    return { cam, r, rx, tilt, rise, fx, fy, back, camY, col, P,
+    return { cam, r, rx, tilt, rise, fx, fy, back, camY, col, P, edgeOn,
              ox: col ? col.bounds.min.x : cam.x, oz: col ? col.bounds.min.z : cam.z };
   }
   function prismPlane(g, cxp, cyp, halfW, halfH, cl) {
     const F = cl ? prismFrame(cxp, cyp, halfW, halfH) : null;
-    if (!F) return;
+    if (!F || F.edgeOn) return;   // ⛔ edge-on the inverse divides by zero and the lattice is one line: none drawn
     const { cam, r, rx, tilt, fx, fy, back } = F;
     let dxMin = Infinity, dxMax = -Infinity, dzMin = Infinity, dzMax = -Infinity;
     for (const [x, y] of [[cl.x, cl.y], [cl.x + cl.w, cl.y], [cl.x, cl.y + cl.h], [cl.x + cl.w, cl.y + cl.h]]) {
@@ -781,6 +800,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *  ⛔ ONE PROJECTION. Every point goes through `prismFrame`'s forward maps — the same arithmetic as
    *    `projectPrism` with the height term in — so a pillar stands exactly on its lattice corner and a
    *    star on a face sits on that face's line. ⚠ Top-down (rise ≈ 0) a pillar is a point: none drawn.
+   *    ⭐ Side-on (tilt 0) is the opposite case and the one the pillars are FOR: they stay, full height.
    *  Deliberate non-goals · no labels on neighbours, no fill, no stars, no faces of other slabs. */
   const CELL_REACH = 2;            // columns each side of the one on the glass: a 5 × 5 neighbourhood
   function prismCells(g, cxp, cyp, halfW, halfH, cl) {
@@ -1379,6 +1399,18 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    * against a true maximum of 6,836,551,510, so the drawn page's worst row asked for **90 bar squares
    * instead of four**. Spelled once, for every caller that needs a denominator rather than an order.
    */
+  /** ⭐ AC-6 (Phase 3 fixup) — how many rows are catalogue stars, counted once per row set (and length): the
+   *  rail header asked every frame, a 172k-row walk to print a number that changes only on a publish. */
+  let realCountMemo = { rows: null, len: -1, n: 0 };
+  function realCount(rows) {
+    if (!rows) return 0;
+    if (realCountMemo.rows !== rows || realCountMemo.len !== rows.length) {
+      let n = 0;
+      for (const s of rows) if (s.isReal) n++;
+      realCountMemo = { rows, len: rows.length, n };
+    }
+    return realCountMemo.n;
+  }
   function rankMax(rows) {
     let m = 0;
     for (const r of rows) if (r && r.n > m) m = r.n;
@@ -2055,7 +2087,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     T(g, hdr, x, y, { color: INK.KEY, rgn: 'rail', what: 'rail header' });
     const cnt = detPlanet ? String(detPlanet.moons.length)
               : [String(D.sectorRows.length), String(S.level === 1 ? gridRows(1).length : 0), String(S.level === 2 ? gridRows(2).length : 0),
-                 `${D.starRows.filter(s=>s.isReal).length}/${fmtK(D.stars.length)}`,
+                 `${realCount(D.starRows)}/${fmtK(D.stars.length)}`,
                  String(D.bodies.length)][S.level];
     T(g, cnt, x + w, y, { color: INK.DIM, align: 'right', rgn: 'rail', what: 'rail count' });
     rect(g, x, y + LEAD - 1, w, 1, INK.RULE);
@@ -2509,6 +2541,16 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     }
     const planeY = slabBarGeo.barRow(slabBarGeo.rowOfIndex(0), top, span)[1] - 1;   // the gap under N1
     rect(g, bx + 1, planeY, 4, 1, INK.DIM);
+    // ⭐ PAST EITHER END (plan §4.5: "the bar shows an 'above' or 'below' mark at its end"; Phase 3 fixup,
+    //    Astra finding 8). A view, ship or target above N30 or below S30 has no cell, so it is marked in the
+    //    bar's own end inset — the outer texel row, above the top cell or below the bottom one — in the same
+    //    column and ink its tick would have: the view `KEY` across the middle, the ship `YOU` on the left,
+    //    the target `TARGET` on the right. The slab's real name stays in the text; ownership is not clamped.
+    const beyond = (k, x, w, ink) => {
+      if (k === null || (k >= -slabBarGeo.BAR_HEMI && k < slabBarGeo.BAR_HEMI)) return;
+      rect(g, x, k > 0 ? by : by + bh - 1, w, 1, ink);
+    };
+    beyond(kView, bx + 1, 4, INK.KEY); beyond(kShip, bx, 1, INK.YOU); beyond(kTgt, bx + 5, 1, INK.TARGET);
     assertMark('segment bar', 'slabbar', bx, by, slabBarGeo.BAR_W, bh);
     S.slabBarRect = r;
   }
@@ -3662,7 +3704,7 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
     //    `[W-21, W-13)`). It was `W - 44`, and a bar left of the gauge would have landed on it.
     const mw = 24, mh = 24, mx = W - 53, my = mapY + mapH - mh - 5;
     for (const d of [[0,0],[mw-3,0],[0,mh-3],[mw-3,mh-3]]) { rect(g, mx+d[0], my+d[1], 3, 1, INK.DIM); rect(g, mx+d[0], my+d[1], 1, 3, INK.DIM); }
-    rect(g, mx + mw / 2, my + mh / 2, 1, 1, INK.YOU);
+    if (D.hereColumn !== false) rect(g, mx + mw / 2, my + mh / 2, 1, 1, INK.YOU);   // ⭐ Phase 3 fixup: YOU means the player — not on a browsed column
     /*  Function · AC-10 — the 24-texel scale column beside the minimap becomes a REAL y-gauge,
      *    spanning the pane and published as `S.yGaugeRect`.
      *  Intent · page item 23, Max's ruling *"yes"*: design 1 has two handles at these two levels and
@@ -3705,6 +3747,42 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *  mode too, because changing slab is exactly what you want while reading a list; the fine gauge stays
    *  map-only."* */
   const D2_BAR_FROM_RIGHT = 28;
+  /*  Function · the texels of design 2's knocked-back list starfield: `[x0, y0, x1, y1, …]`, each once.
+   *  Intent · naming-prism-segments AC-6 (Phase 3 fixup; Astra finding 1: "the list background has no cap").
+   *    It drew one 1×1 rect PER ROW — 172k a frame for a top-down bulge column, ~45 ms headless. ⭐ THE SAME
+   *    PIXELS, NOW BOUNDED BY THE PANE, NOT BY THE COLUMN: every row still lands where `projectPrism` puts
+   *    it (`prismXY`, same arithmetic) and passes the same bounds test, but a texel already lit is not lit
+   *    again (one ink, so the order never mattered), and a texel the parity pass right after repaints in
+   *    `BG` is never lit at all. So at most half the pane's texels are drawn, whatever the column holds.
+   *    And the list is mostly READ, not panned: the texels are kept until the rows, the camera or the
+   *    pane change, so a still frame walks no rows.
+   *  ⛔ THE PARITY TEST IS `checker`'s OWN: from `(round(0), round(mapY))`, texel (i, j) is repainted when
+   *    `i` and `j` have the same parity, inside `round(W) × round(mapH)`.
+   *  Deliberate non-goals · no density shading, no change to which rows are shown. */
+  let listFieldMemo = null;
+  function listField(cxp, cyp, W, mapY, mapH) {
+    const rows = D.starRows || [], cam = S.cam, m = listFieldMemo;
+    if (m && m.rows === rows && m.len === rows.length && m.cx === cam.x && m.cy === cam.y && m.cz === cam.z
+        && m.r === cam.radius && m.rotX === cam.rotX && m.rotY === cam.rotY && m.W === W && m.mapY === mapY && m.mapH === mapH) {
+      return m.texels;
+    }
+    const at = prismXY(cxp, cyp, W / 2, mapH / 2);
+    const ty0 = Math.round(mapY), cw = Math.round(W), ch = Math.round(mapH);
+    const pitch = cw + 2, seen = new Uint8Array(pitch * (ch + 2));
+    const texels = [];
+    for (const s of rows) {
+      const p = at(s);
+      if (p.x < 0 || p.x >= W || p.y < mapY || p.y >= mapY + mapH) continue;
+      const tx = Math.round(p.x), ty = Math.round(p.y), j = ty - ty0;
+      if (tx < cw && j >= 0 && j < ch && ((tx - j) & 1) === 0) continue;      // the parity pass repaints it
+      const i = (j + 1) * pitch + tx;
+      if (seen[i]) continue;
+      seen[i] = 1; texels.push(tx, ty);
+    }
+    listFieldMemo = { rows, len: rows.length, cx: cam.x, cy: cam.y, cz: cam.z, r: cam.radius, rotX: cam.rotX, rotY: cam.rotY,
+                      W, mapY, mapH, texels };
+    return texels;
+  }
   function d2SlabBar(g, W, mapY, mapH) {
     const bx = W - D2_BAR_FROM_RIGHT;
     region('slabbar', bx, mapY, slabBarGeo.BAR_W, mapH);
@@ -3716,13 +3794,8 @@ export function makeDesigns({ S, D, onViolation = null, face = DEFAULT_FACE,
    *  cross-referenced against a dot when the dots are gone. Drawn so that objection is LOOKED AT. */
   function d2List(g, W, mapY, mapH) {
     const cxp = W / 2, cyp = mapY + mapH / 2;
-    const offPane = prismCull(cxp, cyp, W / 2, mapH / 2, 0, mapY, W, mapY + mapH);        // ⭐ AC-6 — see `prismCull`
-    for (const s of D.starRows) {                      // the starfield, still there, knocked back
-      if (offPane(s)) continue;
-      const p = projectPrism(s, cxp, cyp, W / 2, mapH / 2);
-      if (p.x < 0 || p.x >= W || p.y < mapY || p.y >= mapY + mapH) continue;
-      rect(g, p.x, p.y, 1, 1, INK.RULE);
-    }
+    const field = listField(cxp, cyp, W, mapY, mapH);  // the starfield, still there, knocked back
+    for (let i = 0; i < field.length; i += 2) rect(g, field[i], field[i + 1], 1, 1, INK.RULE);
     checker(g, 0, mapY, W, mapH, INK.BG);              // one 50% parity pass — no alpha anywhere, and
                                                        // half the starfield survives, as the design says
     const LEAD = FACE.h + 1, rows = Math.floor((mapH - 4) / LEAD) - 1;

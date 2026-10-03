@@ -164,15 +164,22 @@ describe('a pick survives the frame that is drawn after it', () => {
     // down (it bails on a non-finite pointer), and the legacy pass alone is left to run. It NULLS
     // `_hoveredLocalStar` at :2037 and re-derives it against the LEGACY projection, so the star the
     // rail row named does not come back.
+    // ⭐ naming-prism-segments Phase 3 fixup (AC-6): UNDER A DESIGN THE LEGACY PRISM NO LONGER RUNS AT ALL
+    //   (`_renderLocal` returns after its load — it was ~35 ms a frame of pixels the design erased), so
+    //   the clobbering writer is now only reachable by standing the DESIGN down. That is the control:
+    //   the same pointer, one legacy frame, and the pick is gone — the writer still exists and would
+    //   eat the pick if a design frame ran it again.
     const { nav, drv } = await loadedNav();
     const p = rowPoint(drv, 2);
     nav._handleMouseMove({ clientX: p.x, clientY: p.y });
     const picked = nav._hoveredLocalStar?.star;
     expect(picked, 'the rail row must resolve to a star at all').toBeTruthy();
-    nav._mouseX = NaN;                       // the driver's tail bails; nothing else changes
+    const mode = nav.viewMode;
+    nav.viewMode = null;                     // the design stands down; the legacy pass alone runs
     nav.render();
     expect(nav._hoveredLocalStar?.star?.seed,
       'if the legacy pass could NOT clobber this, the case below is vacuous').not.toBe(picked.seed);
+    nav.viewMode = mode;
   });
 
   for (const mode of ['rail', 'bars']) {

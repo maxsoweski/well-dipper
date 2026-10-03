@@ -116,6 +116,7 @@ import { simClockMs } from '../../core/SimClock.js';
 import * as navGrid from '../navGrid.js';
 import { addressOf } from '../../generation/GalaxyGrid.js';
 import { findStar, starMemoKey, hereRowOf, isHereStar } from './starIdentity.js';
+import { POSITION_MATCH_TOL } from '../../generation/RealStarCatalog.js';
 import { deriveShip, liveMoonRelE } from './shipState.js';
 import alea from 'alea';
 
@@ -670,7 +671,9 @@ export function makeViewState() {
     if (cache.multByStar.has(k)) return cache.multByStar.get(k);
     let m = 1;
     try {
-      m = multiplicityForSeed({ seed: row.seed, pos: { x: row.wx, y: row.wy, z: row.wz },
+      // ⛔ worldX/Y/Z (Phase 3 fixup, Astra finding 3): the oracle reads `worldX…` or top-level `x…` and
+      //   DROPS a `pos` field, so this rolled every procedural star with no galaxy context.
+      m = multiplicityForSeed({ seed: row.seed, worldX: row.wx, worldY: row.wy, worldZ: row.wz,
                                 type: row.spectral, name: row.name }, { galacticMap: gm }).count;
     } catch (e) { m = 1; }
     if (!Number.isFinite(m) || m < 1) m = 1;
@@ -1177,9 +1180,17 @@ export function makeViewState() {
      *   rows that is a frame budget spent asking a question whose answer changes only when the rows,
      *   the player or the selection does. Same answer, asked once per change. */
     const hereKey = `${playerKey}|${nav._hereStarId?.key ?? ''}|${nav._hereStarId?.wx ?? ''}`;
+    /* ⭐ naming-prism-segments AC-6 (Phase 3 fixup) — AND EACH SCAN READS ONLY THE SLABS THAT CAN HOLD ITS
+     *   ANSWER. Both questions are "the row that is this star", and that row lies within the 0.1 pc
+     *   same-star radius of the star's height, so on the loader's own rows only the one or two slabs
+     *   around it can hold it (`rowsNearY`, twice the radius). The memo above still re-asks on every
+     *   publish, and a whole-column scan there was ~7 ms of a 172k-row publish frame (measured). `null`
+     *   — rows that are not the loader's intact publish — falls back to the full list. */
+    const nearRows = (y) => (loaderRows && Number.isFinite(y) && typeof nav._prismLoader?.rowsNearY === 'function'
+      ? nav._prismLoader.rowsNearY(y, 2 * POSITION_MATCH_TOL) : null);
     if (cache.hereRows !== D.starRows || cache.hereKey !== hereKey || cache.hereCol !== D.hereColumn) {
       cache.hereRows = D.starRows; cache.hereKey = hereKey; cache.hereCol = D.hereColumn;
-      cache.here = D.hereColumn ? hereRowOf(nav, D.starRows) : null;
+      cache.here = D.hereColumn ? hereRowOf(nav, nearRows(P && P.y) || D.starRows) : null;
     }
     D.here = cache.here;
     // ⭐ THE NAME THE "WHERE AM I" LABELS PRINT IS THE GAME'S OWN, FIRST. `_currentSystemName` is
@@ -1194,7 +1205,7 @@ export function makeViewState() {
     //    never the first row inside 0.1 pc either, which can be a neighbour.
     if (cache.selRows !== D.starRows || cache.selRef !== sel || cache.selKey !== sel?.key) {
       cache.selRows = D.starRows; cache.selRef = sel; cache.selKey = sel?.key;
-      cache.selFound = sel ? findStar(D.starRows, sel) : null;
+      cache.selFound = sel ? findStar(nearRows(sel.wy) || D.starRows, sel) : null;
     }
     D.selStar = sel ? (cache.selFound || {
       ...sel, name: nameFor(sel), pc: (sel.dist ?? 0) * 1000, ly: (sel.dist ?? 0) * KPC_TO_LY,

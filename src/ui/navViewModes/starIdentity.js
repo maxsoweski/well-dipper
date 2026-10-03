@@ -59,10 +59,19 @@ export function sameStar(a, b) {
 export function findStar(list, s) {
   if (!s || !list) return null;
   let best = null, bestD = Infinity;
+  const sk = keyKind(s.key), T = POSITION_MATCH_TOL;
+  const sx = s.wx, sy = s.wy || 0, sz = s.wz;
   for (const r of list) {
     if (r === s || (s.key != null && r.key === s.key)) return r;   // the same key IS the star
-    if (!sameStar(r, s)) continue;
+    // ⭐ naming-prism-segments AC-6 (Phase 3 fixup) — `sameStar` per row, but CHEAPEST TEST FIRST. A row
+    //   more than the tolerance away on any one axis cannot be within it in 3D, so it is skipped before
+    //   the `hypot` (172k of them per scan at the bulge: ~13 ms a publish, measured). The rule is
+    //   `sameStar`'s exactly: different keys of one kind are never the same star; otherwise the gap
+    //   decides — and the gap below is the same `gap` call, so the nearest row is the same row.
+    if (!(Math.abs(r.wx - sx) < T) || !(Math.abs((r.wy || 0) - sy) < T) || !(Math.abs(r.wz - sz) < T)) continue;
+    if (sk && keyKind(r.key) === sk) continue;
     const d = gap(r, s);
+    if (!(d < T)) continue;
     if (d < bestD) { bestD = d; best = r; }
   }
   return best;

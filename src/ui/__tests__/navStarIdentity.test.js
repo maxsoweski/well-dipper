@@ -16,6 +16,7 @@
  * ⭐ EACH CASE RUNS ON BOTH TWINS. A seed lookup returns whichever twin comes FIRST, so it is right
  * for one of them by luck; only the pair can fail it.
  */
+import { KnownSystems } from '../../generation/KnownSystems.js';
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -258,15 +259,22 @@ describe('⛔ the memos are keyed by the star, not the seed (state.js nameFor / 
   }, 60000);
 
   it('the COMPS fill answers each twin from its own inputs', async () => {
-    // ⚠ BUILT, NOT FOUND. `multFor` hands the oracle `pos:`, which its `_normalize` does not read, so a
-    //   procedural row's count is a function of its seed alone (pre-existing; reported, not changed
-    //   here) and two procedural twins can never disagree. A KnownSystems NAME is the input that can:
-    //   the oracle's first rule answers by alias. So twin B becomes a catalogue star the way the
-    //   real-star merge makes one — new name, new 'r:' key (NavComputer.js:3815), seed kept equal.
+    // ⚠ BUILT, NOT FOUND. Twins share a seed and sit within 0.1 pc, so their position-aware rolls
+    //   almost always agree too. A KnownSystems NAME is the input that can make them differ: the
+    //   oracle's first rule answers by alias. So twin B becomes a catalogue star the way the real-star
+    //   merge makes one — new name, new 'r:' key (NavComputer.js:3815), seed kept equal.
+    //   (Phase 3 fixup: `multFor` now hands the oracle `worldX/Y/Z` — it used to pass `pos:`, which the
+    //   oracle's `_normalize` drops — so the reference below is the position-aware call too.)
     const { nav, drv, A, B } = await twinNav();
     const gm = drv.D.gm;
     expect(gm, 'the adapter needs a galactic map for the fill').toBeTruthy();
-    B.name = 'Alpha Centauri'; B.key = `r:Alpha Centauri@${B.wx},${B.wy},${B.wz}`; B.ident = null;
+    B.name = 'Alpha Centauri'; B.ident = null;
+    // ⚠ AND AT ALPHA CENTAURI. The oracle now has the row's position, and `findByAlias(name, pos)` honours
+    //   the name only within NAME_JOIN_RADIUS (3 pc) of the system — so B stands where the merge would put
+    //   it (inside Sol's column, which spans ±3.9 pc).
+    const ac = KnownSystems.findByAlias('Alpha Centauri');
+    B.wx = ac.position.x; B.wy = ac.position.y; B.wz = ac.position.z;
+    B.key = `r:Alpha Centauri@${B.wx},${B.wy},${B.wz}`;
     // ⚠ naming-prism-segments AC-6 — AS PLAIN ROWS, so the case still reaches `multFor`. The loader's
     //   rows arrive with `mult` already rolled from their OWN inputs at load time (prismLoader.js
     //   `_mult`, no memo at all), and state.js takes them as they are; a row renamed in place after
@@ -274,7 +282,7 @@ describe('⛔ the memos are keyed by the star, not the seed (state.js nameFor / 
     //   path whose identity-keyed memo this case is about.
     nav._localStars = nav._localStars.map(({ slab, mult, ...r }) => r);
     nav.render();
-    const mult = (s) => multiplicityForSeed({ seed: s.seed, pos: { x: s.wx, y: s.wy, z: s.wz }, type: s.spectral,
+    const mult = (s) => multiplicityForSeed({ seed: s.seed, worldX: s.wx, worldY: s.wy, worldZ: s.wz, type: s.spectral,
       name: s.name }, { galacticMap: gm }).count;
     expect(mult(A), 'the twins must have different answers or the probe cannot fail').not.toBe(mult(B));
     for (const s of [A, B]) {

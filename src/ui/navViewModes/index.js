@@ -293,7 +293,7 @@ export function makeViewModeDriver(nav) {
     lastW = w; lastH = h;
     // ⭐ AC-7 — THE PRESS IS OVER WHEN THE HOST SAYS SO. `gaugeGrab` records what a press took; the host
     //    clears `_gaugeDrag` on release (and on leaving the canvas), and this is where the driver hears it.
-    if (!nav._gaugeDrag) S.gaugeHold = null;
+    if (!nav._gaugeDrag) { S.gaugeHold = null; nav._slabBarHeld = false; }
     if (pendingTabs && !nav._anim) { const d = Math.sign(pendingTabs); pendingTabs -= d; tabLevel(d); }
     refresh(nav, { width: w, height: h, lines: h });
     agePick();   // ⭐ AFTER refresh — it tests `S.level`, which refresh has just made current.
@@ -1075,7 +1075,10 @@ export function makeViewModeDriver(nav) {
     // ⛔ THE BAR IS TESTED FIRST AND THE GAUGE'S SKIRT STOPS WHERE THE BAR'S BEGINS, so where the two
     //    widgets stand side by side (design 1) every texel answers exactly one of them (plan §7.3).
     const b = S.slabBarRect;
-    if (b && slabBarGeo.onBar(b, x, y)) { S.gaugeHold = { widget: 'bar' }; return true; }
+    // ⭐ Phase 3 fixup (plan §7.3 "loads on release"): `_slabBarHeld` tells the HOST's loader the press is on
+    //    the bar, so a drag steps the camera without loading every slab it crosses (prismLoader `held()`).
+    nav._slabBarHeld = !!(b && slabBarGeo.onBar(b, x, y));
+    if (nav._slabBarHeld) { S.gaugeHold = { widget: 'bar' }; return true; }
     const r = S.yGaugeRect;
     if (!r) return false;
     const on = x >= r.x - 1 && x < r.x + r.w + 1 && y >= r.y && y < r.y + r.h;

@@ -1408,7 +1408,11 @@ export class GalacticMap {
       return region;
     }
 
-    const features = this._generateFeatureRegion(rx, ry, rz);
+    // naming-prism-segments AC-6 (Phase 3 fixup): a region a sliced loader already built and is HOLDING
+    // (`withFeaturePins`) is handed back, not rebuilt — the LRU may have evicted it while the loader
+    // yielded (Astra: 12 regions rebuilt inline on resume, ~34 ms node). Same deterministic array.
+    const pinned = this._featurePins && this._featurePins.get(key);
+    const features = pinned || this._generateFeatureRegion(rx, ry, rz);
 
     this._featureRegionCache.set(key, features);
     if (this._featureRegionCache.size > this._maxFeatureRegions) {
@@ -1591,14 +1595,44 @@ export class GalacticMap {
     return out;
   }
 
+  /**
+   * naming-prism-segments AC-6 (Phase 3 fixup) — every feature region a `findNearbyFeatures` call from
+   * ANY point of the box [min, max] reads: the union of their 3×3×3 neighbourhoods (27 to 64 regions).
+   * A slab's rows each derive their arrival context at their OWN position, and a column can straddle a
+   * region boundary (Sol's does, at x = 8), so the centre's 27 are not enough to hold.
+   */
+  featureRegionsInBox(min, max) {
+    const a = this._featureRegionIndices(min.x, min.y, min.z), b = this._featureRegionIndices(max.x, max.y, max.z);
+    const out = [];
+    for (let rx = a.rx - 1; rx <= b.rx + 1; rx++) for (let ry = a.ry - 1; ry <= b.ry + 1; ry++) for (let rz = a.rz - 1; rz <= b.rz + 1; rz++) out.push([rx, ry, rz]);
+    return out;
+  }
+
   /** Is this feature region cached? (No LRU touch.) */
   hasFeatureRegion(rx, ry, rz) {
     return this._featureRegionCache.has(`fr:${rx},${ry},${rz}`);
   }
 
-  /** Build (or touch) one feature region — the unit of work a sliced loader schedules. */
+  /** Build (or touch) one feature region — the unit of work a sliced loader schedules. Returns its
+   *  features (immutable — every reader copies), so the loader can hold them (`withFeaturePins`). */
   prefetchFeatureRegion(rx, ry, rz) {
-    this._getFeatureRegion(rx, ry, rz);
+    return this._getFeatureRegion(rx, ry, rz);
+  }
+
+  /** The cache key of a feature region (for a `withFeaturePins` map). */
+  featureRegionKey(rx, ry, rz) { return `fr:${rx},${ry},${rz}`; }
+
+  /**
+   * naming-prism-segments AC-6 (Phase 3 fixup) — run `fn` with `pins` (Map featureRegionKey → features,
+   * built by `prefetchFeatureRegion`) standing in for any of those regions the LRU has evicted, so a
+   * sliced loader's unit can never rebuild a region it already paid for in an earlier slice. Every
+   * feature lookup inside `fn` sees them: the query's feature gather and the multiplicity context
+   * (`deriveGalaxyContext`). Nests; restores the outer pins on exit, throw or not.
+   */
+  withFeaturePins(pins, fn) {
+    const prev = this._featurePins;
+    this._featurePins = pins || prev;
+    try { return fn(); } finally { this._featurePins = prev; }
   }
 
   /**

@@ -14,8 +14,12 @@
  *   instance (the DOM overlay and the cockpit's glass): feature-region prefetch (one region per
  *   unit), the catalogue scan, the cell scan (resumable mid-tier, `HashGridStarfield.prismQuery`),
  *   each real star's twin search, naming + multiplicity (a few rows per unit), the row publish,
- *   and the optional sorted views (`sortedRows`). A unit is ≤ ~0.1–0.3 ms, so a frame overruns its
- *   deadline by at most one unit — nowhere near the 50 ms long-task line.
+ *   and the optional sorted views (`sortedRows`). Most units are well under a millisecond (32 cells, 8
+ *   rows, 256 sort steps); the one indivisible big unit is a COLD feature region (measured ≤ ~6 ms node),
+ *   and that is only started with `REGION_RESERVE_MS` of the frame left. Every region a slab's units
+ *   read is built first and HELD for the job (`withFeaturePins`), so eviction while paused can never
+ *   turn a later unit into an inline rebuild. (Phase 3 fixup — this note used to claim every unit was
+ *   ≤ 0.3 ms, which a cold region is not; Astra review finding 2.)
  *
  *   Work is resumable (each slab keeps its cursor while another slab or a sort runs) and
  *   cancellable: leaving PRISM, switching column or a reset bumps a generation and drops every
@@ -26,7 +30,8 @@
  *   neighbourhood generated straight from the hash grid (across column and slab edges, whatever is
  *   loaded), ties broken by star key. A procedural star is hidden iff it is some real star's twin.
  *   Each R decides alone, so the hidden set — and therefore every slab's rows — is the same for any
- *   load order. Twins are cached per galactic map by the real star's key.
+ *   load order. Twins are cached per galactic map by the real star's key, and dropped when the
+ *   generator's inputs change (`generatorInputs`: the real-feature catalogue arriving late).
  *
  * THE SEAM (NavComputer exposes these; see the delegates at NavComputer.js `_ensureStarsLoaded`)
  *   nav.slab            → { hemi, n } the slab the camera is in
@@ -57,6 +62,8 @@ export const MATCH_KPC = 0.002;
 /** The column the loader fills: ±3 kpc = S30 … N30, matching the segment bar. */
 export const SLAB_SPAN = Math.round(3.0 / SLAB_KPC);           // 30
 export const K_MIN = -SLAB_SPAN, K_MAX = SLAB_SPAN - 1;          // S30 … N30
+/** A cold feature region is only started with at least this much of the frame left (measured ≤ ~6 ms node). */
+export const REGION_RESERVE_MS = 6;
 /** Background slabs publish at most this often; the viewed slab publishes at once. */
 export const PUBLISH_INTERVAL_MS = 100;
 
@@ -157,7 +164,12 @@ export class LoadScheduler {
   runFrame() {
     const t0 = this.now();
     const deadline = t0 + this.budgetMs;
-    const stop = () => this.now() >= deadline;
+    let yielded = false;
+    const stop = () => yielded || this.now() >= deadline;
+    // A unit that cannot be split (a cold feature region, up to ~6 ms node) asks how much is left and, when
+    // it would not fit, ends the frame instead of overrunning it (`REGION_RESERVE_MS`).
+    stop.remaining = () => deadline - this.now();
+    stop.yieldFrame = () => { yielded = true; };
     const list = [...this.loaders];
     if (list.length > 1) { const r = this._rr++ % list.length; list.push(...list.splice(0, r)); }
     let any = true;
@@ -188,26 +200,52 @@ export const prismLoadScheduler = new LoadScheduler();
 // ── twins (AC-8), cached per galactic map by real-star key ───────────────────────────────────────
 
 const twinCaches = new WeakMap();
+/**
+ * ⭐ THE GENERATOR'S INPUTS, AS ONE VALUE (Phase 3 fixup, Astra finding 4). Which procedural stars exist
+ * depends on the galactic map AND on the real-feature catalogue (`HashGridStarfield.realFeatureCatalog`,
+ * installed asynchronously by main.js — its globular clusters add Plummer density). A twin, or a slab's
+ * rows, worked out before that catalogue arrived describe a different population, so both the twin
+ * cache and a loader's column are keyed by this and dropped when it changes.
+ */
+export function generatorInputs() {
+  const f = HashGridStarfield.realFeatureCatalog;
+  return f && f.loaded ? f : null;
+}
 function twinCacheFor(gm) {
-  let m = twinCaches.get(gm);
-  if (!m) { m = new Map(); twinCaches.set(gm, m); }
-  return m;
+  const inputs = generatorInputs();
+  let c = twinCaches.get(gm);
+  if (!c || c.inputs !== inputs) { c = { inputs, map: new Map() }; twinCaches.set(gm, c); }
+  return c.map;
 }
 /** Tests: forget every cached twin for a map (so a test can prove order independence from cold). */
 export function clearTwinCache(gm) { twinCaches.delete(gm); }
 
-/** Prefetch the feature regions a query will read, one region per unit. Returns true when done. */
+/**
+ * Prefetch the feature regions a query will read, one region per unit, and HOLD them (`job.pins`):
+ * every later unit of the job runs under `GalacticMap.withFeaturePins(job.pins)`, so a region the shared
+ * 64-entry LRU evicts while the job is paused (the other nav instance, the game's own lookups) is handed
+ * back, never rebuilt inline (Phase 3 fixup, Astra finding 2: 12 regions rebuilt in one ~34 ms node unit).
+ * A cached region is a touch; a missing one is one build (≤ ~16 ms node cold, measured). True when done.
+ */
 function prefetchRegions(gm, job, stop) {
-  if (!job.regions) {
-    job.regions = job.query.featureRegions().filter((r) => typeof gm.hasFeatureRegion !== 'function' || !gm.hasFeatureRegion(r[0], r[1], r[2]));
-    job.pi = 0;
-  }
+  if (!job.regions) { job.regions = job.regionList ? job.regionList() : job.query.featureRegions(); job.pi = 0; job.pins = new Map(); }
   while (job.pi < job.regions.length) {
     if (stop()) return false;
-    const r = job.regions[job.pi++];
-    gm.prefetchFeatureRegion?.(r[0], r[1], r[2]);
+    const r = job.regions[job.pi];
+    if (typeof stop.remaining === 'function' && stop.remaining() < REGION_RESERVE_MS
+        && typeof gm.hasFeatureRegion === 'function' && !gm.hasFeatureRegion(r[0], r[1], r[2])) {
+      stop.yieldFrame?.();                                   // a cold build would overrun: next frame, first
+      return false;
+    }
+    job.pi++;
+    const features = gm.prefetchFeatureRegion?.(r[0], r[1], r[2]);
+    if (features && typeof gm.featureRegionKey === 'function') job.pins.set(gm.featureRegionKey(r[0], r[1], r[2]), features);
   }
   return true;
+}
+/** Run one unit of `job` with its held feature regions standing in for evicted ones. */
+function pinned(gm, job, fn) {
+  return job.pins && typeof gm.withFeaturePins === 'function' ? gm.withFeaturePins(job.pins, fn) : fn();
 }
 
 /**
@@ -224,7 +262,7 @@ function twinOf(gm, rs, stop, pending) {
     pending.set(rk, job);
   }
   if (!prefetchRegions(gm, job, stop)) return undefined;
-  if (!job.query.step(stop)) return undefined;
+  if (!pinned(gm, job, () => job.query.step(stop))) return undefined;
   let best = null, bestD = MATCH_KPC;
   for (const s of job.query.results) {
     const dx = s.worldX - rs.x, dy = s.worldY - rs.y, dz = s.worldZ - rs.z;
@@ -310,17 +348,32 @@ class SlabJob {
     this.yHalf = (y1 - y0) / 2 + EDGE_PAD;
     this.query = HashGridStarfield.prismQuery(loader.gm, this.center, this.xzHalf, this.yHalf, { extent: true });
     this.regions = null;
+    // The regions to hold: the query's own (around the centre) AND every row's context lookup (around
+    // each star's position), i.e. the whole box's — see GalacticMap.featureRegionsInBox.
+    this.regionList = () => {
+      const gm = loader.gm, q = this.query.featureRegions();
+      if (typeof gm.featureRegionsInBox !== 'function') return q;
+      const box = gm.featureRegionsInBox({ x: col.bounds.min.x, y: y0, z: col.bounds.min.z }, { x: col.bounds.max.x, y: y1, z: col.bounds.max.z });
+      const seen = new Set(box.map((r) => r.join(',')));
+      for (const r of q) if (!seen.has(r.join(','))) box.push(r);
+      return box;
+    };
     this.phase = 0;
     this.real = null; this.ti = 0; this.ri = 0; this.rows = []; this.suppressed = new Set(); this.seen = new Set();
   }
 
   /** @returns {boolean} true when the slab's rows are final */
   step(stop) {
-    const L = this.loader, gm = L.gm;
-    if (this.phase === 0) {                                   // feature regions, one per unit
+    const gm = this.loader.gm;
+    if (this.phase === 0) {                                   // feature regions, one per unit — and held
       if (!prefetchRegions(gm, this, stop)) return false;
       this.phase = 1;
     }
+    return pinned(gm, this, () => this._step(stop));          // the query's gather and each row's context read them
+  }
+
+  _step(stop) {
+    const L = this.loader, gm = L.gm;
     if (this.phase === 1) {                                   // the catalogue, once (≈ 0.1 ms scan)
       if (stop()) return false;
       this.real = L.realStarsNear(this);
@@ -416,12 +469,14 @@ export class PrismLoader {
     if (!col) return;
     const key = navGrid.addressKey(col.address);
     const catLoaded = !!nav._realStarCatalog?.loaded;
+    const inputs = generatorInputs();
     if (key !== this.colKey
         || (this.publishedArr && this.publishedArr.length && nav._localStars !== this.publishedArr
             && !(nav._localStars && nav._localStars.length))                 // someone CLEARED the rows without a reset
-        || catLoaded !== this.catLoaded) {                                    // the catalogue arrived
+        || catLoaded !== this.catLoaded                                       // the catalogue arrived
+        || inputs !== this.inputs) {                                          // the generator's inputs changed (Phase 3 fixup)
       this.reset();
-      this.colKey = key; this.column = col; this.catLoaded = catLoaded;
+      this.colKey = key; this.column = col; this.catLoaded = catLoaded; this.inputs = inputs;
       if (typeof nav._estimateBlockStarCount === 'function' && nav._gm) {
         nav._estimatedBlockStars = nav._estimateBlockStarCount(col.center, col.halfWidth ?? (col.bounds.max.x - col.bounds.min.x) / 2);
       }
@@ -470,7 +525,14 @@ export class PrismLoader {
     return null;
   }
 
-  _active() { return this.colKey !== null && !this.nav._loadSuspended && this.nav._levelIndex === 3 && !!this.nav._gm; }
+  _active() { return this.colKey !== null && !this.nav._loadSuspended && this.nav._levelIndex === 3 && !!this.nav._gm && !this.held(); }
+  /**
+   * ⭐ THE SEGMENT BAR IS HELD (Phase 3 fixup, Astra finding 5; plan §7.3: "drag moves the highlight and
+   * loads on release"). While a drag is on the bar the camera steps slab by slab but nothing loads,
+   * publishes or re-sorts; the press is over the moment the host clears `_gaugeDrag` (mouse up, leaving
+   * the canvas, V), and the next frame's `ensure` loads the slab the drag ended on, first.
+   */
+  held() { return !!(this.nav._gaugeDrag && this.nav._slabBarHeld); }
   _sortPending() { const s = this.activeSort && this.sorts.get(this.activeSort); return !!(s && s.job); }
 
   hasWork() {
@@ -517,9 +579,14 @@ export class PrismLoader {
   }
 
   _mult(row) {
+    // ⛔ worldX/Y/Z, NOT `pos` (Phase 3 fixup, Astra finding 3): the oracle's `_normalize` reads
+    //   `worldX…` or top-level `x…` and silently drops `pos`, so every procedural roll ran with NO
+    //   galaxy context — 2,455 of 5,561 rows of one inner slab disagreed with arrival. The legacy prism
+    //   (NavComputer `_renderLocal`) has always passed worldX; state.js's `multFor` made the same slip.
     try {
-      return multiplicityForSeed({ seed: row.seed, pos: { x: row.wx, y: row.wy, z: row.wz }, type: row.spectral, name: row.name },
+      const m = multiplicityForSeed({ seed: row.seed, worldX: row.wx, worldY: row.wy, worldZ: row.wz, type: row.spectral, name: row.name },
         { galacticMap: this.gm }).count;
+      return Number.isFinite(m) && m >= 1 ? m : 1;
     } catch (e) { return 1; }
   }
 
@@ -567,7 +634,7 @@ export class PrismLoader {
     const arr = [];
     for (const k of ks) { const rows = this.slabs.get(k); for (let i = 0; i < rows.length; i++) arr.push(rows[i]); }
     nav._localStars = arr;                                          // the setter bumps `_rowsRev`
-    this.publishedArr = arr;
+    this.publishedArr = arr; this.publishedLen = arr.length;
     this.log.push({ rev: nav._rowsRev, added });
     if (this.log.length > 128) this.log.shift();
     this.unpublished = [];
@@ -576,6 +643,25 @@ export class PrismLoader {
     nav._loadedYMin = lo; nav._loadedYMax = hi;
     this.refreshStatus();
     if (typeof nav._tryAutoSelectExternalTarget === 'function') nav._tryAutoSelectExternalTarget();
+  }
+
+  /**
+   * The PUBLISHED rows within `tol` kpc of height `y` — the rows of the slabs that can hold them — or
+   * null when `_localStars` is not this loader's intact publish (replaced, or rows pushed into it), so
+   * the caller must scan everything. For "which row is this star" questions (state.js `D.here`,
+   * `D.selStar`): the answer lies within the 0.1 pc same-star radius of the star's height.
+   */
+  rowsNearY(y, tol = 0) {
+    const arr = this.nav._localStars;
+    if (!this.publishedArr || arr !== this.publishedArr || arr.length !== this.publishedLen || !Number.isFinite(y)) return null;
+    const unpub = this.unpublished.length ? new Set(this.unpublished) : null;
+    const out = [];
+    for (let k = slabIndexOfY(y - tol), k1 = slabIndexOfY(y + tol); k <= k1; k++) {
+      if (unpub && unpub.has(k)) continue;
+      const rows = this.slabs.get(k);
+      if (rows) for (let i = 0; i < rows.length; i++) out.push(rows[i]);
+    }
+    return out;
   }
 
   /** Rebuild the published status object (a NEW object whenever anything in it changes). */

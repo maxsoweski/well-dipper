@@ -239,6 +239,22 @@ export class NavGalaxyRenderer {
     // Cache
     this._cache = new Map(); // key → { canvas, lastUsed }
     this._cacheMax = 8;
+
+    // naming-prism-segments AC-6 (Phase 3 fixup) — COMPILE THE SHADER NOW, NOT ON THE FIRST MAP FRAME.
+    // The live trace's one task over 50 ms (62.5 ms, XIGMAG, first REGION screen after a cold start) was
+    // this material's first use: three.js links the program and then blocks on `getProgramInfoLog`. A
+    // link is one driver call and cannot be sliced, so it is started here, at construction (boot), with
+    // `compileAsync` — KHR_parallel_shader_compile lets the driver link in the background and three polls
+    // it without blocking. ⚠ Compiled WITH OUR RENDER TARGET BOUND: three keys the program on it (output
+    // colour space, tone mapping), and a variant compiled for the canvas would not be the one `render`
+    // uses. A warm-up only — if anything here is missing or throws, the first render compiles as before.
+    try {
+      if (typeof renderer.compileAsync === 'function' && typeof renderer.setRenderTarget === 'function') {
+        const prev = renderer.getRenderTarget();
+        renderer.setRenderTarget(this._rt);
+        try { renderer.compileAsync(this._scene, this._camera).catch(() => {}); } finally { renderer.setRenderTarget(prev); }
+      }
+    } catch (e) { /* warm-up only */ }
   }
 
   /**

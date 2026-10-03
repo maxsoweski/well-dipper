@@ -21,6 +21,7 @@ import { FACE, drawPixelText, measurePixelText } from '../../rendering/PixelText
 import * as G from '../navViewModes/slabBar.js';
 import { SYNC_SORT_MAX_ROWS } from '../navViewModes/state.js';
 import * as navGrid from '../navGrid.js';
+import { loaderFor } from '../prismLoader.js';
 
 const W = 417, H = 240;
 
@@ -77,6 +78,8 @@ const inSlab = (y, k) => { const [a, b] = G.slabYRange(k); return y >= a && y < 
 function press(nav, x, y) { nav._handleMouseDown({ clientX: x + 0.5, clientY: y + 0.5, button: 0 }); }
 function move(nav, x, y) { nav._handleMouseMove({ clientX: x + 0.5, clientY: y + 0.5 }); }
 function release(nav, x, y) { nav._handleMouseUp({ clientX: x + 0.5, clientY: y + 0.5, button: 0 }); }
+/** A key through the host's REAL keydown handler (the path a pilot's key takes). */
+function key(nav, code) { nav._onKeyDown({ code, key: '', shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, preventDefault() {}, stopPropagation() {} }); }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 describe('slabBar.js — one geometry and one layer function', () => {
@@ -152,21 +155,32 @@ describe('AC-7 — the segment bar', () => {
     }
   }, 240000);
 
-  it('⭐ DRAGGING ALONG THE BAR STEPS SLAB BY SLAB, AND R/F STILL MOVE CONTINUOUSLY INSIDE THE SLAB', async () => {
+  it('⭐ DRAGGING ALONG THE BAR STEPS SLAB BY SLAB, LOADS ON RELEASE, AND R/F STILL MOVE CONTINUOUSLY INSIDE THE SLAB', async () => {
     // MUTANT `drag-ignores-bar` (gaugeDragTo always fine): the steps are ±2 pc moves, not slabs — red.
+    // MUTANT `drag-loads-every-cell` (prismLoader `held()` → false): the crossed slabs load and publish
+    // while the bar is held — red (plan §7.3: "drag moves the highlight and loads on release").
     const nav = await prismNav('rail');
     const bar = paint(nav, 1).S.slabBarRect;
     const x = bar.x + 2;
+    const L = loaderFor(nav);
+    const rev0 = nav._rowsRev, loaded0 = new Set(L.slabs.keys());
     press(nav, x, rowOf(bar, 0));
     const seen = [];
     for (let k = 0; k <= 6; k++) {                 // N1 … N7, one cell at a time
       move(nav, x, rowOf(bar, k));
       seen.push(G.slabIndexOfY(nav._localCenter.y));
       nav.render();
+      expect(nav._rowsRev, `held on ${G.refOfIndex(k)}: rows were published`).toBe(rev0);
+      expect([...L.slabs.keys()].filter((j) => !loaded0.has(j)), `held on ${G.refOfIndex(k)}: slabs loaded`).toEqual([]);
+      expect(L.jobs.size, `held on ${G.refOfIndex(k)}: a slab job started`).toBe(0);
     }
+    expect(nav.slabLoad.viewSlab, 'the highlight did not follow the drag').toBe('N7');
     release(nav, x, rowOf(bar, 6));
     nav.render();
     expect(seen).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(L.slabs.has(6), 'the slab the drag ended on did not load on release').toBe(true);
+    expect(nav.slabLoad.viewReady).toBe(true);
+    expect([...L.slabs.keys()].filter((j) => !loaded0.has(j) && j !== 6), 'slabs crossed on the way loaded').toEqual([]);
     expect(nav._viewDriverInst.S.gaugeHold, 'the press is over, the hold is not').toBe(null);
     // a move inside one cell keeps the fine height (no re-centring)
     press(nav, x, rowOf(bar, 6));
@@ -186,18 +200,29 @@ describe('AC-7 — the segment bar', () => {
     expect(G.slabIndexOfY(nav._localCenter.y)).toBe(6);
   }, 120000);
 
-  it('⛔ A DRAG THAT OUTLIVES ITS SCREEN DOES NOTHING: a Tab mid-drag withdraws the bar; V mid-drag keeps it', async () => {
+  it('⛔ A DRAG THAT OUTLIVES ITS SCREEN DOES NOTHING: V mid-drag ends it; a level change withdraws the bar', async () => {
     // MUTANT `bar-rect-not-cleared` (drop S.slabBarRect from resetPicks): the drag keeps stepping slabs
     // at REGION off a stale rect — red.
+    // MUTANT `v-keeps-drag` (drop `this._gaugeDrag = false` from NavComputer's KeyV clause): the move
+    // after V steps the slab — red. ⚠ V goes through the REAL key handler (Astra: assigning
+    // `nav.viewMode` directly skipped the clause that ends the press, and pinned the opposite behaviour).
     const nav = await prismNav('rail');
     const bar = paint(nav, 1).S.slabBarRect;
     press(nav, bar.x + 2, rowOf(bar, 0));
     move(nav, bar.x + 2, rowOf(bar, 3));
     expect(G.slabIndexOfY(nav._localCenter.y)).toBe(3);
-    // V: design 2 republishes its own bar at its own x, and the drag carries on against it
-    nav.viewMode = 'bars'; nav.render();
+    // V: the look changes (design 2 publishes its own bar at its own x) and the press is over
+    key(nav, 'KeyV'); nav.render();
+    expect(nav.viewMode).toBe('bars');
+    expect(nav._gaugeDrag, 'V left the bar held').toBe(false);
+    expect(nav._viewDriverInst.S.gaugeHold).toBe(null);
     const bar2 = nav._viewDriverInst.S.slabBarRect;
     expect(bar2.x).not.toBe(bar.x);
+    move(nav, bar2.x + 2, rowOf(bar2, 8));
+    expect(G.slabIndexOfY(nav._localCenter.y), 'a move after V still dragged the view').toBe(3);
+    release(nav, bar2.x + 2, rowOf(bar2, 8));
+    // a fresh press on design 2's bar drags it
+    press(nav, bar2.x + 2, rowOf(bar2, 3));
     move(nav, bar2.x + 2, rowOf(bar2, 8));
     expect(G.slabIndexOfY(nav._localCenter.y)).toBe(8);
     // a level change: no bar on the glass, so the same held drag moves nothing
